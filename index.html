@@ -1,0 +1,2631 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Planificación de Suministro | PETROPERÚ</title>
+    
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Sora:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    
+    <style>
+        /* ═══════════════════════════════════════════════════════════════════════════
+           CSS VARIABLES - THEME SYSTEM
+           ═══════════════════════════════════════════════════════════════════════════ */
+        :root {
+            /* Dark Theme (Default) */
+            --bg-primary: #0a0f1a;
+            --bg-secondary: #0d1525;
+            --bg-tertiary: #111b2e;
+            --bg-card: linear-gradient(145deg, #0f1829 0%, #0a1220 100%);
+            --bg-card-hover: linear-gradient(145deg, #131f35 0%, #0d1628 100%);
+            
+            --border-primary: #1a2a45;
+            --border-accent: #00d4aa;
+            --border-glow: rgba(0, 212, 170, 0.3);
+            
+            --text-primary: #ffffff;
+            --text-secondary: #8b9dc3;
+            --text-muted: #4a5f8c;
+            --text-accent: #00d4aa;
+            
+            --accent-primary: #00d4aa;
+            --accent-secondary: #00b894;
+            --accent-tertiary: #0984e3;
+            --accent-warning: #fdcb6e;
+            --accent-danger: #e17055;
+            --accent-info: #74b9ff;
+            
+            --gradient-primary: linear-gradient(135deg, #00d4aa 0%, #00b894 100%);
+            --gradient-secondary: linear-gradient(135deg, #0984e3 0%, #6c5ce7 100%);
+            --gradient-danger: linear-gradient(135deg, #e17055 0%, #d63031 100%);
+            --gradient-warning: linear-gradient(135deg, #fdcb6e 0%, #f39c12 100%);
+            
+            --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.3);
+            --shadow-md: 0 4px 20px rgba(0, 0, 0, 0.4);
+            --shadow-lg: 0 8px 40px rgba(0, 0, 0, 0.5);
+            --shadow-glow: 0 0 30px rgba(0, 212, 170, 0.15);
+            
+            --font-primary: 'Sora', -apple-system, BlinkMacSystemFont, sans-serif;
+            --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+            
+            --radius-sm: 6px;
+            --radius-md: 10px;
+            --radius-lg: 16px;
+            --radius-xl: 24px;
+            
+            --transition-fast: 150ms ease;
+            --transition-base: 250ms ease;
+            --transition-slow: 400ms ease;
+        }
+
+        /* Light Theme */
+        [data-theme="light"] {
+            --bg-primary: #f5f7fa;
+            --bg-secondary: #ffffff;
+            --bg-tertiary: #edf2f7;
+            --bg-card: linear-gradient(145deg, #ffffff 0%, #f8fafc 100%);
+            --bg-card-hover: linear-gradient(145deg, #f8fafc 0%, #f1f5f9 100%);
+            
+            --border-primary: #e2e8f0;
+            --border-accent: #00a884;
+            --border-glow: rgba(0, 168, 132, 0.2);
+            
+            --text-primary: #1a202c;
+            --text-secondary: #4a5568;
+            --text-muted: #a0aec0;
+            --text-accent: #00a884;
+            
+            --accent-primary: #00a884;
+            --accent-secondary: #00957a;
+            
+            --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.08);
+            --shadow-md: 0 4px 20px rgba(0, 0, 0, 0.1);
+            --shadow-lg: 0 8px 40px rgba(0, 0, 0, 0.12);
+            --shadow-glow: 0 0 30px rgba(0, 168, 132, 0.1);
+        }
+
+        /* ═══════════════════════════════════════════════════════════════════════════
+           RESET & BASE STYLES
+           ═══════════════════════════════════════════════════════════════════════════ */
+        *, *::before, *::after {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        html {
+            font-size: 16px;
+            scroll-behavior: smooth;
+        }
+
+        body {
+            font-family: var(--font-primary);
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            line-height: 1.6;
+            min-height: 100vh;
+            transition: background var(--transition-base), color var(--transition-base);
+        }
+
+        /* ═══════════════════════════════════════════════════════════════════════════
+           LAYOUT STRUCTURE
+           ═══════════════════════════════════════════════════════════════════════════ */
+        .dashboard-container {
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+        }
+
+        /* Header */
+        .dashboard-header {
+            background: var(--bg-secondary);
+            border-bottom: 1px solid var(--border-primary);
+            padding: 0.75rem 1.5rem;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            backdrop-filter: blur(12px);
+        }
+
+        .header-content {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 1rem;
+            max-width: 1920px;
+            margin: 0 auto;
+        }
+
+        .logo-section {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .logo-icon {
+            width: 40px;
+            height: 40px;
+            background: var(--gradient-primary);
+            border-radius: var(--radius-md);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 1.25rem;
+            color: #0a0f1a;
+        }
+
+        .logo-text h1 {
+            font-size: 1rem;
+            font-weight: 600;
+            letter-spacing: -0.02em;
+        }
+
+        .logo-text span {
+            font-size: 0.7rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+        }
+
+        .header-controls {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            flex-wrap: wrap;
+        }
+
+        .status-badge {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 1rem;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-primary);
+            border-radius: var(--radius-lg);
+            font-size: 0.8rem;
+            font-family: var(--font-mono);
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--accent-primary);
+            animation: pulse 2s infinite;
+        }
+
+        .status-dot.error {
+            background: var(--accent-danger);
+        }
+
+        .status-dot.loading {
+            background: var(--accent-warning);
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.5; transform: scale(1.2); }
+        }
+
+        .developer-badge {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 1rem;
+            background: var(--gradient-primary);
+            border-radius: var(--radius-lg);
+            font-size: 0.75rem;
+            font-weight: 500;
+            color: #0a0f1a;
+            text-decoration: none;
+            transition: transform var(--transition-fast), box-shadow var(--transition-fast);
+        }
+
+        .developer-badge:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-glow);
+        }
+
+        .date-badge {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 1rem;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-primary);
+            border-radius: var(--radius-lg);
+            font-size: 0.8rem;
+        }
+
+        .theme-toggle {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.4rem;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-primary);
+            border-radius: var(--radius-lg);
+            cursor: pointer;
+            transition: all var(--transition-fast);
+        }
+
+        .theme-toggle:hover {
+            border-color: var(--border-accent);
+        }
+
+        .theme-btn {
+            padding: 0.4rem 0.75rem;
+            border: none;
+            background: transparent;
+            color: var(--text-secondary);
+            font-size: 0.75rem;
+            font-family: var(--font-primary);
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            transition: all var(--transition-fast);
+        }
+
+        .theme-btn.active {
+            background: var(--accent-primary);
+            color: #0a0f1a;
+            font-weight: 500;
+        }
+
+        /* Navigation Tabs */
+        .nav-tabs {
+            display: flex;
+            gap: 0.25rem;
+            padding: 0.75rem 1.5rem;
+            background: var(--bg-secondary);
+            border-bottom: 1px solid var(--border-primary);
+            overflow-x: auto;
+            scrollbar-width: none;
+        }
+
+        .nav-tabs::-webkit-scrollbar {
+            display: none;
+        }
+
+        .nav-tab {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.6rem 1rem;
+            background: transparent;
+            border: none;
+            color: var(--text-secondary);
+            font-family: var(--font-primary);
+            font-size: 0.8rem;
+            font-weight: 500;
+            border-radius: var(--radius-md);
+            cursor: pointer;
+            transition: all var(--transition-fast);
+            white-space: nowrap;
+        }
+
+        .nav-tab:hover {
+            background: var(--bg-tertiary);
+            color: var(--text-primary);
+        }
+
+        .nav-tab.active {
+            background: var(--accent-primary);
+            color: #0a0f1a;
+        }
+
+        .nav-tab-icon {
+            font-size: 1rem;
+        }
+
+        /* Main Content */
+        .main-content {
+            flex: 1;
+            padding: 1.5rem;
+            max-width: 1920px;
+            margin: 0 auto;
+            width: 100%;
+        }
+
+        .page-header {
+            margin-bottom: 1.5rem;
+        }
+
+        .page-title {
+            font-size: 1.5rem;
+            font-weight: 600;
+            margin-bottom: 0.25rem;
+        }
+
+        .page-subtitle {
+            color: var(--text-muted);
+            font-size: 0.85rem;
+        }
+
+        /* ═══════════════════════════════════════════════════════════════════════════
+           CARD SYSTEM
+           ═══════════════════════════════════════════════════════════════════════════ */
+        .card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-primary);
+            border-radius: var(--radius-lg);
+            padding: 1.25rem;
+            transition: all var(--transition-base);
+        }
+
+        .card:hover {
+            border-color: var(--border-accent);
+            box-shadow: var(--shadow-glow);
+        }
+
+        .card-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 1rem;
+            padding-bottom: 0.75rem;
+            border-bottom: 1px solid var(--border-primary);
+        }
+
+        .card-title {
+            font-size: 0.9rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-secondary);
+        }
+
+        .card-badge {
+            padding: 0.25rem 0.75rem;
+            background: var(--bg-tertiary);
+            border-radius: var(--radius-sm);
+            font-size: 0.7rem;
+            font-family: var(--font-mono);
+            color: var(--text-muted);
+        }
+
+        /* ═══════════════════════════════════════════════════════════════════════════
+           KPI CARDS
+           ═══════════════════════════════════════════════════════════════════════════ */
+        .kpi-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .kpi-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-primary);
+            border-radius: var(--radius-lg);
+            padding: 1.25rem;
+            position: relative;
+            overflow: hidden;
+            transition: all var(--transition-base);
+        }
+
+        .kpi-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: var(--gradient-primary);
+            opacity: 0;
+            transition: opacity var(--transition-fast);
+        }
+
+        .kpi-card:hover::before {
+            opacity: 1;
+        }
+
+        .kpi-card:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-md);
+        }
+
+        .kpi-label {
+            font-size: 0.75rem;
+            font-weight: 500;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 0.5rem;
+        }
+
+        .kpi-value {
+            font-size: 2rem;
+            font-weight: 700;
+            font-family: var(--font-mono);
+            color: var(--text-primary);
+            line-height: 1.1;
+        }
+
+        .kpi-value.loading {
+            color: var(--text-muted);
+        }
+
+        .kpi-unit {
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            font-weight: 400;
+            margin-left: 0.25rem;
+        }
+
+        .kpi-change {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.25rem;
+            margin-top: 0.5rem;
+            padding: 0.2rem 0.5rem;
+            border-radius: var(--radius-sm);
+            font-size: 0.7rem;
+            font-weight: 500;
+            font-family: var(--font-mono);
+        }
+
+        .kpi-change.positive {
+            background: rgba(0, 212, 170, 0.15);
+            color: var(--accent-primary);
+        }
+
+        .kpi-change.negative {
+            background: rgba(225, 112, 85, 0.15);
+            color: var(--accent-danger);
+        }
+
+        /* ═══════════════════════════════════════════════════════════════════════════
+           DASHBOARD GRID
+           ═══════════════════════════════════════════════════════════════════════════ */
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+
+        @media (max-width: 1024px) {
+            .dashboard-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* Section Cards */
+        .section-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-primary);
+            border-radius: var(--radius-lg);
+            overflow: hidden;
+        }
+
+        .section-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 1rem 1.25rem;
+            background: linear-gradient(90deg, var(--accent-primary) 0%, var(--accent-secondary) 100%);
+        }
+
+        .section-header.warning {
+            background: linear-gradient(90deg, var(--accent-danger) 0%, #c0392b 100%);
+        }
+
+        .section-header.info {
+            background: linear-gradient(90deg, var(--accent-tertiary) 0%, #6c5ce7 100%);
+        }
+
+        .section-title {
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: #ffffff;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .section-count {
+            font-size: 0.75rem;
+            opacity: 0.9;
+            font-weight: 400;
+        }
+
+        .section-body {
+            padding: 1rem 1.25rem;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        /* Vessel Cards */
+        .vessel-list {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+
+        .vessel-card {
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-primary);
+            border-radius: var(--radius-md);
+            padding: 1rem;
+            transition: all var(--transition-fast);
+        }
+
+        .vessel-card:hover {
+            border-color: var(--border-accent);
+        }
+
+        .vessel-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 0.5rem;
+        }
+
+        .vessel-name {
+            font-weight: 600;
+            font-size: 0.95rem;
+        }
+
+        .vessel-volume {
+            background: var(--gradient-primary);
+            padding: 0.25rem 0.75rem;
+            border-radius: var(--radius-sm);
+            font-size: 0.75rem;
+            font-weight: 600;
+            font-family: var(--font-mono);
+            color: #0a0f1a;
+        }
+
+        .vessel-info {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+        }
+
+        .vessel-info span {
+            color: var(--text-muted);
+        }
+
+        .vessel-route {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-top: 0.5rem;
+            font-size: 0.8rem;
+        }
+
+        .vessel-route-tag {
+            background: var(--bg-primary);
+            padding: 0.2rem 0.5rem;
+            border-radius: var(--radius-sm);
+            font-size: 0.7rem;
+        }
+
+        .vessel-eta {
+            margin-left: auto;
+            color: var(--text-muted);
+            font-size: 0.75rem;
+        }
+
+        /* Alert Card */
+        .alert-empty {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 2rem;
+            color: var(--text-muted);
+            font-size: 0.85rem;
+        }
+
+        .alert-empty-icon {
+            font-size: 2rem;
+            margin-bottom: 0.5rem;
+            opacity: 0.5;
+        }
+
+        .alert-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 0.75rem;
+            padding: 0.75rem;
+            background: rgba(225, 112, 85, 0.1);
+            border: 1px solid rgba(225, 112, 85, 0.3);
+            border-radius: var(--radius-md);
+            margin-bottom: 0.5rem;
+        }
+
+        .alert-icon {
+            color: var(--accent-danger);
+            font-size: 1.25rem;
+        }
+
+        .alert-content {
+            flex: 1;
+        }
+
+        .alert-title {
+            font-weight: 600;
+            font-size: 0.85rem;
+            margin-bottom: 0.25rem;
+        }
+
+        .alert-desc {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+        }
+
+        /* ═══════════════════════════════════════════════════════════════════════════
+           DATA TABLE
+           ═══════════════════════════════════════════════════════════════════════════ */
+        .table-section {
+            background: var(--bg-card);
+            border: 1px solid var(--border-primary);
+            border-radius: var(--radius-lg);
+            overflow: hidden;
+            margin-bottom: 1.5rem;
+        }
+
+        .table-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 1rem 1.25rem;
+            background: linear-gradient(90deg, var(--accent-tertiary) 0%, #6c5ce7 100%);
+        }
+
+        .table-wrapper {
+            overflow-x: auto;
+        }
+
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.85rem;
+        }
+
+        .data-table th {
+            background: var(--bg-tertiary);
+            padding: 0.75rem 1rem;
+            text-align: left;
+            font-weight: 600;
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-secondary);
+            border-bottom: 1px solid var(--border-primary);
+            white-space: nowrap;
+        }
+
+        .data-table td {
+            padding: 0.75rem 1rem;
+            border-bottom: 1px solid var(--border-primary);
+            white-space: nowrap;
+        }
+
+        .data-table tr:hover td {
+            background: var(--bg-tertiary);
+        }
+
+        .table-empty {
+            padding: 3rem;
+            text-align: center;
+            color: var(--text-muted);
+        }
+
+        /* Product Badge */
+        .product-badge {
+            display: inline-block;
+            padding: 0.2rem 0.6rem;
+            border-radius: var(--radius-sm);
+            font-size: 0.7rem;
+            font-weight: 500;
+        }
+
+        .product-badge.diesel { background: rgba(253, 203, 110, 0.2); color: var(--accent-warning); }
+        .product-badge.gasolina { background: rgba(116, 185, 255, 0.2); color: var(--accent-info); }
+        .product-badge.glp { background: rgba(0, 212, 170, 0.2); color: var(--accent-primary); }
+        .product-badge.residual { background: rgba(225, 112, 85, 0.2); color: var(--accent-danger); }
+
+        /* ═══════════════════════════════════════════════════════════════════════════
+           CHARTS SECTION
+           ═══════════════════════════════════════════════════════════════════════════ */
+        .charts-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+
+        @media (max-width: 768px) {
+            .charts-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .chart-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-primary);
+            border-radius: var(--radius-lg);
+            padding: 1.25rem;
+        }
+
+        .chart-title {
+            font-size: 0.9rem;
+            font-weight: 600;
+            margin-bottom: 1rem;
+            color: var(--text-secondary);
+        }
+
+        .chart-container {
+            position: relative;
+            height: 280px;
+        }
+
+        /* ═══════════════════════════════════════════════════════════════════════════
+           FILTERS BAR
+           ═══════════════════════════════════════════════════════════════════════════ */
+        .filters-bar {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            padding: 1rem;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-primary);
+            border-radius: var(--radius-lg);
+            margin-bottom: 1.5rem;
+            flex-wrap: wrap;
+        }
+
+        .filter-group {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .filter-label {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            font-weight: 500;
+        }
+
+        .filter-input {
+            padding: 0.5rem 0.75rem;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-primary);
+            border-radius: var(--radius-md);
+            color: var(--text-primary);
+            font-family: var(--font-mono);
+            font-size: 0.85rem;
+            transition: all var(--transition-fast);
+        }
+
+        .filter-input:focus {
+            outline: none;
+            border-color: var(--border-accent);
+            box-shadow: 0 0 0 3px var(--border-glow);
+        }
+
+        .filter-btn {
+            padding: 0.5rem 1rem;
+            background: var(--gradient-primary);
+            border: none;
+            border-radius: var(--radius-md);
+            color: #0a0f1a;
+            font-family: var(--font-primary);
+            font-size: 0.8rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all var(--transition-fast);
+        }
+
+        .filter-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: var(--shadow-glow);
+        }
+
+        .filter-btn.secondary {
+            background: var(--bg-tertiary);
+            color: var(--text-primary);
+            border: 1px solid var(--border-primary);
+        }
+
+        /* ═══════════════════════════════════════════════════════════════════════════
+           ERROR OVERLAY
+           ═══════════════════════════════════════════════════════════════════════════ */
+        .error-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(10, 15, 26, 0.95);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            opacity: 0;
+            visibility: hidden;
+            transition: all var(--transition-base);
+        }
+
+        .error-overlay.active {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        .error-modal {
+            background: var(--bg-secondary);
+            border: 1px solid var(--accent-danger);
+            border-radius: var(--radius-xl);
+            padding: 2.5rem;
+            max-width: 480px;
+            text-align: center;
+            box-shadow: 0 0 60px rgba(225, 112, 85, 0.3);
+        }
+
+        .error-icon {
+            width: 80px;
+            height: 80px;
+            background: linear-gradient(135deg, rgba(225, 112, 85, 0.2) 0%, rgba(214, 48, 49, 0.2) 100%);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 1.5rem;
+            font-size: 2.5rem;
+        }
+
+        .error-title {
+            font-size: 1.5rem;
+            font-weight: 700;
+            margin-bottom: 0.75rem;
+        }
+
+        .error-message {
+            color: var(--text-secondary);
+            font-size: 0.95rem;
+            margin-bottom: 1.5rem;
+            line-height: 1.6;
+        }
+
+        .error-details {
+            background: var(--bg-tertiary);
+            padding: 1rem;
+            border-radius: var(--radius-md);
+            margin-bottom: 1.5rem;
+            font-family: var(--font-mono);
+            font-size: 0.8rem;
+            color: var(--accent-danger);
+            text-align: left;
+            max-height: 100px;
+            overflow-y: auto;
+        }
+
+        .error-actions {
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
+        }
+
+        .btn-retry {
+            padding: 0.75rem 2rem;
+            background: var(--gradient-primary);
+            border: none;
+            border-radius: var(--radius-md);
+            color: #0a0f1a;
+            font-family: var(--font-primary);
+            font-size: 0.9rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all var(--transition-fast);
+        }
+
+        .btn-retry:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-glow);
+        }
+
+        .btn-dismiss {
+            padding: 0.75rem 2rem;
+            background: transparent;
+            border: 1px solid var(--border-primary);
+            border-radius: var(--radius-md);
+            color: var(--text-secondary);
+            font-family: var(--font-primary);
+            font-size: 0.9rem;
+            cursor: pointer;
+            transition: all var(--transition-fast);
+        }
+
+        .btn-dismiss:hover {
+            border-color: var(--text-secondary);
+        }
+
+        /* ═══════════════════════════════════════════════════════════════════════════
+           LOADING STATES
+           ═══════════════════════════════════════════════════════════════════════════ */
+        .skeleton {
+            background: linear-gradient(90deg, var(--bg-tertiary) 25%, var(--border-primary) 50%, var(--bg-tertiary) 75%);
+            background-size: 200% 100%;
+            animation: shimmer 1.5s infinite;
+            border-radius: var(--radius-sm);
+        }
+
+        @keyframes shimmer {
+            0% { background-position: 200% 0; }
+            100% { background-position: -200% 0; }
+        }
+
+        .loading-spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 2px solid var(--border-primary);
+            border-top-color: var(--accent-primary);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* ═══════════════════════════════════════════════════════════════════════════
+           FOOTER
+           ═══════════════════════════════════════════════════════════════════════════ */
+        .dashboard-footer {
+            padding: 1rem 1.5rem;
+            background: var(--bg-secondary);
+            border-top: 1px solid var(--border-primary);
+            text-align: center;
+            font-size: 0.8rem;
+            color: var(--text-muted);
+        }
+
+        .footer-link {
+            color: var(--accent-primary);
+            text-decoration: none;
+            font-weight: 500;
+        }
+
+        .footer-link:hover {
+            text-decoration: underline;
+        }
+
+        /* ═══════════════════════════════════════════════════════════════════════════
+           RESPONSIVE ADJUSTMENTS
+           ═══════════════════════════════════════════════════════════════════════════ */
+        @media (max-width: 768px) {
+            .header-content {
+                flex-direction: column;
+                align-items: stretch;
+            }
+
+            .header-controls {
+                justify-content: center;
+            }
+
+            .kpi-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+
+            .kpi-value {
+                font-size: 1.5rem;
+            }
+
+            .filters-bar {
+                flex-direction: column;
+                align-items: stretch;
+            }
+
+            .filter-group {
+                width: 100%;
+            }
+
+            .filter-input {
+                flex: 1;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .kpi-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .nav-tab span {
+                display: none;
+            }
+
+            .nav-tab-icon {
+                font-size: 1.25rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="dashboard-container">
+        <!-- Header -->
+        <header class="dashboard-header">
+            <div class="header-content">
+                <div class="logo-section">
+                    <div class="logo-icon">⛽</div>
+                    <div class="logo-text">
+                        <h1>Planificación de Suministro</h1>
+                        <span>Inventarios & Coberturas • PETROPERÚ</span>
+                    </div>
+                </div>
+                
+                <div class="header-controls">
+                    <a href="#" class="developer-badge">
+                        <span>✦</span> Desarrollado por Franco Urcía Castillo
+                    </a>
+                    
+                    <div class="status-badge">
+                        <div class="status-dot" id="connectionStatus"></div>
+                        <span id="connectionText">Conectando...</span>
+                    </div>
+                    
+                    <div class="date-badge">
+                        <span>📅</span>
+                        <span id="dataDate">Cargando...</span>
+                    </div>
+                    
+                    <div class="theme-toggle">
+                        <button class="theme-btn active" data-theme="dark">Oscuro</button>
+                        <button class="theme-btn" data-theme="light">Claro</button>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Navigation Tabs -->
+        <nav class="nav-tabs">
+            <button class="nav-tab" data-page="resumen">
+                <span class="nav-tab-icon">📊</span>
+                <span>Resumen</span>
+            </button>
+            <button class="nav-tab active" data-page="gerencial">
+                <span class="nav-tab-icon">📈</span>
+                <span>Gerencial</span>
+            </button>
+            <button class="nav-tab" data-page="coberturas">
+                <span class="nav-tab-icon">🎯</span>
+                <span>Coberturas</span>
+            </button>
+            <button class="nav-tab" data-page="mapa-calor">
+                <span class="nav-tab-icon">🔥</span>
+                <span>Mapa Calor</span>
+            </button>
+            <button class="nav-tab" data-page="mapa">
+                <span class="nav-tab-icon">🗺️</span>
+                <span>Mapa</span>
+            </button>
+            <button class="nav-tab" data-page="tendencias">
+                <span class="nav-tab-icon">📉</span>
+                <span>Tendencias</span>
+            </button>
+            <button class="nav-tab" data-page="plan-real">
+                <span class="nav-tab-icon">⚠️</span>
+                <span>Plan vs Real</span>
+            </button>
+            <button class="nav-tab" data-page="proyeccion">
+                <span class="nav-tab-icon">🚀</span>
+                <span>Proyección</span>
+            </button>
+            <button class="nav-tab" data-page="reposiciones">
+                <span class="nav-tab-icon">🔄</span>
+                <span>Reposiciones</span>
+            </button>
+            <button class="nav-tab" data-page="naves">
+                <span class="nav-tab-icon">🚢</span>
+                <span>Naves</span>
+            </button>
+            <button class="nav-tab" data-page="restricciones">
+                <span class="nav-tab-icon">🚫</span>
+                <span>Restricciones</span>
+            </button>
+        </nav>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Page Header -->
+            <div class="page-header">
+                <h2 class="page-title">Vista Gerencial</h2>
+                <p class="page-subtitle">Indicadores ejecutivos y métricas clave • <span id="lastUpdate">--</span></p>
+            </div>
+
+            <!-- Filters Bar -->
+            <div class="filters-bar">
+                <div class="filter-group">
+                    <label class="filter-label">Fecha:</label>
+                    <input type="date" class="filter-input" id="filterDate">
+                </div>
+                <div class="filter-group">
+                    <label class="filter-label">Producto:</label>
+                    <select class="filter-input" id="filterProduct">
+                        <option value="">Todos</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label class="filter-label">Planta:</label>
+                    <select class="filter-input" id="filterPlant">
+                        <option value="">Todas</option>
+                    </select>
+                </div>
+                <button class="filter-btn" id="btnApplyFilters">Aplicar Filtros</button>
+                <button class="filter-btn secondary" id="btnResetFilters">Limpiar</button>
+                <button class="filter-btn secondary" id="btnRefresh">
+                    <span class="loading-spinner" id="refreshSpinner" style="display: none;"></span>
+                    <span id="refreshText">🔄 Actualizar</span>
+                </button>
+            </div>
+
+            <!-- KPI Cards -->
+            <section class="kpi-section">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Indicadores Principales</h3>
+                        <span class="card-badge" id="kpiTimestamp">--</span>
+                    </div>
+                    <div class="kpi-grid">
+                        <div class="kpi-card">
+                            <div class="kpi-label">Inventario Nacional</div>
+                            <div class="kpi-value loading" id="kpiInventario">0.0</div>
+                            <span class="kpi-unit">MB</span>
+                            <div class="kpi-change negative" id="kpiInventarioChange">▼ --%</div>
+                        </div>
+                        <div class="kpi-card">
+                            <div class="kpi-label">Cobertura Prom.</div>
+                            <div class="kpi-value loading" id="kpiCobertura">0.0<span class="kpi-unit">d</span></div>
+                            <div class="kpi-subtext" style="font-size: 0.75rem; color: var(--text-muted);">días promedio</div>
+                        </div>
+                        <div class="kpi-card">
+                            <div class="kpi-label">Críticas</div>
+                            <div class="kpi-value loading" id="kpiCriticas">0</div>
+                            <div class="kpi-subtext" style="font-size: 0.75rem; color: var(--text-muted);">plantas &lt;4 días</div>
+                        </div>
+                        <div class="kpi-card">
+                            <div class="kpi-label">Quiebres</div>
+                            <div class="kpi-value loading" id="kpiQuiebres">0</div>
+                            <div class="kpi-subtext" style="font-size: 0.75rem; color: var(--text-muted);">plantas &lt;1 día</div>
+                        </div>
+                        <div class="kpi-card">
+                            <div class="kpi-label">Ventas/Día</div>
+                            <div class="kpi-value loading" id="kpiVentas">0.0</div>
+                            <span class="kpi-unit">MB vendidos</span>
+                        </div>
+                        <div class="kpi-card">
+                            <div class="kpi-label">BT Buques</div>
+                            <div class="kpi-value loading" id="kpiBuques">0</div>
+                            <div class="kpi-subtext" style="font-size: 0.75rem; color: var(--text-muted);" id="kpiBuquesVolumen">-- MB</div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Dashboard Grid -->
+            <div class="dashboard-grid">
+                <!-- Cabotajes Section -->
+                <div class="section-card">
+                    <div class="section-header">
+                        <div class="section-title">
+                            <span>🚢</span>
+                            CABOTAJES – Transferencia Nacional
+                        </div>
+                        <span class="section-count" id="cabotajesCount">0 buques operando</span>
+                    </div>
+                    <div class="section-body">
+                        <div class="vessel-list" id="cabotajesList">
+                            <div class="alert-empty">
+                                <div class="alert-empty-icon">🚢</div>
+                                <span>Cargando datos de cabotajes...</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Alertas Críticas -->
+                <div class="section-card">
+                    <div class="section-header warning">
+                        <div class="section-title">
+                            <span>⚠️</span>
+                            Alertas Críticas
+                        </div>
+                    </div>
+                    <div class="section-body">
+                        <div id="alertasList">
+                            <div class="alert-empty">
+                                <div class="alert-empty-icon">✓</div>
+                                <span>Sin alertas críticas</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Charts Section -->
+            <div class="charts-grid">
+                <div class="chart-card">
+                    <h4 class="chart-title">📊 Cobertura por Producto</h4>
+                    <div class="chart-container">
+                        <canvas id="chartCobertura"></canvas>
+                    </div>
+                </div>
+                <div class="chart-card">
+                    <h4 class="chart-title">📈 Inventario por Planta</h4>
+                    <div class="chart-container">
+                        <canvas id="chartInventario"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Importaciones Table -->
+            <div class="table-section">
+                <div class="table-header">
+                    <div class="section-title">
+                        <span>🌐</span>
+                        IMPORTACIONES – Buques Internacionales
+                    </div>
+                    <span class="section-count" id="importacionesCount">0 buques programados</span>
+                </div>
+                <div class="table-wrapper">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Buque</th>
+                                <th>Origen</th>
+                                <th>Destino</th>
+                                <th>Volumen</th>
+                                <th>Producto</th>
+                                <th>ETA</th>
+                                <th>Estado</th>
+                            </tr>
+                        </thead>
+                        <tbody id="importacionesBody">
+                            <tr>
+                                <td colspan="7" class="table-empty">Cargando datos...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </main>
+
+        <!-- Footer -->
+        <footer class="dashboard-footer">
+            <span>⚡ Dashboard desarrollado por <a href="#" class="footer-link">Franco Urcía Castillo</a></span>
+            <span> • Planificación de Suministro – PETROPERÚ • </span>
+            <span id="versionInfo">v3.0 • Marzo 2026</span>
+        </footer>
+    </div>
+
+    <!-- Error Overlay -->
+    <div class="error-overlay" id="errorOverlay">
+        <div class="error-modal">
+            <div class="error-icon">⚠️</div>
+            <h3 class="error-title">Error de Conexión</h3>
+            <p class="error-message">No se pudo establecer conexión con la API de Google Sheets. Verifica tu conexión a internet o la URL de despliegue.</p>
+            <div class="error-details" id="errorDetails">
+                Error: Network request failed
+            </div>
+            <div class="error-actions">
+                <button class="btn-retry" id="btnRetry">🔄 Reintentar</button>
+                <button class="btn-dismiss" id="btnDismiss">Cerrar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════════════════════════
+         JAVASCRIPT - SINGLE SOURCE OF TRUTH ARCHITECTURE
+         ═══════════════════════════════════════════════════════════════════════════ -->
+    <script>
+    (function() {
+        'use strict';
+
+        /* ═══════════════════════════════════════════════════════════════════════════
+           SECTION 1: CONFIGURATION & GLOBAL STATE
+           ═══════════════════════════════════════════════════════════════════════════ */
+        
+        // ⚠️ CONFIGURACIÓN: Reemplaza con tu URL de Google Apps Script
+        const CONFIG = {
+            API_URL: 'https://script.google.com/macros/s/AKfycbx_3smWsVfjy_dwSHPSI1SG-Fc_ZjMP_mX_LJyNCtQhNGm7c9OEc64MMbP8VS-jAeJX/exec',
+            FETCH_TIMEOUT: 30000, // 30 segundos
+            AUTO_REFRESH_INTERVAL: 300000, // 5 minutos
+            RETRY_ATTEMPTS: 3,
+            RETRY_DELAY: 2000
+        };
+
+        // Estado Global del Dashboard (Single Source of Truth)
+        const dashboardState = {
+            // Datos crudos de la API
+            rawData: null,
+            
+            // Datos filtrados
+            filteredData: null,
+            
+            // Estado de la UI
+            isLoading: false,
+            hasError: false,
+            errorMessage: '',
+            lastUpdate: null,
+            
+            // Filtros activos
+            filters: {
+                fecha: null,
+                producto: null,
+                planta: null
+            },
+            
+            // Tema actual
+            theme: 'dark',
+            
+            // Referencias a gráficos Chart.js
+            charts: {
+                cobertura: null,
+                inventario: null
+            },
+            
+            // Controlador de fetch para cancelación
+            abortController: null
+        };
+
+        /* ═══════════════════════════════════════════════════════════════════════════
+           SECTION 2: DATA MAPPING LAYER
+           Procesa el array directo de registros de Google Apps Script
+           Esquema API: fecha, planta, producto, inv, pron, vult7, vreal, dem_prom, 
+                        dem, var_dem, vfact, cob, fecha_cobertura, fecha_reposicion,
+                        bt, vol_rep, vacio, comentario, fecha_repos_bt2, bt2, vol_rep_bt2, vacio2
+           ═══════════════════════════════════════════════════════════════════════════ */
+        
+        const DataMapper = {
+            // Umbrales para alertas (en días de cobertura)
+            UMBRAL_CRITICO: 4,
+            UMBRAL_QUIEBRE: 1,
+
+            /**
+             * Procesa el response completo de la API
+             * La API devuelve un ARRAY directo de registros, no un objeto
+             */
+            processResponse(response) {
+                // Detectar si es array directo o tiene estructura
+                const registros = Array.isArray(response) ? response : 
+                                  (response.data || response.registros || response.inventario || []);
+                
+                console.log(`[DataMapper] Procesando ${registros.length} registros`);
+
+                // Calcular KPIs desde los registros
+                const kpis = this.calculateKPIs(registros);
+                
+                // Extraer buques únicos (cabotajes nacionales)
+                const buques = this.extractBuques(registros);
+                
+                // Extraer importaciones (buques internacionales BT2)
+                const importaciones = this.extractImportaciones(registros);
+                
+                // Generar alertas basadas en cobertura
+                const alertas = this.generateAlertas(registros);
+
+                // Obtener fecha más reciente de los datos
+                const fechaMasReciente = this.getFechaMasReciente(registros);
+
+                return {
+                    kpis,
+                    inventario: registros,
+                    buques,
+                    importaciones,
+                    alertas,
+                    timestamp: fechaMasReciente || new Date().toISOString(),
+                    totalRegistros: registros.length
+                };
+            },
+
+            /**
+             * Calcula KPIs agregados desde los registros
+             */
+            calculateKPIs(registros) {
+                if (!registros || registros.length === 0) {
+                    return {
+                        inventarioNacional: 0,
+                        coberturaPromedio: 0,
+                        criticas: 0,
+                        quiebres: 0,
+                        ventasDia: 0,
+                        buques: 0,
+                        volumenBuques: 0
+                    };
+                }
+
+                // Acumuladores
+                let inventarioTotal = 0;
+                let coberturaSum = 0;
+                let coberturaCount = 0;
+                let criticas = 0;
+                let quiebres = 0;
+                let ventasTotal = 0;
+                const buquesSet = new Set();
+                let volumenBuques = 0;
+
+                // Debug: ver estructura del primer registro
+                console.log('[KPIs] Primer registro:', registros[0]);
+                console.log('[KPIs] Campos disponibles:', Object.keys(registros[0]));
+
+                registros.forEach(r => {
+                    // Inventario total (campo: inv)
+                    const inv = this.parseNum(r.inv);
+                    inventarioTotal += inv;
+
+                    // Cobertura promedio (campo: cob)
+                    const cob = this.parseNum(r.cob);
+                    if (cob > 0) {
+                        coberturaSum += cob;
+                        coberturaCount++;
+
+                        // Contar críticas y quiebres
+                        if (cob < this.UMBRAL_QUIEBRE) {
+                            quiebres++;
+                        } else if (cob < this.UMBRAL_CRITICO) {
+                            criticas++;
+                        }
+                    }
+
+                    // Ventas del día (campo: vreal o vfact)
+                    const venta = this.parseNum(r.vreal) || this.parseNum(r.vfact);
+                    ventasTotal += venta;
+
+                    // Buques únicos (campo: bt)
+                    if (r.bt && String(r.bt).trim() !== '' && r.bt !== '-') {
+                        buquesSet.add(String(r.bt).trim());
+                        volumenBuques += this.parseNum(r.vol_rep);
+                    }
+
+                    // También contar BT2 si existe
+                    if (r.bt2 && String(r.bt2).trim() !== '' && r.bt2 !== '-') {
+                        buquesSet.add(String(r.bt2).trim());
+                        volumenBuques += this.parseNum(r.vol_rep_bt2);
+                    }
+                });
+
+                // Debug de totales
+                console.log('[KPIs] Totales calculados:', {
+                    inventarioTotal,
+                    coberturaSum,
+                    coberturaCount,
+                    criticas,
+                    quiebres,
+                    ventasTotal,
+                    buques: buquesSet.size,
+                    volumenBuques
+                });
+
+                // Determinar si ya viene en MBL o en barriles
+                // Si inventarioTotal > 100000, probablemente viene en barriles
+                // Si es menor, probablemente ya viene en MBL
+                const inventarioMBL = inventarioTotal > 100000 ? inventarioTotal / 1000 : inventarioTotal;
+                const ventasMBL = ventasTotal > 10000 ? ventasTotal / 1000 : ventasTotal;
+
+                return {
+                    inventarioNacional: Math.round(inventarioMBL * 10) / 10,
+                    coberturaPromedio: coberturaCount > 0 ? Math.round(coberturaSum / coberturaCount * 10) / 10 : 0,
+                    criticas: criticas,
+                    quiebres: quiebres,
+                    ventasDia: Math.round(ventasMBL * 10) / 10,
+                    buques: buquesSet.size,
+                    volumenBuques: Math.round(volumenBuques)
+                };
+            },
+
+            /**
+             * Extrae buques únicos para la sección de Cabotajes
+             */
+            extractBuques(registros) {
+                const buquesMap = new Map();
+
+                registros.forEach(r => {
+                    // BT principal
+                    if (r.bt && r.bt.trim() !== '' && r.bt !== '-') {
+                        const nombre = r.bt.trim();
+                        if (!buquesMap.has(nombre)) {
+                            buquesMap.set(nombre, {
+                                nombre: nombre,
+                                volumen: 0,
+                                destinos: new Set(),
+                                eta: r.fecha_reposicion || '',
+                                productos: new Set()
+                            });
+                        }
+                        const buque = buquesMap.get(nombre);
+                        buque.volumen += this.parseNum(r.vol_rep);
+                        if (r.planta) buque.destinos.add(r.planta);
+                        if (r.producto) buque.productos.add(r.producto);
+                        if (r.fecha_reposicion) buque.eta = r.fecha_reposicion;
+                    }
+                });
+
+                // Convertir a array y formatear
+                return Array.from(buquesMap.values()).map(b => ({
+                    nombre: b.nombre,
+                    volumen: b.volumen,
+                    ruta: Array.from(b.destinos),
+                    destino: Array.from(b.destinos).join(' / '),
+                    eta: this.formatFecha(b.eta),
+                    productos: Array.from(b.productos).join(', ')
+                }));
+            },
+
+            /**
+             * Extrae importaciones (BT2 - buques internacionales)
+             */
+            extractImportaciones(registros) {
+                const importMap = new Map();
+
+                registros.forEach(r => {
+                    // BT2 - Buques internacionales
+                    if (r.bt2 && r.bt2.trim() !== '' && r.bt2 !== '-') {
+                        const nombre = r.bt2.trim();
+                        if (!importMap.has(nombre)) {
+                            importMap.set(nombre, {
+                                buque: nombre,
+                                volumen: 0,
+                                productos: new Set(),
+                                destinos: new Set(),
+                                eta: r.fecha_repos_bt2 || '',
+                                tipo: 'Importación'
+                            });
+                        }
+                        const imp = importMap.get(nombre);
+                        imp.volumen += this.parseNum(r.vol_rep_bt2);
+                        if (r.producto) imp.productos.add(r.producto);
+                        if (r.planta) imp.destinos.add(r.planta);
+                        if (r.fecha_repos_bt2) imp.eta = r.fecha_repos_bt2;
+                    }
+                });
+
+                return Array.from(importMap.values()).map(i => ({
+                    buque: i.buque,
+                    producto: Array.from(i.productos).join(', '),
+                    volumen: i.volumen,
+                    destino: Array.from(i.destinos).join(' / '),
+                    eta: this.formatFecha(i.eta),
+                    tipo: i.tipo
+                }));
+            },
+
+            /**
+             * Genera alertas basadas en cobertura crítica
+             */
+            generateAlertas(registros) {
+                const alertas = [];
+                const plantasCriticas = [];
+                const plantasQuiebre = [];
+
+                registros.forEach(r => {
+                    const cob = this.parseNum(r.cob);
+                    if (cob > 0 && cob < this.UMBRAL_QUIEBRE) {
+                        plantasQuiebre.push({
+                            planta: r.planta,
+                            producto: r.producto,
+                            cobertura: cob
+                        });
+                    } else if (cob > 0 && cob < this.UMBRAL_CRITICO) {
+                        plantasCriticas.push({
+                            planta: r.planta,
+                            producto: r.producto,
+                            cobertura: cob
+                        });
+                    }
+                });
+
+                // Ordenar por cobertura (más críticos primero)
+                plantasQuiebre.sort((a, b) => a.cobertura - b.cobertura);
+                plantasCriticas.sort((a, b) => a.cobertura - b.cobertura);
+
+                // Agregar alertas de quiebre
+                plantasQuiebre.slice(0, 5).forEach(p => {
+                    alertas.push({
+                        tipo: 'quiebre',
+                        titulo: `⚠️ QUIEBRE: ${p.planta}`,
+                        descripcion: `${p.producto} - Cobertura: ${p.cobertura} días`
+                    });
+                });
+
+                // Agregar alertas críticas
+                plantasCriticas.slice(0, 5).forEach(p => {
+                    alertas.push({
+                        tipo: 'critico',
+                        titulo: `🔴 Crítico: ${p.planta}`,
+                        descripcion: `${p.producto} - Cobertura: ${p.cobertura} días`
+                    });
+                });
+
+                return alertas;
+            },
+
+            /**
+             * Obtiene la fecha más reciente de los registros
+             */
+            getFechaMasReciente(registros) {
+                let fechaMax = null;
+                registros.forEach(r => {
+                    if (r.fecha) {
+                        const fecha = new Date(r.fecha);
+                        if (!isNaN(fecha) && (!fechaMax || fecha > fechaMax)) {
+                            fechaMax = fecha;
+                        }
+                    }
+                });
+                return fechaMax ? fechaMax.toISOString() : null;
+            },
+
+            /**
+             * Parsea número de forma segura
+             */
+            parseNum(val) {
+                if (val === null || val === undefined || val === '' || val === '-') return 0;
+                const num = typeof val === 'number' ? val : parseFloat(String(val).replace(/[^0-9.-]/g, ''));
+                return isNaN(num) ? 0 : num;
+            },
+
+            /**
+             * Formatea fecha para display
+             */
+            formatFecha(val) {
+                if (!val || val === '' || val === '-') return '--';
+                try {
+                    const date = new Date(val);
+                    if (isNaN(date)) return val;
+                    return date.toLocaleDateString('es-PE', { day: '2-digit', month: 'short' });
+                } catch (e) {
+                    return val;
+                }
+            }
+        };
+
+        /* ═══════════════════════════════════════════════════════════════════════════
+           SECTION 3: API LOGIC
+           Fetch robusto con AbortController, reintentos y manejo de errores
+           ═══════════════════════════════════════════════════════════════════════════ */
+        
+        const API = {
+            // Fetch con timeout y cancelación
+            async fetchWithTimeout(url, options = {}) {
+                // Cancelar request anterior si existe
+                if (dashboardState.abortController) {
+                    dashboardState.abortController.abort();
+                }
+
+                // Crear nuevo controller
+                dashboardState.abortController = new AbortController();
+                const { signal } = dashboardState.abortController;
+
+                // Configurar timeout
+                const timeoutId = setTimeout(() => {
+                    dashboardState.abortController.abort();
+                }, CONFIG.FETCH_TIMEOUT);
+
+                try {
+                    // IMPORTANTE: Para Google Apps Script NO enviar headers personalizados
+                    // Esto evita la preflight request (OPTIONS) que causa error CORS
+                    const response = await fetch(url, {
+                        method: 'GET',
+                        signal,
+                        redirect: 'follow' // Importante: seguir redirecciones de GAS
+                    });
+
+                    clearTimeout(timeoutId);
+
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                    }
+
+                    return await response.json();
+                } catch (error) {
+                    clearTimeout(timeoutId);
+                    
+                    if (error.name === 'AbortError') {
+                        throw new Error('La solicitud excedió el tiempo límite');
+                    }
+                    throw error;
+                }
+            },
+
+            // Fetch con reintentos automáticos
+            async fetchWithRetry(url, attempts = CONFIG.RETRY_ATTEMPTS) {
+                let lastError;
+
+                for (let i = 0; i < attempts; i++) {
+                    try {
+                        console.log(`[API] Intento ${i + 1}/${attempts}...`);
+                        return await this.fetchWithTimeout(url);
+                    } catch (error) {
+                        lastError = error;
+                        console.warn(`[API] Intento ${i + 1} fallido:`, error.message);
+                        
+                        if (i < attempts - 1) {
+                            await this.delay(CONFIG.RETRY_DELAY * (i + 1));
+                        }
+                    }
+                }
+
+                throw lastError;
+            },
+
+            // Utilidad de delay
+            delay(ms) {
+                return new Promise(resolve => setTimeout(resolve, ms));
+            },
+
+            // Cargar datos del dashboard
+            async loadDashboardData() {
+                // Validar URL configurada
+                if (!CONFIG.API_URL || CONFIG.API_URL === 'YOUR_GOOGLE_APPS_SCRIPT_URL_HERE') {
+                    throw new Error('URL de API no configurada. Edita CONFIG.API_URL con tu URL de Google Apps Script.');
+                }
+
+                UI.setLoadingState(true);
+                UI.updateConnectionStatus('loading', 'Conectando...');
+
+                try {
+                    const response = await this.fetchWithRetry(CONFIG.API_URL);
+                    console.log('[API] Datos recibidos:', response);
+
+                    // Procesar usando el nuevo DataMapper
+                    dashboardState.rawData = DataMapper.processResponse(response);
+                    console.log('[API] Datos procesados:', dashboardState.rawData);
+
+                    // Aplicar filtros iniciales
+                    dashboardState.filteredData = { ...dashboardState.rawData };
+                    dashboardState.lastUpdate = new Date();
+                    dashboardState.hasError = false;
+
+                    // Actualizar UI
+                    UI.updateConnectionStatus('connected', `Conectado - ${dashboardState.rawData.totalRegistros} registros`);
+                    UI.populateFilters();
+                    Render.updateAll();
+
+                    return dashboardState.rawData;
+
+                } catch (error) {
+                    console.error('[API] Error fatal:', error);
+                    dashboardState.hasError = true;
+                    dashboardState.errorMessage = error.message;
+                    
+                    UI.updateConnectionStatus('error', 'Error de conexión');
+                    UI.showErrorOverlay(error.message);
+                    
+                    throw error;
+                } finally {
+                    UI.setLoadingState(false);
+                }
+            }
+        };
+
+        /* ═══════════════════════════════════════════════════════════════════════════
+           SECTION 4: UI UTILITIES
+           Funciones auxiliares para manipulación del DOM
+           ═══════════════════════════════════════════════════════════════════════════ */
+        
+        const UI = {
+            // Referencias DOM cacheadas
+            elements: {},
+
+            // Inicializar referencias
+            init() {
+                this.elements = {
+                    // Status
+                    connectionStatus: document.getElementById('connectionStatus'),
+                    connectionText: document.getElementById('connectionText'),
+                    dataDate: document.getElementById('dataDate'),
+                    lastUpdate: document.getElementById('lastUpdate'),
+                    kpiTimestamp: document.getElementById('kpiTimestamp'),
+                    
+                    // KPIs
+                    kpiInventario: document.getElementById('kpiInventario'),
+                    kpiInventarioChange: document.getElementById('kpiInventarioChange'),
+                    kpiCobertura: document.getElementById('kpiCobertura'),
+                    kpiCriticas: document.getElementById('kpiCriticas'),
+                    kpiQuiebres: document.getElementById('kpiQuiebres'),
+                    kpiVentas: document.getElementById('kpiVentas'),
+                    kpiBuques: document.getElementById('kpiBuques'),
+                    kpiBuquesVolumen: document.getElementById('kpiBuquesVolumen'),
+                    
+                    // Lists
+                    cabotajesList: document.getElementById('cabotajesList'),
+                    cabotajesCount: document.getElementById('cabotajesCount'),
+                    alertasList: document.getElementById('alertasList'),
+                    importacionesBody: document.getElementById('importacionesBody'),
+                    importacionesCount: document.getElementById('importacionesCount'),
+                    
+                    // Filters
+                    filterDate: document.getElementById('filterDate'),
+                    filterProduct: document.getElementById('filterProduct'),
+                    filterPlant: document.getElementById('filterPlant'),
+                    
+                    // Buttons
+                    btnApplyFilters: document.getElementById('btnApplyFilters'),
+                    btnResetFilters: document.getElementById('btnResetFilters'),
+                    btnRefresh: document.getElementById('btnRefresh'),
+                    refreshSpinner: document.getElementById('refreshSpinner'),
+                    refreshText: document.getElementById('refreshText'),
+                    
+                    // Error overlay
+                    errorOverlay: document.getElementById('errorOverlay'),
+                    errorDetails: document.getElementById('errorDetails'),
+                    btnRetry: document.getElementById('btnRetry'),
+                    btnDismiss: document.getElementById('btnDismiss'),
+                    
+                    // Charts
+                    chartCobertura: document.getElementById('chartCobertura'),
+                    chartInventario: document.getElementById('chartInventario'),
+                    
+                    // Theme
+                    themeButtons: document.querySelectorAll('.theme-btn'),
+                    
+                    // Nav
+                    navTabs: document.querySelectorAll('.nav-tab')
+                };
+            },
+
+            // Estado de carga
+            setLoadingState(isLoading) {
+                dashboardState.isLoading = isLoading;
+                
+                const { refreshSpinner, refreshText } = this.elements;
+                if (refreshSpinner && refreshText) {
+                    refreshSpinner.style.display = isLoading ? 'inline-block' : 'none';
+                    refreshText.textContent = isLoading ? 'Cargando...' : '🔄 Actualizar';
+                }
+
+                // Actualizar clases de KPIs
+                document.querySelectorAll('.kpi-value').forEach(el => {
+                    el.classList.toggle('loading', isLoading);
+                });
+            },
+
+            // Estado de conexión
+            updateConnectionStatus(status, text) {
+                const { connectionStatus, connectionText } = this.elements;
+                
+                if (connectionStatus) {
+                    connectionStatus.className = 'status-dot';
+                    if (status === 'error') connectionStatus.classList.add('error');
+                    if (status === 'loading') connectionStatus.classList.add('loading');
+                }
+                
+                if (connectionText) {
+                    connectionText.textContent = text;
+                }
+            },
+
+            // Mostrar overlay de error
+            showErrorOverlay(message) {
+                const { errorOverlay, errorDetails } = this.elements;
+                
+                if (errorDetails) {
+                    errorDetails.textContent = `Error: ${message}`;
+                }
+                
+                if (errorOverlay) {
+                    errorOverlay.classList.add('active');
+                }
+            },
+
+            // Ocultar overlay de error
+            hideErrorOverlay() {
+                const { errorOverlay } = this.elements;
+                if (errorOverlay) {
+                    errorOverlay.classList.remove('active');
+                }
+            },
+
+            // Poblar filtros con datos únicos
+            populateFilters() {
+                const data = dashboardState.rawData;
+                if (!data || !data.inventario) return;
+
+                const { filterProduct, filterPlant, filterDate } = this.elements;
+
+                // Productos únicos
+                if (filterProduct) {
+                    const productos = [...new Set(data.inventario.map(r => r.producto).filter(Boolean))];
+                    filterProduct.innerHTML = '<option value="">Todos</option>';
+                    productos.forEach(p => {
+                        filterProduct.innerHTML += `<option value="${p}">${p}</option>`;
+                    });
+                }
+
+                // Plantas únicas
+                if (filterPlant) {
+                    const plantas = [...new Set(data.inventario.map(r => r.planta).filter(Boolean))];
+                    filterPlant.innerHTML = '<option value="">Todas</option>';
+                    plantas.forEach(p => {
+                        filterPlant.innerHTML += `<option value="${p}">${p}</option>`;
+                    });
+                }
+
+                // Fecha por defecto (hoy o última disponible)
+                if (filterDate && data.inventario.length > 0) {
+                    const fechas = data.inventario.map(r => r.fecha).filter(Boolean).sort();
+                    const ultimaFecha = fechas[fechas.length - 1];
+                    if (ultimaFecha) {
+                        // Convertir a formato YYYY-MM-DD
+                        const dateObj = new Date(ultimaFecha);
+                        if (!isNaN(dateObj)) {
+                            filterDate.value = dateObj.toISOString().split('T')[0];
+                        }
+                    }
+                }
+            },
+
+            // Formatear números
+            formatNumber(num, decimals = 1) {
+                if (num === null || num === undefined || isNaN(num)) return '0';
+                return Number(num).toLocaleString('es-PE', {
+                    minimumFractionDigits: decimals,
+                    maximumFractionDigits: decimals
+                });
+            },
+
+            // Formatear fecha
+            formatDate(dateStr) {
+                if (!dateStr) return '--';
+                const date = new Date(dateStr);
+                if (isNaN(date)) return dateStr;
+                return date.toLocaleDateString('es-PE', {
+                    day: '2-digit',
+                    month: '2-digit',
+                    year: 'numeric'
+                });
+            },
+
+            // Obtener clase de producto
+            getProductClass(producto) {
+                if (!producto) return '';
+                const p = producto.toLowerCase();
+                if (p.includes('diesel') || p.includes('db5')) return 'diesel';
+                if (p.includes('gasolina') || p.includes('g84') || p.includes('g90') || p.includes('g95')) return 'gasolina';
+                if (p.includes('glp')) return 'glp';
+                if (p.includes('residual') || p.includes('r500')) return 'residual';
+                return '';
+            }
+        };
+
+        /* ═══════════════════════════════════════════════════════════════════════════
+           SECTION 5: RENDER FUNCTIONS
+           Funciones individuales para actualizar cada componente visual
+           ═══════════════════════════════════════════════════════════════════════════ */
+        
+        const Render = {
+            // Actualizar todos los componentes
+            updateAll() {
+                this.updateKPIs();
+                this.updateTimestamps();
+                this.updateCabotajes();
+                this.updateAlertas();
+                this.updateImportaciones();
+                this.updateCharts();
+            },
+
+            // Actualizar KPIs
+            updateKPIs() {
+                const data = dashboardState.filteredData;
+                if (!data || !data.kpis) return;
+
+                const { kpis } = data;
+                const el = UI.elements;
+
+                // Inventario Nacional
+                if (el.kpiInventario) {
+                    el.kpiInventario.textContent = UI.formatNumber(kpis.inventarioNacional, 1);
+                    el.kpiInventario.classList.remove('loading');
+                }
+
+                // Cobertura Promedio
+                if (el.kpiCobertura) {
+                    el.kpiCobertura.innerHTML = `${UI.formatNumber(kpis.coberturaPromedio, 1)}<span class="kpi-unit">d</span>`;
+                    el.kpiCobertura.classList.remove('loading');
+                }
+
+                // Críticas
+                if (el.kpiCriticas) {
+                    el.kpiCriticas.textContent = kpis.criticas || 0;
+                    el.kpiCriticas.classList.remove('loading');
+                }
+
+                // Quiebres
+                if (el.kpiQuiebres) {
+                    el.kpiQuiebres.textContent = kpis.quiebres || 0;
+                    el.kpiQuiebres.classList.remove('loading');
+                }
+
+                // Ventas/Día
+                if (el.kpiVentas) {
+                    el.kpiVentas.textContent = UI.formatNumber(kpis.ventasDia, 1);
+                    el.kpiVentas.classList.remove('loading');
+                }
+
+                // Buques
+                if (el.kpiBuques) {
+                    el.kpiBuques.textContent = kpis.buques || 0;
+                    el.kpiBuques.classList.remove('loading');
+                }
+                if (el.kpiBuquesVolumen) {
+                    el.kpiBuquesVolumen.textContent = `${UI.formatNumber(kpis.volumenBuques, 0)} MB`;
+                }
+            },
+
+            // Actualizar timestamps
+            updateTimestamps() {
+                const data = dashboardState.rawData;
+                const el = UI.elements;
+
+                const now = new Date();
+                const timeStr = now.toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' });
+
+                if (el.lastUpdate) {
+                    el.lastUpdate.textContent = `Actualizado: ${timeStr}`;
+                }
+
+                if (el.kpiTimestamp) {
+                    el.kpiTimestamp.textContent = timeStr;
+                }
+
+                if (el.dataDate && data && data.timestamp) {
+                    el.dataDate.textContent = `Datos al ${UI.formatDate(data.timestamp)}`;
+                }
+            },
+
+            // Actualizar lista de cabotajes
+            updateCabotajes() {
+                const data = dashboardState.filteredData;
+                const { cabotajesList, cabotajesCount } = UI.elements;
+
+                if (!cabotajesList) return;
+
+                const buques = data?.buques || [];
+
+                if (buques.length === 0) {
+                    cabotajesList.innerHTML = `
+                        <div class="alert-empty">
+                            <div class="alert-empty-icon">🚢</div>
+                            <span>Sin buques en tránsito</span>
+                        </div>
+                    `;
+                    if (cabotajesCount) cabotajesCount.textContent = '0 buques operando';
+                    return;
+                }
+
+                cabotajesList.innerHTML = buques.map(buque => `
+                    <div class="vessel-card">
+                        <div class="vessel-header">
+                            <span class="vessel-name">${buque.nombre || 'N/A'}</span>
+                            <span class="vessel-volume">${UI.formatNumber(buque.volumen, 0)} MB</span>
+                        </div>
+                        <div class="vessel-info">
+                            <span>V.</span> ${buque.viaje || buque.codigo || '--'}
+                        </div>
+                        <div class="vessel-route">
+                            <span>Ruta:</span> ${buque.origen || '--'} → ${buque.destino || '--'}
+                        </div>
+                        ${buque.ruta ? `
+                        <div class="vessel-route">
+                            <span>Destinos:</span>
+                            ${(Array.isArray(buque.ruta) ? buque.ruta : [buque.ruta]).map(r => 
+                                `<span class="vessel-route-tag">${r}</span>`
+                            ).join('')}
+                        </div>
+                        ` : ''}
+                        <div class="vessel-eta">
+                            ETA: ${buque.eta || '--'}
+                        </div>
+                    </div>
+                `).join('');
+
+                if (cabotajesCount) {
+                    cabotajesCount.textContent = `${buques.length} buques operando`;
+                }
+            },
+
+            // Actualizar alertas
+            updateAlertas() {
+                const data = dashboardState.filteredData;
+                const { alertasList } = UI.elements;
+
+                if (!alertasList) return;
+
+                const alertas = data?.alertas || [];
+
+                // También generar alertas automáticas basadas en KPIs
+                const autoAlertas = [];
+                if (data?.kpis) {
+                    if (data.kpis.criticas > 0) {
+                        autoAlertas.push({
+                            titulo: `${data.kpis.criticas} plantas en estado crítico`,
+                            descripcion: 'Cobertura menor a 4 días'
+                        });
+                    }
+                    if (data.kpis.quiebres > 0) {
+                        autoAlertas.push({
+                            titulo: `${data.kpis.quiebres} plantas en quiebre`,
+                            descripcion: 'Cobertura menor a 1 día - Acción inmediata requerida'
+                        });
+                    }
+                }
+
+                const todasAlertas = [...alertas, ...autoAlertas];
+
+                if (todasAlertas.length === 0) {
+                    alertasList.innerHTML = `
+                        <div class="alert-empty">
+                            <div class="alert-empty-icon">✓</div>
+                            <span>Sin alertas críticas</span>
+                        </div>
+                    `;
+                    return;
+                }
+
+                alertasList.innerHTML = todasAlertas.map(alerta => `
+                    <div class="alert-item">
+                        <span class="alert-icon">⚠️</span>
+                        <div class="alert-content">
+                            <div class="alert-title">${alerta.titulo || alerta.mensaje || 'Alerta'}</div>
+                            <div class="alert-desc">${alerta.descripcion || alerta.detalle || ''}</div>
+                        </div>
+                    </div>
+                `).join('');
+            },
+
+            // Actualizar tabla de importaciones
+            updateImportaciones() {
+                const data = dashboardState.filteredData;
+                const { importacionesBody, importacionesCount } = UI.elements;
+
+                if (!importacionesBody) return;
+
+                const importaciones = data?.importaciones || [];
+
+                if (importaciones.length === 0) {
+                    importacionesBody.innerHTML = `
+                        <tr>
+                            <td colspan="7" class="table-empty">Sin importaciones programadas</td>
+                        </tr>
+                    `;
+                    if (importacionesCount) importacionesCount.textContent = '0 buques programados';
+                    return;
+                }
+
+                importacionesBody.innerHTML = importaciones.map(imp => `
+                    <tr>
+                        <td><strong>${imp.nombre || imp.buque || 'N/A'}</strong></td>
+                        <td>${imp.origen || '--'}</td>
+                        <td>${imp.destino || '--'}</td>
+                        <td>${UI.formatNumber(imp.volumen, 0)} MB</td>
+                        <td>
+                            <span class="product-badge ${UI.getProductClass(imp.producto)}">
+                                ${imp.producto || '--'}
+                            </span>
+                        </td>
+                        <td>${imp.eta || '--'}</td>
+                        <td>${imp.estado || 'Programado'}</td>
+                    </tr>
+                `).join('');
+
+                if (importacionesCount) {
+                    importacionesCount.textContent = `${importaciones.length} buques programados`;
+                }
+            },
+
+            // Actualizar gráficos
+            updateCharts() {
+                this.updateChartCobertura();
+                this.updateChartInventario();
+            },
+
+            // Gráfico de Cobertura por Producto
+            updateChartCobertura() {
+                const data = dashboardState.filteredData;
+                const canvas = UI.elements.chartCobertura;
+                
+                if (!canvas) return;
+
+                // Destruir gráfico anterior
+                if (dashboardState.charts.cobertura) {
+                    dashboardState.charts.cobertura.destroy();
+                }
+
+                // Preparar datos agrupados por producto
+                const inventario = data?.inventario || [];
+                const porProducto = {};
+
+                inventario.forEach(r => {
+                    if (r.producto && r.cob !== undefined) {
+                        if (!porProducto[r.producto]) {
+                            porProducto[r.producto] = { total: 0, count: 0 };
+                        }
+                        const cob = Number(r.cob) || 0;
+                        if (cob > 0) {
+                            porProducto[r.producto].total += cob;
+                            porProducto[r.producto].count++;
+                        }
+                    }
+                });
+
+                const labels = Object.keys(porProducto);
+                const values = labels.map(p => 
+                    porProducto[p].count > 0 
+                        ? (porProducto[p].total / porProducto[p].count).toFixed(1) 
+                        : 0
+                );
+
+                // Colores por producto
+                const colors = labels.map(p => {
+                    const pc = UI.getProductClass(p);
+                    switch (pc) {
+                        case 'diesel': return '#fdcb6e';
+                        case 'gasolina': return '#74b9ff';
+                        case 'glp': return '#00d4aa';
+                        case 'residual': return '#e17055';
+                        default: return '#a29bfe';
+                    }
+                });
+
+                // Crear gráfico
+                const ctx = canvas.getContext('2d');
+                dashboardState.charts.cobertura = new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: labels.length > 0 ? labels : ['Sin datos'],
+                        datasets: [{
+                            label: 'Días de Cobertura',
+                            data: values.length > 0 ? values : [0],
+                            backgroundColor: colors.length > 0 ? colors : ['#4a5568'],
+                            borderColor: colors.length > 0 ? colors : ['#4a5568'],
+                            borderWidth: 1,
+                            borderRadius: 6
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { display: false },
+                            tooltip: {
+                                backgroundColor: 'rgba(10, 15, 26, 0.9)',
+                                titleColor: '#fff',
+                                bodyColor: '#8b9dc3',
+                                borderColor: '#1a2a45',
+                                borderWidth: 1,
+                                callbacks: {
+                                    label: ctx => `${ctx.parsed.y} días`
+                                }
+                            }
+                        },
+                        scales: {
+                            x: {
+                                grid: { color: 'rgba(26, 42, 69, 0.5)' },
+                                ticks: { color: '#8b9dc3', font: { family: 'Sora' } }
+                            },
+                            y: {
+                                beginAtZero: true,
+                                grid: { color: 'rgba(26, 42, 69, 0.5)' },
+                                ticks: { color: '#8b9dc3', font: { family: 'JetBrains Mono' } }
+                            }
+                        }
+                    }
+                });
+            },
+
+            // Gráfico de Inventario por Planta
+            updateChartInventario() {
+                const data = dashboardState.filteredData;
+                const canvas = UI.elements.chartInventario;
+                
+                if (!canvas) return;
+
+                // Destruir gráfico anterior
+                if (dashboardState.charts.inventario) {
+                    dashboardState.charts.inventario.destroy();
+                }
+
+                // Preparar datos agrupados por planta (top 10)
+                const inventario = data?.inventario || [];
+                const porPlanta = {};
+
+                inventario.forEach(r => {
+                    if (r.planta && r.inv !== undefined) {
+                        if (!porPlanta[r.planta]) {
+                            porPlanta[r.planta] = 0;
+                        }
+                        porPlanta[r.planta] += Number(r.inv) || 0;
+                    }
+                });
+
+                // Ordenar y tomar top 10, convertir a MBL
+                const sorted = Object.entries(porPlanta)
+                    .sort((a, b) => b[1] - a[1])
+                    .slice(0, 10);
+
+                const labels = sorted.map(([planta]) => planta);
+                const values = sorted.map(([, inv]) => Math.round(inv / 1000 * 10) / 10); // Convertir a MBL
+
+                // Crear gráfico
+                const ctx = canvas.getContext('2d');
+                dashboardState.charts.inventario = new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: labels.length > 0 ? labels : ['Sin datos'],
+                        datasets: [{
+                            label: 'Inventario (MB)',
+                            data: values.length > 0 ? values : [0],
+                            backgroundColor: 'rgba(0, 212, 170, 0.6)',
+                            borderColor: '#00d4aa',
+                            borderWidth: 1,
+                            borderRadius: 6
+                        }]
+                    },
+                    options: {
+                        indexAxis: 'y',
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { display: false },
+                            tooltip: {
+                                backgroundColor: 'rgba(10, 15, 26, 0.9)',
+                                titleColor: '#fff',
+                                bodyColor: '#8b9dc3',
+                                borderColor: '#1a2a45',
+                                borderWidth: 1,
+                                callbacks: {
+                                    label: ctx => `${UI.formatNumber(ctx.parsed.x, 1)} MB`
+                                }
+                            }
+                        },
+                        scales: {
+                            x: {
+                                beginAtZero: true,
+                                grid: { color: 'rgba(26, 42, 69, 0.5)' },
+                                ticks: { color: '#8b9dc3', font: { family: 'JetBrains Mono' } }
+                            },
+                            y: {
+                                grid: { display: false },
+                                ticks: { 
+                                    color: '#8b9dc3', 
+                                    font: { family: 'Sora', size: 11 },
+                                    callback: function(value) {
+                                        const label = this.getLabelForValue(value);
+                                        return label.length > 15 ? label.substr(0, 15) + '...' : label;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+        };
+
+        /* ═══════════════════════════════════════════════════════════════════════════
+           SECTION 6: FILTERS & INTERACTIONS
+           ═══════════════════════════════════════════════════════════════════════════ */
+        
+        const Filters = {
+            // Aplicar filtros a los datos
+            apply() {
+                const raw = dashboardState.rawData;
+                if (!raw) return;
+
+                const { fecha, producto, planta } = dashboardState.filters;
+                
+                // Clonar datos
+                const filtered = {
+                    ...raw,
+                    inventario: [...(raw.inventario || [])],
+                    buques: [...(raw.buques || [])],
+                    importaciones: [...(raw.importaciones || [])],
+                    alertas: [...(raw.alertas || [])]
+                };
+
+                // Filtrar inventario
+                if (filtered.inventario.length > 0) {
+                    filtered.inventario = filtered.inventario.filter(r => {
+                        let match = true;
+                        
+                        if (fecha && r.fecha) {
+                            const rFecha = new Date(r.fecha).toISOString().split('T')[0];
+                            match = match && rFecha === fecha;
+                        }
+                        
+                        if (producto && r.producto) {
+                            match = match && r.producto === producto;
+                        }
+                        
+                        if (planta && r.planta) {
+                            match = match && r.planta === planta;
+                        }
+                        
+                        return match;
+                    });
+
+                    // Recalcular KPIs basados en datos filtrados
+                    const inv = filtered.inventario;
+                    const invTotal = inv.reduce((sum, r) => sum + (Number(r.inv) || 0), 0);
+                    const cobSum = inv.reduce((sum, r) => sum + (Number(r.cob) || 0), 0);
+                    const cobCount = inv.filter(r => (Number(r.cob) || 0) > 0).length;
+                    
+                    filtered.kpis = {
+                        ...raw.kpis,
+                        inventarioNacional: Math.round(invTotal / 1000 * 10) / 10, // MBL
+                        coberturaPromedio: cobCount > 0 
+                            ? Math.round(cobSum / cobCount * 10) / 10 
+                            : 0,
+                        criticas: inv.filter(r => {
+                            const c = Number(r.cob) || 0;
+                            return c > 0 && c < 4 && c >= 1;
+                        }).length,
+                        quiebres: inv.filter(r => {
+                            const c = Number(r.cob) || 0;
+                            return c > 0 && c < 1;
+                        }).length,
+                        ventasDia: Math.round(inv.reduce((sum, r) => sum + (Number(r.vreal) || Number(r.vfact) || 0), 0) / 1000 * 10) / 10
+                    };
+                }
+
+                dashboardState.filteredData = filtered;
+                Render.updateAll();
+            },
+
+            // Leer filtros del DOM
+            read() {
+                const { filterDate, filterProduct, filterPlant } = UI.elements;
+                
+                dashboardState.filters = {
+                    fecha: filterDate?.value || null,
+                    producto: filterProduct?.value || null,
+                    planta: filterPlant?.value || null
+                };
+            },
+
+            // Resetear filtros
+            reset() {
+                const { filterDate, filterProduct, filterPlant } = UI.elements;
+                
+                if (filterDate) filterDate.value = '';
+                if (filterProduct) filterProduct.value = '';
+                if (filterPlant) filterPlant.value = '';
+                
+                dashboardState.filters = { fecha: null, producto: null, planta: null };
+                dashboardState.filteredData = { ...dashboardState.rawData };
+                
+                Render.updateAll();
+            }
+        };
+
+        /* ═══════════════════════════════════════════════════════════════════════════
+           SECTION 7: THEME MANAGEMENT
+           ═══════════════════════════════════════════════════════════════════════════ */
+        
+        const Theme = {
+            // Establecer tema
+            set(theme) {
+                document.documentElement.setAttribute('data-theme', theme);
+                dashboardState.theme = theme;
+                localStorage.setItem('petroperu-theme', theme);
+
+                // Actualizar botones
+                UI.elements.themeButtons?.forEach(btn => {
+                    btn.classList.toggle('active', btn.dataset.theme === theme);
+                });
+
+                // Actualizar colores de gráficos
+                if (dashboardState.charts.cobertura || dashboardState.charts.inventario) {
+                    Render.updateCharts();
+                }
+            },
+
+            // Inicializar tema guardado
+            init() {
+                const saved = localStorage.getItem('petroperu-theme') || 'dark';
+                this.set(saved);
+            }
+        };
+
+        /* ═══════════════════════════════════════════════════════════════════════════
+           SECTION 8: EVENT LISTENERS & INITIALIZATION
+           ═══════════════════════════════════════════════════════════════════════════ */
+        
+        function initEventListeners() {
+            const el = UI.elements;
+
+            // Theme toggle
+            el.themeButtons?.forEach(btn => {
+                btn.addEventListener('click', () => Theme.set(btn.dataset.theme));
+            });
+
+            // Filtros
+            el.btnApplyFilters?.addEventListener('click', () => {
+                Filters.read();
+                Filters.apply();
+            });
+
+            el.btnResetFilters?.addEventListener('click', () => {
+                Filters.reset();
+            });
+
+            // Filtro de fecha - actualización en tiempo real
+            el.filterDate?.addEventListener('change', () => {
+                Filters.read();
+                Filters.apply();
+            });
+
+            // Refresh
+            el.btnRefresh?.addEventListener('click', () => {
+                API.loadDashboardData().catch(console.error);
+            });
+
+            // Error overlay
+            el.btnRetry?.addEventListener('click', () => {
+                UI.hideErrorOverlay();
+                API.loadDashboardData().catch(console.error);
+            });
+
+            el.btnDismiss?.addEventListener('click', () => {
+                UI.hideErrorOverlay();
+            });
+
+            // Navigation tabs
+            el.navTabs?.forEach(tab => {
+                tab.addEventListener('click', () => {
+                    el.navTabs.forEach(t => t.classList.remove('active'));
+                    tab.classList.add('active');
+                    // Aquí podrías implementar navegación SPA
+                });
+            });
+
+            // Auto-refresh
+            setInterval(() => {
+                if (!dashboardState.isLoading && !document.hidden) {
+                    console.log('[Auto-refresh] Actualizando datos...');
+                    API.loadDashboardData().catch(console.error);
+                }
+            }, CONFIG.AUTO_REFRESH_INTERVAL);
+        }
+
+        // Inicialización principal
+        async function init() {
+            console.log('[Dashboard] Inicializando PETROPERÚ Dashboard v3.0...');
+            
+            // Inicializar referencias DOM
+            UI.init();
+            
+            // Inicializar tema
+            Theme.init();
+            
+            // Configurar event listeners
+            initEventListeners();
+            
+            // Cargar datos
+            try {
+                await API.loadDashboardData();
+                console.log('[Dashboard] ✓ Inicialización completada');
+            } catch (error) {
+                console.error('[Dashboard] ✗ Error en inicialización:', error);
+            }
+        }
+
+        // Ejecutar cuando el DOM esté listo
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', init);
+        } else {
+            init();
+        }
+
+    })();
+    </script>
+</body>
+</html>
