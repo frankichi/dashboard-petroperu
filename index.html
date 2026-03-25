@@ -1,0 +1,1378 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PETROPERÚ — Dashboard de Inventarios y Coberturas</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+/* ══════════════════════════════════════════════════════════════════════════
+   DESIGN TOKENS - Exactamente del original
+   ══════════════════════════════════════════════════════════════════════════ */
+:root {
+  --bg: #060f1c;
+  --bg2: #0a1828;
+  --bg3: #0f2240;
+  --card: #0c1e34;
+  --card2: #081525;
+  --bdr: #1a3a5c;
+  --bdr2: #2a4d6e;
+  --txt: #e8f2ff;
+  --txt2: #7ba8d0;
+  --txt3: #3a6080;
+  --muted: #3a6080;
+  --acc: #2d8cf0;
+  --acc2: #60b5ff;
+  --topH: 52px;
+  --navH: 40px;
+  --r: 8px;
+  --mono: 'JetBrains Mono', monospace;
+  --sans: 'Sora', sans-serif;
+  --shadow: 0 2px 20px rgba(0,0,0,.5);
+  --red: #ef4444;
+  --ora: #f97316;
+  --yel: #eab308;
+  --grn: #22c55e;
+  --drk: #7f1d1d;
+}
+
+body.light {
+  --bg: #eef2f7;
+  --bg2: #ffffff;
+  --bg3: #e0e9f4;
+  --card: #ffffff;
+  --card2: #f4f7fb;
+  --bdr: #c0d0e4;
+  --bdr2: #a8bdd4;
+  --txt: #0a1828;
+  --txt2: #1e4060;
+  --txt3: #3a5878;
+  --muted: #5a7898;
+  --acc: #0f62d4;
+  --acc2: #1a6fd4;
+  --shadow: 0 2px 16px rgba(10,30,60,.1);
+  --red: #c81e1e;
+  --ora: #c2510a;
+  --yel: #8a6600;
+  --grn: #15803d;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   RESET
+   ══════════════════════════════════════════════════════════════════════════ */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{
+  font-family:var(--sans);font-size:13px;
+  background:var(--bg);color:var(--txt);
+  -webkit-font-smoothing:antialiased;
+  transition:background .2s,color .2s;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   TOPBAR
+   ══════════════════════════════════════════════════════════════════════════ */
+.topbar{
+  height:var(--topH);position:sticky;top:0;z-index:200;
+  display:flex;align-items:center;padding:0 18px;gap:14px;
+  background:var(--bg2);border-bottom:1px solid var(--bdr);
+  box-shadow:0 1px 12px rgba(0,0,0,.2);
+}
+.topbar-logo{display:flex;align-items:center;gap:9px;flex-shrink:0}
+.topbar-logo img{height:34px;width:auto}
+.topbar-title{display:flex;flex-direction:column}
+.topbar-title .t1{font-size:13px;font-weight:700;color:var(--txt);letter-spacing:-.01em}
+.topbar-title .t2{font-size:9.5px;font-weight:500;color:var(--txt3)}
+.topbar-right{margin-left:auto;display:flex;align-items:center;gap:8px;flex-shrink:0}
+
+.gs-badge{
+  display:flex;align-items:center;gap:5px;padding:4px 11px;
+  border-radius:20px;background:var(--bg3);border:1px solid var(--bdr);
+  font-size:10px;font-weight:600;white-space:nowrap;
+  transition:border-color .3s,background .3s;
+}
+.gs-badge.connected{border-color:#34a85388;background:rgba(52,168,83,.08)}
+.gs-badge.error{border-color:var(--red)55;background:rgba(239,68,68,.07)}
+.gs-icon{display:flex;align-items:center;flex-shrink:0}
+.gs-dot{
+  width:6px;height:6px;border-radius:50%;flex-shrink:0;
+  background:var(--txt3);transition:background .3s,box-shadow .3s;
+}
+.gs-badge.connected .gs-dot{background:#34a853;box-shadow:0 0 7px #34a853;animation:pulse-dot 2s ease-in-out infinite}
+.gs-badge.connecting .gs-dot{background:var(--yel);animation:pulse-dot .8s ease-in-out infinite}
+.gs-badge.error .gs-dot{background:var(--red);box-shadow:0 0 7px var(--red)}
+.gs-text{color:var(--txt2)}
+.gs-badge.connected .gs-text{color:#34a853}
+.gs-badge.error .gs-text{color:var(--red)}
+@keyframes pulse-dot{0%,100%{opacity:1}50%{opacity:.3}}
+
+.author-badge{
+  display:flex;align-items:center;gap:6px;padding:4px 12px;
+  background:rgba(14,165,233,0.1);border:1px solid rgba(14,165,233,0.25);
+  border-radius:20px;font-size:10px;color:var(--acc);
+}
+
+.t-toggle{
+  display:flex;align-items:center;gap:5px;cursor:pointer;
+  padding:3px 10px 3px 8px;border-radius:20px;
+  background:var(--bg3);border:1px solid var(--bdr);
+  font-size:10px;font-weight:600;color:var(--txt2);
+  transition:border-color .15s;user-select:none;
+}
+.t-toggle:hover{border-color:var(--acc)}
+.t-track{
+  width:28px;height:16px;border-radius:8px;background:var(--bdr);
+  position:relative;transition:background .18s;flex-shrink:0;
+}
+body.light .t-track{background:var(--acc)}
+.t-thumb{
+  width:12px;height:12px;border-radius:50%;background:#fff;
+  position:absolute;top:2px;left:2px;transition:transform .18s;
+  box-shadow:0 1px 4px rgba(0,0,0,.4);
+}
+body.light .t-thumb{transform:translateX(12px)}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   NAV TABS
+   ══════════════════════════════════════════════════════════════════════════ */
+.nav{
+  height:var(--navH);background:var(--bg2);
+  border-bottom:2px solid var(--bdr);
+  display:flex;align-items:stretch;padding:0 8px;gap:0;
+  overflow-x:auto;overflow-y:visible;
+  scrollbar-width:thin;
+  scrollbar-color:var(--bdr2) transparent;
+}
+.nav::-webkit-scrollbar{height:4px}
+.nav::-webkit-scrollbar-thumb{background:var(--bdr2);border-radius:2px}
+.nav-tab{
+  display:inline-flex;align-items:center;gap:5px;
+  padding:0 13px;font-size:11.5px;font-weight:600;
+  color:var(--txt3);cursor:pointer;white-space:nowrap;flex-shrink:0;
+  border-bottom:2px solid transparent;margin-bottom:-2px;
+  transition:color .15s,border-color .15s;
+  background:none;border-top:none;border-left:none;border-right:none;
+}
+.nav-tab:hover{color:var(--txt2)}
+.nav-tab.active{color:var(--acc2);border-bottom-color:var(--acc2)}
+.tab-icon{font-size:13px}
+.nav-sep{display:flex;align-items:center;padding:0 6px;flex-shrink:0}
+.nav-sep::after{content:'';width:1px;height:20px;background:var(--bdr)}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   PAGES
+   ══════════════════════════════════════════════════════════════════════════ */
+.page{
+  display:none;
+  height:calc(100vh - var(--topH) - var(--navH));
+  overflow-y:auto;overflow-x:hidden;
+}
+.page.active{display:block;animation:fadein .18s ease}
+@keyframes fadein{from{opacity:0;transform:translateY(3px)}to{opacity:1;transform:none}}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   PAGE HEADER
+   ══════════════════════════════════════════════════════════════════════════ */
+.page-header{
+  padding:16px 20px 14px;
+  border-bottom:1px solid var(--bdr);
+  background:var(--bg2);
+  position:sticky;top:0;z-index:100;
+}
+.page-header-title{
+  font-size:18px;font-weight:800;color:var(--txt);
+  letter-spacing:-.02em;display:flex;align-items:center;gap:8px;margin-bottom:4px;
+}
+.page-header-subtitle{font-size:11.5px;color:var(--txt3);font-weight:500}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   DATE PICKER BAR (global calendar)
+   ══════════════════════════════════════════════════════════════════════════ */
+.date-bar{
+  display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+  padding:7px 18px;background:var(--bg2);
+  border-bottom:1px solid var(--bdr);
+  position:sticky;top:0;z-index:99;
+}
+.date-bar .f-label{
+  font-size:9.5px;font-weight:700;color:var(--txt3);
+  text-transform:uppercase;letter-spacing:.6px;white-space:nowrap;
+}
+.date-picker-wrap{display:flex;align-items:center;gap:6px}
+.date-nav-btn{
+  width:26px;height:26px;border-radius:6px;border:1px solid var(--bdr);
+  background:var(--card2);color:var(--txt2);cursor:pointer;
+  display:flex;align-items:center;justify-content:center;font-size:14px;line-height:1;
+  transition:all .15s;font-family:var(--sans);padding:0;
+}
+.date-nav-btn:hover:not(:disabled){border-color:var(--acc);color:var(--txt)}
+.date-nav-btn:disabled{opacity:.3;cursor:default}
+.date-input{
+  background:var(--card2);color:var(--txt);border:1px solid var(--bdr);
+  border-radius:6px;padding:4px 10px;font-size:11.5px;font-weight:600;
+  font-family:var(--mono);cursor:pointer;transition:border-color .15s;
+  color-scheme:dark;
+}
+body.light .date-input{color-scheme:light}
+.date-input:focus{outline:none;border-color:var(--acc)}
+.date-badge{
+  display:flex;align-items:center;gap:5px;padding:3px 10px;
+  border-radius:20px;background:var(--acc)18;border:1px solid var(--acc)44;
+  font-size:10px;font-weight:700;color:var(--acc2);font-family:var(--mono);
+  white-space:nowrap;
+}
+.date-count{
+  margin-left:auto;font-size:10px;color:var(--txt3);font-weight:600;
+  white-space:nowrap;
+}
+
+.filterbar{
+  display:flex;align-items:center;gap:12px;flex-wrap:wrap;
+  padding:8px 18px;background:var(--bg2);
+  border-bottom:1px solid var(--bdr);
+  position:sticky;top:0;z-index:99;
+}
+.f-label{font-size:9.5px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.6px}
+.f-group{display:flex;align-items:center;gap:7px}
+select,input[type=date]{
+  background:var(--card2);color:var(--txt);border:1px solid var(--bdr);
+  border-radius:6px;padding:4px 9px;font-size:11.5px;font-weight:500;
+  font-family:var(--sans);cursor:pointer;transition:border-color .15s;
+}
+select:focus,input[type=date]:focus{outline:none;border-color:var(--acc)}
+.btn-secondary{
+  background:var(--bg3);border:1px solid var(--bdr);border-radius:6px;
+  color:var(--txt2);font-size:11px;padding:4px 12px;cursor:pointer;
+  font-family:var(--sans);transition:all .15s;
+}
+.btn-secondary:hover{border-color:var(--acc);color:var(--txt)}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   KPI CARDS
+   ══════════════════════════════════════════════════════════════════════════ */
+.kpi-row{
+  display:grid;gap:10px;padding:14px 18px 0;
+  grid-template-columns:repeat(auto-fill,minmax(170px,1fr));
+}
+.kpi{
+  background:var(--card);border:1px solid var(--bdr);
+  border-radius:var(--r);padding:14px 16px;
+  display:flex;flex-direction:column;gap:5px;
+  transition:box-shadow .15s,border-color .15s;
+}
+.kpi:hover{box-shadow:var(--shadow);border-color:var(--bdr2)}
+.kpi.blue{border-left:3px solid var(--acc)}
+.kpi.red{border-left:3px solid var(--red)}
+.kpi.amber{border-left:3px solid var(--yel)}
+.kpi.green{border-left:3px solid var(--grn)}
+
+.kpi-label{font-size:10px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.4px}
+.kpi-value{font-size:26px;font-weight:800;color:var(--txt);line-height:1;font-family:var(--mono);letter-spacing:-.02em}
+.kpi-sub{font-size:10px;color:var(--txt2)}
+.kpi-delta{font-size:10.5px;font-weight:600;display:flex;align-items:center;gap:4px;margin-top:1px}
+/* ══════════════════════════════════════════════════════════════════════════
+   ALERT KPI CARDS (4 tarjetas de criticidad)
+   ══════════════════════════════════════════════════════════════════════════ */
+.alert-kpi-row{
+  display:grid;gap:12px;padding:14px 18px 0;
+  grid-template-columns:repeat(4,1fr);
+}
+@media(max-width:900px){.alert-kpi-row{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:500px){.alert-kpi-row{grid-template-columns:1fr}}
+
+.alert-kpi{
+  background:var(--card);border:1px solid var(--bdr);
+  border-radius:var(--r);padding:16px 18px 14px;
+  display:flex;flex-direction:column;gap:4px;
+  transition:box-shadow .15s,border-color .15s;
+  position:relative;overflow:hidden;
+}
+.alert-kpi::before{
+  content:'';position:absolute;top:0;left:0;right:0;height:3px;
+}
+.alert-kpi.crit::before{background:var(--red)}
+.alert-kpi.warn::before{background:var(--yel)}
+.alert-kpi.ok::before{background:var(--grn)}
+.alert-kpi.restrict::before{background:#a855f7}
+.alert-kpi:hover{box-shadow:var(--shadow);border-color:var(--bdr2)}
+
+.alert-kpi-label{
+  font-size:9.5px;font-weight:700;letter-spacing:.6px;
+  text-transform:uppercase;
+}
+.alert-kpi.crit .alert-kpi-label{color:var(--red)}
+.alert-kpi.warn .alert-kpi-label{color:var(--yel)}
+.alert-kpi.ok .alert-kpi-label{color:var(--grn)}
+.alert-kpi.restrict .alert-kpi-label{color:#a855f7}
+
+.alert-kpi-value{
+  font-size:36px;font-weight:800;line-height:1;
+  font-family:var(--mono);letter-spacing:-.03em;margin:2px 0;
+}
+.alert-kpi.crit .alert-kpi-value{color:var(--red)}
+.alert-kpi.warn .alert-kpi-value{color:var(--yel)}
+.alert-kpi.ok .alert-kpi-value{color:var(--grn)}
+.alert-kpi.restrict .alert-kpi-value{color:#a855f7}
+
+.alert-kpi-sub{font-size:10.5px;color:var(--txt2);font-weight:500}
+.alert-kpi-action{
+  font-size:10px;font-weight:700;margin-top:6px;
+  padding-top:6px;border-top:1px solid var(--bdr);
+}
+.alert-kpi.crit .alert-kpi-action{color:var(--red)}
+.alert-kpi.warn .alert-kpi-action{color:var(--yel)}
+.alert-kpi.ok .alert-kpi-action{color:var(--grn)}
+.alert-kpi.restrict .alert-kpi-action{color:#a855f7}
+
+/* Criticidad chips dentro de prod-card */
+.prod-crit-row{
+  border-top:1px solid var(--bdr);
+  background:var(--card2);
+  padding:7px 12px;
+  display:flex;flex-wrap:wrap;gap:4px;align-items:center;
+  min-height:32px;
+}
+.prod-crit-row .crit-label{
+  font-size:8.5px;font-weight:700;color:var(--txt3);
+  text-transform:uppercase;letter-spacing:.4px;margin-right:4px;white-space:nowrap;
+}
+.crit-chip{
+  display:inline-flex;align-items:center;gap:3px;
+  padding:1px 7px;border-radius:10px;font-size:9.5px;font-weight:700;
+  font-family:var(--mono);white-space:nowrap;
+}
+.crit-chip.c1{background:var(--red)1a;color:var(--red);border:1px solid var(--red)40}
+.crit-chip.c2{background:var(--yel)1a;color:var(--yel);border:1px solid var(--yel)40}
+.crit-chip.c3{background:#a855f71a;color:#a855f7;border:1px solid #a855f740}
+.crit-chip.none{color:var(--grn);font-size:9px;font-weight:600}
+
+
+/* ══════════════════════════════════════════════════════════════════════════
+   PRODUCT CARDS
+   ══════════════════════════════════════════════════════════════════════════ */
+.prod-cards-grid{
+  display:grid;padding:14px 18px 18px;gap:10px;
+  grid-template-columns:repeat(auto-fill,minmax(260px,1fr));
+}
+.prod-card{
+  background:var(--card);border:1px solid var(--bdr);
+  border-radius:var(--r);overflow:hidden;
+  transition:box-shadow .15s,border-color .15s;
+}
+.prod-card:hover{box-shadow:var(--shadow);border-color:var(--bdr2)}
+.prod-card.red{border-top:3px solid var(--red)}
+.prod-card.amber{border-top:3px solid var(--yel)}
+.prod-card.green{border-top:3px solid var(--grn)}
+
+.prod-card-top{display:flex;justify-content:space-between;align-items:flex-start;padding:12px 14px 8px}
+.prod-card-name{font-size:13px;font-weight:800;color:var(--txt);letter-spacing:-.01em}
+.prod-card-inv{text-align:right}
+.prod-inv-val{font-size:20px;font-weight:800;font-family:var(--mono);color:var(--txt);line-height:1}
+.prod-inv-unit{font-size:10px;color:var(--txt3);margin-left:2px}
+
+.prod-card-metrics{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--bdr);border-top:1px solid var(--bdr)}
+.prod-card-metrics.three{grid-template-columns:1fr 1fr 1fr}
+.prod-metric{background:var(--card2);padding:8px 12px}
+.prod-metric-lbl{font-size:8.5px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.4px;margin-bottom:2px}
+.prod-metric-val{font-size:14px;font-weight:700;font-family:var(--mono);color:var(--txt)}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   SEMAPHORE BADGES
+   ══════════════════════════════════════════════════════════════════════════ */
+.sem,.badge{
+  display:inline-flex;align-items:center;justify-content:center;
+  padding:2px 9px;border-radius:20px;font-size:10px;font-weight:700;
+  font-family:var(--mono);white-space:nowrap;
+}
+.s0,.cob-empty{background:var(--drk)22;color:var(--drk);border:1px solid var(--drk)44}
+.s1,.cob-crit{background:var(--red)1a;color:var(--red);border:1px solid var(--red)40}
+.s2,.cob-low{background:var(--ora)1a;color:var(--ora);border:1px solid var(--ora)40}
+.s3,.cob-warn{background:var(--yel)1a;color:var(--yel);border:1px solid var(--yel)40}
+.s4,.cob-ok{background:var(--grn)14;color:var(--grn);border:1px solid var(--grn)35}
+.badge.red{background:var(--red)1a;color:var(--red);border:1px solid var(--red)40}
+.badge.amber{background:var(--yel)1a;color:var(--yel);border:1px solid var(--yel)40}
+.badge.green{background:var(--grn)14;color:var(--grn);border:1px solid var(--grn)35}
+.badge.blue{background:var(--acc)1a;color:var(--acc2);border:1px solid var(--acc)40}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   TABLES
+   ══════════════════════════════════════════════════════════════════════════ */
+.tbl-wrap{background:var(--card);border:1px solid var(--bdr);border-radius:var(--r);overflow:auto;margin:0 18px 18px}
+table{width:100%;border-collapse:collapse;font-size:11.5px}
+th{
+  background:var(--card2);color:var(--txt3);
+  font-size:9px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;
+  padding:7px 12px;border-bottom:1px solid var(--bdr);white-space:nowrap;
+  position:sticky;top:0;z-index:2;text-align:left;
+}
+td{padding:6px 12px;border-bottom:1px solid var(--bdr);color:var(--txt2);vertical-align:middle}
+tr:last-child td{border-bottom:none}
+tr:hover td{background:var(--bg3)}
+.tn,.num{font-family:var(--mono);text-align:right;font-size:11px}
+.tp{font-weight:700;color:var(--txt)}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   CHARTS
+   ══════════════════════════════════════════════════════════════════════════ */
+.chart-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:0 18px;margin-bottom:18px}
+.cc{background:var(--card);border:1px solid var(--bdr);border-radius:var(--r);padding:16px 18px}
+.cc-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+.cc-title{font-size:10.5px;font-weight:700;color:var(--txt2);text-transform:uppercase;letter-spacing:.4px}
+.chart-h220{position:relative;height:220px}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   SECTION HEADERS
+   ══════════════════════════════════════════════════════════════════════════ */
+.section-head{
+  font-size:10px;font-weight:700;color:var(--txt3);
+  text-transform:uppercase;letter-spacing:.6px;
+  margin:0 18px 10px;padding-top:14px;
+  border-top:1px solid var(--bdr);
+  display:flex;align-items:center;gap:6px;
+}
+.section-head::before{
+  content:'';width:3px;height:14px;border-radius:2px;
+  background:var(--acc);display:inline-block;flex-shrink:0;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   BT CARDS
+   ══════════════════════════════════════════════════════════════════════════ */
+.bt-cards{display:flex;flex-direction:column;gap:16px;padding:14px 18px}
+.bt-card{background:var(--card);border:1px solid var(--bdr);border-radius:var(--r);overflow:hidden}
+.bt-card-header{
+  display:flex;align-items:center;gap:10px;padding:12px 16px;
+  background:var(--card2);border-bottom:1px solid var(--bdr);
+}
+.bt-icon{font-size:18px}
+.bt-name{font-size:13px;font-weight:800;color:var(--txt)}
+.bt-badge{
+  display:inline-flex;align-items:center;gap:5px;padding:3px 10px;
+  border-radius:20px;font-size:10px;font-weight:600;background:var(--bg3);
+  border:1px solid var(--bdr);color:var(--txt2);margin-left:auto
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   LOADING & ERROR
+   ══════════════════════════════════════════════════════════════════════════ */
+.loading-overlay{
+  position:fixed;top:0;left:0;right:0;bottom:0;
+  background:rgba(6,15,28,.95);display:flex;
+  flex-direction:column;align-items:center;justify-content:center;
+  z-index:9999;gap:16px;
+}
+.loading-spinner{
+  width:48px;height:48px;border:3px solid var(--bdr);
+  border-top-color:var(--acc);border-radius:50%;
+  animation:spin 1s linear infinite;
+}
+@keyframes spin{to{transform:rotate(360deg)}}
+.loading-text{font-size:14px;color:var(--txt2)}
+
+.error-box{
+  background:var(--card);border:1px solid var(--red);
+  border-radius:var(--r);padding:24px;max-width:400px;text-align:center;
+}
+.error-icon{font-size:48px;margin-bottom:12px}
+.error-title{font-size:16px;font-weight:700;margin-bottom:8px}
+.error-msg{font-size:12px;color:var(--txt2);margin-bottom:16px}
+.btn-retry{
+  background:var(--acc);border:none;border-radius:6px;
+  color:#fff;font-size:12px;font-weight:600;padding:8px 20px;
+  cursor:pointer;font-family:var(--sans);
+}
+.btn-retry:hover{background:var(--acc2)}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   SCROLLBAR
+   ══════════════════════════════════════════════════════════════════════════ */
+::-webkit-scrollbar{width:4px;height:4px}
+::-webkit-scrollbar-thumb{background:var(--bdr2);border-radius:2px}
+::-webkit-scrollbar-track{background:transparent}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   RESPONSIVE
+   ══════════════════════════════════════════════════════════════════════════ */
+@media(max-width:900px){
+  .chart-grid{grid-template-columns:1fr}
+  .kpi-row{grid-template-columns:repeat(2,1fr)}
+}
+@media(max-width:700px){
+  .topbar{padding:0 12px;gap:8px}
+  .topbar-title .t2{display:none}
+  .author-badge{display:none}
+  .kpi-row{grid-template-columns:1fr 1fr;gap:8px;padding:10px 12px 0}
+  .kpi-value{font-size:22px}
+  .prod-cards-grid{grid-template-columns:1fr;padding:10px 12px}
+  .filterbar{padding:7px 12px}
+  .tbl-wrap{margin:0 12px 12px}
+  .bt-cards{padding:10px 12px}
+}
+@media(max-width:500px){
+  .nav-tab .tab-text{display:none}
+  .nav-tab{padding:0 10px}
+  .tab-icon{font-size:16px}
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   LIGHT MODE IMPROVEMENTS
+   ══════════════════════════════════════════════════════════════════════════ */
+body.light .kpi{box-shadow:0 1px 6px rgba(10,30,60,.07)}
+body.light .prod-card{box-shadow:0 1px 6px rgba(10,30,60,.07)}
+body.light th{background:#edf2f8}
+body.light .kpi-value{color:#02090e}
+body.light .prod-card-name{color:#02090e}
+body.light .prod-metric-val{color:#04111e}
+</style>
+</head>
+<body>
+
+<!-- Loading Overlay -->
+<div class="loading-overlay" id="loadingOverlay">
+  <div class="loading-spinner"></div>
+  <div class="loading-text">Conectando con Google Sheets...</div>
+</div>
+
+<!-- TOPBAR -->
+<div class="topbar">
+  <div class="topbar-logo">
+    <!-- Logo Petroperú -->
+    <svg width="38" height="38" viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <!-- P shape: red top band -->
+      <path d="M20 10 L90 10 Q108 10 108 30 Q108 50 90 50 L54 50 L54 70 L20 70 Z" fill="#e31b23"/>
+      <!-- P inner cutout -->
+      <path d="M54 20 L88 20 Q96 20 96 30 Q96 40 88 40 L54 40 Z" fill="white" opacity="0.15"/>
+      <!-- Blue stripe -->
+      <path d="M20 70 L54 70 L54 90 Q54 100 44 100 Q34 100 20 88 Z" fill="#009fe3"/>
+      <!-- Green leaf bottom -->
+      <path d="M54 70 L90 70 Q108 70 108 90 Q108 108 88 108 Q70 108 54 90 Z" fill="#00a651"/>
+      <!-- Petroperú text (simplified) -->
+    </svg>
+    <div class="topbar-title">
+      <span class="t1">Planificación de Suministro</span>
+      <span class="t2">Inventarios & Coberturas — Petroperú</span>
+    </div>
+  </div>
+  <div class="topbar-right">
+    <div class="author-badge">
+      <span style="opacity:0.7">👨‍💻</span>
+      <span style="font-weight:600">Desarrollado por Franco Urcia Castillo</span>
+    </div>
+    <div class="gs-badge" id="gsBadge">
+      <span class="gs-icon">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <rect x="3" y="3" width="18" height="18" rx="2" fill="#34a853" opacity="0.18"/>
+          <path d="M8 3h8v18H8z" fill="#34a853" opacity="0.25"/>
+          <path d="M3 8h18M3 12h18M3 16h18" stroke="#34a853" stroke-width="1.3"/>
+          <rect x="3" y="3" width="18" height="18" rx="2" stroke="#34a853" stroke-width="1.5"/>
+        </svg>
+      </span>
+      <span class="gs-dot" id="gsStatusDot"></span>
+      <span id="gsStatusText" class="gs-text">Conectando...</span>
+    </div>
+    <div class="t-toggle" onclick="toggleTheme()">
+      <div class="t-track"><div class="t-thumb"></div></div>
+      <span id="theme-lbl">Claro</span>
+    </div>
+  </div>
+</div>
+
+<!-- NAV TABS -->
+<div class="nav" id="main-nav">
+  <button class="nav-tab active" onclick="showPage('p1',this)"><span class="tab-icon">🏠</span><span class="tab-text">Resumen</span></button>
+  <button class="nav-tab" onclick="showPage('p7',this)"><span class="tab-icon">📊</span><span class="tab-text">Gerencial</span></button>
+  <div class="nav-sep"></div>
+  <button class="nav-tab" onclick="showPage('p2',this)"><span class="tab-icon">📋</span><span class="tab-text">Coberturas</span></button>
+  <button class="nav-tab" onclick="showPage('p6',this)"><span class="tab-icon">🌡️</span><span class="tab-text">Mapa Calor</span></button>
+  <div class="nav-sep"></div>
+  <button class="nav-tab" onclick="showPage('p5',this)"><span class="tab-icon">⚓</span><span class="tab-text">Reposiciones</span></button>
+  <button class="nav-tab" onclick="showPage('p10',this)"><span class="tab-icon">🚢</span><span class="tab-text">Naves</span></button>
+</div>
+
+<!-- PAGES -->
+<div id="p1" class="page active"><div id="p1-content"></div></div>
+<div id="p2" class="page"><div id="p2-content"></div></div>
+<div id="p5" class="page"><div id="p5-content"></div></div>
+<div id="p6" class="page"><div id="p6-content"></div></div>
+<div id="p7" class="page"><div id="p7-content"></div></div>
+<div id="p10" class="page"><div id="p10-content"></div></div>
+
+<script>
+// ════════════════════════════════════════════════════════════════════════════
+// CONFIGURATION
+// ════════════════════════════════════════════════════════════════════════════
+const CONFIG = {
+  API_URL: 'https://script.google.com/macros/s/AKfycbx_3smWsVfjy_dwSHPSI1SG-Fc_ZjMP_mX_LJyNCtQhNGm7c9OEc64MMbP8VS-jAeJX/exec',
+  COB_RED: 3,  // Crítico
+  COB_AMB: 5,  // Advertencia
+  COB_YEL: 7   // Precaución
+};
+
+// ════════════════════════════════════════════════════════════════════════════
+// GLOBAL STATE
+// ════════════════════════════════════════════════════════════════════════════
+let RAW = [];
+let DATES = [];
+let currentDate = null;
+
+// ════════════════════════════════════════════════════════════════════════════
+// CONNECTION STATUS
+// ════════════════════════════════════════════════════════════════════════════
+function setGsStatus(state, text) {
+  const badge = document.getElementById('gsBadge');
+  const dot   = document.getElementById('gsStatusDot');
+  const txt   = document.getElementById('gsStatusText');
+  if (!badge) return;
+  badge.className = 'gs-badge ' + state;
+  txt.textContent = text;
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// DATE PICKER — GLOBAL CALENDAR CONTROL
+// Todas las páginas comparten el mismo currentDate.
+// El <input type="date"> solo permite fechas que existen en DATES.
+// ════════════════════════════════════════════════════════════════════════════
+function selectDate(fecha) {
+  if (!DATES.includes(fecha)) return;
+  currentDate = fecha;
+  rerenderActivePage();
+  syncAllDateBars();
+}
+
+function navDate(dir) {
+  const idx = DATES.indexOf(currentDate);
+  const newIdx = idx + dir;
+  if (newIdx < 0 || newIdx >= DATES.length) return;
+  selectDate(DATES[newIdx]);
+}
+
+function onDateInputChange(val) {
+  // Find the closest available date on or before the selected value
+  if (!val) return;
+  // Exact match first
+  if (DATES.includes(val)) { selectDate(val); return; }
+  // Closest earlier date
+  const earlier = [...DATES].filter(d => d <= val).pop();
+  if (earlier) { selectDate(earlier); return; }
+  // Closest later date
+  const later = DATES.find(d => d > val);
+  if (later) selectDate(later);
+}
+
+function buildDateBar(containerId) {
+  if (!DATES.length) return '';
+  const curIdx = DATES.indexOf(currentDate);
+  const prevDisabled = curIdx <= 0 ? 'disabled' : '';
+  const nextDisabled = curIdx >= DATES.length - 1 ? 'disabled' : '';
+  const minDate = DATES[0];
+  const maxDate = DATES[DATES.length - 1];
+  const curLabel = currentDate
+    ? new Date(currentDate + 'T12:00:00').toLocaleDateString('es-PE', {weekday:'short', day:'2-digit', month:'short', year:'numeric'})
+    : '—';
+
+  return `
+    <div class="date-bar" id="${containerId}">
+      <span class="f-label">📅 Fecha</span>
+      <div class="date-picker-wrap">
+        <button class="date-nav-btn" onclick="navDate(-1)" ${prevDisabled} title="Día anterior">‹</button>
+        <input type="date"
+          class="date-input"
+          id="dateInput_${containerId}"
+          value="${currentDate || ''}"
+          min="${minDate}"
+          max="${maxDate}"
+          onchange="onDateInputChange(this.value)"
+          title="Seleccionar fecha">
+        <button class="date-nav-btn" onclick="navDate(1)" ${nextDisabled} title="Día siguiente">›</button>
+      </div>
+      <div class="date-badge">📊 ${curLabel}</div>
+      <span class="date-count">${DATES.length} fechas disponibles</span>
+    </div>
+  `;
+}
+
+function syncAllDateBars() {
+  // Update all existing date bars without full re-render
+  ['dateBarP1','dateBarP2','dateBarP7'].forEach(id => {
+    const input = document.getElementById('dateInput_' + id);
+    if (input) input.value = currentDate || '';
+    const bar = document.getElementById(id);
+    if (!bar) return;
+    // Update nav buttons disabled state
+    const curIdx = DATES.indexOf(currentDate);
+    const btns = bar.querySelectorAll('.date-nav-btn');
+    if (btns[0]) btns[0].disabled = curIdx <= 0;
+    if (btns[1]) btns[1].disabled = curIdx >= DATES.length - 1;
+    // Update badge label
+    const badge = bar.querySelector('.date-badge');
+    if (badge) {
+      const curLabel = currentDate
+        ? new Date(currentDate + 'T12:00:00').toLocaleDateString('es-PE', {weekday:'short', day:'2-digit', month:'short', year:'numeric'})
+        : '—';
+      badge.textContent = '📊 ' + curLabel;
+    }
+  });
+}
+
+function rerenderActivePage() {
+  const activePage = document.querySelector('.page.active');
+  if (!activePage) return;
+  switch(activePage.id) {
+    case 'p1': renderP1(); break;
+    case 'p2': renderP2(); break;
+    case 'p5': renderP5(); break;
+    case 'p6': renderP6(); break;
+    case 'p7': renderP7(); break;
+    case 'p10': renderP10(); break;
+  }
+}
+
+// Keep backward compat alias
+function buildAllDateBars() { syncAllDateBars(); }
+
+// ════════════════════════════════════════════════════════════════════════════
+// API FETCH
+// ════════════════════════════════════════════════════════════════════════════
+async function fetchData() {
+  setGsStatus('connecting', 'Conectando...');
+  try {
+    const response = await fetch(CONFIG.API_URL, {
+      method: 'GET',
+      redirect: 'follow'
+    });
+    
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    
+    const data = await response.json();
+    console.log('[API] Datos recibidos:', data.length, 'registros');
+    
+    // Procesar datos
+    RAW = data;
+    DATES = [...new Set(RAW.map(r => r.fecha))].filter(Boolean).sort();
+    currentDate = DATES[DATES.length - 1];
+    
+    // Update UI
+    const lastLabel = currentDate ? new Date(currentDate + 'T12:00:00').toLocaleDateString('es-PE', {day:'2-digit', month:'short', year:'numeric'}) : '—';
+    setGsStatus('connected', `Google Sheets · ${lastLabel}`);
+    document.getElementById('loadingOverlay').style.display = 'none';
+    
+    // Render initial page
+    renderP1();
+    
+  } catch (error) {
+    console.error('[API] Error:', error);
+    setGsStatus('error', 'Sin conexión');
+    document.getElementById('loadingOverlay').innerHTML = `
+      <div class="error-box">
+        <div class="error-icon">⚠️</div>
+        <div class="error-title">Error de Conexión</div>
+        <div class="error-msg">${error.message}</div>
+        <button class="btn-retry" onclick="location.reload()">🔄 Reintentar</button>
+      </div>
+    `;
+  }
+}
+function fmt(n, d=1) {
+  if (n === null || n === undefined || isNaN(n)) return '—';
+  return Number(n).toLocaleString('es-PE', {minimumFractionDigits:d, maximumFractionDigits:d});
+}
+
+function fmtDate(d) {
+  if (!d) return '—';
+  const date = new Date(d + 'T12:00:00');
+  return date.toLocaleDateString('es-PE', {day:'2-digit', month:'short'});
+}
+
+function semClass(cob) {
+  if (cob <= 0) return 's0';
+  if (cob < CONFIG.COB_RED) return 's1';
+  if (cob < CONFIG.COB_AMB) return 's2';
+  if (cob < CONFIG.COB_YEL) return 's3';
+  return 's4';
+}
+
+function prodColor(cob) {
+  if (cob < CONFIG.COB_RED) return 'red';
+  if (cob < CONFIG.COB_AMB) return 'amber';
+  return 'green';
+}
+
+function byDate(fecha) {
+  return RAW.filter(r => r.fecha === fecha);
+}
+
+function byLatest() {
+  return byDate(currentDate || DATES[DATES.length - 1] || '');
+}
+
+function cssVar(name) {
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// THEME TOGGLE
+// ════════════════════════════════════════════════════════════════════════════
+function toggleTheme() {
+  document.body.classList.toggle('light');
+  const isLight = document.body.classList.contains('light');
+  document.getElementById('theme-lbl').textContent = isLight ? 'Oscuro' : 'Claro';
+  localStorage.setItem('petroperu-theme', isLight ? 'light' : 'dark');
+  // Actualizar gráficos si existen
+  renderCharts();
+}
+
+function initTheme() {
+  const saved = localStorage.getItem('petroperu-theme');
+  if (saved === 'light') {
+    document.body.classList.add('light');
+    document.getElementById('theme-lbl').textContent = 'Oscuro';
+  }
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// PAGE NAVIGATION
+// ════════════════════════════════════════════════════════════════════════════
+function showPage(id, tab) {
+  // Hide all pages
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  // Show selected page
+  document.getElementById(id).classList.add('active');
+  // Update tabs
+  document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+  if (tab) tab.classList.add('active');
+  
+  // Render page content
+  switch(id) {
+    case 'p1': renderP1(); break;
+    case 'p2': renderP2(); break;
+    case 'p5': renderP5(); break;
+    case 'p6': renderP6(); break;
+    case 'p7': renderP7(); break;
+    case 'p10': renderP10(); break;
+  }
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// PAGE RENDERS
+// ════════════════════════════════════════════════════════════════════════════
+
+// P1: RESUMEN NACIONAL
+function renderP1() {
+  const today = byLatest();
+  if (!today.length) return;
+
+  const EXCLUIR = ['ULSD EXPO','Regular HS'];
+  const active = today.filter(r => !EXCLUIR.some(x => r.producto && r.producto.toUpperCase().includes(x.toUpperCase())));
+
+  const COB_CRIT = 4;
+  const COB_WARN = 7;
+
+  const critList     = active.filter(r => r.cob > 0 && r.cob < COB_CRIT);
+  const warnList     = active.filter(r => r.cob >= COB_CRIT && r.cob < COB_WARN);
+  const okList       = active.filter(r => r.cob >= COB_WARN);
+  const restrictList = active.filter(r => (r.vfact||0) < (r.pron||0) && (r.pron||0) > 0);
+
+  const PRON_PLANTAS = {
+    'Diesel':     ['Talara','Eten','Salaverry','Chimbote','Supe','Callao','Conchán','Pisco','Mollendo','Ilo'],
+    'G. Regular': ['Talara','Eten','Salaverry','Chimbote','Supe','Callao','Conchán','Pisco','Mollendo','Pucallpa','Iquitos'],
+    'G. Premium': ['Talara','Salaverry','Supe','Callao','Conchán','Pisco','Mollendo'],
+    'G84':        ['Talara','Iquitos'],
+    'GLP':        ['Talara'],
+    'Turbo':      ['Talara','Callao','Iquitos'],
+  };
+
+  const byProd = {};
+  active.forEach(r => {
+    if (!byProd[r.producto]) byProd[r.producto] = {inv:0, cob:[], vreal:0, vult7:0, pron:0, plantas:[]};
+    const p = byProd[r.producto];
+    p.inv   += r.inv   || 0;
+    p.vreal += r.vreal || 0;
+    p.vult7 += r.vult7 || 0;
+    if (r.cob > 0) p.cob.push(r.cob);
+    p.plantas.push(r);
+    const pv = PRON_PLANTAS[r.producto];
+    if (pv && pv.includes(r.planta)) p.pron += r.pron || 0;
+  });
+
+  function fmtMB(n) {
+    if (!n && n !== 0) return '—';
+    return (n/1000).toLocaleString('es-PE',{minimumFractionDigits:2,maximumFractionDigits:2}) + ' MB';
+  }
+
+  function getCritChips(rows) {
+    const chips = [];
+    rows.forEach(r => {
+      if (r.cob > 0 && r.cob < COB_CRIT)
+        chips.push(`<span class="crit-chip c1">🔴 ${r.planta} ${r.cob}d</span>`);
+      else if (r.cob >= COB_CRIT && r.cob < COB_WARN)
+        chips.push(`<span class="crit-chip c2">🟡 ${r.planta} ${r.cob}d</span>`);
+      else if ((r.vfact||0) < (r.pron||0) && (r.pron||0) > 0)
+        chips.push(`<span class="crit-chip c3">⚠ ${r.planta}</span>`);
+    });
+    if (!chips.length) chips.push('<span class="crit-chip none">✓ Sin alertas</span>');
+    return chips.join('');
+  }
+
+  const prodCards = Object.entries(byProd).map(([prod, data]) => {
+    const cobAvg = data.cob.length ? data.cob.reduce((a,b)=>a+b,0)/data.cob.length : 0;
+    const color = prodColor(cobAvg);
+    const invMB = (data.inv/1000).toLocaleString('es-PE',{minimumFractionDigits:2,maximumFractionDigits:2});
+    return `
+      <div class="prod-card ${color}">
+        <div class="prod-card-top">
+          <div class="prod-card-name">${prod}</div>
+          <div class="prod-card-inv">
+            <span class="prod-inv-val">${invMB}</span>
+            <span class="prod-inv-unit">MB</span>
+          </div>
+        </div>
+        <div class="prod-card-metrics" style="grid-template-columns:1fr 1fr 1fr">
+          <div class="prod-metric">
+            <div class="prod-metric-lbl">Venta Real</div>
+            <div class="prod-metric-val">${fmtMB(data.vreal)}</div>
+          </div>
+          <div class="prod-metric">
+            <div class="prod-metric-lbl">Venta Últ 7d</div>
+            <div class="prod-metric-val">${fmtMB(data.vult7)}</div>
+          </div>
+          <div class="prod-metric">
+            <div class="prod-metric-lbl">Pronóstico</div>
+            <div class="prod-metric-val" style="color:var(--acc2)">${data.pron > 0 ? fmtMB(data.pron) : '—'}</div>
+          </div>
+        </div>
+        <div class="prod-crit-row">
+          <span class="crit-label">Alertas:</span>
+          ${getCritChips(data.plantas)}
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  document.getElementById('p1-content').innerHTML = `
+    <div class="page-header">
+      <div class="page-header-title">🏠 Resumen Nacional</div>
+      <div class="page-header-subtitle">Estado consolidado de inventarios al ${fmtDate(currentDate)}</div>
+    </div>
+    ${buildDateBar('dateBarP1')}
+    <div class="alert-kpi-row">
+      <div class="alert-kpi crit">
+        <div class="alert-kpi-label">🚨 Alertas Críticas &lt;${COB_CRIT} Días</div>
+        <div class="alert-kpi-value">${critList.length}</div>
+        <div class="alert-kpi-sub">planta/producto con acción inmediata</div>
+        <div class="alert-kpi-action">Priorizar despacho / restricción</div>
+      </div>
+      <div class="alert-kpi warn">
+        <div class="alert-kpi-label">⚠️ En Vigilancia ${COB_CRIT}–${COB_WARN-1} Días</div>
+        <div class="alert-kpi-value">${warnList.length}</div>
+        <div class="alert-kpi-sub">seguimiento corto plazo</div>
+        <div class="alert-kpi-action">Programar reposición</div>
+      </div>
+      <div class="alert-kpi ok">
+        <div class="alert-kpi-label">✅ Nivel Normal ≥${COB_WARN} Días</div>
+        <div class="alert-kpi-value">${okList.length}</div>
+        <div class="alert-kpi-sub">sin acción inmediata</div>
+        <div class="alert-kpi-action">Cobertura operativa estable</div>
+      </div>
+      <div class="alert-kpi restrict">
+        <div class="alert-kpi-label">🔒 Restricción Activa</div>
+        <div class="alert-kpi-value">${restrictList.length}</div>
+        <div class="alert-kpi-sub">vfac &lt; pron</div>
+        <div class="alert-kpi-action">filas con racionamiento operativo</div>
+      </div>
+    </div>
+    <div class="section-head" style="margin-top:14px">Inventario por Producto</div>
+    <div class="prod-cards-grid">${prodCards}</div>
+    <div class="chart-grid">
+      <div class="cc">
+        <div class="cc-head"><div class="cc-title">📊 Cobertura por Producto</div></div>
+        <div class="chart-h220"><canvas id="chartCobProd"></canvas></div>
+      </div>
+      <div class="cc">
+        <div class="cc-head"><div class="cc-title">📈 Inventario por Planta (Top 10)</div></div>
+        <div class="chart-h220"><canvas id="chartInvPlanta"></canvas></div>
+      </div>
+    </div>
+  `;
+  renderCharts();
+}
+// P2: COBERTURAS
+function renderP2() {
+  const today = byLatest();
+  const sorted = [...today].sort((a,b) => (a.cob||999) - (b.cob||999));
+  
+  const rows = sorted.map(r => `
+    <tr>
+      <td class="tp">${r.planta}</td>
+      <td>${r.producto}</td>
+      <td class="tn">${fmt(r.inv,1)}</td>
+      <td><span class="sem ${semClass(r.cob)}">${r.cob > 0 ? r.cob+'d' : '—'}</span></td>
+      <td>${r.fecha_cob || r.fecha_cobertura || '—'}</td>
+      <td>${r.bt || '—'}</td>
+      <td class="tn">${r.vol_rep ? fmt(r.vol_rep,1) : '—'}</td>
+      <td>${r.fecha_reposicion || r.fecha_rep || '—'}</td>
+    </tr>
+  `).join('');
+  
+  document.getElementById('p2-content').innerHTML = `
+    <div class="page-header">
+      <div class="page-header-title">📋 Coberturas por Planta</div>
+      <div class="page-header-subtitle">Estado de cobertura ordenado de más crítico a más holgado — ${fmtDate(currentDate)}</div>
+    </div>
+    ${buildDateBar('dateBarP2')}
+    <div class="tbl-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Planta</th>
+            <th>Producto</th>
+            <th>Inventario</th>
+            <th>Cobertura</th>
+            <th>Fecha Cob.</th>
+            <th>BT</th>
+            <th>Vol. Repos.</th>
+            <th>ETA</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+  `;
+}
+
+// P5: REPOSICIONES BT
+function renderP5() {
+  const today = byLatest();
+  const withBT = today.filter(r => r.bt && r.bt !== '' && r.bt !== '-');
+  
+  // Agrupar por BT
+  const btMap = {};
+  withBT.forEach(r => {
+    if (!btMap[r.bt]) btMap[r.bt] = {nombre: r.bt, destinos: [], volTotal: 0, eta: r.fecha_reposicion || r.fecha_rep};
+    btMap[r.bt].destinos.push({planta: r.planta, producto: r.producto, vol: r.vol_rep || 0});
+    btMap[r.bt].volTotal += r.vol_rep || 0;
+    if (r.fecha_reposicion || r.fecha_rep) btMap[r.bt].eta = r.fecha_reposicion || r.fecha_rep;
+  });
+  
+  const btCards = Object.values(btMap).map(bt => {
+    const destRows = bt.destinos.map(d => `
+      <tr>
+        <td class="tp">${d.planta}</td>
+        <td>${d.producto}</td>
+        <td class="tn">${fmt(d.vol,1)} MB</td>
+      </tr>
+    `).join('');
+    
+    return `
+      <div class="bt-card">
+        <div class="bt-card-header">
+          <span class="bt-icon">🚢</span>
+          <span class="bt-name">${bt.nombre}</span>
+          <span class="bt-badge">${fmt(bt.volTotal,1)} MB • ETA: ${fmtDate(bt.eta)}</span>
+        </div>
+        <table style="width:100%">
+          <thead><tr><th>Destino</th><th>Producto</th><th>Volumen</th></tr></thead>
+          <tbody>${destRows}</tbody>
+        </table>
+      </div>
+    `;
+  }).join('');
+  
+  document.getElementById('p5-content').innerHTML = `
+    <div class="page-header">
+      <div class="page-header-title">⚓ Reposiciones BT</div>
+      <div class="page-header-subtitle">Buques de transferencia programados</div>
+    </div>
+    <div class="bt-cards">${btCards || '<div style="padding:40px;text-align:center;color:var(--txt3)">Sin buques programados</div>'}</div>
+  `;
+}
+
+// P6: MAPA CALOR
+function renderP6() {
+  const today = byLatest();
+  
+  // Agrupar por planta
+  const plantaMap = {};
+  today.forEach(r => {
+    if (!plantaMap[r.planta]) plantaMap[r.planta] = {productos: [], minCob: 999};
+    plantaMap[r.planta].productos.push({prod: r.producto, cob: r.cob, inv: r.inv});
+    if (r.cob > 0 && r.cob < plantaMap[r.planta].minCob) plantaMap[r.planta].minCob = r.cob;
+  });
+  
+  const cells = Object.entries(plantaMap).sort((a,b) => a[1].minCob - b[1].minCob).map(([planta, data]) => {
+    const color = data.minCob === 999 ? 'var(--txt3)' : 
+                  data.minCob < CONFIG.COB_RED ? 'var(--red)' :
+                  data.minCob < CONFIG.COB_AMB ? 'var(--ora)' :
+                  data.minCob < CONFIG.COB_YEL ? 'var(--yel)' : 'var(--grn)';
+    const bg = data.minCob === 999 ? 'var(--bg3)' :
+               data.minCob < CONFIG.COB_RED ? 'var(--red)18' :
+               data.minCob < CONFIG.COB_AMB ? 'var(--ora)18' :
+               data.minCob < CONFIG.COB_YEL ? 'var(--yel)18' : 'var(--grn)14';
+    
+    return `
+      <div style="background:${bg};border:1px solid ${color}44;border-radius:var(--r);padding:14px;text-align:center">
+        <div style="font-weight:700;color:var(--txt);margin-bottom:6px">${planta}</div>
+        <div style="font-size:24px;font-weight:800;font-family:var(--mono);color:${color}">${data.minCob === 999 ? '—' : data.minCob+'d'}</div>
+        <div style="font-size:10px;color:var(--txt3);margin-top:4px">${data.productos.length} productos</div>
+      </div>
+    `;
+  }).join('');
+  
+  document.getElementById('p6-content').innerHTML = `
+    <div class="page-header">
+      <div class="page-header-title">🌡️ Mapa de Calor</div>
+      <div class="page-header-subtitle">Cobertura mínima por planta</div>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;padding:18px">
+      ${cells}
+    </div>
+  `;
+}
+
+// P7: VISTA GERENCIAL
+function renderP7() {
+  const today = byLatest();
+  
+  // KPIs
+  const invTotal = today.reduce((s,r) => s + (r.inv || 0), 0);
+  const cobProm = today.filter(r => r.cob > 0).reduce((s,r,i,a) => s + r.cob/a.length, 0);
+  const criticas = today.filter(r => r.cob > 0 && r.cob < CONFIG.COB_RED).length;
+  const quiebres = today.filter(r => r.cob > 0 && r.cob < 1).length;
+  const ventasDia = today.reduce((s,r) => s + (r.vreal || r.dem || 0), 0);
+  const buques = new Set(today.filter(r => r.bt).map(r => r.bt)).size;
+  
+  // Tabla de críticos
+  const criticos = today.filter(r => r.cob > 0 && r.cob < CONFIG.COB_AMB)
+    .sort((a,b) => a.cob - b.cob)
+    .slice(0, 10)
+    .map(r => `
+      <tr>
+        <td class="tp">${r.planta}</td>
+        <td>${r.producto}</td>
+        <td class="tn">${fmt(r.inv,1)}</td>
+        <td><span class="sem ${semClass(r.cob)}">${r.cob}d</span></td>
+        <td>${r.bt || '—'}</td>
+        <td>${fmtDate(r.fecha_reposicion || r.fecha_rep)}</td>
+      </tr>
+    `).join('');
+  
+  document.getElementById('p7-content').innerHTML = `
+    <div class="page-header">
+      <div class="page-header-title">📊 Vista Gerencial</div>
+      <div class="page-header-subtitle">Indicadores ejecutivos y métricas clave — ${fmtDate(currentDate)}</div>
+    </div>
+    ${buildDateBar('dateBarP7')}
+    <div class="kpi-row" style="grid-template-columns:repeat(6,1fr)">
+      <div class="kpi blue">
+        <div class="kpi-label">Inventario Nacional</div>
+        <div class="kpi-value">${fmt(invTotal,1)}</div>
+        <div class="kpi-sub">Miles de Barriles</div>
+      </div>
+      <div class="kpi green">
+        <div class="kpi-label">Cobertura Prom.</div>
+        <div class="kpi-value">${fmt(cobProm,1)}</div>
+        <div class="kpi-sub">Días promedio</div>
+      </div>
+      <div class="kpi red">
+        <div class="kpi-label">Críticas</div>
+        <div class="kpi-value">${criticas}</div>
+        <div class="kpi-sub">Plantas &lt;${CONFIG.COB_RED}d</div>
+      </div>
+      <div class="kpi red">
+        <div class="kpi-label">Quiebres</div>
+        <div class="kpi-value">${quiebres}</div>
+        <div class="kpi-sub">Plantas &lt;1d</div>
+      </div>
+      <div class="kpi blue">
+        <div class="kpi-label">Ventas/Día</div>
+        <div class="kpi-value">${fmt(ventasDia,1)}</div>
+        <div class="kpi-sub">MB despacho</div>
+      </div>
+      <div class="kpi blue">
+        <div class="kpi-label">BT Activos</div>
+        <div class="kpi-value">${buques}</div>
+        <div class="kpi-sub">Buques en ruta</div>
+      </div>
+    </div>
+    
+    <div class="section-head">Top 10 Plantas Críticas</div>
+    <div class="tbl-wrap">
+      <table>
+        <thead>
+          <tr><th>Planta</th><th>Producto</th><th>Inventario</th><th>Cobertura</th><th>BT</th><th>ETA</th></tr>
+        </thead>
+        <tbody>${criticos || '<tr><td colspan="6" style="text-align:center;color:var(--grn)">✓ Sin plantas críticas</td></tr>'}</tbody>
+      </table>
+    </div>
+    
+    <div class="chart-grid">
+      <div class="cc">
+        <div class="cc-head"><div class="cc-title">Cobertura por Producto</div></div>
+        <div class="chart-h220"><canvas id="chartCobProdG"></canvas></div>
+      </div>
+      <div class="cc">
+        <div class="cc-head"><div class="cc-title">Inventario por Planta</div></div>
+        <div class="chart-h220"><canvas id="chartInvPlantaG"></canvas></div>
+      </div>
+    </div>
+  `;
+  
+  renderChartsGerencial();
+}
+
+// P10: NAVES
+function renderP10() {
+  const today = byLatest();
+  const buques = new Set(today.filter(r => r.bt && r.bt !== '').map(r => r.bt));
+  
+  document.getElementById('p10-content').innerHTML = `
+    <div class="page-header">
+      <div class="page-header-title">🚢 Programa de Naves</div>
+      <div class="page-header-subtitle">Estado de buques de transferencia</div>
+    </div>
+    <div style="padding:40px;text-align:center">
+      <div style="font-size:48px;margin-bottom:16px">🚢</div>
+      <div style="font-size:24px;font-weight:800;color:var(--txt);margin-bottom:8px">${buques.size} Buques Activos</div>
+      <div style="color:var(--txt2)">${[...buques].join(' • ') || 'Sin buques en ruta'}</div>
+    </div>
+  `;
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// CHARTS
+// ════════════════════════════════════════════════════════════════════════════
+let chartCobProd = null;
+let chartInvPlanta = null;
+
+function renderCharts() {
+  const today = byLatest();
+  if (!today.length) return;
+  
+  // Cobertura por Producto
+  const byProd = {};
+  today.forEach(r => {
+    if (!byProd[r.producto]) byProd[r.producto] = {cob: [], count: 0};
+    if (r.cob > 0) {
+      byProd[r.producto].cob.push(r.cob);
+      byProd[r.producto].count++;
+    }
+  });
+  
+  const prodLabels = Object.keys(byProd);
+  const prodData = prodLabels.map(p => byProd[p].cob.length ? byProd[p].cob.reduce((a,b)=>a+b,0)/byProd[p].cob.length : 0);
+  const prodColors = prodData.map(c => c < CONFIG.COB_RED ? cssVar('--red') : c < CONFIG.COB_AMB ? cssVar('--ora') : cssVar('--grn'));
+  
+  const ctxCob = document.getElementById('chartCobProd');
+  if (ctxCob) {
+    if (chartCobProd) chartCobProd.destroy();
+    chartCobProd = new Chart(ctxCob, {
+      type: 'bar',
+      data: {
+        labels: prodLabels,
+        datasets: [{
+          data: prodData,
+          backgroundColor: prodColors,
+          borderRadius: 4
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {legend: {display: false}},
+        scales: {
+          x: {grid: {display: false}, ticks: {color: cssVar('--txt3')}},
+          y: {grid: {color: cssVar('--bdr')}, ticks: {color: cssVar('--txt3')}}
+        }
+      }
+    });
+  }
+  
+  // Inventario por Planta (Top 10)
+  const byPlanta = {};
+  today.forEach(r => {
+    if (!byPlanta[r.planta]) byPlanta[r.planta] = 0;
+    byPlanta[r.planta] += r.inv || 0;
+  });
+  
+  const sortedPlantas = Object.entries(byPlanta).sort((a,b) => b[1] - a[1]).slice(0, 10);
+  
+  const ctxInv = document.getElementById('chartInvPlanta');
+  if (ctxInv) {
+    if (chartInvPlanta) chartInvPlanta.destroy();
+    chartInvPlanta = new Chart(ctxInv, {
+      type: 'bar',
+      data: {
+        labels: sortedPlantas.map(p => p[0]),
+        datasets: [{
+          data: sortedPlantas.map(p => p[1]),
+          backgroundColor: cssVar('--acc'),
+          borderRadius: 4
+        }]
+      },
+      options: {
+        indexAxis: 'y',
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {legend: {display: false}},
+        scales: {
+          x: {grid: {color: cssVar('--bdr')}, ticks: {color: cssVar('--txt3')}},
+          y: {grid: {display: false}, ticks: {color: cssVar('--txt3')}}
+        }
+      }
+    });
+  }
+}
+
+function renderChartsGerencial() {
+  const today = byLatest();
+  if (!today.length) return;
+  
+  // Similar a renderCharts pero para P7
+  const byProd = {};
+  today.forEach(r => {
+    if (!byProd[r.producto]) byProd[r.producto] = {cob: []};
+    if (r.cob > 0) byProd[r.producto].cob.push(r.cob);
+  });
+  
+  const prodLabels = Object.keys(byProd);
+  const prodData = prodLabels.map(p => byProd[p].cob.length ? byProd[p].cob.reduce((a,b)=>a+b,0)/byProd[p].cob.length : 0);
+  const prodColors = prodData.map(c => c < CONFIG.COB_RED ? cssVar('--red') : c < CONFIG.COB_AMB ? cssVar('--ora') : cssVar('--grn'));
+  
+  const ctxCob = document.getElementById('chartCobProdG');
+  if (ctxCob) {
+    new Chart(ctxCob, {
+      type: 'bar',
+      data: {labels: prodLabels, datasets: [{data: prodData, backgroundColor: prodColors, borderRadius: 4}]},
+      options: {responsive: true, maintainAspectRatio: false, plugins: {legend: {display: false}},
+        scales: {x: {grid: {display: false}, ticks: {color: cssVar('--txt3')}}, y: {grid: {color: cssVar('--bdr')}, ticks: {color: cssVar('--txt3')}}}}
+    });
+  }
+  
+  const byPlanta = {};
+  today.forEach(r => {
+    if (!byPlanta[r.planta]) byPlanta[r.planta] = 0;
+    byPlanta[r.planta] += r.inv || 0;
+  });
+  const sortedPlantas = Object.entries(byPlanta).sort((a,b) => b[1] - a[1]).slice(0, 10);
+  
+  const ctxInv = document.getElementById('chartInvPlantaG');
+  if (ctxInv) {
+    new Chart(ctxInv, {
+      type: 'bar',
+      data: {labels: sortedPlantas.map(p => p[0]), datasets: [{data: sortedPlantas.map(p => p[1]), backgroundColor: cssVar('--acc'), borderRadius: 4}]},
+      options: {indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: {legend: {display: false}},
+        scales: {x: {grid: {color: cssVar('--bdr')}, ticks: {color: cssVar('--txt3')}}, y: {grid: {display: false}, ticks: {color: cssVar('--txt3')}}}}
+    });
+  }
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// INIT
+// ════════════════════════════════════════════════════════════════════════════
+document.addEventListener('DOMContentLoaded', () => {
+  initTheme();
+  fetchData();
+});
+</script>
+</body>
+</html>
