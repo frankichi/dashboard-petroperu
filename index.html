@@ -3255,6 +3255,18 @@ async function fetchData(forceRefresh) {
           }
         });
         console.log('[API] Pron\u00f3stico (parallel):', loaded, '| Final:', Object.keys(pronSheet).length);
+        // Pre-poblar _pronByMonthCache con TODOS los meses del pronData para que
+        // renderPTend los encuentre sin fetches adicionales.
+        if (typeof _pronByMonthCache !== 'undefined') {
+          pronData.forEach(function(p) {
+            if (!p.mes || !p.planta || !p.producto || !(p.pron > 0)) return;
+            var dp = (typeof VENTAS_DASH_MAP!=='undefined' && VENTAS_DASH_MAP[p.producto]) || p.producto;
+            if (!_pronByMonthCache[p.mes]) _pronByMonthCache[p.mes] = {};
+            _pronByMonthCache[p.mes][p.planta + '|' + dp] = (_pronByMonthCache[p.mes][p.planta + '|' + dp] || 0) + p.pron;
+          });
+          var mesesCached = Object.keys(_pronByMonthCache).length;
+          if (mesesCached > 0) console.log('[API] Cache pron\u00f3stico:', mesesCached, 'meses pre-cargados');
+        }
         var ap = document.querySelector('.page.active');
         if (ap) {
           if (ap.id==='pResumen' && typeof renderPResumen==='function') try{renderPResumen();}catch(e){}
@@ -9410,14 +9422,14 @@ function _pronEvRender(el) {
   var tbody = datos.map(function(r) {
     var d   = delta(r);
     var p   = pct(r);
-    var ult = meses.length ? (r.meses[meses[meses.length-1]] !== undefined ? r.meses[meses[meses.length-1]].toFixed(4) : '—') : '—';
-    var dStr = d === null ? '—' : (d >= 0 ? '+' : '') + d.toFixed(4);
+    var ult = meses.length ? (r.meses[meses[meses.length-1]] !== undefined ? r.meses[meses[meses.length-1]].toFixed(2) : '—') : '—';
+    var dStr = d === null ? '—' : (d >= 0 ? '+' : '') + d.toFixed(2);
     var pStr = p === null ? '—' : (p >= 0 ? '+' : '') + p.toFixed(1) + '%';
     var dCol = d === null ? 'var(--txt3)' : (d > 0.0001 ? 'var(--grn)' : d < -0.0001 ? 'var(--red)' : 'var(--txt3)');
     var mesesCols = meses.map(function(m) {
       var v = r.meses[m];
       return '<td style="text-align:right;font-family:var(--mono);font-size:10px;padding:6px 10px;border-bottom:1px solid var(--bdr)22">' +
-        (v !== undefined ? v.toFixed(4) : '<span style="color:var(--bdr)">—</span>') + '</td>';
+        (v !== undefined ? v.toFixed(2) : '<span style="color:var(--bdr)">—</span>') + '</td>';
     }).join('');
     return '<tr>' +
       '<td style="padding:6px 12px;border-bottom:1px solid var(--bdr)22;font-weight:700;color:var(--txt);white-space:nowrap">' + r.planta + '</td>' +
@@ -10357,7 +10369,7 @@ function _pTendEnsurePPVentas(meses) {
 // (ej. ver junio con su pronóstico ya cargado, mientras julio aún no se sube).
 var _pronByMonthCache = {}; // {mes: {'planta|producto': pron}}
 function _pTendLoadPronMes(mes) {
-  return fetch(CONFIG.API_URL + '?action=getPronostico&mes=' + encodeURIComponent(mes), {method:'GET', redirect:'follow'})
+  return fetch(CONFIG.API_URL + '?action=getPronostico&mes=' + encodeURIComponent(mes), {method:'GET', redirect:'follow', cache:'no-store'})
     .then(function(r){ return r.ok ? r.json() : []; })
     .then(function(rows){
       var map = {};
