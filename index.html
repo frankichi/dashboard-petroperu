@@ -13688,8 +13688,8 @@ function handlePronFile(file) {
         }
       }
       if (!registros.length) throw new Error('No se encontraron registros de pron\u00f3stico');
-      var mesInput = document.getElementById('pron-mes-input');
-      var mes = mesInput ? mesInput.value : '2026-03';
+      var mesInput = document.getElementById('pron-mes-input') || document.getElementById('pron-month-input');
+      var mes = (mesInput && mesInput.value) ? mesInput.value : new Date().toISOString().slice(0,7);
       uploadPronData = {mes: mes, registros: registros};
       var html = '<div class="upload-summary">'
         + '<div class="upload-sum-card"><div class="upload-sum-val">' + registros.length + '</div><div class="upload-sum-lbl">Registros</div></div>'
