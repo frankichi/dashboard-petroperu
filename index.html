@@ -526,6 +526,7 @@ body.has-ticker #app-layout{height:calc(100vh - var(--topH) - 28px)}
     <span class="sb-icon"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" width="16" height="16"><polyline points="2,14 6,10 10,12 14,7 18,4" stroke-linecap="round" stroke-linejoin="round"/><line x1="2" y1="18" x2="18" y2="18" stroke-linecap="round"/></svg></span>
     <span class="sb-label">Tendencia Inv.</span>
   </button>
+  <button class="sb-item" data-pid="pPronEv" onclick="showPage('pPronEv',this)" title="Evolución Pronóstico"><span class="sb-icon">🔮</span><span class="sb-label">Evolución Pronóstico</span></button>
   <button class="sb-item" data-pid="p2" onclick="showPage('p2',this)" title="Coberturas">
     <span class="sb-icon"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" width="16" height="16"><path d="M3 5h14M3 10h14M3 15h14" stroke-linecap="round"/><rect x="6" y="3" width="2" height="4" rx="0.5"/><rect x="12" y="8" width="2" height="4" rx="0.5"/><rect x="9" y="13" width="2" height="4" rx="0.5"/></svg></span>
     <span class="sb-label">Coberturas <span class="sb-badge" id="sb-badge-pC" style="display:none"></span></span>
@@ -613,6 +614,7 @@ body.has-ticker #app-layout{height:calc(100vh - var(--topH) - 28px)}
 <div id="pCis" class="page"><div id="pCis-content"></div></div>
 <div id="pB" class="page"><div id="pB-content"></div></div>
 <div id="pResumen" class="page active"><div id="pResumen-content"></div></div>
+<div id="pPronEv" class="page"><div id="pPronEv-content"></div></div>
 <div id="pTend" class="page"><div id="pTend-content"></div></div>
 <div id="pIqui" class="page"><div id="pIqui-content"></div></div>
 <div id="pSegD" class="page"><div id="pSegD-content"></div></div>
@@ -2986,6 +2988,7 @@ function rerenderActivePage() {
     case 'pCis':    if (typeof renderPCis === 'function') renderPCis(); break;
     case 'pB':      renderPB(); break;
     case 'pTend':   renderPTend(); break;
+    case 'pPronEv': renderPPronEv(); break;
     case 'pC':      renderPC(); break;
     case 'p2':      if (typeof renderP2 === 'function') renderP2(); break;
     case 'pD':      renderPD(); break;
@@ -3353,6 +3356,7 @@ function showPage(id, tab) {
     case 'pCis':    if (typeof renderPCis === 'function') renderPCis(); break;
     case 'pB':      renderPB(); break;
     case 'pTend':   renderPTend(); break;
+    case 'pPronEv': renderPPronEv(); break;
     case 'pC':      renderPC(); break;
     case 'p2':      if (typeof renderP2 === 'function') renderP2(); break;
     case 'pD':      renderPD(); break;
@@ -9295,6 +9299,199 @@ window._pTendSetRange = function(val) {
   _pTendRange = val;
   renderPTend();
 };
+// ═══════════════════════════════════════════════════════════════════════
+// EVOLUCIÓN DE PRONÓSTICOS — Módulo comparativo mes a mes
+// Muestra cómo ha cambiado el pronóstico de cada planta/producto
+// entre los meses disponibles (mayo 2026 en adelante).
+// ═══════════════════════════════════════════════════════════════════════
+var _pronEvData = null;    // caché de los datos cargados
+var _pronEvFilter = { planta: '', producto: '' };
+var _pronEvLoading = false;
+
+function renderPPronEv() {
+  var el = document.getElementById('pPronEv-content');
+  if (!el) return;
+
+  if (_pronEvLoading) return;
+
+  // Si ya tenemos datos en caché, renderizar directamente
+  if (_pronEvData) { _pronEvRender(el); return; }
+
+  // Spinner mientras carga
+  el.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:200px;flex-direction:column;gap:12px">' +
+    '<div style="width:36px;height:36px;border:3px solid var(--bdr);border-top-color:var(--acc);border-radius:50%;animation:spin 1s linear infinite"></div>' +
+    '<div style="font-size:12px;color:var(--txt3)">Cargando evolución de pronósticos…</div></div>';
+
+  _pronEvLoading = true;
+  fetch(CONFIG.API_URL + '?action=getPronosticoEvolucion')
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      _pronEvLoading = false;
+      _pronEvData = data;
+      _pronEvRender(el);
+    })
+    .catch(function(err) {
+      _pronEvLoading = false;
+      el.innerHTML = '<div style="padding:40px;text-align:center;color:var(--red)">Error cargando datos: ' + err.message + '</div>';
+    });
+}
+
+function _pronEvRender(el) {
+  var meses   = _pronEvData.meses || [];
+  var allData = _pronEvData.data  || [];
+  if (!meses.length || !allData.length) {
+    el.innerHTML = '<div style="padding:40px;text-align:center;color:var(--txt3)">Sin datos de pronóstico disponibles. Sube pronósticos desde el módulo de carga de datos.</div>';
+    return;
+  }
+
+  // Listas únicas para filtros
+  var plantas   = [...new Set(allData.map(function(r){ return r.planta; }))].sort();
+  var productos = [...new Set(allData.map(function(r){ return r.producto; }))].sort();
+
+  // Filtrar datos
+  var datos = allData.filter(function(r) {
+    return (!_pronEvFilter.planta   || r.planta   === _pronEvFilter.planta) &&
+           (!_pronEvFilter.producto || r.producto === _pronEvFilter.producto);
+  });
+
+  // Mes formateado legible
+  function fmtMes(m) {
+    if (!m) return m;
+    var p = m.split('-');
+    var meses = ['','Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+    return meses[parseInt(p[1])] + ' ' + p[0];
+  }
+
+  // Delta entre último y penúltimo mes
+  function delta(r) {
+    if (meses.length < 2) return null;
+    var m1 = meses[meses.length - 2];
+    var m2 = meses[meses.length - 1];
+    var v1 = r.meses[m1];
+    var v2 = r.meses[m2];
+    if (v1 === undefined || v2 === undefined) return null;
+    return v2 - v1;
+  }
+
+  // Variación porcentual
+  function pct(r) {
+    if (meses.length < 2) return null;
+    var m1 = meses[meses.length - 2];
+    var v1 = r.meses[m1];
+    if (!v1) return null;
+    var d = delta(r);
+    if (d === null) return null;
+    return (d / v1) * 100;
+  }
+
+  // Sparkline SVG inline para la fila de la tabla
+  function sparkRow(r) {
+    var vals = meses.map(function(m){ return r.meses[m] !== undefined ? r.meses[m] : null; });
+    var defined = vals.filter(function(v){ return v !== null; });
+    if (defined.length < 2) return '';
+    var mn = Math.min.apply(null, defined), mx = Math.max.apply(null, defined);
+    var w = 90, h = 26, pad = 3;
+    var pts = [];
+    vals.forEach(function(v, i) {
+      if (v === null) return;
+      var x = pad + (i / (meses.length - 1)) * (w - pad*2);
+      var y = h - pad - ((v - mn) / (mx - mn || 1)) * (h - pad*2);
+      pts.push(x.toFixed(1) + ',' + y.toFixed(1));
+    });
+    var d = delta(r);
+    var col = d === null ? 'var(--txt3)' : (d > 0 ? '#22c55e' : d < 0 ? '#ef4444' : 'var(--txt3)');
+    return '<svg width="' + w + '" height="' + h + '" style="display:block">' +
+      '<polyline points="' + pts.join(' ') + '" fill="none" stroke="' + col + '" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>' +
+      (pts.length ? '<circle cx="' + pts[pts.length-1].split(',')[0] + '" cy="' + pts[pts.length-1].split(',')[1] + '" r="2.5" fill="' + col + '"/>' : '') +
+      '</svg>';
+  }
+
+  // Construir tabla
+  var tbody = datos.map(function(r) {
+    var d   = delta(r);
+    var p   = pct(r);
+    var ult = meses.length ? (r.meses[meses[meses.length-1]] !== undefined ? r.meses[meses[meses.length-1]].toFixed(4) : '—') : '—';
+    var dStr = d === null ? '—' : (d >= 0 ? '+' : '') + d.toFixed(4);
+    var pStr = p === null ? '—' : (p >= 0 ? '+' : '') + p.toFixed(1) + '%';
+    var dCol = d === null ? 'var(--txt3)' : (d > 0.0001 ? 'var(--grn)' : d < -0.0001 ? 'var(--red)' : 'var(--txt3)');
+    var mesesCols = meses.map(function(m) {
+      var v = r.meses[m];
+      return '<td style="text-align:right;font-family:var(--mono);font-size:10px;padding:6px 10px;border-bottom:1px solid var(--bdr)22">' +
+        (v !== undefined ? v.toFixed(4) : '<span style="color:var(--bdr)">—</span>') + '</td>';
+    }).join('');
+    return '<tr>' +
+      '<td style="padding:6px 12px;border-bottom:1px solid var(--bdr)22;font-weight:700;color:var(--txt);white-space:nowrap">' + r.planta + '</td>' +
+      '<td style="padding:6px 12px;border-bottom:1px solid var(--bdr)22;font-size:11px;color:var(--txt2)">' + r.producto + '</td>' +
+      mesesCols +
+      '<td style="padding:6px 10px;border-bottom:1px solid var(--bdr)22;font-family:var(--mono);font-weight:800;font-size:11px;color:' + dCol + '">' + dStr + '</td>' +
+      '<td style="padding:6px 10px;border-bottom:1px solid var(--bdr)22;font-family:var(--mono);font-weight:800;font-size:11px;color:' + dCol + '">' + pStr + '</td>' +
+      '<td style="padding:4px 10px 4px 14px;border-bottom:1px solid var(--bdr)22">' + sparkRow(r) + '</td>' +
+    '</tr>';
+  }).join('');
+
+  // KPIs resumen
+  var aumentaron = datos.filter(function(r){ var d=delta(r); return d!==null && d>0.0001; }).length;
+  var bajaron    = datos.filter(function(r){ var d=delta(r); return d!==null && d<-0.0001; }).length;
+  var estables   = datos.filter(function(r){ var d=delta(r); return d!==null && Math.abs(d)<=0.0001; }).length;
+  var sinComp    = datos.filter(function(r){ return delta(r)===null; }).length;
+
+  el.innerHTML =
+    // Header
+    '<div class="page-header">' +
+      '<div class="page-header-title">🔮 Evolución de Pronósticos</div>' +
+      '<div class="page-header-subtitle">Comparativo mes a mes · ' + meses.length + ' meses disponibles (' + fmtMes(meses[0]) + ' → ' + fmtMes(meses[meses.length-1]) + ')</div>' +
+    '</div>' +
+    // KPIs
+    '<div style="display:flex;gap:8px;flex-wrap:wrap;padding:10px 18px;background:var(--bg2);border-bottom:1px solid var(--bdr)">' +
+      '<div style="display:flex;align-items:center;gap:6px;padding:5px 14px;border-radius:8px;background:var(--grn)14;border:1px solid var(--grn)35">' +
+        '<span style="font-size:18px;font-weight:800;font-family:var(--mono);color:var(--grn)">' + aumentaron + '</span>' +
+        '<span style="font-size:10px;font-weight:700;color:var(--grn)">▲ Aumentaron</span>' +
+      '</div>' +
+      '<div style="display:flex;align-items:center;gap:6px;padding:5px 14px;border-radius:8px;background:var(--red)14;border:1px solid var(--red)35">' +
+        '<span style="font-size:18px;font-weight:800;font-family:var(--mono);color:var(--red)">' + bajaron + '</span>' +
+        '<span style="font-size:10px;font-weight:700;color:var(--red)">▼ Bajaron</span>' +
+      '</div>' +
+      '<div style="display:flex;align-items:center;gap:6px;padding:5px 14px;border-radius:8px;background:var(--bg3);border:1px solid var(--bdr)">' +
+        '<span style="font-size:18px;font-weight:800;font-family:var(--mono);color:var(--txt3)">' + estables + '</span>' +
+        '<span style="font-size:10px;font-weight:700;color:var(--txt3)">= Sin cambio</span>' +
+      '</div>' +
+      (sinComp ? '<div style="display:flex;align-items:center;gap:6px;padding:5px 14px;border-radius:8px;background:var(--bg3);border:1px solid var(--bdr);opacity:.6">' +
+        '<span style="font-size:18px;font-weight:800;font-family:var(--mono);color:var(--txt3)">' + sinComp + '</span>' +
+        '<span style="font-size:10px;font-weight:700;color:var(--txt3)">Sin comparar</span>' +
+      '</div>' : '') +
+      '<button onclick="_pronEvData=null;renderPPronEv()" style="margin-left:auto;padding:5px 12px;border-radius:6px;border:1px solid var(--bdr);background:var(--bg3);color:var(--txt2);font-size:11px;font-weight:700;cursor:pointer;font-family:var(--sans)">↻ Actualizar</button>' +
+    '</div>' +
+    // Filtros
+    '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:8px 18px;background:var(--bg2);border-bottom:1px solid var(--bdr)">' +
+      '<span style="font-size:9px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px">Filtrar:</span>' +
+      '<select id="pronev-planta" onchange="_pronEvFilter.planta=this.value;_pronEvRender(document.getElementById(\'pPronEv-content\'))" style="background:var(--card2);color:var(--txt);border:1px solid var(--bdr);border-radius:6px;padding:4px 9px;font-size:11px;font-family:var(--sans)">' +
+        '<option value="">Todas las plantas</option>' +
+        plantas.map(function(p){ return '<option value="' + p + '"' + (_pronEvFilter.planta===p?' selected':'') + '>' + p + '</option>'; }).join('') +
+      '</select>' +
+      '<select id="pronev-prod" onchange="_pronEvFilter.producto=this.value;_pronEvRender(document.getElementById(\'pPronEv-content\'))" style="background:var(--card2);color:var(--txt);border:1px solid var(--bdr);border-radius:6px;padding:4px 9px;font-size:11px;font-family:var(--sans)">' +
+        '<option value="">Todos los productos</option>' +
+        productos.map(function(p){ return '<option value="' + p + '"' + (_pronEvFilter.producto===p?' selected':'') + '>' + p + '</option>'; }).join('') +
+      '</select>' +
+      '<span style="font-size:10px;color:var(--txt3);margin-left:8px">' + datos.length + ' combinaciones</span>' +
+    '</div>' +
+    // Tabla
+    '<div style="padding:0 18px 20px;overflow-x:auto">' +
+      '<table style="width:100%;border-collapse:collapse;font-size:11.5px;margin-top:14px">' +
+        '<thead><tr>' +
+          '<th style="background:var(--bg3);color:var(--txt3);font-size:8.5px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;padding:7px 12px;border-bottom:2px solid var(--bdr);text-align:left;white-space:nowrap;position:sticky;top:0">Planta</th>' +
+          '<th style="background:var(--bg3);color:var(--txt3);font-size:8.5px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;padding:7px 12px;border-bottom:2px solid var(--bdr);text-align:left;white-space:nowrap;position:sticky;top:0">Producto</th>' +
+          meses.map(function(m) {
+            return '<th style="background:var(--bg3);color:var(--acc2);font-size:8.5px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;padding:7px 10px;border-bottom:2px solid var(--bdr);text-align:right;white-space:nowrap;position:sticky;top:0">' + fmtMes(m) + '</th>';
+          }).join('') +
+          '<th style="background:var(--bg3);color:var(--txt3);font-size:8.5px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;padding:7px 10px;border-bottom:2px solid var(--bdr);text-align:right;white-space:nowrap;position:sticky;top:0">Δ Último</th>' +
+          '<th style="background:var(--bg3);color:var(--txt3);font-size:8.5px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;padding:7px 10px;border-bottom:2px solid var(--bdr);text-align:right;white-space:nowrap;position:sticky;top:0">% Var.</th>' +
+          '<th style="background:var(--bg3);color:var(--txt3);font-size:8.5px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;padding:7px 14px;border-bottom:2px solid var(--bdr);text-align:left;white-space:nowrap;position:sticky;top:0">Tendencia</th>' +
+        '</tr></thead>' +
+        '<tbody>' + tbody + '</tbody>' +
+      '</table>' +
+    '</div>';
+}
+
 function renderPTend() {
   var el = document.getElementById('pTend-content');
   if (!el) return;
