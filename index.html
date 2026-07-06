@@ -526,7 +526,7 @@ body.has-ticker #app-layout{height:calc(100vh - var(--topH) - 28px)}
     <span class="sb-icon"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" width="16" height="16"><polyline points="2,14 6,10 10,12 14,7 18,4" stroke-linecap="round" stroke-linejoin="round"/><line x1="2" y1="18" x2="18" y2="18" stroke-linecap="round"/></svg></span>
     <span class="sb-label">Tendencia Inv.</span>
   </button>
-  <button class="sb-item" data-pid="pC" onclick="showPage('pC',this)" title="Coberturas">
+  <button class="sb-item" data-pid="p2" onclick="showPage('p2',this)" title="Coberturas">
     <span class="sb-icon"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" width="16" height="16"><path d="M3 5h14M3 10h14M3 15h14" stroke-linecap="round"/><rect x="6" y="3" width="2" height="4" rx="0.5"/><rect x="12" y="8" width="2" height="4" rx="0.5"/><rect x="9" y="13" width="2" height="4" rx="0.5"/></svg></span>
     <span class="sb-label">Coberturas <span class="sb-badge" id="sb-badge-pC" style="display:none"></span></span>
   </button>
@@ -2987,6 +2987,7 @@ function rerenderActivePage() {
     case 'pB':      renderPB(); break;
     case 'pTend':   renderPTend(); break;
     case 'pC':      renderPC(); break;
+    case 'p2':      if (typeof renderPInv === 'function') renderPInv(); break;
     case 'pD':      renderPD(); break;
     case 'pE':      renderPE(); break;
     case 'pInv':    if (typeof renderPInv === 'function') renderPInv(); break;
@@ -3353,6 +3354,7 @@ function showPage(id, tab) {
     case 'pB':      renderPB(); break;
     case 'pTend':   renderPTend(); break;
     case 'pC':      renderPC(); break;
+    case 'p2':      if (typeof renderPInv === 'function') renderPInv(); break;
     case 'pD':      renderPD(); break;
     case 'pE':      renderPE(); break;
     case 'pProg':   renderPProg(); break;
@@ -9158,11 +9160,15 @@ function renderPB() {
   `;
 }
 function renderPCtrl() {
-  // Control Coberturas = mismo heatmap que Coberturas, pero con edición habilitada.
-  // Simplemente renderizamos directamente en pCtrl-content usando la misma función.
+  // Control Coberturas = misma tabla cobal que Coberturas (renderPInv en p2)
+  // pero con edición habilitada. Se renderiza en pCtrl-content.
   var ctrlEl = document.getElementById('pCtrl-content');
   if (!ctrlEl) return;
-  _renderPCInto(ctrlEl, true);
+  // Primero renderizar la tabla en p2 (su contenedor natural)
+  if (typeof renderPInv === 'function') renderPInv();
+  // Luego clonar el resultado al contenedor de pCtrl
+  var src = document.getElementById('p2-content');
+  if (src) ctrlEl.innerHTML = src.innerHTML;
 }
 function renderPC() {
   var el = document.getElementById('pC-content');
