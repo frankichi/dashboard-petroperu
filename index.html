@@ -2987,7 +2987,7 @@ function rerenderActivePage() {
     case 'pB':      renderPB(); break;
     case 'pTend':   renderPTend(); break;
     case 'pC':      renderPC(); break;
-    case 'p2':      if (typeof renderPInv === 'function') renderPInv(); break;
+    case 'p2':      if (typeof renderP2 === 'function') renderP2(); break;
     case 'pD':      renderPD(); break;
     case 'pE':      renderPE(); break;
     case 'pInv':    if (typeof renderPInv === 'function') renderPInv(); break;
@@ -3354,7 +3354,7 @@ function showPage(id, tab) {
     case 'pB':      renderPB(); break;
     case 'pTend':   renderPTend(); break;
     case 'pC':      renderPC(); break;
-    case 'p2':      if (typeof renderPInv === 'function') renderPInv(); break;
+    case 'p2':      if (typeof renderP2 === 'function') renderP2(); break;
     case 'pD':      renderPD(); break;
     case 'pE':      renderPE(); break;
     case 'pProg':   renderPProg(); break;
@@ -9160,13 +9160,12 @@ function renderPB() {
   `;
 }
 function renderPCtrl() {
-  // Control Coberturas = misma tabla cobal que Coberturas (renderPInv en p2)
-  // pero con edición habilitada. Se renderiza en pCtrl-content.
+  // Control Coberturas = misma tabla cobal que Coberturas (renderP2 en p2-content)
+  // Se renderiza directamente en p2 y también se muestra en pCtrl.
+  // La forma más simple: activar p2 y copiar su contenido a pCtrl-content.
   var ctrlEl = document.getElementById('pCtrl-content');
   if (!ctrlEl) return;
-  // Primero renderizar la tabla en p2 (su contenedor natural)
-  if (typeof renderPInv === 'function') renderPInv();
-  // Luego clonar el resultado al contenedor de pCtrl
+  if (typeof renderP2 === 'function') renderP2();
   var src = document.getElementById('p2-content');
   if (src) ctrlEl.innerHTML = src.innerHTML;
 }
