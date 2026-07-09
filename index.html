@@ -172,9 +172,9 @@ body.light #ship-ops-bar{background:linear-gradient(90deg,#0f1a30,#16233d)}
 #ship-ops-viewport:hover #ship-ops-vessels.sop-marquee{animation-play-state:paused!important}
 @keyframes sopMarquee{from{transform:translateX(0)}to{transform:translateX(-50%)}}
 @keyframes tickerScroll{from{transform:translateX(0)}to{transform:translateX(-50%)}}
-/* Event ticker: FIXED para que no desaparezca al hacer scroll */
-#event-ticker{position:fixed!important;top:var(--topH);left:0;right:0;z-index:149;height:28px;display:none;align-items:center;overflow:hidden}
-body.has-ticker #app-layout{margin-top:28px}
+/* Event ticker: STICKY (no fixed) para que ocupe espacio real en el flujo
+   y no se superponga con la cinta de buques que va justo debajo */
+#event-ticker{position:sticky;top:var(--topH);left:0;right:0;z-index:149;height:28px;display:none;align-items:center;overflow:hidden}
 body.has-ticker #ship-ops-bar{top:calc(var(--topH) + 28px)}
 #ship-ops-bar::-webkit-scrollbar{display:none}
 #ship-ops-summary{
@@ -565,6 +565,10 @@ var _mapLibsLoaded=false;
     <span class="sb-icon"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" width="16" height="16"><circle cx="10" cy="10" r="3"/><path d="M10 2v2M10 16v2M2 10h2M16 10h2M4.5 4.5l1.4 1.4M14.1 14.1l1.4 1.4M4.5 15.5l1.4-1.4M14.1 5.9l1.4-1.4" stroke-linecap="round"/></svg></span>
     <span class="sb-label">Seg. Diario <span class="sb-badge" id="sb-badge-pSegD" style="display:none"></span></span>
   </button>
+  <button class="sb-item" data-pid="pComent" onclick="showPage('pComent',this)" title="Comentarios de plantas">
+    <span class="sb-icon"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" width="16" height="16"><path d="M2 4h16v9H8l-4 3v-3H2z" stroke-linejoin="round"/></svg></span>
+    <span class="sb-label">Comentarios <span class="sb-badge" id="sb-badge-pComent" style="display:none"></span></span>
+  </button>
   <button class="sb-item sb-exec-hidden" data-pid="pCtrl" onclick="showPage('pCtrl',this)" title="Control Coberturas">
     <span class="sb-icon"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" width="16" height="16"><circle cx="6" cy="10" r="2"/><circle cx="14" cy="6" r="2"/><circle cx="14" cy="14" r="2"/><path d="M2 10h2M8 10h10M10 6h2M10 14h2M2 6h8M2 14h8" stroke-linecap="round"/></svg></span>
     <span class="sb-label">Control Cob.</span>
@@ -661,6 +665,7 @@ var _mapLibsLoaded=false;
 <div id="p10"      class="page"><div id="p10-content"></div></div>
 <div id="pC"       class="page"><div id="pC-content"></div></div>
 <div id="pSegD"    class="page"><div id="pSegD-content"></div></div>
+<div id="pComent"  class="page"><div id="pComent-content"></div></div>
 <div id="pm"       class="page"><div id="pm-content"></div></div>
 
 <script>
@@ -2964,6 +2969,7 @@ function rerenderActivePage() {
     case 'pDec':    if (typeof renderPDec === 'function') renderPDec(); break;
     case 'pIqui':   if (typeof renderPIqui === 'function') renderPIqui(); break;
     case 'pSegD':   if (typeof renderPSegD === 'function') renderPSegD(); break;
+    case 'pComent': if (typeof renderPComent === 'function') renderPComent(); break;
   }
 }
 function buildAllDateBars() { syncAllDateBars(); }
@@ -3173,6 +3179,7 @@ async function fetchData(forceRefresh) {
     if (INVENTORY_REPORT_MODE && typeof renderInventoryReport === 'function') renderInventoryReport();
     setTimeout(function(){ if(typeof _updateShipOpsBar==='function') _updateShipOpsBar(); }, 400);
     setTimeout(function(){ if(typeof _updateShipOpsBar==='function') _updateShipOpsBar(); }, 3500);
+    setTimeout(function(){ if(typeof _pcUpdateBadgeOnly==='function') _pcUpdateBadgeOnly(); }, 3600);
     try {
       renderPResumen();
     } catch(renderErr) {
@@ -3414,6 +3421,7 @@ function showPage(id, tab) {
     case 'pInv':    renderPInv(); break;
     case 'pIqui':   if(typeof renderPIqui==='function') renderPIqui(); break;
     case 'pSegD':   if(typeof renderPSegD==='function') renderPSegD(); break;
+    case 'pComent': if(typeof renderPComent==='function') renderPComent(); break;
     case 'pDec':    if(typeof renderPDec==='function') renderPDec(); break;
   }
 }
@@ -3708,6 +3716,115 @@ function renderPSegD() {
     .catch(function() {
       document.getElementById('segd-body').innerHTML = '<div style="color:var(--red)">Error de conexión al cargar el seguimiento.</div>';
     });
+}
+// ═══════════════════════════════════════════════════════════════════════
+// COMENTARIOS — feed de comentarios registrados en Registro Diario,
+// por planta/producto/día (general de la planta + específico por producto)
+// ═══════════════════════════════════════════════════════════════════════
+function renderPComent() {
+  var el = document.getElementById('pComent-content');
+  var raw = Array.isArray(window.RAW) ? window.RAW : [];
+
+  // Construir lista de eventos de comentario, deduplicando el comentario
+  // general (se guarda repetido en cada producto de la misma planta/fecha).
+  var vistoGeneral = {};
+  var eventos = [];
+  raw.forEach(function(r) {
+    var gen  = (r.comentario || '').trim();
+    var prod = (r.comentario_prod || '').trim();
+    if (gen) {
+      var kg = r.fecha + '|' + r.planta;
+      if (!vistoGeneral[kg]) {
+        vistoGeneral[kg] = true;
+        eventos.push({ fecha: r.fecha, planta: r.planta, producto: '', texto: gen, tipo: 'general' });
+      }
+    }
+    if (prod) {
+      eventos.push({ fecha: r.fecha, planta: r.planta, producto: r.producto, texto: prod, tipo: 'producto' });
+    }
+  });
+  eventos.sort(function(a, b) {
+    if (a.fecha !== b.fecha) return a.fecha < b.fecha ? 1 : -1;
+    return (a.planta || '').localeCompare(b.planta || '');
+  });
+
+  var fechas = [...new Set(eventos.map(function(e){ return e.fecha; }))].sort().reverse();
+  var plantasConComent = [...new Set(eventos.map(function(e){ return e.planta; }))].sort();
+
+  var badge = document.getElementById('sb-badge-pComent');
+  if (badge) {
+    var hoyStr = (typeof _hoyLima === 'function') ? _hoyLima() : new Date().toISOString().slice(0,10);
+    var nHoy = eventos.filter(function(e){ return e.fecha === hoyStr; }).length;
+    if (nHoy > 0) { badge.style.display = ''; badge.textContent = nHoy; } else { badge.style.display = 'none'; }
+  }
+
+  if (!window._pcFiltroFecha) window._pcFiltroFecha = '';
+  if (!window._pcFiltroPlanta) window._pcFiltroPlanta = '';
+
+  function draw() {
+    var filtrados = eventos.filter(function(e) {
+      if (window._pcFiltroFecha && e.fecha !== window._pcFiltroFecha) return false;
+      if (window._pcFiltroPlanta && e.planta !== window._pcFiltroPlanta) return false;
+      return true;
+    });
+
+    var cardsHtml = filtrados.length ? filtrados.map(function(e) {
+      var icono = e.tipo === 'general' ? '🏭' : '🧪';
+      var etiqueta = e.tipo === 'general' ? 'Comentario general de planta' : ('Producto: ' + e.producto);
+      var color = e.tipo === 'general' ? 'var(--acc)' : '#0071A4';
+      return '<div style="background:var(--card);border:1px solid var(--bdr);border-left:3px solid ' + color + ';border-radius:var(--r);padding:12px 14px;margin-bottom:8px">' +
+        '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">' +
+          '<span style="font-size:14px">' + icono + '</span>' +
+          '<span style="font-size:12.5px;font-weight:800;color:var(--txt)">' + (_segDLabel ? _segDLabel(e.planta) : e.planta) + '</span>' +
+          '<span class="badge" style="background:' + color + '14;color:' + color + ';border:1px solid ' + color + '40;font-size:9px">' + etiqueta + '</span>' +
+          '<span style="margin-left:auto;font-size:10px;color:var(--txt3)">' + e.fecha + '</span>' +
+        '</div>' +
+        '<div style="font-size:12px;color:var(--txt2);line-height:1.4">' + String(e.texto).replace(/</g,'&lt;') + '</div>' +
+      '</div>';
+    }).join('') : '<div style="padding:30px;text-align:center;color:var(--txt3);font-size:12px">Sin comentarios registrados para este filtro.</div>';
+
+    document.getElementById('pcom-body').innerHTML = cardsHtml;
+    document.getElementById('pcom-count').textContent = filtrados.length + ' comentario(s)';
+  }
+
+  el.innerHTML =
+    '<div class="page-header">' +
+      '<div class="page-header-title">💬 Comentarios de Plantas</div>' +
+      '<div class="page-header-subtitle">Comentarios generales y por producto registrados en Registro Diario — trazabilidad completa, no solo en el Sheets</div>' +
+      '<div class="date-bar" style="padding:6px 0 0;flex-wrap:wrap;gap:8px">' +
+        '<span class="f-label">Fecha</span>' +
+        '<select id="pcom-fecha"><option value="">Todas</option>' +
+          fechas.map(function(f){ return '<option value="' + f + '">' + f + '</option>'; }).join('') +
+        '</select>' +
+        '<span class="f-label">Planta</span>' +
+        '<select id="pcom-planta"><option value="">Todas</option>' +
+          plantasConComent.map(function(p){ return '<option value="' + p + '">' + (_segDLabel ? _segDLabel(p) : p) + '</option>'; }).join('') +
+        '</select>' +
+        '<span class="date-count" id="pcom-count"></span>' +
+      '</div>' +
+    '</div>' +
+    '<div id="pcom-body" style="padding:16px 18px;max-width:900px"></div>';
+
+  document.getElementById('pcom-fecha').value = window._pcFiltroFecha;
+  document.getElementById('pcom-planta').value = window._pcFiltroPlanta;
+  document.getElementById('pcom-fecha').addEventListener('change', function(){ window._pcFiltroFecha = this.value; draw(); });
+  document.getElementById('pcom-planta').addEventListener('change', function(){ window._pcFiltroPlanta = this.value; draw(); });
+
+  draw();
+}
+// Actualiza solo el badge de "Comentarios" en el sidebar, usando los datos
+// ya cargados en RAW (sin request adicional al servidor).
+function _pcUpdateBadgeOnly() {
+  var badge = document.getElementById('sb-badge-pComent');
+  if (!badge) return;
+  var raw = Array.isArray(window.RAW) ? window.RAW : [];
+  var hoyStr = (typeof _hoyLima === 'function') ? _hoyLima() : new Date().toISOString().slice(0,10);
+  var n = 0;
+  raw.forEach(function(r) {
+    if (r.fecha !== hoyStr) return;
+    if ((r.comentario||'').trim() || (r.comentario_prod||'').trim()) n++;
+  });
+  if (n > 0) { badge.style.display = ''; badge.textContent = n; } else { badge.style.display = 'none'; }
 }
 function openProductModal(prod) {
   const today = byLatest();
@@ -6897,6 +7014,7 @@ function renderP2() {
         + '<td class="cobal-ind" title="' + alerta.msg.replace(/"/g,'&quot;') + '">' + alerta.icon + '</td>'
         + '<td style="font-weight:700;color:var(--txt);cursor:pointer" onclick="openWhatIf(\'' + r.planta.replace(/'/g, "\\'") + '\',\'' + r.producto.replace(/'/g, "\\'") + '\')" title="Abrir simulador What-If"><span style="border-bottom:1px dashed var(--acc)44">' + r.producto + '</span> <span style="font-size:8px;color:var(--acc2)">📊</span>'
         + (r.existencia_minima ? ' <span style="font-size:8px;font-weight:800;padding:1px 6px;border-radius:8px;background:#c8102e;color:#fff" title="Reportado con existencia mínima (OSINERGMIN)">⚠ MÍN</span>' : '')
+        + ((r.comentario_prod || r.comentario) ? ' <span style="font-size:11px;cursor:help" title="' + ((r.comentario_prod||'') + (r.comentario_prod && r.comentario ? ' · ' : '') + (r.comentario||'')).replace(/"/g,'&quot;') + '">💬</span>' : '')
         + '</td>'
         + '<td class="r" style="white-space:nowrap">'
         + (cobEditMode

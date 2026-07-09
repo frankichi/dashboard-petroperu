@@ -204,6 +204,21 @@ input.input-error{border-color:var(--red)!important;box-shadow:0 0 0 3px rgba(20
 .min-warn textarea{width:100%;border:1px solid #c8102e40;border-radius:6px;padding:7px 9px;font-size:11px;font-family:var(--sans);resize:vertical;min-height:44px;box-sizing:border-box}
 .min-warn textarea:focus{outline:none;border-color:#c8102e;box-shadow:0 0 0 3px rgba(200,16,46,.08)}
 
+/* Banner de confirmación de fecha de reporte */
+.fecha-banner{display:flex;align-items:center;gap:12px;flex-wrap:wrap;border-radius:10px;padding:12px 16px;margin:10px 0 4px}
+.fecha-banner.normal{background:#f0f4fa;border:1px solid #d7e0ee}
+.fecha-banner.madrugada{background:#fdf3e0;border:1.5px solid #e8a000}
+.fecha-banner-icon{font-size:20px;flex-shrink:0}
+.fecha-banner-text{flex:1;min-width:180px;font-size:12px;color:#334}
+.fecha-banner-text b{color:#0f1e3c}
+.fecha-banner .fecha-banner-sub{display:block;font-size:10.5px;color:#7a5200;margin-top:2px}
+.fecha-banner-actions{display:flex;gap:8px;flex-wrap:wrap}
+.fecha-banner-btn{padding:7px 14px;border-radius:7px;font-size:11px;font-weight:700;cursor:pointer;font-family:var(--sans);border:1.5px solid transparent;transition:all .15s}
+.fecha-banner-btn.primary{background:#1a7a44;color:#fff;border-color:#1a7a44}
+.fecha-banner-btn.primary:hover{background:#155e35}
+.fecha-banner-btn.secondary{background:#fff;color:#0f1e3c;border-color:#c7d0de}
+.fecha-banner-btn.secondary:hover{background:#f0f4fa}
+
 /* Solicitud de corrección */
 .sol-banner{background:#fdf3e0;border:1.5px solid #e8a000;border-radius:8px;padding:10px 14px;margin:10px 0;font-size:11px;color:#7a5200}
 .sol-btn{display:inline-flex;align-items:center;gap:6px;padding:6px 14px;border-radius:7px;border:1.5px solid #e8a000;background:#fff;color:#a86a00;font-size:11px;font-weight:700;cursor:pointer;font-family:var(--sans);transition:all .15s}
@@ -303,6 +318,7 @@ input.input-error{border-color:var(--red)!important;box-shadow:0 0 0 3px rgba(20
   <div id="rdPanel-registro" class="rd-panel active">
     <div class="page-title">Reporte diario de existencias</div>
     <div class="page-sub" id="appSub">—</div>
+    <div id="fechaReporteBanner"></div>
     <div class="status-pill" id="statusPill"></div>
 
     <div class="card">
@@ -454,6 +470,67 @@ function rdHoyLima() {
   var lima = new Date(d.getTime() - 5 * 3600 * 1000);
   return lima.toISOString().slice(0, 10);
 }
+function rdAyerLima() {
+  var d = new Date();
+  var lima = new Date(d.getTime() - 5 * 3600 * 1000 - 24 * 3600 * 1000);
+  return lima.toISOString().slice(0, 10);
+}
+function rdHoraLima() {
+  var d = new Date();
+  var lima = new Date(d.getTime() - 5 * 3600 * 1000);
+  return lima.getUTCHours() + lima.getUTCMinutes() / 60;
+}
+// Ventana de "madrugada": 00:00–06:00 Lima. Reportes hechos en este rango
+// casi siempre corresponden al CIERRE del día anterior, no al día que ya
+// empezó en el calendario. RD.fechaReporte es la fecha que el formulario
+// realmente usa para cargar/guardar — nunca se asume en silencio.
+function rdInicializarFechaReporte() {
+  var hora = rdHoraLima();
+  RD.esMadrugada = (hora < 6);
+  RD.fechaReporte = RD.esMadrugada ? rdAyerLima() : rdHoyLima();
+}
+
+function rdCambiarFechaReporte(nuevaFecha) {
+  RD.fechaReporte = nuevaFecha;
+  rdRefreshMiReporte();
+}
+
+function rdRenderFechaBanner() {
+  var el = document.getElementById('fechaReporteBanner');
+  if (!el) return;
+  var d = new Date();
+  var lima = new Date(d.getTime() - 5 * 3600 * 1000);
+  var hh = String(lima.getUTCHours()).padStart(2, '0');
+  var mm = String(lima.getUTCMinutes()).padStart(2, '0');
+  var fechaSel = RD.fechaReporte || rdHoyLima();
+  var esHoy = fechaSel === rdHoyLima();
+  var otraFecha = esHoy ? rdAyerLima() : rdHoyLima();
+  var otraLabel = esHoy ? 'ayer' : 'hoy';
+
+  if (RD.esMadrugada) {
+    el.innerHTML =
+      '<div class="fecha-banner madrugada">' +
+        '<span class="fecha-banner-icon">🌙</span>' +
+        '<span class="fecha-banner-text">' +
+          'Son las <b>' + hh + ':' + mm + '</b> — de madrugada. Este reporte se está registrando como el <b>cierre del ' + fmtFecha(fechaSel) + '</b> (' + (esHoy ? 'hoy' : 'ayer') + ').' +
+          '<span class="fecha-banner-sub">Si reportas a esta hora, normalmente es el cierre del día anterior. Verifica antes de continuar.</span>' +
+        '</span>' +
+        '<span class="fecha-banner-actions">' +
+          '<button class="fecha-banner-btn primary" disabled>✓ Cierre de ' + fmtFecha(fechaSel) + '</button>' +
+          '<button class="fecha-banner-btn secondary" onclick="rdCambiarFechaReporte(\'' + otraFecha + '\')">Es del ' + fmtFecha(otraFecha) + ' (' + otraLabel + ')</button>' +
+        '</span>' +
+      '</div>';
+  } else {
+    el.innerHTML =
+      '<div class="fecha-banner normal">' +
+        '<span class="fecha-banner-icon">📅</span>' +
+        '<span class="fecha-banner-text">Reportando el cierre de <b>' + fmtFecha(fechaSel) + '</b> (' + (esHoy ? 'hoy' : 'ayer') + ')</span>' +
+        '<span class="fecha-banner-actions">' +
+          '<button class="fecha-banner-btn secondary" onclick="rdCambiarFechaReporte(\'' + otraFecha + '\')">¿Es de ' + fmtFecha(otraFecha) + ' (' + otraLabel + ')? Cambiar</button>' +
+        '</span>' +
+      '</div>';
+  }
+}
 
 const API_URL = 'https://script.google.com/macros/s/AKfycbwL5Gec0EmZgha2rNUaORMDT6MBuouyIlV07tlMpQo9O1YcgkiWJdoQUmIafMQhF2kgUg/exec';
 
@@ -471,7 +548,9 @@ const RD = {
   email: localStorage.getItem('rd_email') || '',
   productos: [],
   plantas: [],
-  productosPorPlanta: {}
+  productosPorPlanta: {},
+  fechaReporte: null,
+  esMadrugada: false
 };
 
 function rdShowLoader(v) { document.getElementById('loader').classList.toggle('show', v); }
@@ -1037,7 +1116,9 @@ function rdRenderProdRows(productos, valores, detalle, yaReportado) {
 
 function rdRefreshMiReporte() {
   rdShowLoader(true);
-  var hoy = rdHoyLima();
+  if (!RD.fechaReporte) rdInicializarFechaReporte();
+  rdRenderFechaBanner();
+  var hoy = RD.fechaReporte;
   rdGet('rdGetMiReporte', { token: RD.token, fecha: hoy }).then(res => {
     rdShowLoader(false);
     if (!res.success) { if (/sesión/i.test(res.message || '')) rdLogout(); else rdToast(res.message, 'error'); return; }
@@ -1129,7 +1210,7 @@ function rdAbrirConfirmacion() {
     if (blk2) { if (!blk2.classList.contains('open')) blk2.classList.add('open'); blk2.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
     return;
   }
-  document.getElementById('confirmFecha').textContent = new Date().toISOString().slice(0, 10);
+  document.getElementById('confirmFecha').textContent = RD.fechaReporte || rdHoyLima();
   document.getElementById('confirmPlanta').textContent = plantaLabel(RD.planta);
   document.getElementById('confirmModal').classList.add('open');
 }
@@ -1164,7 +1245,7 @@ function rdConfirmarGuardar() {
   var comentarioGeneral = document.getElementById('comentario').value.trim();
   var payload = {
     token:      RD.token,
-    fecha:      rdHoyLima(),
+    fecha:      RD.fechaReporte || rdHoyLima(),
     productos:  productos,
     comentario: comentarioGeneral,
     clientInfo: { equipo: navigator.userAgent.slice(0, 120) }
@@ -1188,6 +1269,7 @@ function rdEnterApp() {
   document.getElementById('viewRecuperar').style.display = 'none';
   document.getElementById('viewReset').style.display = 'none';
   document.getElementById('appShell').style.display = 'block';
+  rdInicializarFechaReporte();
   rdRefreshMiReporte();
   // Precargar histórico y pronóstico en background
   setTimeout(function() { rdLoadPronostico(); }, 2000);
