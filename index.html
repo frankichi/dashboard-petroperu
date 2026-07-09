@@ -2733,7 +2733,7 @@ function getBTsForRow(planta, producto, r) {
         const prods = stop.prods || [{producto: stop.producto, vol: stop.vol}];
         prods.forEach(function(pr) {
           const sp = (pr.producto || '').replace(/\(BT2\)/, '').trim();
-          if (prodEq(sp, producto) && (pr.vol||0) > 0) {
+          if (prodEq(sp, producto) && (pr.vol||0) > 0 && vigente(stop.etaDate||'')) {
             projected.push({name: ship.name, vol: pr.vol||0, eta: stop.etaDate||'', source:'projected'});
           }
         });
