@@ -496,6 +496,11 @@ var _mapLibsLoaded=false;
       <span class="gs-icon"><span class="gs-dot"></span></span>
       <span class="gs-text">Conectando&hellip;</span>
     </div>
+    <!-- Vista Ejecutiva (compartir link de solo lectura) -->
+    <button onclick="if(typeof openExecutiveView==='function') openExecutiveView(event)" title="Compartir Vista Ejecutiva (solo lectura, sin login)"
+      style="padding:5px 12px;border-radius:7px;border:1.5px solid #7c3aed;background:#7c3aed;color:#fff;font-size:11px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:6px">
+      🔗 Vista Ejecutiva
+    </button>
     <!-- Actualizar datos -->
     <button onclick="_refreshAllData()" title="Refrescar datos del dashboard"
       id="btn-refresh-global"
@@ -2706,9 +2711,20 @@ function prodEq(a, b) {
 }
 function getBTsForRow(planta, producto, r) {
   const confirmed = [], projected = [];
+  // Guard de vigencia: un BT/cabotaje "confirmado" cuya fecha de reposición
+  // (ETA) ya pasó respecto a la fecha de ESTA fila (r.fecha) es un dato
+  // obsoleto — normalmente ya se recibió y la existencia reportada ya lo
+  // incluye. Sin este chequeo, un ETA de meses atrás (ej. "03-jun" viendo
+  // datos de julio) sigue apareciendo como si fuera una reposición activa.
+  const rowFecha = r && r.fecha ? r.fecha : '';
+  function vigente(eta) {
+    if (!eta) return true; // sin fecha registrada: no se puede evaluar, se deja pasar
+    if (!rowFecha) return true;
+    return eta >= rowFecha;
+  }
   if (r) {
-    if (r.bt  && (r.vol_rep||0)     > 0) confirmed.push({name: r.bt,  vol: r.vol_rep,     eta: r.fecha_reposicion||'', source:'confirmed'});
-    if (r.bt2 && (r.vol_rep_bt2||0) > 0) confirmed.push({name: r.bt2, vol: r.vol_rep_bt2, eta: r.fecha_repos_bt2||'',  source:'confirmed'});
+    if (r.bt  && (r.vol_rep||0)     > 0 && vigente(r.fecha_reposicion||'')) confirmed.push({name: r.bt,  vol: r.vol_rep,     eta: r.fecha_reposicion||'', source:'confirmed'});
+    if (r.bt2 && (r.vol_rep_bt2||0) > 0 && vigente(r.fecha_repos_bt2||''))  confirmed.push({name: r.bt2, vol: r.vol_rep_bt2, eta: r.fecha_repos_bt2||'',  source:'confirmed'});
   }
   if (typeof simShips !== 'undefined' && simShips && simShips.length > 0) {
     simShips.forEach(function(ship) {
@@ -19316,14 +19332,13 @@ function initExecutiveMode() {
     +   '<div class="exec-credit">Desarrollado por <strong>Franco Urcia Castillo</strong></div>'
     + '</div>';
   document.body.insertBefore(banner, document.body.firstChild);
-  var navTabs = document.querySelectorAll('.nav-tab');
-  var visibleTabs = Array.from(navTabs).filter(function(t) {
-    return !t.classList.contains('tab-hidden-exec');
-  });
-  var currentActive = document.querySelector('.nav-tab.active');
-  if (!currentActive || currentActive.classList.contains('tab-hidden-exec')) {
-    navTabs.forEach(function(t) { t.classList.remove('active'); });
-    if (visibleTabs.length > 0) visibleTabs[0].classList.add('active');
+  // Forzar Resumen Nacional como página de entrada — es la vista diseñada
+  // para una decisión en 10-20 segundos (semáforo + KPIs + riesgos).
+  // (Antes esto usaba '.nav-tab', una navegación de una versión anterior
+  // del dashboard que ya no existe — el código no hacía nada.)
+  if (typeof showPage === 'function') {
+    var pResumenBtn = document.querySelector('.sb-item[data-pid="pResumen"]');
+    showPage('pResumen', pResumenBtn || null);
   }
   var footer = document.createElement('div');
   footer.className = 'exec-footer';
@@ -19569,16 +19584,22 @@ function getCapacidad(planta, producto) {
         const rep         = bts.totalVol;           // total (confirmado + proyectado)
         const repConf     = bts.confirmedVol;
         const repProj     = bts.projectedVol;
-        const repDate     = bts.confirmed[0]?.eta || bts.projected[0]?.eta || r.fecha_reposicion || r.fecha_reposicion_bt2 || '';
-        const bt          = bts.confirmed[0]?.name || bts.projected[0]?.name || r.bt || r.bt2 || '';
+        // Sin fallback a r.fecha_reposicion/r.bt crudos: si getBTsForRow ya
+        // excluyó el BT por estar vencido, no debe reaparecer aquí.
+        const repDate     = bts.confirmed[0]?.eta || bts.projected[0]?.eta || '';
+        const bt          = bts.confirmed[0]?.name || bts.projected[0]?.name || '';
         const cap = r.capacidad > 0 ? r.capacidad
                   : getCapacidad(r.planta, prod||r.producto||'');
         // Cabotaje marítimo y terrestre (del E&D, campo vol_rep)
+        // Mismo guard de vigencia que getBTsForRow: un ETA ya pasado
+        // respecto a r.fecha es un dato obsoleto, no una reposición activa.
+        var vigente1 = !r.fecha_reposicion || !r.fecha || r.fecha_reposicion >= r.fecha;
+        var vigente2 = !r.fecha_repos_bt2  || !r.fecha || r.fecha_repos_bt2  >= r.fecha;
         var isMar  = function(b){ var fl=['UCAYALI','MOCHE','URUBAMBA','TROMPETEROS','PARIÑAS','HUMBOLDT']; return b && fl.some(function(f){ return (b||'').toUpperCase().indexOf(f)>=0; }); };
-        var mar1=(r.vol_rep||0)>0&&isMar(r.bt)?r.vol_rep:0;
-        var terr1=(r.vol_rep||0)>0&&!isMar(r.bt)?r.vol_rep:0;
-        var mar2=(r.vol_rep_bt2||0)>0&&isMar(r.bt2)?r.vol_rep_bt2:0;
-        var terr2=(r.vol_rep_bt2||0)>0&&!isMar(r.bt2)?r.vol_rep_bt2:0;
+        var mar1=(r.vol_rep||0)>0&&isMar(r.bt)&&vigente1?r.vol_rep:0;
+        var terr1=(r.vol_rep||0)>0&&!isMar(r.bt)&&vigente1?r.vol_rep:0;
+        var mar2=(r.vol_rep_bt2||0)>0&&isMar(r.bt2)&&vigente2?r.vol_rep_bt2:0;
+        var terr2=(r.vol_rep_bt2||0)>0&&!isMar(r.bt2)&&vigente2?r.vol_rep_bt2:0;
         var mar=mar1+mar2, terr=terr1+terr2;
         return { planta:r.planta, inv, vf, pron, cob, cobNorm, cobRestr, rep, repConf, repProj, repDate, bt, cap, bts, mar, terr };
       })
