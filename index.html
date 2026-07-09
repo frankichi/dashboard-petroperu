@@ -10184,12 +10184,11 @@ function renderPTend() {
         </div>
         <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
           <span id="ptend-desp-leg-ppdiaria" style="display:flex;align-items:center;gap:5px;font-size:10px;color:var(--txt3)">
-            <span style="width:16px;height:3px;background:#60a5fa;display:inline-block;border-radius:2px"></span>PP diarias
+            <span style="width:16px;height:3px;background:#60a5fa;display:inline-block;border-radius:2px"></span>Ventas totales promedio correspondiente a cada día
           </span>
           <span id="ptend-desp-leg-cognos" style="display:flex;align-items:center;gap:5px;font-size:10px;color:var(--txt3)">
-            <span style="width:16px;height:3px;background:#7c3aed;display:inline-block;border-radius:2px"></span>Cognos${planta!=='Nacional'?' \u00b7 '+planta:''}
+            <span style="width:16px;height:3px;background:#7c3aed;display:inline-block;border-radius:2px"></span>${planta==='Nacional'?'Ventas Cognos (Nac.)':'Ventas diarias'}
           </span>
-          ${planta!=='Nacional'?'<span id="ptend-desp-leg-totalnac" style="display:flex;align-items:center;gap:5px;font-size:10px;color:var(--txt3)"><span style="width:16px;height:0;border-top:2px dashed #94a3b8;display:inline-block"></span>Total Nac.</span>':''}
           <span id="ptend-desp-leg-promacum" style="display:flex;align-items:center;gap:5px;font-size:10px;color:var(--txt3)">
             <span style="width:16px;height:0;border-top:2px dashed #f97316;display:inline-block"></span>Prom. PP acum.
           </span>
@@ -10510,7 +10509,7 @@ function renderPTend() {
                || cognosData.some(function(v){ return v != null; });
       if (!hasAny) {
         ventasCanvas.style.display = 'none';
-        ['ptend-desp-leg-ppdiaria','ptend-desp-leg-cognos','ptend-desp-leg-totalnac','ptend-desp-leg-promacum','ptend-desp-leg-pronostico'].forEach(function(id){
+        ['ptend-desp-leg-ppdiaria','ptend-desp-leg-cognos','ptend-desp-leg-promacum','ptend-desp-leg-pronostico'].forEach(function(id){
           var lEl = document.getElementById(id); if (lEl) lEl.style.display = 'none';
         });
         var hintElEmpty = document.getElementById('ptend-desp-empty-hint');
@@ -10531,9 +10530,13 @@ function renderPTend() {
         var labelColorV = cssVar('--txt2') || '#8a9bb8';
         var gridColorV  = cssVar('--bdr')  || '#1e2d45';
         var datasets = [];
-        if (ppDiariaData.some(function(v){ return v!=null; })) {
+        // "Ventas PP diarias" es un dato NACIONAL puro (el reporte PP no se
+        // desagrega por planta) — mostrarlo al ver una planta específica
+        // induce a error, como si fuera el dato de esa planta. Solo se
+        // grafica en vista Nacional.
+        if (planta === 'Nacional' && ppDiariaData.some(function(v){ return v!=null; })) {
           datasets.push({
-            label: 'Ventas PP diarias (Nac.)',
+            label: 'Ventas totales promedio correspondiente a cada día',
             data: ppDiariaData,
             borderColor: '#60a5fa', backgroundColor: 'rgba(96,165,250,0.10)',
             borderWidth: 2.5, pointRadius: 4, pointHoverRadius: 6,
@@ -10543,38 +10546,13 @@ function renderPTend() {
         }
         if (cognosData.some(function(v){ return v!=null; })) {
           datasets.push({
-            label: planta==='Nacional' ? 'Ventas Cognos (Nac.)' : 'Cognos \u00b7 '+planta,
+            label: planta==='Nacional' ? 'Ventas Cognos (Nac.)' : 'Ventas diarias',
             data: cognosData,
             borderColor: '#7c3aed', backgroundColor: 'transparent',
             borderWidth: 3, pointRadius: 3.5, pointHoverRadius: 6,
             pointBackgroundColor: '#7c3aed',
             tension: 0.25, fill: false, spanGaps: true, yAxisID: 'yV',
           });
-        }
-        // ── Línea de Total Nacional Cognos (referencia) cuando se ve planta específica ──
-        if (planta !== 'Nacional' && _hasVentasCognos) {
-          var nacTotalData = dateLabels.map(function(d) {
-            if (!_dayHasCognos(d)) return null;
-            var tot = 0;
-            Object.keys(ventasDiariasMap).forEach(function(k) {
-              var p3 = k.split('|');
-              if (p3.length === 3 && p3[0] === d && p3[2] === prod) {
-                if (!_subPlantas.has(p3[1]+'|'+prod)) tot += ventasDiariasMap[k] || 0;
-              }
-            });
-            return tot > 0 ? parseFloat(tot.toFixed(3)) : null;
-          });
-          if (nacTotalData.some(function(v){ return v!=null; })) {
-            datasets.push({
-              label: 'Total Nacional Cognos',
-              data: nacTotalData,
-              borderColor: '#94a3b8',
-              backgroundColor: 'transparent',
-              borderWidth: 1.5, borderDash: [5,4],
-              pointRadius: 0, pointHoverRadius: 4,
-              tension: 0.25, fill: false, spanGaps: true, yAxisID: 'yV',
-            });
-          }
         }
         if (ppAvgData.some(function(v){ return v!=null; })) {
           datasets.push({
@@ -10598,14 +10576,12 @@ function renderPTend() {
         // (evita mostrar "Pronóstico mes" o "Prom. PP acum." como si existieran
         //  cuando en realidad no hay esa data cargada — confundía al usuario)
         function _legShow(id, show){ var lEl=document.getElementById(id); if(lEl) lEl.style.display = show?'flex':'none'; }
-        var tienePPDiaria = ppDiariaData.some(function(v){ return v!=null; });
+        var tienePPDiaria = planta==='Nacional' && ppDiariaData.some(function(v){ return v!=null; });
         var tieneCognosD  = cognosData.some(function(v){ return v!=null; });
-        var tieneTotalNac = (typeof nacTotalData !== 'undefined') && nacTotalData.some(function(v){ return v!=null; });
         var tienePromAcum = ppAvgData.some(function(v){ return v!=null; });
         var tienePronost  = pronLineData.some(function(v){ return v!=null; });
         _legShow('ptend-desp-leg-ppdiaria', tienePPDiaria);
         _legShow('ptend-desp-leg-cognos', tieneCognosD);
-        _legShow('ptend-desp-leg-totalnac', tieneTotalNac);
         _legShow('ptend-desp-leg-promacum', tienePromAcum);
         _legShow('ptend-desp-leg-pronostico', tienePronost);
         var hintEl = document.getElementById('ptend-desp-empty-hint');
@@ -10646,10 +10622,10 @@ function renderPTend() {
                     if (v==null || isNaN(v)) return null;
                     // Prefijos de texto plano — los emojis/HTML no se renderizan en Chart.js tooltips
                     var prefixes = {
-                      'Ventas PP diarias (Nac.)': '[PP]',
+                      'Ventas totales promedio correspondiente a cada d\u00eda': '[PP]',
                       'Pron\u00f3stico mes (MBDC)':   '[Pron\u00f3n.]',
-                      'Total Nacional Cognos':     '[Nac. total]',
-                      'Promedio PP acum. (mes)':   '[Prom. PP]'
+                      'Promedio PP acum. (mes)':   '[Prom. PP]',
+                      'Ventas diarias': '[Cognos]'
                     };
                     var lbl = ctx.dataset.label || '';
                     var prefix = prefixes[lbl] || '[Cognos]';
@@ -10760,6 +10736,11 @@ function _pTendPronParaFecha(fecha, planta, prod) {
   var mes = fecha.slice(0,7);
   var map = _pronByMonthCache[mes];
   if (!map) return 0;
+  // map[...] es el pronóstico APROBADO MENSUAL (mismo origen que pronSheet
+  // en Coberturas). Se convierte a diario dividiendo entre los días reales
+  // de ESE mes — antes se graficaba el total mensual crudo en un eje de
+  // MB/día, mostrando una línea varias veces más alta de lo real.
+  var dias = (typeof diasEnMesJS === 'function') ? diasEnMesJS(mes + '-01') : 30;
   if (planta === 'Nacional') {
     var padres = (typeof PRON_PADRE_PLANTS !== 'undefined' && PRON_PADRE_PLANTS[prod]) || null;
     var tot = 0;
@@ -10769,9 +10750,9 @@ function _pTendPronParaFecha(fecha, planta, prod) {
       if (padres) { if (padres.has(parts[0])) tot += map[k]; }
       else { if (!VENTAS_SUB_PLANTS.has(parts[0]+'|'+prod)) tot += map[k]; }
     });
-    return tot;
+    return tot / dias;
   }
-  return map[planta+'|'+prod] || 0;
+  return (map[planta+'|'+prod] || 0) / dias;
 }
 window._pTendSetProd = function(p) {
   // Verificar que el producto tiene datos para la planta actual
