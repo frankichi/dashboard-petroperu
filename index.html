@@ -311,7 +311,8 @@ var _mapLibsLoaded=false;
     var raw = sessionStorage.getItem('pp_dash_session');
     if (raw) {
       var s = JSON.parse(raw);
-      if (s && s.email && s.exp && Date.now() < s.exp && s.token) sess = s;
+      if (s && s.email && s.exp && Date.now() < s.exp && s.token
+          && s.email.trim().toLowerCase() === 'furcia@petroperu.com.pe') sess = s;
       else sessionStorage.removeItem('pp_dash_session');
     }
   } catch(e) { sessionStorage.removeItem('pp_dash_session'); }
@@ -356,6 +357,16 @@ var _mapLibsLoaded=false;
       btnEl.textContent = 'Ingresar';
       console.log('[AUTH] respuesta:', JSON.stringify(res));
       if (res && res.success) {
+        // ── Acceso restringido: SOLO esta cuenta puede entrar al panel
+        // de control nacional (index.html). Cualquier otra cuenta válida
+        // (ej. una planta) se autentica correctamente contra el sistema
+        // pero se le niega el acceso a ESTE dashboard específicamente.
+        var ALLOWED_EMAIL = 'furcia@petroperu.com.pe';
+        if (em.trim().toLowerCase() !== ALLOWED_EMAIL) {
+          showMsg('Este panel es de acceso restringido. Si necesitas registrar el reporte de tu planta, usa el sistema de Registro Diario.', false);
+          if (passEl) { passEl.value = ''; }
+          return;
+        }
         var s = { email: em, nombre: res.nombre || em, planta: res.planta || '',
                   rol: res.rol || 'operador', token: res.token || '', exp: Date.now() + 43200000 };
         try { sessionStorage.setItem('pp_dash_session', JSON.stringify(s)); } catch(x) {}
@@ -2417,7 +2428,8 @@ if (!_dashSession) {
     var _ss = sessionStorage.getItem('pp_dash_session');
     if (_ss) {
       var _sd = JSON.parse(_ss);
-      if (_sd && _sd.email && _sd.exp && Date.now() < _sd.exp && _sd.token) {
+      if (_sd && _sd.email && _sd.exp && Date.now() < _sd.exp && _sd.token
+          && _sd.email.trim().toLowerCase() === 'furcia@petroperu.com.pe') {
         _dashSession = _sd;
         window._dashSession = _sd;
       } else {
@@ -2595,6 +2607,12 @@ function _authShowLogin() {
         if (btnEl) { btnEl.disabled = false; btnEl.textContent = 'Ingresar'; }
         console.log('[AUTH] login response:', JSON.stringify(res));
         if (res && res.success) {
+          var ALLOWED_EMAIL2 = 'furcia@petroperu.com.pe';
+          if (em.trim().toLowerCase() !== ALLOWED_EMAIL2) {
+            showMsg('Este panel es de acceso restringido. Si necesitas registrar el reporte de tu planta, usa el sistema de Registro Diario.', false);
+            if (passEl) { passEl.value = ''; }
+            return;
+          }
           _dashSession = { email: em, nombre: res.nombre || em.split('@')[0], planta: res.planta || '', rol: res.rol || 'operador', token: res.token || '', exp: Date.now() + 12 * 3600000 };
           try { sessionStorage.setItem('pp_dash_session', JSON.stringify(_dashSession)); } catch(x) {}
           window._authPending = false;
@@ -3458,12 +3476,20 @@ function renderPResumen() {
   var filasDia = RAW.filter(function(r){ return r.fecha === fechaUso && r.inv > 0; });
 
   // Agrupar por planta: sumar inventario y tomar cobertura mínima de sus productos
+  var COB_SANO_MAX = 90; // más de 90 días de cobertura es señal de dato mal
+                          // cargado (mismo patrón que el caso Iquitos/DEM) —
+                          // se excluye del promedio para no distorsionarlo
+  var cobOutliers = [];
   var porPlanta = {};
   filasDia.forEach(function(r) {
     var pl = r.planta;
     if (!porPlanta[pl]) porPlanta[pl] = { inv: 0, cobMin: 999, cobSum: 0, n: 0, prods: [] };
     porPlanta[pl].inv += (r.inv || 0);
     var cob = r.cob || 0;
+    if (cob > COB_SANO_MAX) {
+      cobOutliers.push({ planta: pl, producto: r.producto, cob: cob });
+      cob = 0; // no se usa en mínimos ni en el promedio
+    }
     if (cob > 0 && cob < porPlanta[pl].cobMin) porPlanta[pl].cobMin = cob;
     if (cob > 0) { porPlanta[pl].cobSum += cob; porPlanta[pl].n++; }
     porPlanta[pl].prods.push({ prod: normProd(r.producto), cob: cob, inv: r.inv || 0 });
@@ -3481,11 +3507,13 @@ function renderPResumen() {
   var invAyer = fechaAyer ? RAW.filter(function(r){return r.fecha===fechaAyer && r.inv>0;}).reduce(function(s,r){return s+(r.inv||0);},0) : 0;
   var deltaInv = invTotal - invAyer;
 
-  // Top riesgos: plantas con menor cobertura mínima
+  // Top riesgos: TODAS las plantas con cobertura mínima válida, peor primero.
+  // Antes se cortaba en 8 (.slice(0,8)) y como había 10 plantas críticas,
+  // 2 quedaban invisibles en la tabla aunque sí contaban en el KPI de
+  // arriba — mostraba números que no cuadraban entre sí.
   var riesgosTop = plantas
     .filter(function(p){ return porPlanta[p].cobMin < 999; })
-    .sort(function(a,b){ return porPlanta[a].cobMin - porPlanta[b].cobMin; })
-    .slice(0, 8);
+    .sort(function(a,b){ return porPlanta[a].cobMin - porPlanta[b].cobMin; });
 
   // ── Semáforo nacional ────────────────────────────────────────────────
   var semColor = criticas.length > 0 ? 'var(--red)' : (alertas.length > 0 ? 'var(--yel)' : 'var(--grn)');
@@ -3574,6 +3602,12 @@ function renderPResumen() {
     // Tabla de riesgos
     '<div style="padding:14px 18px 0">' +
       '<div class="section-head">Plantas por nivel de riesgo (cobertura mínima de sus productos)</div>' +
+      (cobOutliers.length ? (
+        '<div style="display:flex;align-items:center;gap:8px;padding:8px 12px;margin-bottom:10px;border-radius:8px;background:var(--red)0d;border:1px solid var(--red)30;font-size:11px;color:var(--red)">' +
+          '<span>⚠</span><span><b>' + cobOutliers.length + ' dato(s) excluido(s) del promedio</b> por cobertura implausible (&gt;' + COB_SANO_MAX + 'd) — probable error de carga en el E&D: ' +
+          cobOutliers.slice(0,4).map(function(o){ return o.planta + '/' + o.producto; }).join(', ') + (cobOutliers.length>4 ? '…' : '') + '. Revisar la fuente.' +
+        '</span></div>'
+      ) : '') +
       '<div style="background:var(--card);border:1px solid var(--bdr);border-radius:var(--r);overflow:auto">' +
         '<table style="width:100%;border-collapse:collapse;font-size:11.5px">' +
           '<thead><tr>' +
@@ -3861,7 +3895,7 @@ function openProductModal(prod) {
     return (r.vfact||0) > 0 && p > 0 && (r.vfact||0) < p;
   });
   const plantasOrden = rows.slice().sort((a,b) => (b.inv||0) - (a.inv||0)).slice(0, 8);
-  const cobsValidas = rows.filter(r => r.cob > 0);
+  const cobsValidas = rows.filter(r => r.cob > 0 && r.cob <= 90); // excluye outliers (dato mal cargado)
   const cobProm = cobsValidas.length
     ? cobsValidas.reduce((s,r) => s + r.cob, 0) / cobsValidas.length
     : 0;
