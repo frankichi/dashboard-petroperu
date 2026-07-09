@@ -10673,14 +10673,36 @@ function _pTendLoadPronMes(mes) {
     .then(function(r){ return r.ok ? r.json() : []; })
     .then(function(rows){
       var map = {};
+      var rawLog = []; // diagnóstico: filas crudas relevantes a Talara/Diesel
       if (Array.isArray(rows)) {
         rows.forEach(function(p){
           if (p.planta && p.producto && p.pron > 0) {
-            var dp = (typeof VENTAS_DASH_MAP!=='undefined' && VENTAS_DASH_MAP[p.producto]) || p.producto;
-            var key = p.planta + '|' + dp;
+            var plTrim = String(p.planta).trim();
+            var prodTrim = String(p.producto).trim();
+            // Normalización robusta: match exacto, si no case-insensitive
+            var dp = (typeof VENTAS_DASH_MAP!=='undefined' && VENTAS_DASH_MAP[prodTrim]) || null;
+            if (!dp && typeof VENTAS_DASH_MAP!=='undefined') {
+              var prodLow = prodTrim.toLowerCase();
+              Object.keys(VENTAS_DASH_MAP).forEach(function(k){
+                if (!dp && k.toLowerCase() === prodLow) dp = VENTAS_DASH_MAP[k];
+              });
+            }
+            dp = dp || prodTrim;
+            var key = plTrim + '|' + dp;
             map[key] = (map[key]||0) + p.pron;
+            if (plTrim.toLowerCase().indexOf('talara') >= 0) {
+              rawLog.push({planta_raw: p.planta, producto_raw: p.producto, dp_normalizado: dp, pron: p.pron, key: key});
+            }
           }
         });
+      }
+      if (rawLog.length) {
+        console.log('[PronTendencia] Filas crudas de Talara en pronostico (' + mes + '):', rawLog);
+        console.log('[PronTendencia] Total map[Talara|Diesel] =', map['Talara|Diesel'] || 0,
+                     '| VENTAS_AGG_RULES fuentes suman:',
+                     (VENTAS_AGG_RULES['Talara|Diesel']||['Talara']).map(function(pl){ return pl+'='+(map[pl+'|Diesel']||0); }).join(', '));
+      } else {
+        console.warn('[PronTendencia] NO se encontró ninguna fila de "Talara" en la hoja pronostico para ' + mes + '. Revisa el nombre exacto de la planta en el Sheets.');
       }
       _pronByMonthCache[mes] = map;
       return map;
