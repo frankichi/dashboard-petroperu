@@ -8098,8 +8098,20 @@ function renderPA() {
       const tableRows = d.records.sort((a,b) => prodSortKey(a.producto) - prodSortKey(b.producto)).map(r => {
         const rc   = cobColor(r._mapCob||0);
         const inv  = (r.inv||0).toFixed(1);
-        const dem  = (r.dem||r.dem_prom||0).toFixed(2);
-        const pron = (pronSheet[r.planta+'|'+r.producto] || r.pron_mes || r.pron || 0).toFixed(2);
+        const demRaw = r.dem||r.dem_prom||0;
+        const pronRaw = pronSheet[r.planta+'|'+r.producto] || r.pron_mes || r.pron || 0;
+        // Guard: la columna "dem" (col DESPACHO DIARIO de inventario) a veces
+        // trae un dato de origen mal cargado (ej. un total mensual o en otra
+        // unidad, escrito por error en la carga E&D) que dispara valores
+        // absurdos (~1000x el pronóstico). La cobertura real (_mapCob) NUNCA
+        // usa este campo — usa V.Factible/Pronóstico — así que solo afecta
+        // la columna informativa. Se marca como sospechoso en vez de
+        // mostrarlo como si fuera confiable.
+        const demSuspicious = demRaw > 0 && pronRaw > 0 && demRaw > pronRaw * 50;
+        const dem = demSuspicious
+          ? `<span title="Dato posiblemente mal cargado en el E&D — revisar fuente" style="color:${isLight?'#c2410c':'#fb923c'};cursor:help">⚠ ${demRaw.toFixed(0)}</span>`
+          : demRaw.toFixed(2);
+        const pron = pronRaw.toFixed(2);
         const cobs = (r._mapCob||0) > 0 ? Math.round(r._mapCob||0)+'d' : '0d';
         const btRow = r.bt
           ? `<div style="font-size:9px;color:${popBtColor};margin-top:2px;font-weight:600">🚢 ${r.bt} · ETA ${fmtDate(r.fecha_reposicion||'')}</div>`
