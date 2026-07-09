@@ -10724,7 +10724,13 @@ function _pTendPronParaFecha(fecha, planta, prod) {
     });
     return tot / dias;
   }
-  return (map[planta+'|'+prod] || 0) / dias;
+  // "Talara" (y otros hubs) en Ventas es la suma de varias sub-plantas
+  // (VENTAS_AGG_RULES) — el pronóstico debe sumarse con el MISMO criterio,
+  // si no, se compara "Ventas de 5 plantas" contra "Pronóstico de 1 sola".
+  var fuentes = (typeof VENTAS_AGG_RULES !== 'undefined' && VENTAS_AGG_RULES[planta+'|'+prod]) || [planta];
+  var totPlanta = 0;
+  fuentes.forEach(function(pl){ totPlanta += (map[pl+'|'+prod] || 0); });
+  return totPlanta / dias;
 }
 window._pTendSetProd = function(p) {
   // Verificar que el producto tiene datos para la planta actual
