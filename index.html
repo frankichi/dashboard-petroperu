@@ -4173,9 +4173,12 @@ function diasEnMesJS(fechaStr) {
 // cobertura y disparaba falsos positivos de "restricción").
 function pronDiarioAprobado(r) {
   if (!r) return 0;
-  var mensual = (typeof pronSheet !== 'undefined' && pronSheet[r.planta+'|'+r.producto]) || r.pron_mes || 0;
-  if (mensual > 0) return mensual / diasEnMesJS(r.fecha);
-  return r.pron || r.dem_prom || 0; // sin pronóstico mensual aprobado: usar campo diario legado
+  // La hoja 'pronostico' tiene columna PRONOSTICO_MBDC — MBDC = Miles de
+  // Barriles Día Calendario, YA es una tasa diaria (confirmado directo en
+  // el Sheets). NO se divide entre días del mes.
+  var val = (typeof pronSheet !== 'undefined' && pronSheet[r.planta+'|'+r.producto]) || r.pron_mes || 0;
+  if (val > 0) return val;
+  return r.pron || r.dem_prom || 0;
 }
 function cobSystemDays(r) {
   if (!r) return 0;
@@ -6493,8 +6496,8 @@ function cobCalcFecha(baseDate, days) {
 }
 function cobGetPron(r) {
   var key = r.planta + '|' + r.producto;
-  if (cobPronOverrides[key] !== undefined) return cobPronOverrides[key]; // override manual: se asume ya en unidad diaria
-  if (pronSheet[key] > 0) return pronSheet[key] / diasEnMesJS(r.fecha); // mensual aprobado → diario
+  if (cobPronOverrides[key] !== undefined) return cobPronOverrides[key];
+  if (pronSheet[key] > 0) return pronSheet[key]; // PRONOSTICO_MBDC ya es diario
   if (r.pron && r.pron > 0) return r.pron;
   return r.dem_prom || 0;
 }
@@ -6801,9 +6804,7 @@ async function cobSaveToGS() {
       } else {
         RAW.push({
           fecha: fechaObjetivo, planta: rec.planta, producto: rec.producto,
-          vfact: rec.value, pron: ((pronSheet[rec.planta+'|'+rec.producto] || 0) > 0
-                    ? pronSheet[rec.planta+'|'+rec.producto] / diasEnMesJS(fechaObjetivo)
-                    : rec.value),
+          vfact: rec.value, pron: pronSheet[rec.planta+'|'+rec.producto] || rec.value,
           inv: 0, vreal: 0, dem: 0, vult7: 0,
           bt: '', vol_rep: 0, bt2: '', vol_rep_bt2: 0, _injected: true
         });
@@ -10198,6 +10199,7 @@ function renderPTend() {
         <canvas id="pTend-ventas-chart"></canvas>
         <div id="ptend-desp-empty-hint" style="display:none;position:absolute;top:8px;right:8px;font-size:9.5px;color:var(--txt3);background:var(--bg3);border:1px solid var(--bdr);border-radius:8px;padding:5px 10px;max-width:260px;text-align:right"></div>
       </div>
+      <div id="ptend-pron-debug" style="display:none;margin-top:8px;padding:10px 12px;background:#fef3c7;border:1px solid #f59e0b;border-radius:8px;font-size:10.5px;font-family:var(--mono);color:#78350f;white-space:pre-wrap"></div>
     </div>
     <!-- Desglose por planta -->
     <div class="pinv-chart-card">
@@ -10473,6 +10475,30 @@ function renderPTend() {
         var v = _pTendPronParaFecha(d, planta, prod);
         return v > 0 ? parseFloat(v.toFixed(3)) : null;
       });
+      // ── Panel de diagnóstico visible (temporal) ──────────────────────────
+      // Muestra exactamente qué hay en el Sheets para planta/producto
+      // actuales, sin depender de la consola del navegador.
+      (function() {
+        var dbg = document.getElementById('ptend-pron-debug');
+        if (!dbg) return;
+        var mesesVisibles = [...new Set(dateLabels.map(function(d){ return d.slice(0,7); }))];
+        var lineas = [];
+        lineas.push('DIAGNÓSTICO PRONÓSTICO — ' + planta + ' · ' + prod);
+        var fuentesDbg = (typeof VENTAS_AGG_RULES !== 'undefined' && VENTAS_AGG_RULES[planta+'|'+prod]) || [planta];
+        lineas.push('Plantas que se suman: ' + fuentesDbg.join(', '));
+        mesesVisibles.forEach(function(m) {
+          var map = _pronByMonthCache[m];
+          if (map === undefined) { lineas.push(m + ': (aún cargando desde el Sheets...)'); return; }
+          var detalle = fuentesDbg.map(function(pl){
+            var raw = map[pl+'|'+prod];
+            return pl + '=' + (raw!=null ? raw.toFixed(2)+' MBDC' : 'SIN DATO en Sheets');
+          }).join(' + ');
+          var totalDiario = fuentesDbg.reduce(function(s,pl){ return s + (map[pl+'|'+prod]||0); }, 0);
+          lineas.push(m + ': ' + detalle + '  \u2192  Demanda pron\u00f3stico = ' + totalDiario.toFixed(3) + ' MB/d\u00eda (PRONOSTICO_MBDC ya es diario, sin dividir)');
+        });
+        dbg.textContent = lineas.join('\n');
+        dbg.style.display = 'block';
+      })();
       // 2. Ventas (Cognos) — ya calculadas en ventasLine, respeta AGG_RULES
       var cognosData = dateLabels.map(function(d, i) { return ventasLine[i]; });
       // 3. Despachos — lo que cada planta/terminal registró en el formulario
@@ -10730,11 +10756,8 @@ function _pTendPronParaFecha(fecha, planta, prod) {
   var mes = fecha.slice(0,7);
   var map = _pronByMonthCache[mes];
   if (!map) return 0;
-  // map[...] es el pronóstico APROBADO MENSUAL (mismo origen que pronSheet
-  // en Coberturas). Se convierte a diario dividiendo entre los días reales
-  // de ESE mes — antes se graficaba el total mensual crudo en un eje de
-  // MB/día, mostrando una línea varias veces más alta de lo real.
-  var dias = (typeof diasEnMesJS === 'function') ? diasEnMesJS(mes + '-01') : 30;
+  // map[...] viene de la columna PRONOSTICO_MBDC del Sheets — MBDC = Miles
+  // de Barriles Día Calendario, YA es una tasa diaria. No se divide.
   if (planta === 'Nacional') {
     var padres = (typeof PRON_PADRE_PLANTS !== 'undefined' && PRON_PADRE_PLANTS[prod]) || null;
     var tot = 0;
@@ -10744,15 +10767,15 @@ function _pTendPronParaFecha(fecha, planta, prod) {
       if (padres) { if (padres.has(parts[0])) tot += map[k]; }
       else { if (!VENTAS_SUB_PLANTS.has(parts[0]+'|'+prod)) tot += map[k]; }
     });
-    return tot / dias;
+    return tot;
   }
   // "Talara" (y otros hubs) en Ventas es la suma de varias sub-plantas
-  // (VENTAS_AGG_RULES) — el pronóstico debe sumarse con el MISMO criterio,
-  // si no, se compara "Ventas de 5 plantas" contra "Pronóstico de 1 sola".
+  // (VENTAS_AGG_RULES) — el pronóstico se suma con el MISMO criterio, si
+  // no, se compara "Ventas de 5 plantas" contra "Pronóstico de 1 sola".
   var fuentes = (typeof VENTAS_AGG_RULES !== 'undefined' && VENTAS_AGG_RULES[planta+'|'+prod]) || [planta];
   var totPlanta = 0;
   fuentes.forEach(function(pl){ totPlanta += (map[pl+'|'+prod] || 0); });
-  return totPlanta / dias;
+  return totPlanta;
 }
 window._pTendSetProd = function(p) {
   // Verificar que el producto tiene datos para la planta actual

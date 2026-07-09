@@ -913,15 +913,16 @@ function rdRecalcDespacho(prod) {
   var existEl = document.querySelector('.rd-existencia[data-prod="' + prod + '"]');
   var autoEl = document.querySelector('[data-auto-calc="' + prod + '"]');
   if (!despEl || !autoEl) return;
-  var desp  = parseFloat(despEl.value) || 0;
-  var exist = existEl ? (parseFloat(existEl.value) || 0) : 0;
+  var desp  = rdParseNum(despEl);
+  var exist = existEl ? rdParseNum(existEl) : 0;
   if (desp > 0 && exist >= 0) {
     autoEl.textContent = rdFmt(exist / desp) + ' d';
   } else {
-    // fallback al despacho del sistema
+    // fallback al despacho/demanda del sistema
     var ref = (RD.detalle && RD.detalle[prod]) || {};
     var uc  = ref.ultimo_calculo;
-    autoEl.textContent = (uc && uc.despacho > 0) ? rdFmt(exist / uc.despacho) + ' d' : '\u2014';
+    var despFallback = (uc && (uc.despacho || uc.dem)) || 0;
+    autoEl.textContent = (despFallback > 0) ? rdFmt(exist / despFallback) + ' d' : '\u2014';
   }
 }
 
@@ -940,15 +941,21 @@ function rdRecalc(prod) {
   var uc  = ref.ultimo_calculo;
   var autoEl = document.querySelector('[data-auto-calc="' + prod + '"]');
   if (autoEl) {
-    var despacho = uc && uc.despacho;
-    autoEl.textContent = (despacho && despacho > 0) ? rdFmt(existencia / despacho) + ' d' : '\u2014';
+    // Prioridad: 1) despacho que el operador acaba de escribir hoy,
+    // 2) despacho/dem del sistema como referencia. Antes esto solo miraba
+    // uc.despacho y sobreescribía con un valor obsoleto cualquier cálculo
+    // correcto que ya se había hecho con el despacho recién ingresado.
+    var despEl2 = document.querySelector('.rd-despacho[data-prod="' + prod + '"]');
+    var despTyped = despEl2 ? (rdParseNum(despEl2) || 0) : 0;
+    var despacho = despTyped > 0 ? despTyped : ((uc && (uc.despacho || uc.dem)) || 0);
+    autoEl.textContent = (despacho > 0) ? rdFmt(existencia / despacho) + ' d' : '\u2014';
   }
   // Badge de cobertura (header) — misma fórmula canónica que "Coberturas"
   // del index, recalculada en vivo según lo que se está escribiendo.
   var badgeEl = document.querySelector('[data-cobbadge="' + prod + '"]');
   if (badgeEl && uc) {
-    var pronAprobDia = (uc.pron_mes > 0) ? (uc.pron_mes / rdDiasEnMes(RD.fechaReporte)) : 0;
-    var cobViva = rdCobCanonica(existencia, uc.vfact || 0, pronAprobDia);
+    // uc.pron_mes viene de PRONOSTICO_MBDC — ya es una tasa diaria, no se divide.
+    var cobViva = rdCobCanonica(existencia, uc.vfact || 0, uc.pron_mes || 0);
     badgeEl.textContent = cobViva + ' d\u00edas';
     badgeEl.className = 'prod-cond-badge ' + (cobViva < 3 ? 'crit' : cobViva < 5 ? 'warn' : 'ok');
   }
@@ -1011,13 +1018,13 @@ function rdRenderProdRows(productos, valores, detalle, yaReportado) {
     var fosiVal       = ref.fondo_osinergmin || 0;
     var brutaIni  = existenciaNum + fondosVal;
     var vacioIni  = capacidadVal - brutaIni;
-    var autoIni   = (uc && uc.despacho > 0) ? rdFmt(existenciaNum / uc.despacho) + ' d' : '\u2014';
+    var autoIni   = (uc && (uc.despacho||uc.dem) > 0) ? rdFmt(existenciaNum / (uc.despacho||uc.dem)) + ' d' : '\u2014';
     var haVal     = existenciaVal !== '' && !isNaN(existenciaNum);
     var filled    = haVal ? ' filled' : '';
 
     var condBadge = '';
-    var pronAprobadoDiario = (uc && uc.pron_mes > 0) ? (uc.pron_mes / rdDiasEnMes(RD.fechaReporte)) : 0;
-    var cobCanonica = (uc) ? rdCobCanonica(existenciaNum, uc.vfact || 0, pronAprobadoDiario) : 0;
+    // uc.pron_mes viene de PRONOSTICO_MBDC — ya es una tasa diaria, no se divide.
+    var cobCanonica = (uc) ? rdCobCanonica(existenciaNum, uc.vfact || 0, uc.pron_mes || 0) : 0;
     if (uc) {
       var cls = cobCanonica < 3 ? 'crit' : cobCanonica < 5 ? 'warn' : 'ok';
       condBadge = '<span class="prod-cond-badge ' + cls + '" data-cobbadge="' + p + '">' + cobCanonica + ' d\u00edas</span>';
@@ -1881,9 +1888,9 @@ function rdCheckPlantaHoy() {
     // Pendiente hoy: buscar el último reporte conocido para no confundir
     // "no reportó hoy" con "nunca reportó" — puede que hoy simplemente
     // aún no le toque, o que el reporte de ayer siga vigente.
-    out.innerHTML = '<div class="check-result pend">⏳ ' + plantaLabel(planta) + ' aún no reporta hoy ('
-      + fmtFecha(hoy) + ').<div style="font-size:10.5px;font-weight:400;margin-top:4px" id="checkUltimoWrap">Buscando último reporte…</div>'
-      + '<div style="font-size:10.5px;font-weight:400;margin-top:4px">Puedes iniciar sesión para registrar el cierre del día.</div></div>';
+    out.innerHTML = '<div class="check-result pend">⏳ ' + plantaLabel(planta) + ' aún no ha registrado el <b>cierre de hoy (' + fmtFecha(hoy) + ')</b>.'
+      + '<div style="font-size:10.5px;font-weight:400;margin-top:4px" id="checkUltimoWrap">Buscando último reporte…</div>'
+      + '<div style="font-size:10.5px;font-weight:400;margin-top:6px">Esto es normal si aún es temprano: el cierre de hoy se registra <b>al final del día</b> (usualmente entre 6 y 7 p.m.). Puedes iniciar sesión cuando corresponda.</div></div>';
     rdGet('rdGetUltimoReporte', { planta: planta }).then(function(res2) {
       var wrap = document.getElementById('checkUltimoWrap');
       if (!wrap) return;
@@ -1893,7 +1900,7 @@ function rdCheckPlantaHoy() {
       }
       var horaU = '';
       if (res2.hora) { try { horaU = new Date(res2.hora).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' }); } catch(e) {} }
-      wrap.innerHTML = 'Último reporte registrado: <b>' + fmtFecha(res2.fecha) + '</b>'
+      wrap.innerHTML = 'Último <b>cierre</b> registrado: <b>' + fmtFecha(res2.fecha) + '</b>'
         + (res2.nombre ? ' por ' + res2.nombre : '') + (horaU ? ' a las ' + horaU : '') + '.';
     }).catch(function() {
       var wrap = document.getElementById('checkUltimoWrap');
