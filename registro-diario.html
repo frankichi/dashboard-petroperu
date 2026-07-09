@@ -52,6 +52,9 @@ body{font-family:var(--sans);font-size:13px;background:var(--bg);color:var(--txt
 .msgbox.error{background:#fdecec;color:#a3182f;border:1px solid #f3c2ca;display:block}
 .msgbox.ok{background:#e9f7ee;color:#166534;border:1px solid #b7e4c7;display:block}
 .authlinks{display:flex;justify-content:space-between;margin-top:16px;font-size:11.5px}
+.check-result{border-radius:8px;padding:10px 12px;font-size:12px;font-weight:700}
+.check-result.ok{background:#e9f7ee;color:#1a7a44;border:1px solid #1a7a4430}
+.check-result.pend{background:#fdf3e0;color:#a86a00;border:1px solid #e8a00030}
 .authlinks a{color:var(--red);text-decoration:none;cursor:pointer;font-weight:600}
 .authlinks a:hover{text-decoration:underline}
 .pw-strength{height:3px;border-radius:2px;background:var(--bdr);margin-top:6px;overflow:hidden}
@@ -258,6 +261,15 @@ input.input-error{border-color:var(--red)!important;box-shadow:0 0 0 3px rgba(20
     <div class="authlinks">
       <a onclick="rdShowView('registro')">Crear cuenta</a>
       <a onclick="rdShowView('recuperar')">Olvidé mi contraseña</a>
+    </div>
+    <div style="text-align:center;margin-top:14px;padding-top:14px;border-top:1px solid #eef0f4">
+      <a onclick="rdToggleCheckPanel()" style="font-size:12px;color:#0071a4;font-weight:700;cursor:pointer">📡 ¿Tu planta ya reportó hoy? Verificar sin iniciar sesión</a>
+      <div id="checkPanel" style="display:none;margin-top:12px;text-align:left">
+        <div class="fld"><label>Selecciona tu instalación</label>
+          <select id="checkPlanta" onchange="rdCheckPlantaHoy()"><option value="">Elige una planta…</option></select>
+        </div>
+        <div id="checkResultado" style="margin-top:8px"></div>
+      </div>
     </div>
   </div>
 </div>
@@ -1834,8 +1846,62 @@ function rdLoadCatalogo() {
     const sel = document.getElementById('regPlanta');
     sel.innerHTML = '<option value="">Selecciona tu instalación…</option>' +
       res.plantas.map(p => '<option value="' + p + '">' + plantaLabel(p) + '</option>').join('');
+    const selChk = document.getElementById('checkPlanta');
+    if (selChk) {
+      selChk.innerHTML = '<option value="">Elige una planta…</option>' +
+        res.plantas.map(p => '<option value="' + p + '">' + plantaLabel(p) + '</option>').join('');
+    }
   }).catch(function(e) { console.warn('[rdLoadCatalogo] error:', e); });
 }
+
+function rdToggleCheckPanel() {
+  const panel = document.getElementById('checkPanel');
+  if (panel) panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+}
+
+function rdCheckPlantaHoy() {
+  const planta = document.getElementById('checkPlanta').value;
+  const out = document.getElementById('checkResultado');
+  if (!planta) { out.innerHTML = ''; return; }
+  out.innerHTML = '<div style="font-size:11px;color:#94a3b8;padding:8px 0">Consultando…</div>';
+  const hoy = rdHoyLima();
+  rdGet('rdGetTrackingHoy', { fecha: hoy }).then(function(res) {
+    if (!res || !res.success) { out.innerHTML = '<div style="font-size:11px;color:#c8102e">No se pudo consultar.</div>'; return; }
+    var item = (res.tracking || []).find(function(t) { return t.planta === planta; });
+    if (!item) { out.innerHTML = '<div style="font-size:11px;color:#94a3b8">Sin información para hoy.</div>'; return; }
+    var yaReportado = item.estado === 'Reportado' || item.estado === 'Validado';
+    if (yaReportado) {
+      var hora = '';
+      if (item.hora) { try { hora = new Date(item.hora).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' }); } catch(e) {} }
+      out.innerHTML = '<div class="check-result ok">✓ ' + plantaLabel(planta) + ' ya reportó hoy'
+        + (item.usuario ? ' — <b>' + item.usuario + '</b>' : '') + (hora ? ' a las ' + hora : '') + '.'
+        + '<div style="font-size:10.5px;font-weight:400;margin-top:4px">No es necesario que otro supervisor vuelva a ingresar.</div></div>';
+      return;
+    }
+    // Pendiente hoy: buscar el último reporte conocido para no confundir
+    // "no reportó hoy" con "nunca reportó" — puede que hoy simplemente
+    // aún no le toque, o que el reporte de ayer siga vigente.
+    out.innerHTML = '<div class="check-result pend">⏳ ' + plantaLabel(planta) + ' aún no reporta hoy ('
+      + fmtFecha(hoy) + ').<div style="font-size:10.5px;font-weight:400;margin-top:4px" id="checkUltimoWrap">Buscando último reporte…</div>'
+      + '<div style="font-size:10.5px;font-weight:400;margin-top:4px">Puedes iniciar sesión para registrar el cierre del día.</div></div>';
+    rdGet('rdGetUltimoReporte', { planta: planta }).then(function(res2) {
+      var wrap = document.getElementById('checkUltimoWrap');
+      if (!wrap) return;
+      if (!res2 || !res2.success || !res2.encontrado) {
+        wrap.textContent = 'Sin reportes previos registrados para esta planta.';
+        return;
+      }
+      var horaU = '';
+      if (res2.hora) { try { horaU = new Date(res2.hora).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' }); } catch(e) {} }
+      wrap.innerHTML = 'Último reporte registrado: <b>' + fmtFecha(res2.fecha) + '</b>'
+        + (res2.nombre ? ' por ' + res2.nombre : '') + (horaU ? ' a las ' + horaU : '') + '.';
+    }).catch(function() {
+      var wrap = document.getElementById('checkUltimoWrap');
+      if (wrap) wrap.textContent = '';
+    });
+  }).catch(function() { out.innerHTML = '<div style="font-size:11px;color:#c8102e">Error de conexión.</div>'; });
+}
+
 
 (function rdRenderCredit() {
   var codes = [68,101,115,97,114,114,111,108,108,97,100,111,32,112,111,114,32,70,114,97,110,99,111,32,85,114,99,105,97,32,67,97,115,116,105,108,108,111];
