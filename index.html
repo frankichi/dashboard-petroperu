@@ -3893,7 +3893,7 @@ function openProductModal(prod) {
   let totalPron = 0;
   rows.forEach(r => {
     if (pv && !pv.includes(r.planta)) return;
-    totalPron += pronSheet[r.planta + '|' + r.producto] || r.pron_mes || r.pron || 0;
+    totalPron += pronDiarioAprobado(r);
   });
   const cabotaje = rows.filter(r => (r.vol_rep||0) > 0 || (r.vol_rep_bt2||0) > 0).map(r => ({
     planta:   r.planta,
@@ -3907,7 +3907,7 @@ function openProductModal(prod) {
   const excluyeRestr = prod === 'TA1' || prod === 'GLP';
   const restricciones = rows.filter(r => {
     if (excluyeRestr) return false;
-    const p = pronSheet[r.planta+'|'+r.producto] || r.pron_mes || r.pron || 0;
+    const p = pronDiarioAprobado(r);
     return (r.vfact||0) > 0 && p > 0 && (r.vfact||0) < p;
   });
   const plantasOrden = rows.slice().sort((a,b) => (b.inv||0) - (a.inv||0)).slice(0, 8);
@@ -3930,7 +3930,7 @@ function openProductModal(prod) {
   }
   if (restricciones.length) {
     const totalGap = restricciones.reduce((s,r) => {
-      const p = pronSheet[r.planta+'|'+r.producto] || r.pron_mes || r.pron || 0;
+      const p = pronDiarioAprobado(r);
       return s + Math.max(0, p - (r.vfact||0));
     }, 0);
     recos.push({tipo:'restriccion', msg:`Gap de ${fmt(totalGap)} MBDC frente a pronóstico en ${restricciones.length} planta${restricciones.length>1?'s':''}. Evaluar adelanto de despachos.`});
@@ -4065,7 +4065,7 @@ function openProductModal(prod) {
           </tr></thead>
           <tbody>
             ${plantasOrden.map(r => {
-              const p   = pronSheet[r.planta+'|'+r.producto] || r.pron_mes || r.pron || 0;
+              const p   = pronDiarioAprobado(r);
               const pct = totalInv > 0 ? (r.inv/totalInv*100) : 0;
               const cobCol = r.cob>0 && r.cob<COB_CRIT ? '#dc2626' : r.cob<COB_WARN ? '#f59e0b' : '#16a34a';
               return `<tr>
@@ -4157,10 +4157,30 @@ function _navCurrentPort(nav) {
 // ── cobSystemDays: fórmula canónica de cobertura (igual que la tabla Coberturas) ──
 // Usa cobGetVfact/cobGetInv/cobGetRefineryAdj si están disponibles (post-carga de renderP2).
 // Si se llama antes de que se carguen, usa fallback directo desde el registro.
+// Días del mes de una fecha 'YYYY-MM-DD' — para convertir el pronóstico
+// mensual aprobado a un equivalente diario (misma lógica que Code.gs y
+// registro-diario.html: diasEnMes / rdDiasEnMes).
+function diasEnMesJS(fechaStr) {
+  var y = parseInt(String(fechaStr||'').slice(0,4), 10);
+  var m = parseInt(String(fechaStr||'').slice(5,7), 10);
+  if (!y || !m) return 30;
+  return new Date(y, m, 0).getDate();
+}
+// Pronóstico APROBADO (hoja pronostico, valor MENSUAL) convertido a diario.
+// Único punto de conversión — reemplaza todos los usos sueltos de
+// "pronSheet[...] || r.pron_mes || r.pron" que antes tomaban el total
+// mensual y lo usaban directo como si ya fuera una tasa diaria (inflaba
+// cobertura y disparaba falsos positivos de "restricción").
+function pronDiarioAprobado(r) {
+  if (!r) return 0;
+  var mensual = (typeof pronSheet !== 'undefined' && pronSheet[r.planta+'|'+r.producto]) || r.pron_mes || 0;
+  if (mensual > 0) return mensual / diasEnMesJS(r.fecha);
+  return r.pron || r.dem_prom || 0; // sin pronóstico mensual aprobado: usar campo diario legado
+}
 function cobSystemDays(r) {
   if (!r) return 0;
   var vf  = (typeof cobGetVfact === 'function') ? cobGetVfact(r)
-          : ((r.vfact||0) > 0 ? r.vfact : ((typeof pronSheet!=='undefined' && pronSheet[r.planta+'|'+r.producto]) || r.pron || 0));
+          : ((r.vfact||0) > 0 ? r.vfact : pronDiarioAprobado(r));
   var inv = (typeof cobGetInv === 'function') ? cobGetInv(r) : (r.inv || 0);
   if (typeof cobGetRefineryAdj === 'function') inv += (cobGetRefineryAdj(r.planta, r.producto) || 0);
   if (!vf || vf <= 0 || !inv || inv <= 0) return 0;
@@ -4277,7 +4297,7 @@ function updateEventTicker() {
       if (vp && vp.indexOf(r.planta) < 0) return false;
       // Misma regla de descarte que la tabla: sin inv, sin pron, sin vfact,
       // sin vreal y sin pronSheet → la fila no existe en Coberturas
-      var ps = (typeof pronSheet !== 'undefined' && pronSheet[r.planta+'|'+r.producto]) || 0;
+      var ps = pronDiarioAprobado(r);
       if ((r.inv||0) <= 0 && (r.pron||0) <= 0 && (r.vfact||0) <= 0 && (r.vreal||0) <= 0 && ps <= 0) return false;
       // Dedupe defensivo por planta|producto (una sola entrada por combinación)
       var k = (r.planta||'')+'|'+(r.producto||'');
@@ -4458,7 +4478,7 @@ function decBuildRecs() {
     return !EXCL.some(function(x){ return r.producto && r.producto.toUpperCase().includes(x.toUpperCase()); })
       && !SKIP_COMBOS.has((r.planta||'')+'|'+(r.producto||''))
       && ((r.inv||0) > 0 || (r.pron||0) > 0 || (r.vfact||0) > 0 ||
-          ((typeof pronSheet!=='undefined' && pronSheet[r.planta+'|'+r.producto])||0) > 0);
+          (pronDiarioAprobado(r)) > 0);
   });
   act.forEach(function(r){ r._dCob = cobSystemDays(r); if ((r.inv||0)>0 && r._dCob===0) r._dCob=999; });
   var recs = [];
@@ -4535,10 +4555,10 @@ function decBuildRecs() {
   }
   // R4: restricci\u00f3n activa (vfact < pron)
   act.filter(function(r){
-    var pron=(typeof pronSheet!=='undefined'&&pronSheet[r.planta+'|'+r.producto])||r.pron||0;
+    var pron=pronDiarioAprobado(r);
     return (r.vfact||0)>0 && pron>0 && r.vfact < pron*0.98;
   }).slice(0,6).forEach(function(r){
-    var pron=(typeof pronSheet!=='undefined'&&pronSheet[r.planta+'|'+r.producto])||r.pron||0;
+    var pron=pronDiarioAprobado(r);
     var pct = pron>0 ? Math.round((1-r.vfact/pron)*100) : 0;
     recs.push({
       sev:'media',
@@ -4716,7 +4736,7 @@ function renderP1() {
   const warnList     = active.filter(r => r._sysCob >= COB_CRIT && r._sysCob < COB_WARN);
   const okList       = active.filter(r => r._sysCob >= COB_WARN);
   const restrictList = active.filter(r => {
-    var pron = pronSheet[r.planta + '|' + r.producto] || r.pron_mes || r.pron || 0;
+    var pron = pronDiarioAprobado(r);
     var vfact = r.vfact || 0;
     return vfact > 0 && pron > 0 && vfact < pron && r.producto !== 'TA1' && r.producto !== 'GLP';
   });
@@ -4772,7 +4792,7 @@ function renderP1() {
     if (r.cob > 0) p.cob.push(r.cob);
     p.plantas.push(r);
     const pv = PRON_PLANTAS[r.producto];
-    if (pv && pv.includes(r.planta)) p.pron += pronSheet[r.planta + '|' + r.producto] || r.pron_mes || r.pron || 0;
+    if (pv && pv.includes(r.planta)) p.pron += pronDiarioAprobado(r);
   });
   const projVolByProduct = {};
   if (typeof simShips !== 'undefined' && simShips && simShips.length > 0) {
@@ -4811,7 +4831,7 @@ function renderP1() {
       else if (r.cob >= COB_CRIT && r.cob < COB_WARN)
         alerts.push({planta:r.planta, tipo:'VIGILANCIA', cls:'t-warn', rowcls:'alert-row-warn', cob:Math.round(r.cob||0)+'d', r});
       else {
-        var alertPron = pronSheet[r.planta + '|' + r.producto] || r.pron_mes || r.pron || 0;
+        var alertPron = pronDiarioAprobado(r);
         if ((r.vfact||0) > 0 && alertPron > 0 && (r.vfact||0) < alertPron && r.producto !== 'TA1' && r.producto !== 'GLP')
           alerts.push({planta:r.planta, tipo:'RESTRICCIÓN', cls:'t-restr', rowcls:'alert-row-restrict', cob:r.cob > 0 ? Math.round(r.cob||0)+'d' : '—', r});
       }
@@ -4872,7 +4892,7 @@ function renderP1() {
         ${(() => {
           const c1 = data.plantas.filter(r=>r.cob>0&&r.cob<COB_CRIT).length;
           const c2 = data.plantas.filter(r=>r.cob>=COB_CRIT&&r.cob<COB_WARN).length;
-          const c3 = data.plantas.filter(r=>{var pr=pronSheet[r.planta+'|'+r.producto]||r.pron_mes||r.pron||0;return (r.vfact||0)>0&&pr>0&&(r.vfact||0)<pr&&r.producto!=='TA1'&&r.producto!=='GLP';}).length;
+          const c3 = data.plantas.filter(r=>{var pr=pronDiarioAprobado(r);return (r.vfact||0)>0&&pr>0&&(r.vfact||0)<pr&&r.producto!=='TA1'&&r.producto!=='GLP';}).length;
           const total = c1+c2+c3;
           if(!total) return '<div class="card-status-bar ok"><span>✓ Operación normal</span></div>';
           const parts = [];
@@ -4885,7 +4905,7 @@ function renderP1() {
   }).join('');
   function buildRestrTable() {
     const allRestr = active.filter(r => {
-      var pr = pronSheet[r.planta + '|' + r.producto] || r.pron_mes || r.pron || 0;
+      var pr = pronDiarioAprobado(r);
       return (r.vfact||0) > 0 && pr > 0 && (r.vfact||0) < pr && r.producto !== 'TA1' && r.producto !== 'GLP';
     });
     const filtered = activeFilter ? allRestr.filter(r => r.producto === activeFilter) : allRestr;
@@ -4914,12 +4934,12 @@ function renderP1() {
     const nPlantas  = Object.keys(byPlanta).length;
     const productos = [...new Set(filtered.map(r=>r.producto))].length;
     const reducciones   = filtered.map(r => {
-      var pr = pronSheet[r.planta + '|' + r.producto] || r.pron_mes || r.pron || 0;
+      var pr = pronDiarioAprobado(r);
       return pr > 0 ? (pr - (r.vfact||0)) / pr * 100 : 0;
     });
     const redProm       = reducciones.length ? reducciones.reduce((a,b)=>a+b,0)/reducciones.length : 0;
     const diasGanadosList = filtered.map(r => {
-      var pr = pronSheet[r.planta + '|' + r.producto] || r.pron_mes || r.pron || 0;
+      var pr = pronDiarioAprobado(r);
       var inv = r.inv || 0;
       var cobN = pr > 0 ? Math.floor(inv / pr) : 0;
       var cobR = (r.vfact||0) > 0 ? Math.floor(inv / (r.vfact||1)) : cobN;
@@ -4929,7 +4949,7 @@ function renderP1() {
     const promDiasGanados = diasGanadosList.length
       ? (diasGanadosList.reduce((a,b)=>a+b,0)/diasGanadosList.length).toFixed(1)
       : 0;
-    const maxPron = Math.max(...filtered.map(r=>pronSheet[r.planta+'|'+r.producto]||r.pron_mes||r.pron||0), 1);
+    const maxPron = Math.max(...filtered.map(r=>pronDiarioAprobado(r)), 1);
     const plantaBlocks = Object.entries(byPlanta)
       .sort((a,b) => {
         const ORDER = ['Talara','Piura','Eten','Salaverry','Chimbote','Supe','Callao',
@@ -4944,13 +4964,13 @@ function renderP1() {
       })
       .map(([planta, rows]) => {
         const maxDG = Math.max(...rows.map(r => {
-          var pr = pronSheet[r.planta+'|'+r.producto]||r.pron_mes||r.pron||0;
+          var pr = pronDiarioAprobado(r);
           var cobN = pr > 0 ? Math.floor((r.inv||0) / pr) : 0;
           var cobR = (r.vfact||0) > 0 ? Math.floor((r.inv||0) / (r.vfact||1)) : cobN;
           return Math.max(0, cobR - cobN);
         }), 0);
         const tRows = rows.map(r => {
-          const pron    = pronSheet[r.planta+'|'+r.producto] || r.pron_mes || r.pron || 0;
+          const pron    = pronDiarioAprobado(r);
           const vfact   = r.vfact || 0;
           const inv     = r.inv || 0;
           const cobNorm = pron > 0 ? Math.floor(inv / pron) : 0;
@@ -5432,26 +5452,26 @@ function renderP1() {
           <div style="font-size:9.5px;text-transform:uppercase;letter-spacing:.5px;color:var(--txt3);margin-top:2px">Plantas afectadas</div>
         </div>
         <div style="background:var(--bg3);border:1px solid var(--bdr);border-radius:10px;padding:12px;text-align:center">
-          <div style="font-size:26px;font-weight:800;color:#a855f7">${(() => { const vals=restrictList.map(r=>{const p=pronSheet[r.planta+'|'+r.producto]||r.pron_mes||r.pron||r.dem_prom||0;const vf=r.vfact||0;return p>0&&vf>0?Math.round((1-vf/p)*100):0;}).filter(v=>v>0); return vals.length?Math.round(vals.reduce((a,b)=>a+b,0)/vals.length)+'%':'—'; })()}</div>
+          <div style="font-size:26px;font-weight:800;color:#a855f7">${(() => { const vals=restrictList.map(r=>{const p=pronDiarioAprobado(r);const vf=r.vfact||0;return p>0&&vf>0?Math.round((1-vf/p)*100):0;}).filter(v=>v>0); return vals.length?Math.round(vals.reduce((a,b)=>a+b,0)/vals.length)+'%':'—'; })()}</div>
           <div style="font-size:9.5px;text-transform:uppercase;letter-spacing:.5px;color:var(--txt3);margin-top:2px">Reducción promedio</div>
         </div>
         <div style="background:var(--bg3);border:1px solid var(--bdr);border-radius:10px;padding:12px;text-align:center">
-          <div style="font-size:26px;font-weight:800;color:#60a5fa">${(() => { const vals=restrictList.map(r=>{const p=pronSheet[r.planta+'|'+r.producto]||r.pron_mes||r.pron||r.dem_prom||0;const vf=r.vfact||0;const inv=r.inv||0;if(!vf||!p||!inv)return 0;return Math.max(0,Math.floor(inv/vf)-Math.floor(inv/p));}).filter(v=>v>0); return vals.length?Math.round(vals.reduce((a,b)=>a+b,0)/vals.length)+'d':'—'; })()}</div>
+          <div style="font-size:26px;font-weight:800;color:#60a5fa">${(() => { const vals=restrictList.map(r=>{const p=pronDiarioAprobado(r);const vf=r.vfact||0;const inv=r.inv||0;if(!vf||!p||!inv)return 0;return Math.max(0,Math.floor(inv/vf)-Math.floor(inv/p));}).filter(v=>v>0); return vals.length?Math.round(vals.reduce((a,b)=>a+b,0)/vals.length)+'d':'—'; })()}</div>
           <div style="font-size:9.5px;text-transform:uppercase;letter-spacing:.5px;color:var(--txt3);margin-top:2px">Días ganados prom.</div>
         </div>
       </div>
       <!-- Top 3 most critical restrictions -->
       ${(() => {
-        const top = restrictList.filter(r => { const p=pronSheet[r.planta+'|'+r.producto]||r.pron_mes||r.pron||r.dem_prom||0; const vf=r.vfact||0; return p>0&&vf>0&&vf<p; }).sort((a,b) => {
-          const pA=pronSheet[a.planta+'|'+a.producto]||a.pron_mes||a.pron||a.dem_prom||0, vfA=a.vfact||0;
-          const pB=pronSheet[b.planta+'|'+b.producto]||b.pron_mes||b.pron||b.dem_prom||0, vfB=b.vfact||0;
+        const top = restrictList.filter(r => { const p=pronDiarioAprobado(r); const vf=r.vfact||0; return p>0&&vf>0&&vf<p; }).sort((a,b) => {
+          const pA=pronDiarioAprobado(a), vfA=a.vfact||0;
+          const pB=pronDiarioAprobado(b), vfB=b.vfact||0;
           return (pA>0?(1-vfA/pA):0) - (pB>0?(1-vfB/pB):0);
         }).slice(0,4);
         if (!top.length) return '';
         return '<div style="margin-top:12px"><div style="font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--txt3);margin-bottom:6px">Las más críticas</div>'
           + '<div style="display:flex;flex-wrap:wrap;gap:6px">'
           + top.map(r => {
-              const p=pronSheet[r.planta+'|'+r.producto]||r.pron_mes||r.pron||r.dem_prom||0, vf=r.vfact||0;
+              const p=pronDiarioAprobado(r), vf=r.vfact||0;
               const pct=p>0?Math.round((1-vf/p)*100):0;
               const c=pct>50?'#ef4444':pct>30?'#f97316':'#fbbf24';
               return `<div style="background:${c}12;border:1px solid ${c}30;border-radius:8px;padding:7px 12px;min-width:150px;flex:1">
@@ -5557,7 +5577,7 @@ function renderPR() {
   const EXCLUIR  = ['A. Iquitos','A. Tarapoto','A. LimaCallao','A. Cusco'];
   const active   = today.filter(r => !EXCLUIR.some(x => r.planta===x) && !SKIP_COMBOS.has((r.planta||'')+'|'+(r.producto||'')));
   const restrictList = active.filter(r => {
-    const pr = pronSheet[r.planta+'|'+r.producto] || r.pron_mes || r.pron || r.dem_prom || 0;
+    const pr =pronDiarioAprobado(r);
     const vf = r.vfact || 0;
     return pr > 0 && vf > 0 && vf < pr;
   });
@@ -5574,7 +5594,7 @@ function renderPR() {
     });
     const plantas = Object.entries(byPlanta).map(([planta, rows]) => {
       const diasGanadosPl = rows.reduce((mx, r) => {
-        const pr = pronSheet[r.planta+'|'+r.producto] || r.pron_mes || r.pron || r.dem_prom || 0;
+        const pr =pronDiarioAprobado(r);
         const vf = r.vfact || 0, inv = r.inv || 0;
         if (!vf||!pr||!inv) return mx;
         return Math.max(mx, Math.max(0, Math.floor(inv/vf) - Math.floor(inv/pr)));
@@ -5585,7 +5605,7 @@ function renderPR() {
       const nProds = rows.length;
       const dLabel = diasGanadosPl > 0 ? `+${diasGanadosPl}d ganados` : '';
       const tRows = rows.sort((a,b) => prodSortKey(a.producto)-prodSortKey(b.producto)).map(r => {
-        const pr  = pronSheet[r.planta+'|'+r.producto] || r.pron_mes || r.pron || r.dem_prom || 0;
+        const pr  =pronDiarioAprobado(r);
         const vf  = r.vfact || 0, inv = r.inv || 0;
         const pct = pr > 0 ? Math.round((1-vf/pr)*100) : 0;
         const cobN = (inv>0&&pr>0) ? Math.floor(inv/pr) : 0;
@@ -5654,9 +5674,9 @@ function renderPR() {
   }
   const nRestr   = restrictList.length;
   const nPlantas = new Set(restrictList.map(r=>r.planta)).size;
-  const redVals  = restrictList.map(r=>{const p=pronSheet[r.planta+'|'+r.producto]||r.pron_mes||r.pron||r.dem_prom||0,vf=r.vfact||0;return p>0&&vf>0?Math.round((1-vf/p)*100):0;}).filter(v=>v>0);
+  const redVals  = restrictList.map(r=>{const p=pronDiarioAprobado(r),vf=r.vfact||0;return p>0&&vf>0?Math.round((1-vf/p)*100):0;}).filter(v=>v>0);
   const redProm  = redVals.length ? redVals.reduce((a,b)=>a+b,0)/redVals.length : 0;
-  const diasVals = restrictList.map(r=>{const p=pronSheet[r.planta+'|'+r.producto]||r.pron_mes||r.pron||r.dem_prom||0,vf=r.vfact||0,inv=r.inv||0;return (!vf||!p||!inv)?0:Math.max(0,Math.floor(inv/vf)-Math.floor(inv/p));}).filter(v=>v>0);
+  const diasVals = restrictList.map(r=>{const p=pronDiarioAprobado(r),vf=r.vfact||0,inv=r.inv||0;return (!vf||!p||!inv)?0:Math.max(0,Math.floor(inv/vf)-Math.floor(inv/p));}).filter(v=>v>0);
   const promDias = diasVals.length ? Math.round(diasVals.reduce((a,b)=>a+b,0)/diasVals.length) : 0;
   document.getElementById('pR-content').innerHTML = `
     <div class="page-header">
@@ -6473,8 +6493,8 @@ function cobCalcFecha(baseDate, days) {
 }
 function cobGetPron(r) {
   var key = r.planta + '|' + r.producto;
-  if (cobPronOverrides[key] !== undefined) return cobPronOverrides[key];
-  if (pronSheet[key] > 0) return pronSheet[key];
+  if (cobPronOverrides[key] !== undefined) return cobPronOverrides[key]; // override manual: se asume ya en unidad diaria
+  if (pronSheet[key] > 0) return pronSheet[key] / diasEnMesJS(r.fecha); // mensual aprobado → diario
   if (r.pron && r.pron > 0) return r.pron;
   return r.dem_prom || 0;
 }
@@ -6781,7 +6801,9 @@ async function cobSaveToGS() {
       } else {
         RAW.push({
           fecha: fechaObjetivo, planta: rec.planta, producto: rec.producto,
-          vfact: rec.value, pron: pronSheet[rec.planta+'|'+rec.producto] || rec.value,
+          vfact: rec.value, pron: ((pronSheet[rec.planta+'|'+rec.producto] || 0) > 0
+                    ? pronSheet[rec.planta+'|'+rec.producto] / diasEnMesJS(fechaObjetivo)
+                    : rec.value),
           inv: 0, vreal: 0, dem: 0, vult7: 0,
           bt: '', vol_rep: 0, bt2: '', vol_rep_bt2: 0, _injected: true
         });
@@ -8149,7 +8171,7 @@ function renderPA() {
         const rc   = cobColor(r._mapCob||0);
         const inv  = (r.inv||0).toFixed(1);
         const demRaw = r.dem||r.dem_prom||0;
-        const pronRaw = pronSheet[r.planta+'|'+r.producto] || r.pron_mes || r.pron || 0;
+        const pronRaw = pronDiarioAprobado(r);
         // Guard: la columna "dem" (col DESPACHO DIARIO de inventario) a veces
         // trae un dato de origen mal cargado (ej. un total mensual o en otra
         // unidad, escrito por error en la carga E&D) que dispara valores
@@ -9915,7 +9937,7 @@ function renderPTend() {
   var _pronCob = 0;
   var _lastRows = byLatest().filter(function(r){ return r.producto === prod; });
   function _demSys(r) {
-    var pron = (typeof pronSheet !== 'undefined' && pronSheet[r.planta+'|'+prod]) || r.pron || 0;
+    var pron = pronDiarioAprobado(r);
     return (r.vfact||0) > 0 ? r.vfact : pron;
   }
   if (planta === 'Nacional') {
@@ -11186,7 +11208,7 @@ function simUpdateStopCoverage(ship, idx) {
   const inv     = liveRec ? (liveRec.inv || 0) : 0;
   const vf      = liveRec ? (liveRec.vfact || 0) : 0;
   const pron    = liveRec
-    ? ((window.pronSheet && window.pronSheet[liveRec.planta+'|'+liveRec.producto]) || liveRec.pron_mes || liveRec.pron || 0)
+    ? pronDiarioAprobado(liveRec)
     : 0;
   const demRate = vf > 0 ? vf : pron;
   const liveCob = demRate > 0 && inv > 0 ? Math.floor(inv / demRate) : null;
@@ -11738,7 +11760,7 @@ function renderPE() {
         const inv     = liveRec ? (liveRec.inv || 0)   : 0;
         const vf      = liveRec ? (liveRec.vfact || 0) : 0;
         const pron2   = liveRec
-          ? ((window.pronSheet && window.pronSheet[liveRec.planta+'|'+liveRec.producto]) || liveRec.pron_mes || liveRec.pron || 0)
+          ? pronDiarioAprobado(liveRec)
           : 0;
         const demRate = vf > 0 ? vf : pron2;  // tasa de consumo (MBDC/día)
         const liveCob = demRate > 0 && inv > 0 ? Math.floor(inv / demRate) : null;
@@ -11891,7 +11913,7 @@ function simRunScenario(tipo) {
   if (closeBtn) closeBtn.style.display = '';
   var today = byLatest();
   function demOf(r) {
-    var pron = (typeof pronSheet !== 'undefined' && pronSheet[r.planta+'|'+r.producto]) || r.pron || 0;
+    var pron = pronDiarioAprobado(r);
     return (r.vfact||0) > 0 ? r.vfact : pron;
   }
   function cobOf(inv, dem) { return (dem > 0 && inv > 0) ? Math.round(inv/dem) : 0; }
@@ -14599,7 +14621,7 @@ function openWhatIf(planta, producto) {
   var r = today.find(function(x) { return x.planta === planta && x.producto === producto; });
   if (!r) return;
   var inv = cobGetInv(r) + cobGetRefineryAdj(planta, producto);
-  var pronVal = pronSheet[planta + '|' + producto] || r.pron_mes || r.pron || 0;
+  var pronVal = pronDiarioAprobado(r);
   var vfactVal = r.vfact || 0;
   var demRate = vfactVal > 0 ? vfactVal : (pronVal > 0 ? pronVal : (r.dem_prom || 0));
   var btVol = (r.vol_rep || 0) + (r.vol_rep_bt2 || 0);
@@ -14682,7 +14704,7 @@ function renderWhatIfChart(planta, producto) {
   var input = document.getElementById('wi-input');
   var slider = document.getElementById('wi-slider');
   var simVfact = input ? (parseFloat(input.value) || 0) : (slider ? parseFloat(slider.value) || 0 : 0);
-  var pronVal = pronSheet[planta + '|' + producto] || r.pron_mes || r.pron || 0;
+  var pronVal = pronDiarioAprobado(r);
   var btVol = (r.vol_rep || 0) + (r.vol_rep_bt2 || 0);
   var btEtaMs = r.fecha_reposicion ? new Date(r.fecha_reposicion + 'T12:00:00').getTime() : null;
   var days = 30;
@@ -14909,7 +14931,7 @@ function openCoverageModal(tipo) {
       { label:'Dem.', align:'right',
         render: function(r) { return '<span style="font-family:var(--mono);color:#94a3b8">' + (r.dem||r.dem_prom||0).toFixed(2) + '</span>'; }},
       { label:'Pron.', align:'right',
-        render: function(r) { var p=(pronSheet[r.planta+'|'+r.producto]||r.pron_mes||r.pron||0); return '<span style="font-family:var(--mono);color:#93c5fd">' + p.toFixed(2) + '</span>'; }},
+        render: function(r) { var p=(pronDiarioAprobado(r)); return '<span style="font-family:var(--mono);color:#93c5fd">' + p.toFixed(2) + '</span>'; }},
       { label:'Cobertura', align:'center', px:'10px',
         render: function(r) {
           var c = Math.round(r.cob||0);
@@ -14952,14 +14974,14 @@ function openRestrModal(tipo) {
   var today = byLatest();
   var restr = today.filter(function(r) {
     if (SKIP_COMBOS.has((r.planta||'')+'|'+(r.producto||''))) return false;
-    var pr = pronSheet[r.planta+'|'+r.producto] || r.pron_mes || r.pron || 0;
+    var pr = pronDiarioAprobado(r);
     return (r.vfact||0) > 0 && pr > 0 && (r.vfact||0) < pr && r.producto !== 'TA1' && r.producto !== 'GLP';
   });
   var title = '', body = '';
   if (tipo === 'restricciones') {
     title = '🚨 Restricciones Activas (' + restr.length + ')';
     var totalPronS = 0, totalVfS = 0;
-    restr.forEach(function(r) { var pr = pronSheet[r.planta+'|'+r.producto]||r.pron||0; totalPronS+=pr; totalVfS+=(r.vfact||0); });
+    restr.forEach(function(r) { var pr =pronDiarioAprobado(r); totalPronS+=pr; totalVfS+=(r.vfact||0); });
     var diffS = totalPronS - totalVfS;
     var redS  = totalPronS > 0 ? (diffS/totalPronS*100).toFixed(1) : 0;
     var byPlS = {}; restr.forEach(function(r){byPlS[r.planta]=true;});
@@ -14977,12 +14999,12 @@ function openRestrModal(tipo) {
       { label:'Inv (MB)', align:'right',
         render: function(r){ return '<span style="font-family:var(--mono);font-weight:700;color:var(--txt)">'+(r.inv||0).toFixed(1)+'</span>'; }},
       { label:'Pronóstico', align:'right',
-        render: function(r){ var pr=pronSheet[r.planta+'|'+r.producto]||r.pron||0; return '<span style="font-family:var(--mono);color:#93c5fd">'+pr.toFixed(2)+'</span>'; }},
+        render: function(r){ var pr=pronDiarioAprobado(r); return '<span style="font-family:var(--mono);color:#93c5fd">'+pr.toFixed(2)+'</span>'; }},
       { label:'V. Factible', align:'right',
         render: function(r){ return '<span style="font-family:var(--mono);color:#fbbf24;font-weight:700">'+(r.vfact||0).toFixed(2)+'</span>'; }},
       { label:'Recorte', align:'right',
         render: function(r){
-          var pr=pronSheet[r.planta+'|'+r.producto]||r.pron||0;
+          var pr=pronDiarioAprobado(r);
           var red=pr>0?((pr-(r.vfact||0))/pr*100).toFixed(1):0;
           return '<span style="color:#f87171;font-weight:700">-'+red+'%</span>'; }},
       { label:'Cobertura', align:'center', px:'10px',
@@ -15007,7 +15029,7 @@ function openRestrModal(tipo) {
       body += '<div style="background:var(--bg3);border:1px solid var(--bdr);border-radius:10px;padding:14px">'
         + '<div style="font-weight:800;font-size:13px;margin-bottom:10px;color:var(--txt)">'+pl+'</div>';
       recs.forEach(function(r) {
-        var pr = pronSheet[r.planta+'|'+r.producto] || r.pron || 0;
+        var pr =pronDiarioAprobado(r);
         var red = pr > 0 ? ((pr-(r.vfact||0))/pr*100).toFixed(1) : 0;
         body += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;padding:5px 8px;background:var(--bg2);border-radius:6px">'
           + '<span style="font-size:11px;font-weight:600;color:var(--txt2)">'+r.producto+'</span>'
@@ -15021,7 +15043,7 @@ function openRestrModal(tipo) {
     title = '📉 Impacto de Restricciones';
     var totalPron = 0, totalVfact = 0;
     restr.forEach(function(r) {
-      var pr = pronSheet[r.planta+'|'+r.producto] || r.pron || 0;
+      var pr =pronDiarioAprobado(r);
       totalPron += pr; totalVfact += (r.vfact||0);
     });
     var diff = totalPron - totalVfact;
@@ -15056,7 +15078,7 @@ function openRestrModal(tipo) {
       + '<th style="padding:8px 8px;text-align:center;font-size:9.5px;text-transform:uppercase;letter-spacing:.5px;color:#a855f7">Días +</th>'
       + '</tr></thead><tbody>';
     restr.forEach(function(r) {
-      var pr = pronSheet[r.planta+'|'+r.producto] || r.pron || 0;
+      var pr =pronDiarioAprobado(r);
       var cobNorm = pr > 0 ? Math.floor(r.inv/pr) : 0;
       var cobRestr = (r.vfact||0) > 0 ? Math.floor(r.inv/(r.vfact||1)) : cobNorm;
       var gained = Math.max(0, cobRestr - cobNorm);
@@ -19569,8 +19591,7 @@ function getCapacidad(planta, producto) {
     });
     return rawRows
       .map(r => {
-        const pron   = (window.pronSheet && window.pronSheet[r.planta+'|'+r.producto])
-                       || r.pron_mes || r.pron || 0;
+        const pron   = pronDiarioAprobado(r);
         const vf  = r.vfact || 0;
         const inv = (typeof cobGetInv === 'function') ? cobGetInv(r) : (r.inv || 0);
         const cobNorm  = pron > 0 ? Math.floor(inv / pron)  : 0;
