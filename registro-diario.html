@@ -495,6 +495,51 @@ function rdCambiarFechaReporte(nuevaFecha) {
   rdRefreshMiReporte();
 }
 
+// ── Blindaje de separador decimal ────────────────────────────────────────
+// Algunos equipos (config. regional en español) permiten escribir "," como
+// separador decimal en inputs type="number". Si eso llega sin normalizar a
+// parseFloat(), el valor se trunca (ej: "12,45" -> 12) y el dato se guarda
+// mal en el Sheets. Este listener global normaliza "," -> "." en tiempo
+// real en CUALQUIER input numérico del formulario, sin importar cuál sea.
+document.addEventListener('input', function (e) {
+  var t = e.target;
+  if (t && t.tagName === 'INPUT' && t.type === 'number' && typeof t.value === 'string' && t.value.indexOf(',') > -1) {
+    var pos = t.selectionStart;
+    t.value = t.value.replace(',', '.');
+    try { t.setSelectionRange(pos, pos); } catch (err) {}
+  }
+}, true);
+
+// Segunda capa de seguridad: al leer un valor numérico de un input (ej. al
+// guardar), normaliza "," -> "." por si el evento 'input' no llegó a
+// dispararse (casos raros de autocompletado o scripts externos).
+function rdParseNum(el) {
+  if (!el) return 0;
+  var raw = String(el.value || '').replace(',', '.');
+  var n = parseFloat(raw);
+  return isNaN(n) ? 0 : n;
+}
+
+// Fórmula CANÓNICA de cobertura — debe ser idéntica a cobSystemDays() en
+// index.html (Coberturas): usa V. Factible si existe; si no, cae al
+// pronóstico DIARIO (uc.pron, no el mensual). Si ninguno existe o la
+// existencia es 0, la cobertura es 0. Sin esto, el badge del formulario
+// podía mostrar un número heredado/obsoleto que nunca coincidía con lo
+// que Coberturas calculaba en vivo para la misma planta/producto.
+function rdDiasEnMes(fechaStr) {
+  if (!fechaStr) fechaStr = RD.fechaReporte || rdHoyLima();
+  var y = parseInt(fechaStr.slice(0,4), 10);
+  var m = parseInt(fechaStr.slice(5,7), 10);
+  if (!y || !m) return 30;
+  return new Date(y, m, 0).getDate(); // día 0 del mes siguiente = último día del mes actual
+}
+
+function rdCobCanonica(inv, vfact, pronDiario) {
+  var vf = (vfact > 0) ? vfact : (pronDiario > 0 ? pronDiario : 0);
+  if (!vf || vf <= 0 || !inv || inv <= 0) return 0;
+  return Math.round(inv / vf);
+}
+
 function rdRenderFechaBanner() {
   var el = document.getElementById('fechaReporteBanner');
   if (!el) return;
@@ -717,32 +762,6 @@ function rdFmt(n) {
 }
 
 
-function rdToggleBtConfirm(btn) {
-  var prod  = btn.dataset.prod;
-  var btNom = btn.dataset.bt;
-  var vol   = btn.dataset.vol;
-  if (!RD.btConfirmados) RD.btConfirmados = {};
-  var key = prod + '|' + btNom;
-  var yaConf = btn.classList.contains('confirmed');
-  if (yaConf) {
-    delete RD.btConfirmados[key];
-    btn.classList.remove('confirmed');
-    btn.textContent = '\u26f3 Confirmar recepci\u00f3n de BT';
-  } else {
-    RD.btConfirmados[key] = { bt: btNom, vol: vol };
-    btn.classList.add('confirmed');
-    btn.textContent = '\u2713 Recepci\u00f3n confirmada';
-    // Auto-insertar nota en comentario del producto
-    var ta = document.querySelector('.rd-coment-prod[data-prod="' + prod + '"]');
-    if (ta && !ta.value.includes(btNom)) {
-      var nota = (ta.value.trim() ? ' | ' : '') + 'BT ' + btNom + ' recepcionado';
-      if (parseFloat(vol) > 0) nota += ' ' + rdFmt(parseFloat(vol)) + ' MB';
-      ta.value = ta.value.trim() + nota;
-    }
-    rdToast('\u2713 Recepci\u00f3n de ' + btNom + ' registrada para ' + prod, 'ok');
-  }
-}
-
 // ── Solicitud de corrección ────────────────────────────────────────────
 function rdAbrirSolicitud() {
   var modal = document.getElementById('solModal');
@@ -896,9 +915,9 @@ function rdRecalcDespacho(prod) {
 
 
 function rdRecalc(prod) {
-  var existencia = parseFloat((document.querySelector('.rd-existencia[data-prod="' + prod + '"]') || {}).value) || 0;
-  var capacidad  = parseFloat((document.querySelector('.rd-capacidad[data-prod="'  + prod + '"]') || {}).value) || 0;
-  var fondos     = parseFloat((document.querySelector('.rd-fondos[data-prod="'     + prod + '"]') || {}).value) || 0;
+  var existencia = rdParseNum(document.querySelector('.rd-existencia[data-prod="' + prod + '"]'));
+  var capacidad  = rdParseNum(document.querySelector('.rd-capacidad[data-prod="'  + prod + '"]'));
+  var fondos     = rdParseNum(document.querySelector('.rd-fondos[data-prod="'     + prod + '"]'));
   var bruta = existencia + fondos;
   var vacio = capacidad - bruta;
   var brutaEl = document.querySelector('[data-bruta="' + prod + '"]');
@@ -911,6 +930,15 @@ function rdRecalc(prod) {
   if (autoEl) {
     var despacho = uc && uc.despacho;
     autoEl.textContent = (despacho && despacho > 0) ? rdFmt(existencia / despacho) + ' d' : '\u2014';
+  }
+  // Badge de cobertura (header) — misma fórmula canónica que "Coberturas"
+  // del index, recalculada en vivo según lo que se está escribiendo.
+  var badgeEl = document.querySelector('[data-cobbadge="' + prod + '"]');
+  if (badgeEl && uc) {
+    var pronAprobDia = (uc.pron_mes > 0) ? (uc.pron_mes / rdDiasEnMes(RD.fechaReporte)) : 0;
+    var cobViva = rdCobCanonica(existencia, uc.vfact || 0, pronAprobDia);
+    badgeEl.textContent = cobViva + ' d\u00edas';
+    badgeEl.className = 'prod-cond-badge ' + (cobViva < 3 ? 'crit' : cobViva < 5 ? 'warn' : 'ok');
   }
   rdMarkFilled(prod);
   rdCheckExistenciaMinima(prod, existencia);
@@ -976,9 +1004,11 @@ function rdRenderProdRows(productos, valores, detalle, yaReportado) {
     var filled    = haVal ? ' filled' : '';
 
     var condBadge = '';
-    if (uc && uc.cob !== undefined && uc.cob !== null) {
-      var cls = uc.cob < 3 ? 'crit' : uc.cob < 5 ? 'warn' : 'ok';
-      condBadge = '<span class="prod-cond-badge ' + cls + '">' + uc.cob.toFixed(1) + ' d\u00edas</span>';
+    var pronAprobadoDiario = (uc && uc.pron_mes > 0) ? (uc.pron_mes / rdDiasEnMes(RD.fechaReporte)) : 0;
+    var cobCanonica = (uc) ? rdCobCanonica(existenciaNum, uc.vfact || 0, pronAprobadoDiario) : 0;
+    if (uc) {
+      var cls = cobCanonica < 3 ? 'crit' : cobCanonica < 5 ? 'warn' : 'ok';
+      condBadge = '<span class="prod-cond-badge ' + cls + '" data-cobbadge="' + p + '">' + cobCanonica + ' d\u00edas</span>';
     }
     var pronMes  = uc && uc.pron_mes  > 0 ? uc.pron_mes  : 0;
     var vfactVal = uc && uc.vfact > 0 ? uc.vfact : 0;
@@ -1073,39 +1103,10 @@ function rdRenderProdRows(productos, valores, detalle, yaReportado) {
           +   '<div class="calc-item hl"><span class="calc-lbl">Autonomía estimada</span><span class="calc-val" data-auto-calc="' + p + '">' + autoIni + '</span></div>'
           + '</div>' : '')
       +   infoRow
-      // ── BT programado
-      +   (uc && (uc.bt||uc.bt2) ? (function(){
-            var html = '';
-            function mkBt(btNom, btVol, btEta, badge) {
-              if (!btNom || !btNom.trim()) return '';
-              var isConf = RD.btConfirmados && RD.btConfirmados[p+'|'+btNom];
-              return '<div class="bt-card">'
-                + '<div class="bt-card-hd">'
-                + '<span style="font-size:16px">⛴️</span>'
-                + '<span class="bt-card-title">' + btNom + '</span>'
-                + '<span class="bt-card-badge">' + badge + '</span>'
-                + '</div>'
-                + '<div class="bt-card-info">'
-                + (btVol > 0 ? '<span>📦 Vol. prog. <b>' + rdFmt(btVol) + ' MB</b></span>' : '')
-                + (btEta  ? '<span>📅 ETA <b>' + btEta + '</b></span>' : '')
-                + '<span style="font-size:9px;color:#94a3b8">' + p + '</span>'
-                + '</div>'
-                + (yaReportado ? (isConf ? '<div style="font-size:10px;color:#1a7a44;font-weight:700">✓ Recepción confirmada</div>' : '') :
-                    '<button class="bt-confirm-btn' + (isConf?' confirmed':'') + '" '
-                    + 'data-prod="' + p + '" data-bt="' + btNom + '" data-vol="' + btVol + '" '
-                    + 'onclick="rdToggleBtConfirm(this)">'
-                    + (isConf ? '✓ Recepción confirmada' : '⛳ Confirmar recepción de BT')
-                    + '</button>')
-                + '</div>';
-            }
-            html += mkBt(uc.bt, uc.vol_rep, uc.fecha_repos, 'BT programado');
-            html += mkBt(uc.bt2, uc.vol_rep2, uc.fecha_repos2, 'BT2 programado');
-            return html;
-          })() : '')
       // ── Comentario por producto ──────────────────────────────────────────
       +   '<div class="prod-comentario-wrap">'
       +     '<label>Comentario del producto</label>'
-      +     '<textarea class="rd-coment-prod" data-prod="' + p + '" placeholder="Ej: Recepci\u00f3n en curso, tanque en mantenimiento\u2026" rows="2"'
+      +     '<textarea class="rd-coment-prod" data-prod="' + p + '" placeholder="Ej: BT UCAYALI recepcionado 80 MB · Recepci\u00f3n en curso · Tanque en mantenimiento\u2026" rows="2"'
       +     (yaReportado ? ' readonly style="background:#f7f8fa;cursor:not-allowed"' : '') + '></textarea>'
       +   '</div>'      + '</div>'
       + '</div>';
@@ -1228,15 +1229,12 @@ function rdConfirmarGuardar() {
     var motivoMinEl = document.querySelector('.rd-min-motivo[data-prod="' + p + '"]');
     return {
       producto: p,
-      existencia:       parseFloat((document.querySelector('.rd-existencia[data-prod="' + p + '"]') || {}).value) || 0,
-      capacidad:        parseFloat((document.querySelector('.rd-capacidad[data-prod="'  + p + '"]') || {}).value) || 0,
-      fondos:           parseFloat((document.querySelector('.rd-fondos[data-prod="'     + p + '"]') || {}).value) || 0,
-      fondo_osinergmin: parseFloat((document.querySelector('.rd-fosi[data-prod="'       + p + '"]') || {}).value) || 0,
-    despacho_diario:  parseFloat((document.querySelector('.rd-despacho[data-prod="' + p + '"]') || {}).value) || 0,
+      existencia:       rdParseNum(document.querySelector('.rd-existencia[data-prod="' + p + '"]')),
+      capacidad:        rdParseNum(document.querySelector('.rd-capacidad[data-prod="'  + p + '"]')),
+      fondos:           rdParseNum(document.querySelector('.rd-fondos[data-prod="'     + p + '"]')),
+      fondo_osinergmin: rdParseNum(document.querySelector('.rd-fosi[data-prod="'       + p + '"]')),
+    despacho_diario:  rdParseNum(document.querySelector('.rd-despacho[data-prod="' + p + '"]')),
       comentario_prod:  comentProd,
-      recepcion_bt:     (RD.btConfirmados && RD.btConfirmados[p + '|' + 
-                          ((RD.detalle[p]||{}).ultimo_calculo||{}).bt]) ?
-                          ((RD.detalle[p]||{}).ultimo_calculo||{}).bt : '',
       existencia_minima: !!(minFlag.activo && minFlag.confirmado),
       motivo_minima:     motivoMinEl ? motivoMinEl.value.trim() : ''
     };
