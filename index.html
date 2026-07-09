@@ -10183,17 +10183,14 @@ function renderPTend() {
           📉 Despacho diario — ${prod} ${planta==='Nacional'?'· Nacional':'· '+planta}
         </div>
         <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-          <span id="ptend-desp-leg-ppdiaria" style="display:flex;align-items:center;gap:5px;font-size:10px;color:var(--txt3)">
-            <span style="width:16px;height:3px;background:#60a5fa;display:inline-block;border-radius:2px"></span>Ventas totales promedio correspondiente a cada día
+          <span id="ptend-desp-leg-pronostico" style="display:flex;align-items:center;gap:5px;font-size:10px;color:var(--txt3)">
+            <span style="width:16px;height:0;border-top:3px dashed #059669;display:inline-block"></span>Demanda pronóstico
           </span>
           <span id="ptend-desp-leg-cognos" style="display:flex;align-items:center;gap:5px;font-size:10px;color:var(--txt3)">
-            <span style="width:16px;height:3px;background:#7c3aed;display:inline-block;border-radius:2px"></span>${planta==='Nacional'?'Ventas Cognos (Nac.)':'Ventas diarias'}
+            <span style="width:16px;height:3px;background:#7c3aed;display:inline-block;border-radius:2px"></span>Ventas
           </span>
-          <span id="ptend-desp-leg-promacum" style="display:flex;align-items:center;gap:5px;font-size:10px;color:var(--txt3)">
-            <span style="width:16px;height:0;border-top:2px dashed #f97316;display:inline-block"></span>Prom. PP acum.
-          </span>
-          <span id="ptend-desp-leg-pronostico" style="display:flex;align-items:center;gap:5px;font-size:10px;color:var(--txt3)">
-            <span style="width:16px;height:0;border-top:3px dashed #059669;display:inline-block"></span>Pronóstico mes
+          <span id="ptend-desp-leg-ppdiaria" style="display:flex;align-items:center;gap:5px;font-size:10px;color:var(--txt3)">
+            <span style="width:16px;height:3px;background:#60a5fa;display:inline-block;border-radius:2px"></span>Despachos
           </span>
         </div>
       </div>
@@ -10467,49 +10464,37 @@ function renderPTend() {
     if (ventasCanvas) {
       if (window._pTendVentasChart && window._pTendVentasChart.destroy)
         window._pTendVentasChart.destroy();
-      // Construir mapa fecha→venta PP nacional para el producto
-      var allMesesV = [...new Set(dateLabels.map(function(d){ return d.slice(0,7); }))];
-      var ppByDate = {};
-      allMesesV.forEach(function(m) {
-        var recs = _ppVentasCache[m] || [];
-        recs.forEach(function(r) {
-          if (r.producto === prod) {
-            var k = String(r.fecha);
-            ppByDate[k] = (ppByDate[k] || 0) + (parseFloat(r.venta_mb) || 0);
-          }
-        });
-      });
-      // 1. Ventas PP diarias (puntos con dato real)
-      var ppDiariaData = dateLabels.map(function(d) {
-        var v = ppByDate[d];
-        return (v != null && v > 0) ? parseFloat(v.toFixed(3)) : null;
-      });
-      // 2. Promedio PP acumulado a la fecha (solo mes actual)
-      var mesActualV = dateLabels.length ? dateLabels[dateLabels.length-1].slice(0,7) : '';
-      var sumAcc = 0, cntAcc = 0;
-      var ppAvgData = dateLabels.map(function(d) {
-        if (d.slice(0,7) !== mesActualV) return null;
-        var v = ppByDate[d];
-        if (v != null && v > 0) { sumAcc += v; cntAcc++; }
-        return cntAcc > 0 ? parseFloat((sumAcc / cntAcc).toFixed(3)) : null;
-      });
-      // 3. Pronóstico mes — por fecha, usando el caché mensual (_pronByMonthCache).
-      //    Cada día toma el pronóstico DE SU PROPIO MES: así si julio aún no
-      //    se ha cargado pero junio sí, la línea se dibuja igual sobre los
-      //    días de junio (y queda en null en julio hasta que se suba).
+      // 1. Demanda pronóstico — por fecha, usando el caché mensual
+      //    (_pronByMonthCache). Cada día toma el pronóstico DE SU PROPIO MES:
+      //    así si julio aún no se ha cargado pero junio sí, la línea se
+      //    dibuja igual sobre los días de junio (y queda en null en julio
+      //    hasta que se suba). Ya viene convertida a diaria (÷ días del mes).
       var pronLineData = dateLabels.map(function(d) {
         var v = _pTendPronParaFecha(d, planta, prod);
         return v > 0 ? parseFloat(v.toFixed(3)) : null;
       });
-      // 4. Ventas Cognos (ya calculadas en ventasLine, respeta AGG_RULES)
+      // 2. Ventas (Cognos) — ya calculadas en ventasLine, respeta AGG_RULES
       var cognosData = dateLabels.map(function(d, i) { return ventasLine[i]; });
-      var hasAny = ppDiariaData.some(function(v){ return v != null; })
-               || ppAvgData.some(function(v){ return v != null; })
-               || pronLineData.some(function(v){ return v != null; })
-               || cognosData.some(function(v){ return v != null; });
+      // 3. Despachos — lo que cada planta/terminal registró en el formulario
+      //    de Registro Diario ("Despacho del día"), campo vreal/dem de
+      //    inventario. Para 'Nacional' se suma el despacho de todas las
+      //    plantas de ese producto (mismo universo que las demás líneas).
+      var despachoData = dateLabels.map(function(d) {
+        var filas = RAW.filter(function(r) {
+          if (r.fecha !== d || r.producto !== prod) return false;
+          if (SKIP_COMBOS && SKIP_COMBOS.has((r.planta||'')+'|'+(r.producto||''))) return false;
+          return planta === 'Nacional' ? true : r.planta === planta;
+        });
+        if (!filas.length) return null;
+        var tot = filas.reduce(function(s,r){ return s + (r.vreal || r.dem || 0); }, 0);
+        return tot > 0 ? parseFloat(tot.toFixed(3)) : null;
+      });
+      var hasAny = pronLineData.some(function(v){ return v != null; })
+               || cognosData.some(function(v){ return v != null; })
+               || despachoData.some(function(v){ return v != null; });
       if (!hasAny) {
         ventasCanvas.style.display = 'none';
-        ['ptend-desp-leg-ppdiaria','ptend-desp-leg-cognos','ptend-desp-leg-promacum','ptend-desp-leg-pronostico'].forEach(function(id){
+        ['ptend-desp-leg-ppdiaria','ptend-desp-leg-cognos','ptend-desp-leg-pronostico'].forEach(function(id){
           var lEl = document.getElementById(id); if (lEl) lEl.style.display = 'none';
         });
         var hintElEmpty = document.getElementById('ptend-desp-empty-hint');
@@ -10530,23 +10515,20 @@ function renderPTend() {
         var labelColorV = cssVar('--txt2') || '#8a9bb8';
         var gridColorV  = cssVar('--bdr')  || '#1e2d45';
         var datasets = [];
-        // "Ventas PP diarias" es un dato NACIONAL puro (el reporte PP no se
-        // desagrega por planta) — mostrarlo al ver una planta específica
-        // induce a error, como si fuera el dato de esa planta. Solo se
-        // grafica en vista Nacional.
-        if (planta === 'Nacional' && ppDiariaData.some(function(v){ return v!=null; })) {
+        // 1. Demanda pronóstico (aprobada, mensual → diaria)
+        if (pronLineData.some(function(v){ return v!=null; })) {
           datasets.push({
-            label: 'Ventas totales promedio correspondiente a cada día',
-            data: ppDiariaData,
-            borderColor: '#60a5fa', backgroundColor: 'rgba(96,165,250,0.10)',
-            borderWidth: 2.5, pointRadius: 4, pointHoverRadius: 6,
-            pointBackgroundColor: '#60a5fa', pointBorderColor: '#1e3a5f', pointBorderWidth: 1.5,
-            tension: 0.25, fill: true, spanGaps: false, yAxisID: 'yV',
+            label: 'Demanda pronóstico',
+            data: pronLineData,
+            borderColor: '#059669', backgroundColor: 'transparent',
+            borderWidth: 3, borderDash: [10,5], pointRadius: 0, pointHoverRadius: 0,
+            tension: 0, fill: false, spanGaps: true, yAxisID: 'yV',
           });
         }
+        // 2. Ventas (Cognos)
         if (cognosData.some(function(v){ return v!=null; })) {
           datasets.push({
-            label: planta==='Nacional' ? 'Ventas Cognos (Nac.)' : 'Ventas diarias',
+            label: 'Ventas',
             data: cognosData,
             borderColor: '#7c3aed', backgroundColor: 'transparent',
             borderWidth: 3, pointRadius: 3.5, pointHoverRadius: 6,
@@ -10554,35 +10536,26 @@ function renderPTend() {
             tension: 0.25, fill: false, spanGaps: true, yAxisID: 'yV',
           });
         }
-        if (ppAvgData.some(function(v){ return v!=null; })) {
+        // 3. Despachos (registrados en Registro Diario, por planta/terminal)
+        if (despachoData.some(function(v){ return v!=null; })) {
           datasets.push({
-            label: 'Promedio PP acum. (mes)',
-            data: ppAvgData,
-            borderColor: '#f97316', backgroundColor: 'transparent',
-            borderWidth: 2, borderDash: [6,4], pointRadius: 0, pointHoverRadius: 4,
-            tension: 0.3, fill: false, spanGaps: true, yAxisID: 'yV',
-          });
-        }
-        if (pronLineData.some(function(v){ return v!=null; })) {
-          datasets.push({
-            label: 'Pronóstico mes (MBDC)',
-            data: pronLineData,
-            borderColor: '#059669', backgroundColor: 'transparent',
-            borderWidth: 3, borderDash: [10,5], pointRadius: 0, pointHoverRadius: 0,
-            tension: 0, fill: false, spanGaps: true, yAxisID: 'yV',
+            label: 'Despachos',
+            data: despachoData,
+            borderColor: '#60a5fa', backgroundColor: 'rgba(96,165,250,0.10)',
+            borderWidth: 2.5, pointRadius: 4, pointHoverRadius: 6,
+            pointBackgroundColor: '#60a5fa', pointBorderColor: '#1e3a5f', pointBorderWidth: 1.5,
+            tension: 0.25, fill: true, spanGaps: false, yAxisID: 'yV',
           });
         }
         // ── Sincronizar la leyenda con lo que realmente se está graficando ──
         // (evita mostrar "Pronóstico mes" o "Prom. PP acum." como si existieran
         //  cuando en realidad no hay esa data cargada — confundía al usuario)
         function _legShow(id, show){ var lEl=document.getElementById(id); if(lEl) lEl.style.display = show?'flex':'none'; }
-        var tienePPDiaria = planta==='Nacional' && ppDiariaData.some(function(v){ return v!=null; });
+        var tieneDespacho = despachoData.some(function(v){ return v!=null; });
         var tieneCognosD  = cognosData.some(function(v){ return v!=null; });
-        var tienePromAcum = ppAvgData.some(function(v){ return v!=null; });
         var tienePronost  = pronLineData.some(function(v){ return v!=null; });
-        _legShow('ptend-desp-leg-ppdiaria', tienePPDiaria);
+        _legShow('ptend-desp-leg-ppdiaria', tieneDespacho);
         _legShow('ptend-desp-leg-cognos', tieneCognosD);
-        _legShow('ptend-desp-leg-promacum', tienePromAcum);
         _legShow('ptend-desp-leg-pronostico', tienePronost);
         var hintEl = document.getElementById('ptend-desp-empty-hint');
         if (hintEl) {
@@ -10622,10 +10595,9 @@ function renderPTend() {
                     if (v==null || isNaN(v)) return null;
                     // Prefijos de texto plano — los emojis/HTML no se renderizan en Chart.js tooltips
                     var prefixes = {
-                      'Ventas totales promedio correspondiente a cada d\u00eda': '[PP]',
-                      'Pron\u00f3stico mes (MBDC)':   '[Pron\u00f3n.]',
-                      'Promedio PP acum. (mes)':   '[Prom. PP]',
-                      'Ventas diarias': '[Cognos]'
+                      'Despachos': '[Desp.]',
+                      'Demanda pron\u00f3stico': '[Pron\u00f3n.]',
+                      'Ventas': '[Cognos]'
                     };
                     var lbl = ctx.dataset.label || '';
                     var prefix = prefixes[lbl] || '[Cognos]';
