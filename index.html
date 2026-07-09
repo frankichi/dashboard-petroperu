@@ -10489,12 +10489,24 @@ function renderPTend() {
         mesesVisibles.forEach(function(m) {
           var map = _pronByMonthCache[m];
           if (map === undefined) { lineas.push(m + ': (aún cargando desde el Sheets...)'); return; }
-          var detalle = fuentesDbg.map(function(pl){
-            var raw = map[pl+'|'+prod];
-            return pl + '=' + (raw!=null ? raw.toFixed(2)+' MBDC' : 'SIN DATO en Sheets');
-          }).join(' + ');
+          var rawByKey = _pronRawRowsCache[m] || {};
+          fuentesDbg.forEach(function(pl) {
+            var key = pl + '|' + prod;
+            var filas = rawByKey[key] || [];
+            if (!filas.length) { lineas.push(m + ' · ' + pl + ': SIN DATO en Sheets'); return; }
+            if (filas.length > 1) {
+              lineas.push(m + ' · ' + pl + ': \u26a0 ' + filas.length + ' FILAS encontradas para esta misma clave (posible duplicado en el Sheets):');
+              filas.forEach(function(f, idx){
+                lineas.push('    fila ' + (idx+1) + ': planta="' + f.planta_raw + '" producto="' + f.producto_raw + '" mes="' + f.mes_raw + '" pron=' + f.pron + ' MBDC');
+              });
+              lineas.push('    SUMA actual = ' + filas.reduce(function(s,f){return s+f.pron;},0).toFixed(3) + ' MBDC \u2190 esto puede estar mal si son duplicados, no productos distintos');
+            } else {
+              lineas.push(m + ' · ' + pl + ': ' + filas[0].pron + ' MBDC (1 fila, sin duplicados)');
+            }
+          });
           var totalDiario = fuentesDbg.reduce(function(s,pl){ return s + (map[pl+'|'+prod]||0); }, 0);
-          lineas.push(m + ': ' + detalle + '  \u2192  Demanda pron\u00f3stico = ' + totalDiario.toFixed(3) + ' MB/d\u00eda (PRONOSTICO_MBDC ya es diario, sin dividir)');
+          lineas.push(m + ' TOTAL Demanda pron\u00f3stico = ' + totalDiario.toFixed(3) + ' MB/d\u00eda');
+          lineas.push('');
         });
         dbg.textContent = lineas.join('\n');
         dbg.style.display = 'block';
@@ -10694,12 +10706,13 @@ function _pTendEnsurePPVentas(meses) {
 // el gráfico de Tendencia muestra rangos que pueden abarcar varios meses
 // (ej. ver junio con su pronóstico ya cargado, mientras julio aún no se sube).
 var _pronByMonthCache = {}; // {mes: {'planta|producto': pron}}
+var _pronRawRowsCache = {}; // {mes: {'planta|producto': [ {planta_raw, producto_raw, pron}, ... ]}} — diagnóstico
 function _pTendLoadPronMes(mes) {
   return fetch(CONFIG.API_URL + '?action=getPronostico&mes=' + encodeURIComponent(mes), {method:'GET', redirect:'follow', cache:'no-store'})
     .then(function(r){ return r.ok ? r.json() : []; })
     .then(function(rows){
       var map = {};
-      var rawLog = []; // diagnóstico: filas crudas relevantes a Talara/Diesel
+      var rawByKey = {}; // diagnóstico: TODAS las filas crudas que aportan a cada clave
       if (Array.isArray(rows)) {
         rows.forEach(function(p){
           if (p.planta && p.producto && p.pron > 0) {
@@ -10715,22 +10728,19 @@ function _pTendLoadPronMes(mes) {
             }
             dp = dp || prodTrim;
             var key = plTrim + '|' + dp;
-            map[key] = (map[key]||0) + p.pron;
-            if (plTrim.toLowerCase().indexOf('talara') >= 0) {
-              rawLog.push({planta_raw: p.planta, producto_raw: p.producto, dp_normalizado: dp, pron: p.pron, key: key});
-            }
+            // "Última fila gana" en vez de sumar — el pronóstico debe ser
+            // UN valor autorizado por mes+planta+producto. Si el Sheets
+            // tiene una fila duplicada/corregida, sumarlas infla el total
+            // artificialmente (esto era el bug real: Piura Diesel mostraba
+            // 9.51 cuando el Sheets solo tiene una fila con 3.17).
+            map[key] = p.pron;
+            if (!rawByKey[key]) rawByKey[key] = [];
+            rawByKey[key].push({planta_raw: p.planta, producto_raw: p.producto, pron: p.pron, mes_raw: p.mes});
           }
         });
       }
-      if (rawLog.length) {
-        console.log('[PronTendencia] Filas crudas de Talara en pronostico (' + mes + '):', rawLog);
-        console.log('[PronTendencia] Total map[Talara|Diesel] =', map['Talara|Diesel'] || 0,
-                     '| VENTAS_AGG_RULES fuentes suman:',
-                     (VENTAS_AGG_RULES['Talara|Diesel']||['Talara']).map(function(pl){ return pl+'='+(map[pl+'|Diesel']||0); }).join(', '));
-      } else {
-        console.warn('[PronTendencia] NO se encontró ninguna fila de "Talara" en la hoja pronostico para ' + mes + '. Revisa el nombre exacto de la planta en el Sheets.');
-      }
       _pronByMonthCache[mes] = map;
+      _pronRawRowsCache[mes] = rawByKey;
       return map;
     })
     .catch(function(){ _pronByMonthCache[mes] = {}; return {}; });
@@ -12396,17 +12406,17 @@ function renderPUpload() {
         + '<button class="upload-btn upload-btn-secondary" onclick="clearVentas()">✕ Limpiar</button>'
         + '<span class="upload-status" id="ventas-upload-status"></span></div>'
     , cogFecha)
-    + _uplAccordion('acc-pron', '🎯', 'Pronóstico Mensual (Excel)',
-        'Archivo de pronóstico mensual de demanda por planta y producto',
+    + _uplAccordion('acc-pron', '🎯', 'Pronóstico Colaborativo de Ventas (Excel)',
+        'Archivo mensual "PRONÓSTICO COLABORATIVO DE VENTAS" (hoja PLANTAS) — convierte automáticamente de MB mensual a MBDC diario',
         '', false,
         '<div class="upl-date-bar">'
         + '<label>📅 Mes del pronóstico:</label>'
         + '<input type="month" id="pron-month-input" value="'+(currentDate?currentDate.slice(0,7):new Date().toISOString().slice(0,7))+'">'
-        + '<span class="upl-date-hint">Mes al que corresponde el pronóstico</span></div>'
+        + '<span class="upl-date-hint">Se detecta automáticamente del encabezado del Excel, pero puedes ajustarlo</span></div>'
         + '<div class="upload-dropzone" id="dropzone-pron">'
         + '<div class="upload-dropzone-icon">📁</div>'
-        + '<div class="upload-dropzone-text">Arrastra el Excel aquí o haz clic</div>'
-        + '<div class="upload-dropzone-hint">Pronostico_*.xlsx</div>'
+        + '<div class="upload-dropzone-text">Arrastra el Excel de Pronóstico Colaborativo aquí o haz clic</div>'
+        + '<div class="upload-dropzone-hint">PRONOSTICO_[MES]_[AÑO].xlsx — hoja "PLANTAS"</div>'
         + '<input type="file" id="file-pron" accept=".xlsx,.xls"></div>'
         + '<div id="pron-upload-preview"></div>'
         + '<div class="upload-actions" id="pron-upload-actions" style="display:none">'
@@ -14227,6 +14237,38 @@ async function sendCobToGS() {
     if (btn) btn.disabled = false;
   }
 }
+// Mapeo espejo del backend (Code.gs) — mismo criterio, para mostrar en el
+// preview qué se va a migrar y qué se omite ANTES de enviar.
+var PLANTA_MAP_PRONOSTICO = {
+  'PLANTA VENTAS TALARA':                    'Talara',
+  'PLANTA VENTAS PIURA':                      'Piura',
+  'PLANTA CONCHÁN':                           'Conchán',
+  'TERMINAL CALLAO':                          'Callao',
+  'TERMINAL CHIMBOTE':                        'Chimbote',
+  'TERMINAL ETEN':                            'Eten',
+  'TERMINAL ILO':                             'Ilo',
+  'TERMINAL MOLLENDO':                        'Mollendo',
+  'TERMINAL PISCO':                           'Pisco',
+  'TERMINAL SALAVERRY':                       'Salaverry',
+  'TERMINAL SUPE':                            'Supe',
+  'PLANTA DE VENTAS PUCALLPA':                'Pucallpa',
+  'PLANTA DE VENTAS TARAPOTO':                'Tarapoto',
+  'PLANTA DE VENTAS YURIMAGUAS':              'Yurimaguas',
+  'PLANTA EL MILAGRO':                        'El Milagro',
+  'PLANTA JULIACA':                           'Juliaca',
+  'PLANTA CUSCO':                             'Cusco',
+  'PLANTA VENTA IQUITOS':                     'Iquitos',
+  'Oficina de Facturación Puerto Maldonado':  'Pto. Maldonado'
+};
+var PRODUCTO_MAP_PRONOSTICO = {
+  'DIESEL-B5 50PPM':   'Diesel',
+  'DIESEL B5':         'Diesel B5',
+  'GASOLINA REGULAR':  'G. Regular',
+  'GASOLINA PREMIUM':  'G. Premium',
+  'GASOLINA 84':       'G. 84',
+  'TURBO JET A-1':     'TA1',
+  'GLP':               'GLP'
+};
 function handlePronFile(file) {
   if (!file || typeof XLSX === 'undefined') return;
   var reader = new FileReader();
@@ -14234,46 +14276,85 @@ function handlePronFile(file) {
     try {
       var data = new Uint8Array(e.target.result);
       var wb = XLSX.read(data, {type:'array'});
-      var ws = wb.Sheets[wb.SheetNames[0]];
+      // Buscar la hoja "PLANTAS" (o usar la primera si no existe con ese nombre)
+      var sheetName = wb.SheetNames.indexOf('PLANTAS') >= 0 ? 'PLANTAS' : wb.SheetNames[0];
+      var ws = wb.Sheets[sheetName];
       var json = XLSX.utils.sheet_to_json(ws, {header:1, defval:''});
-      var registros = [];
-      for (var i = 0; i < json.length; i++) {
-        var row = json[i];
-        if (!row) continue;
-        for (var c = 0; c < row.length - 2; c++) {
-          var planta = String(row[c] || '').trim();
-          var producto = String(row[c+1] || '').trim();
-          var val = parseFloat(row[c+2]);
-          if (planta && producto && !isNaN(val) && val >= 0 &&
-              isNaN(parseFloat(planta)) && isNaN(parseFloat(producto))) {
-            if (planta.indexOf('A.') === 0 || planta.indexOf('A ') === 0) continue;
-            registros.push({planta: planta, producto: producto, pron: Math.round(val * 10000) / 10000});
-            break;
+      // Buscar la fila de encabezado: debe tener 'Planta', 'Producto', 'UN'
+      // y una columna con formato de mes YYYY-MM
+      var headerRowIdx = -1, colPlanta=-1, colProducto=-1, colUN=-1, colMes=-1, mesDetectado='';
+      for (var i = 0; i < Math.min(json.length, 20); i++) {
+        var row = json[i] || [];
+        var iPlanta = row.findIndex(function(c){ return String(c).trim().toLowerCase() === 'planta'; });
+        var iProducto = row.findIndex(function(c){ return String(c).trim().toLowerCase() === 'producto'; });
+        if (iPlanta >= 0 && iProducto >= 0) {
+          headerRowIdx = i; colPlanta = iPlanta; colProducto = iProducto;
+          colUN = row.findIndex(function(c){ return String(c).trim().toLowerCase() === 'un'; });
+          for (var c = 0; c < row.length; c++) {
+            if (/^\d{4}-\d{2}$/.test(String(row[c]).trim())) { colMes = c; mesDetectado = String(row[c]).trim(); break; }
           }
+          break;
         }
       }
-      if (!registros.length) throw new Error('No se encontraron registros de pron\u00f3stico');
+      if (headerRowIdx < 0 || colMes < 0) {
+        throw new Error('No se encontró la fila de encabezado (Planta/Producto/UN/mes). Verifica que sea el formato "PRONÓSTICO COLABORATIVO DE VENTAS".');
+      }
+      var registros = [], omitidas = [];
+      for (var r = headerRowIdx + 1; r < json.length; r++) {
+        var row = json[r] || [];
+        var plantaRaw = String(row[colPlanta] || '').trim();
+        var productoRaw = String(row[colProducto] || '').trim();
+        var un = colUN >= 0 ? String(row[colUN] || '').trim().toUpperCase() : 'MB';
+        var val = parseFloat(row[colMes]);
+        if (!plantaRaw || !productoRaw || isNaN(val) || val <= 0) continue;
+        if (plantaRaw.toLowerCase().indexOf('total') === 0) continue; // filas de subtotal
+        if (un && un !== 'MB') continue; // solo unidad MB (miles de barriles)
+        var planta = PLANTA_MAP_PRONOSTICO[plantaRaw];
+        var producto = PRODUCTO_MAP_PRONOSTICO[productoRaw];
+        if (!planta || !producto) {
+          omitidas.push(plantaRaw + ' / ' + productoRaw);
+          continue;
+        }
+        registros.push({planta_raw: plantaRaw, producto_raw: productoRaw, planta: planta, producto: producto, valor_mensual_mb: Math.round(val*1000)/1000});
+      }
+      if (!registros.length) throw new Error('No se encontraron filas migrables (revisa que las plantas/productos ya estén en el mapeo).');
       var mesInput = document.getElementById('pron-mes-input') || document.getElementById('pron-month-input');
-      var mes = (mesInput && mesInput.value) ? mesInput.value : new Date().toISOString().slice(0,7);
-      uploadPronData = {mes: mes, registros: registros};
+      // El mes detectado en el propio Excel manda (más confiable que el
+      // valor por defecto del campo, que solo refleja la fecha actual).
+      var mes = mesDetectado || (mesInput && mesInput.value) || new Date().toISOString().slice(0,7);
+      if (mesInput) mesInput.value = mes;
+      uploadPronData = {mes: mes, registros: registros, omitidas: omitidas};
+      var diasDelMes = new Date(parseInt(mes.slice(0,4),10), parseInt(mes.slice(5,7),10), 0).getDate();
       var html = '<div class="upload-summary">'
-        + '<div class="upload-sum-card"><div class="upload-sum-val">' + registros.length + '</div><div class="upload-sum-lbl">Registros</div></div>'
-        + '<div class="upload-sum-card"><div class="upload-sum-val">' + mes + '</div><div class="upload-sum-lbl">Mes</div></div>'
-        + '<div class="upload-sum-card"><div class="upload-sum-val">' + new Set(registros.map(function(r){return r.planta})).size + '</div><div class="upload-sum-lbl">Plantas</div></div></div>';
-      html += '<div class="upload-preview"><table><thead><tr><th>Planta</th><th>Producto</th><th class="r">Pron.(MBDC)</th></tr></thead><tbody>';
+        + '<div class="upload-sum-card"><div class="upload-sum-val">' + registros.length + '</div><div class="upload-sum-lbl">Registros a migrar</div></div>'
+        + '<div class="upload-sum-card"><div class="upload-sum-val">' + mes + '</div><div class="upload-sum-lbl">Mes (' + diasDelMes + ' d\u00edas)</div></div>'
+        + '<div class="upload-sum-card"><div class="upload-sum-val">' + new Set(registros.map(function(r){return r.planta})).size + '</div><div class="upload-sum-lbl">Plantas</div></div>'
+        + '<div class="upload-sum-card" style="' + (omitidas.length?'color:#a86a00':'') + '"><div class="upload-sum-val">' + omitidas.length + '</div><div class="upload-sum-lbl">Omitidas (no migradas a\u00fan)</div></div></div>';
+      html += '<div class="upload-preview"><table><thead><tr><th>Planta (Excel \u2192 interno)</th><th>Producto (Excel \u2192 interno)</th><th class="r">Mensual (MB)</th><th class="r">MBDC (\u00f7' + diasDelMes + 'd)</th></tr></thead><tbody>';
       registros.forEach(function(r) {
-        html += '<tr><td>' + r.planta + '</td><td style="font-weight:700">' + r.producto + '</td><td class="r">' + r.pron.toFixed(4) + '</td></tr>';
+        var mbdc = r.valor_mensual_mb / diasDelMes;
+        html += '<tr><td>' + r.planta_raw + ' <span style="color:var(--acc)">\u2192</span> <b>' + r.planta + '</b></td>'
+          + '<td>' + r.producto_raw + ' <span style="color:var(--acc)">\u2192</span> <b>' + r.producto + '</b></td>'
+          + '<td class="r">' + r.valor_mensual_mb.toFixed(3) + '</td>'
+          + '<td class="r" style="font-weight:700">' + mbdc.toFixed(3) + '</td></tr>';
       });
       html += '</tbody></table></div>';
+      if (omitidas.length) {
+        html += '<div style="margin-top:10px;padding:10px 12px;background:#fdf3e0;border:1px solid #e8a00050;border-radius:8px;font-size:11px;color:#7a5200">'
+          + '\u26a0 <b>' + omitidas.length + ' fila(s) omitida(s)</b> — planta/producto aún no está en el mapeo de migración: '
+          + [...new Set(omitidas)].slice(0,15).join(', ') + (omitidas.length>15?'…':'') + '</div>';
+      }
       uploadPronPreviewHTML = html;
       var prev = document.getElementById('pron-upload-preview');
       if (prev) prev.innerHTML = html;
       var actions = document.getElementById('pron-upload-actions');
       if (actions) actions.style.display = 'flex';
-      addUploadLog(true, 'Pron\u00f3stico: ' + registros.length + ' registros para ' + mes);
+      addUploadLog(true, 'Pron\u00f3stico: ' + registros.length + ' registros para ' + mes + (omitidas.length ? ' (' + omitidas.length + ' omitidos)' : ''));
     } catch (err) {
       console.error('[Pron Upload]', err);
       addUploadLog(false, 'Error pron\u00f3stico: ' + err.message);
+      var prev2 = document.getElementById('pron-upload-preview');
+      if (prev2) prev2.innerHTML = '<div style="color:var(--red);font-size:12px;padding:10px">\u274c ' + err.message + '</div>';
     }
   };
   reader.readAsArrayBuffer(file);
@@ -14292,20 +14373,28 @@ async function sendPronToGS() {
   if (btn) btn.disabled = true;
   if (status) { status.className = 'upload-status'; status.textContent = '\u23F3 Guardando...'; }
   try {
-    await fetch(CONFIG.API_URL, {
-      method: 'POST', mode: 'no-cors',
-      headers: {'Content-Type': 'application/json'},
+    var sess = window._dashSession || {};
+    var res = await fetch(CONFIG.API_URL, {
+      method: 'POST', redirect: 'follow',
+      headers: {'Content-Type': 'text/plain;charset=utf-8'},
       body: JSON.stringify({
-        action: 'savePronostico',
+        action: 'uploadPronosticoMBDC',
+        token: sess.token,
         mes: uploadPronData.mes,
-        records: uploadPronData.registros
+        rows: uploadPronData.registros
       })
-    });
-    if (status) { status.className = 'upload-status success'; status.textContent = '\u2705 Guardado (' + uploadPronData.registros.length + ' registros)'; }
-    addUploadLog(true, 'Pron\u00f3stico ' + uploadPronData.mes + ' guardado: ' + uploadPronData.registros.length + ' registros');
+    }).then(function(r){ return r.json(); });
+    if (res && res.success) {
+      if (status) { status.className = 'upload-status success'; status.textContent = '\u2705 ' + res.message; }
+      addUploadLog(true, res.message);
+      setTimeout(function() { if (typeof fetchData === 'function') fetchData(true); }, 2000);
+    } else {
+      throw new Error((res && res.message) || 'Respuesta inv\u00e1lida del servidor');
+    }
   } catch (err) {
     console.error('[Pron Send]', err);
     if (status) { status.className = 'upload-status error'; status.textContent = '\u274C ' + err.message; }
+    addUploadLog(false, 'Error guardando pron\u00f3stico: ' + err.message);
   } finally {
     if (btn) btn.disabled = false;
   }
