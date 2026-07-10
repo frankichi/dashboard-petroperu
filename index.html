@@ -4187,7 +4187,15 @@ function pronDiarioAprobado(r) {
   // La hoja 'pronostico' tiene columna PRONOSTICO_MBDC — MBDC = Miles de
   // Barriles Día Calendario, YA es una tasa diaria (confirmado directo en
   // el Sheets). NO se divide entre días del mes.
-  var val = (typeof pronSheet !== 'undefined' && pronSheet[r.planta+'|'+r.producto]) || r.pron_mes || 0;
+  // "Talara" (y otros hubs) es la suma de varias sub-plantas
+  // (VENTAS_AGG_RULES) — mismo criterio en TODO el dashboard (Coberturas,
+  // Restricciones, Tendencia, etc.), no solo en el gráfico de Tendencia.
+  var fuentes = (typeof VENTAS_AGG_RULES !== 'undefined' && VENTAS_AGG_RULES[r.planta+'|'+r.producto]) || [r.planta];
+  var val = 0;
+  if (typeof pronSheet !== 'undefined') {
+    fuentes.forEach(function(pl){ val += (pronSheet[pl+'|'+r.producto] || 0); });
+  }
+  if (!val) val = r.pron_mes || 0;
   if (val > 0) return val;
   return r.pron || r.dem_prom || 0;
 }
@@ -6508,7 +6516,12 @@ function cobCalcFecha(baseDate, days) {
 function cobGetPron(r) {
   var key = r.planta + '|' + r.producto;
   if (cobPronOverrides[key] !== undefined) return cobPronOverrides[key];
-  if (pronSheet[key] > 0) return pronSheet[key]; // PRONOSTICO_MBDC ya es diario
+  // "Talara" (y otros hubs) es la suma de varias sub-plantas
+  // (VENTAS_AGG_RULES) — mismo criterio en todo el dashboard.
+  var fuentes = (typeof VENTAS_AGG_RULES !== 'undefined' && VENTAS_AGG_RULES[key]) || [r.planta];
+  var sum = 0;
+  fuentes.forEach(function(pl){ sum += (pronSheet[pl+'|'+r.producto] || 0); });
+  if (sum > 0) return sum; // PRONOSTICO_MBDC ya es diario
   if (r.pron && r.pron > 0) return r.pron;
   return r.dem_prom || 0;
 }
@@ -10198,9 +10211,6 @@ function renderPTend() {
           <span id="ptend-desp-leg-pronostico" style="display:flex;align-items:center;gap:5px;font-size:10px;color:var(--txt3)">
             <span style="width:16px;height:0;border-top:3px dashed #059669;display:inline-block"></span>Demanda pronóstico
           </span>
-          <span id="ptend-desp-leg-cognos" style="display:flex;align-items:center;gap:5px;font-size:10px;color:var(--txt3)">
-            <span style="width:16px;height:3px;background:#7c3aed;display:inline-block;border-radius:2px"></span>Ventas
-          </span>
           <span id="ptend-desp-leg-ppdiaria" style="display:flex;align-items:center;gap:5px;font-size:10px;color:var(--txt3)">
             <span style="width:16px;height:3px;background:#60a5fa;display:inline-block;border-radius:2px"></span>Despachos
           </span>
@@ -10539,11 +10549,10 @@ function renderPTend() {
         return tot > 0 ? parseFloat(tot.toFixed(3)) : null;
       });
       var hasAny = pronLineData.some(function(v){ return v != null; })
-               || cognosData.some(function(v){ return v != null; })
                || despachoData.some(function(v){ return v != null; });
       if (!hasAny) {
         ventasCanvas.style.display = 'none';
-        ['ptend-desp-leg-ppdiaria','ptend-desp-leg-cognos','ptend-desp-leg-pronostico'].forEach(function(id){
+        ['ptend-desp-leg-ppdiaria','ptend-desp-leg-pronostico'].forEach(function(id){
           var lEl = document.getElementById(id); if (lEl) lEl.style.display = 'none';
         });
         var hintElEmpty = document.getElementById('ptend-desp-empty-hint');
@@ -10564,7 +10573,7 @@ function renderPTend() {
         var labelColorV = cssVar('--txt2') || '#8a9bb8';
         var gridColorV  = cssVar('--bdr')  || '#1e2d45';
         var datasets = [];
-        // 1. Demanda pronóstico (aprobada, mensual → diaria)
+        // 1. Demanda pronóstico (aprobada)
         if (pronLineData.some(function(v){ return v!=null; })) {
           datasets.push({
             label: 'Demanda pronóstico',
@@ -10574,18 +10583,7 @@ function renderPTend() {
             tension: 0, fill: false, spanGaps: true, yAxisID: 'yV',
           });
         }
-        // 2. Ventas (Cognos)
-        if (cognosData.some(function(v){ return v!=null; })) {
-          datasets.push({
-            label: 'Ventas',
-            data: cognosData,
-            borderColor: '#7c3aed', backgroundColor: 'transparent',
-            borderWidth: 3, pointRadius: 3.5, pointHoverRadius: 6,
-            pointBackgroundColor: '#7c3aed',
-            tension: 0.25, fill: false, spanGaps: true, yAxisID: 'yV',
-          });
-        }
-        // 3. Despachos (registrados en Registro Diario, por planta/terminal)
+        // 2. Despachos (registrados en Registro Diario, por planta/terminal)
         if (despachoData.some(function(v){ return v!=null; })) {
           datasets.push({
             label: 'Despachos',
@@ -10601,10 +10599,8 @@ function renderPTend() {
         //  cuando en realidad no hay esa data cargada — confundía al usuario)
         function _legShow(id, show){ var lEl=document.getElementById(id); if(lEl) lEl.style.display = show?'flex':'none'; }
         var tieneDespacho = despachoData.some(function(v){ return v!=null; });
-        var tieneCognosD  = cognosData.some(function(v){ return v!=null; });
         var tienePronost  = pronLineData.some(function(v){ return v!=null; });
         _legShow('ptend-desp-leg-ppdiaria', tieneDespacho);
-        _legShow('ptend-desp-leg-cognos', tieneCognosD);
         _legShow('ptend-desp-leg-pronostico', tienePronost);
         var hintEl = document.getElementById('ptend-desp-empty-hint');
         if (hintEl) {
@@ -10645,11 +10641,10 @@ function renderPTend() {
                     // Prefijos de texto plano — los emojis/HTML no se renderizan en Chart.js tooltips
                     var prefixes = {
                       'Despachos': '[Desp.]',
-                      'Demanda pron\u00f3stico': '[Pron\u00f3n.]',
-                      'Ventas': '[Cognos]'
+                      'Demanda pron\u00f3stico': '[Pron\u00f3n.]'
                     };
                     var lbl = ctx.dataset.label || '';
-                    var prefix = prefixes[lbl] || '[Cognos]';
+                    var prefix = prefixes[lbl] || '';
                     return '  ' + prefix + ' ' + lbl + ': ' + v.toFixed(2) + ' MB';
                   }
                 }
