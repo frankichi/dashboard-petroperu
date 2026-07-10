@@ -927,6 +927,16 @@ function _solResponder(id, aprobado) {
 function _refreshAllData() {
   var btn = document.getElementById('btn-refresh-global');
   if (btn) { btn.disabled = true; btn.textContent = '↻ Actualizando…'; }
+  // Limpiar cachés del navegador que solo se cargan UNA VEZ por sesión.
+  // Sin esto, "Actualizar" refrescaba el inventario (RAW) pero los
+  // gráficos que dependen de estos cachés (Tendencia, pronóstico,
+  // ventas PP) seguían mostrando el snapshot del primer login, aunque
+  // el Sheets ya tuviera datos nuevos (ej. tras subir un Excel).
+  if (typeof _pronByMonthCache !== 'undefined') for (var k in _pronByMonthCache) delete _pronByMonthCache[k];
+  if (typeof _pronRawRowsCache !== 'undefined') for (var k2 in _pronRawRowsCache) delete _pronRawRowsCache[k2];
+  if (typeof _ppVentasCache !== 'undefined') for (var k3 in _ppVentasCache) delete _ppVentasCache[k3];
+  window._cargasNavesCache = null;
+  window._navPosData = null;
   // Forzar recarga sin caché
   if (typeof fetchData === 'function') {
     fetchData(true);
@@ -935,7 +945,8 @@ function _refreshAllData() {
   if (typeof _solLoad === 'function') _solLoad();
   setTimeout(function() {
     if (btn) { btn.disabled = false; btn.textContent = '↻ Actualizar'; }
-    // Re-renderizar la página activa
+    // Re-renderizar la página activa (con los cachés ya limpios, esto
+    // dispara la recarga real de pronóstico/ventas/cargas desde el Sheets)
     if (typeof rerenderActivePage === 'function') rerenderActivePage();
     // Si estamos en seguimiento, recargar
     var segActive = document.getElementById('pSegD');
