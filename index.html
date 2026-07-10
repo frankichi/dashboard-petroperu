@@ -19930,7 +19930,7 @@ function renderVistaEjecutivaSimple() {
       '<div class="exec-title-main" style="margin-bottom:14px">Inventarios y Despachos' + (pl==='Nacional' ? ' ' : ' — ') + tituloScope + '</div>' +
       volverBtn +
       '<div class="exec-periodo-row" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">' +
-        periodoBar + '<div style="display:flex;gap:10px;flex-wrap:wrap">' + plantaSelector + productoSelector + '</div>' +
+        periodoBar + '<div class="exec-select-row" style="display:flex;gap:10px;flex-wrap:wrap">' + plantaSelector + productoSelector + '</div>' +
       '</div>' +
     '</div>' +
     (esRefineriaExec ? '<div style="margin-bottom:16px;padding:10px 14px;background:#eef2f7;border:1px solid #cbd5e1;border-radius:10px;font-size:12px;color:#475569">🛢️ <b>' + pl + '</b> es una refinería — solo procesa y almacena producto, no vende. Por eso aquí solo se muestra su <b>inventario</b>, sin despacho.</div>' : '') +
@@ -20008,26 +20008,27 @@ function initExecutiveMode() {
     '.exec-banner{flex-wrap:wrap;row-gap:8px}' +
     '.exec-title-main{font-size:22px;font-weight:800;color:var(--txt);line-height:1.25}' +
     '@media (max-width:640px){' +
-      '.exec-banner{padding:8px 12px;gap:8px}' +
-      '.exec-banner-logo{width:32px;height:32px}' +
-      '.exec-banner-title .exec-h1{font-size:11px;letter-spacing:.01em}' +
+      '.exec-banner{padding:7px 10px;gap:6px}' +
+      '.exec-banner-logo{width:28px;height:28px}' +
+      '.exec-banner-title .exec-h1{font-size:10.5px;letter-spacing:.01em;margin:0}' +
       '.exec-banner-title .exec-h2{display:none}' +
-      '.exec-banner-stamp{font-size:8px;padding:3px 7px;order:3}' +
-      '.exec-banner-meta{font-size:8.5px;text-align:right;order:2;margin-left:auto}' +
-      '.exec-banner-meta .exec-time{font-size:9px}' +
-      '.exec-banner-meta .exec-credit{display:block!important;font-size:8px;opacity:.75}' +
-      '#exec-simple-view{padding-left:12px!important;padding-right:12px!important}' +
-      '.exec-sticky-hdr{margin-left:-12px!important;margin-right:-12px!important;padding-left:12px!important;padding-right:12px!important;padding-top:12px!important;padding-bottom:10px!important}' +
-      '.exec-title-main{font-size:15px!important;margin-bottom:10px!important}' +
-      '.exec-kpi-grid{grid-template-columns:1fr!important;gap:12px!important}' +
-      '.exec-kpi-val{font-size:26px!important}' +
-      // Botones de periodo/orden/modo: grilla compacta de 2 columnas en
-      // vez de apilarse uno debajo del otro (antes ocupaban media pantalla).
-      '.exec-btn-grid{display:grid!important;grid-template-columns:1fr 1fr!important;gap:6px!important;width:100%}' +
-      '.exec-btn-grid button{width:100%;padding:8px 6px!important;font-size:10.5px!important;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}' +
-      '.exec-periodo-row{flex-direction:column;align-items:stretch!important;gap:8px!important}' +
-      '.exec-periodo-row select{width:100%;padding:7px 10px!important;font-size:11.5px!important}' +
-      '.exec-cob-label{width:70px!important;font-size:10px!important}' +
+      '.exec-banner-meta{font-size:8px;text-align:right;margin-left:auto}' +
+      '.exec-banner-meta .exec-time{font-size:8.5px}' +
+      '.exec-banner-meta .exec-credit{display:block!important;font-size:7px;opacity:.75;margin-top:3px;padding-top:3px}' +
+      '#exec-simple-view{padding-left:10px!important;padding-right:10px!important}' +
+      '.exec-sticky-hdr{margin-left:-10px!important;margin-right:-10px!important;padding:10px 10px 8px!important}' +
+      '.exec-title-main{font-size:14px!important;margin-bottom:8px!important}' +
+      '.exec-kpi-grid{grid-template-columns:1fr!important;gap:10px!important}' +
+      '.exec-kpi-val{font-size:24px!important}' +
+      // Botones de periodo/orden/modo y selectores: grillas compactas de 2
+      // columnas en vez de apilarse uno debajo del otro (antes ocupaban
+      // media pantalla en celular).
+      '.exec-btn-grid{display:grid!important;grid-template-columns:1fr 1fr!important;gap:5px!important;width:100%}' +
+      '.exec-btn-grid button{width:100%;padding:6px 4px!important;font-size:10px!important;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}' +
+      '.exec-periodo-row{flex-direction:column;align-items:stretch!important;gap:6px!important}' +
+      '.exec-select-row{display:grid!important;grid-template-columns:1fr 1fr!important;gap:6px!important}' +
+      '.exec-select-row select{width:100%;padding:6px 8px!important;font-size:10.5px!important}' +
+      '.exec-cob-label{width:64px!important;font-size:9.5px!important}' +
     '}';
   document.head.appendChild(execStyle);
   // Las cintas (buques/riesgos y eventos) ya quedan ocultas de forma
@@ -20039,10 +20040,9 @@ function initExecutiveMode() {
   banner.innerHTML =
       '<div class="exec-banner-logo"><img src="data:image/jpeg;base64,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" alt="PETROPERÚ" /></div>'
     + '<div class="exec-banner-title">'
-    +   '<h1 class="exec-h1">Vista Ejecutiva · Panel de Suministro</h1>'
+    +   '<h1 class="exec-h1">Panel de Suministro</h1>'
     +   '<p class="exec-h2">Planificación de Suministro · Inventarios &amp; Coberturas a nivel nacional</p>'
     + '</div>'
-    + '<div class="exec-banner-stamp">Solo Lectura</div>'
     + '<div class="exec-banner-meta">'
     +   '<span class="exec-live-dot"></span><span id="exec-live-text">Conectado</span>'
     +   '<div class="exec-time" id="exec-snapshot-time">—</div>'
