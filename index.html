@@ -291,6 +291,29 @@ var _mapLibsLoaded=false;
     }
     #sidebar .sb-group:first-of-type{ margin-top:2px; }
     #sidebar .sb-badge{ flex-shrink:0; }
+
+    /* ── Panel principal (Resumen Nacional y demás) en móvil ──────────
+       El grid de KPIs de Resumen Nacional usaba un estilo en línea que
+       bloqueaba la regla responsive ya existente para .kpi-row (ver fix
+       en el JS). Aquí se refuerza con una red de seguridad general para
+       que ningún número grande (ej. "805.5 MB") se corte visualmente en
+       pantallas angostas, y para que las tablas anchas siempre puedan
+       desplazarse en vez de romper el layout. */
+    @media (max-width:640px){
+      .kpi{ min-width:0; overflow:visible; padding:12px 14px; }
+      .kpi-value{
+        font-size:19px !important;
+        white-space:normal !important;
+        overflow-wrap:break-word;
+        word-break:break-word;
+      }
+      .kpi-row{ grid-template-columns:1fr 1fr !important; gap:8px !important; padding:10px 12px 0 !important; }
+      .page-header{ padding:12px 14px !important; }
+      .page-header-title{ font-size:15px !important; }
+      .cob-tbl-wrap,.restr-table-wrap,.tbl-wrap{ overflow-x:auto !important; -webkit-overflow-scrolling:touch; }
+      .cob-toolbar,.restr-header,.filterbar{ flex-wrap:wrap !important; row-gap:6px; }
+      .topbar{ padding:0 10px !important; gap:6px !important; }
+    }
   </style>
 </head>
 <body>
@@ -3704,7 +3727,7 @@ function renderPResumen() {
       '</div>' +
     '</div>' +
     // KPIs
-    '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(175px,1fr));gap:10px;padding:14px 18px 0">' +
+    '<div class="kpi-row">' +
       // Inventario total
       '<div class="kpi blue" style="position:relative">' +
         '<div class="kpi-label">Inventario Nacional</div>' +
