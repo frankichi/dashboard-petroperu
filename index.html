@@ -19496,13 +19496,24 @@ function renderVistaEjecutivaSimple() {
   // Nota: ya no se carga más el archivo E&D — las plantas/terminales
   // reportan directamente en Registro Diario. El campo vreal/dem de
   // "inventario" refleja lo que cada planta escribió ahí, sin mezcla.
+  //
+  // Guard de sanidad: un despacho de una sola planta/producto en un solo
+  // día por encima de este umbral es casi seguro un dato de prueba o un
+  // error de digitación (ej. "100" tecleado como valor de prueba durante
+  // pruebas del sistema) — se descarta para que nunca infle esta vista.
+  var DESP_MAX_RAZONABLE = 60; // MB/día por planta+producto
+  function despRow(r) {
+    var v = r.vreal || r.dem || 0;
+    return (v > 0 && v <= DESP_MAX_RAZONABLE) ? v : 0;
+  }
+
   var invHoy   = sumFecha(fechaHoy, 'inv', pl);
   var invAyer  = fechaAyer ? sumFecha(fechaAyer, 'inv', pl) : null;
   var deltaInv = invAyer !== null ? invHoy - invAyer : 0;
   var despHoy  = RAW.filter(function(r){ return r.fecha===fechaHoy && (pl==='Nacional' || r.planta===pl); })
-                     .reduce(function(s,r){ return s + (r.vreal || r.dem || 0); }, 0);
+                     .reduce(function(s,r){ return s + despRow(r); }, 0);
   var despAyer = fechaAyer ? RAW.filter(function(r){ return r.fecha===fechaAyer && (pl==='Nacional' || r.planta===pl); })
-                     .reduce(function(s,r){ return s + (r.vreal || r.dem || 0); }, 0) : null;
+                     .reduce(function(s,r){ return s + despRow(r); }, 0) : null;
 
   // ── Construir la serie según el periodo elegido ──────────────────────
   var labels, invSerie, despSerie;
@@ -19515,7 +19526,7 @@ function renderVistaEjecutivaSimple() {
       var invD = sumFecha(d, 'inv', pl);
       if (invD > 0) { mesesMap[m].invSum += invD; mesesMap[m].invCnt++; }
       mesesMap[m].despSum += RAW.filter(function(r){ return r.fecha===d && (pl==='Nacional'||r.planta===pl); })
-                                 .reduce(function(s,r){ return s+(r.vreal||r.dem||0); }, 0);
+                                 .reduce(function(s,r){ return s+despRow(r); }, 0);
     });
     var mesesOrdenados = Object.keys(mesesMap).sort().slice(-12);
     var mesesNombre = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
@@ -19529,7 +19540,7 @@ function renderVistaEjecutivaSimple() {
     invSerie = datesN.map(function(d){ var v=sumFecha(d,'inv',pl); return v>0?parseFloat(v.toFixed(1)):null; });
     despSerie = datesN.map(function(d){
       var v = RAW.filter(function(r){ return r.fecha===d && (pl==='Nacional'||r.planta===pl); })
-                 .reduce(function(s,r){ return s+(r.vreal||r.dem||0); }, 0);
+                 .reduce(function(s,r){ return s+despRow(r); }, 0);
       return v>0 ? parseFloat(v.toFixed(2)) : null;
     });
   }
@@ -19544,9 +19555,18 @@ function renderVistaEjecutivaSimple() {
   }
 
   // ── Lista de plantas para el selector de detalle ─────────────────────
+  var PLANTA_ORDEN_NS = ['Talara','Piura','Eten','Salaverry','Chimbote','Supe','Callao',
+    'Conchán','Pisco','Mollendo','Ilo','Juliaca','Cusco','Pucallpa','Tarapoto',
+    'Yurimaguas','El Milagro','Iquitos'];
   var plantasDisp = [...new Set(RAW.map(function(r){ return r.planta; }))]
     .filter(function(p){ return p && p !== 'Nacional'; })
-    .sort();
+    .sort(function(a, b) {
+      var ia = PLANTA_ORDEN_NS.indexOf(a), ib = PLANTA_ORDEN_NS.indexOf(b);
+      if (ia === -1) ia = 999; // plantas no listadas van al final, orden alfabético entre ellas
+      if (ib === -1) ib = 999;
+      if (ia !== ib) return ia - ib;
+      return a.localeCompare(b);
+    });
 
   function periodoBtn(val, label) {
     var active = window._execPeriod === val;
@@ -19593,14 +19613,16 @@ function renderVistaEjecutivaSimple() {
   }
 
   box.innerHTML =
-    '<div style="margin-bottom:22px">' +
-      '<div style="font-size:11px;font-weight:800;color:#c2410c;text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px">Panel de Suministro · Vista en Vivo</div>' +
-      '<div style="font-size:22px;font-weight:800;color:var(--txt)">Inventarios y Despachos — ' + tituloScope + '</div>' +
-      '<div style="font-size:12.5px;color:var(--txt3);margin-top:2px">Datos al ' + fechaHoy + ' · actualización automática cada ' + Math.round(EXEC_AUTOREFRESH_MS/60000) + ' min</div>' +
-    '</div>' +
-    volverBtn +
-    '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:20px">' +
-      periodoBar + plantaSelector +
+    '<div style="position:sticky;top:0;z-index:50;background:var(--bg);margin:-30px -36px 20px;padding:24px 36px 16px;border-bottom:1px solid var(--bdr)">' +
+      '<div style="margin-bottom:16px">' +
+        '<div style="font-size:11px;font-weight:800;color:#c2410c;text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px">Panel de Suministro · Vista en Vivo</div>' +
+        '<div style="font-size:22px;font-weight:800;color:var(--txt)">Inventarios y Despachos — ' + tituloScope + '</div>' +
+        '<div style="font-size:12.5px;color:var(--txt3);margin-top:2px">Datos al ' + fechaHoy + ' · actualización automática cada ' + Math.round(EXEC_AUTOREFRESH_MS/60000) + ' min</div>' +
+      '</div>' +
+      volverBtn +
+      '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">' +
+        periodoBar + plantaSelector +
+      '</div>' +
     '</div>' +
     '<div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:28px">' +
       '<div style="background:var(--card);border:1px solid var(--bdr);border-radius:14px;padding:24px 26px">' +
@@ -19689,7 +19711,7 @@ function initExecutiveMode() {
     + '</div>'
     + '<div class="exec-banner-stamp">Solo Lectura</div>'
     + '<div class="exec-banner-meta">'
-    +   '<span class="exec-live-dot"></span><span id="exec-live-text">Conectado a Google Sheets · en vivo</span>'
+    +   '<span class="exec-live-dot"></span><span id="exec-live-text">Conectado</span>'
     +   '<div class="exec-time" id="exec-snapshot-time">—</div>'
     +   '<div class="exec-credit">Desarrollado por <strong>Franco Urcia Castillo</strong></div>'
     + '</div>';
