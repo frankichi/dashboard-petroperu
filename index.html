@@ -7144,7 +7144,7 @@ function renderP2() {
     var pillBg = minCobInt < CONFIG.COB_RED ? 'var(--red)1a' : minCobInt < CONFIG.COB_YEL ? 'var(--yel)1a' : 'var(--grn)14';
     var isCollapsed = cobCollapsed[planta] !== false; // Default collapsed
     tbody += '<tr class="cob-planta-row' + (isCollapsed ? ' collapsed' : '') + '" id="cob-ph-' + safePlanta + '" onclick="cobTogglePlanta(\'' + planta.replace(/'/g, "\\'") + '\')">'
-      + '<td colspan="15"><span class="toggle-arrow">\u25BC</span>' + planta
+      + '<td colspan="16"><span class="toggle-arrow">\u25BC</span>' + planta
       + '<span class="pill" style="background:' + pillBg + ';color:' + cobColor + '">' + rows.length + ' prod.</span>'
       + (minCobInt < 999 ? '<span class="pill" style="background:' + pillBg + ';color:' + cobColor + '">min ' + minCobInt + 'd</span>' : '')
       + '<span class="cobal-palert" id="cobal-pa-' + safePlanta + '"></span>'
@@ -7255,6 +7255,16 @@ function renderP2() {
         + '</div></td>'
         + '<td class="r" id="cob-reduc-' + sid + '" style="color:' + reducColor + ';font-weight:700;font-size:10px">' + reducStr + '</td>'
         + '<td class="r"><span id="cob-days-' + sid + '" class="cob-cov-cell ' + cobClass + '">' + (cob > 0 ? cob + 'd' : '\u2014') + '</span></td>'
+        + (function() {
+            // Cobertura "real": inventario ÷ despacho REAL reportado ese día
+            // (Registro Diario) — distinta de la columna anterior, que usa
+            // V.Factible (el supuesto de planificación). Es informativa,
+            // no editable — para comparar sin tocar el flujo de edición.
+            var despReal = r.vreal || r.dem || 0;
+            var cobReal = (despReal > 0 && (r.inv||0) > 0) ? Math.round(r.inv / despReal) : 0;
+            var colReal = cobReal <= 0 ? 'var(--txt3)' : cobReal < 3 ? 'var(--red)' : cobReal < 5 ? 'var(--yel)' : 'var(--grn)';
+            return '<td class="r" title="Inventario \u00f7 despacho real reportado en Registro Diario"><span style="font-family:var(--mono);font-weight:700;font-size:10.5px;color:' + colReal + '">' + (cobReal > 0 ? cobReal + 'd' : '\u2014') + '</span></td>';
+          })()
         + '<td id="cob-fecha-' + sid + '">' + (fechaCob ? fmtDate(fechaCob) : '\u2014') + '</td>'
         + '<td title="' + btTooltip + '"' + (bts.hasConfirmed || bts.hasProjected ? ' class="bt-cell-hybrid"' : '') + '>'
           + (function() {
@@ -7326,7 +7336,7 @@ function renderP2() {
         + '<td id="cob-nfecha-' + sid + '">' + (fechaNuevaCob ? '<span style="color:var(--acc2);font-weight:700">' + fmtDate(fechaNuevaCob) + '</span>' : '\u2014') + '</td>'
         + '</tr>'
         + ((alerta.nivel === 'quiebre' || alerta.nivel === 'critico')
-            ? '<tr class="cob-data-' + safePlanta + hiddenClass + ' cobal-msgrow ' + COB_NIVEL_CLS[alerta.nivel] + '"><td></td><td colspan="14"><span style="margin-right:5px">' + alerta.icon + '</span>' + alerta.msg + '</td></tr>'
+            ? '<tr class="cob-data-' + safePlanta + hiddenClass + ' cobal-msgrow ' + COB_NIVEL_CLS[alerta.nivel] + '"><td></td><td colspan="15"><span style="margin-right:5px">' + alerta.icon + '</span>' + alerta.msg + '</td></tr>'
             : '')
         + (function() {
             var prevRec = byDate(prevDateStr).find(function(x){ return x.planta===r.planta && x.producto===r.producto; });
@@ -7360,7 +7370,7 @@ function renderP2() {
             ].filter(Boolean).join('');
             if (!pills) return '';
             return '<tr class="cob-data-' + safePlanta + hiddenClass + ' cob-hist-row">'
-              + '<td></td><td colspan="14">' + pills + '</td></tr>';
+              + '<td></td><td colspan="15">' + pills + '</td></tr>';
           })();
     });
   });
@@ -7501,6 +7511,7 @@ function renderP2() {
     + '<th class="r" style="position:sticky;top:0;z-index:20;background:var(--bg3);color:var(--acc2)">V. Factible<br><span style="font-weight:400;opacity:.6">\u270F\uFE0F MBDC</span></th>'
     + '<th class="r" style="position:sticky;top:0;z-index:20;background:var(--bg3)">Reduc.</th>'
     + '<th class="r" style="position:sticky;top:0;z-index:20;background:var(--bg3)">Cob.<br><span style="font-weight:400;opacity:.6">(d\u00edas)</span></th>'
+    + '<th class="r" style="position:sticky;top:0;z-index:20;background:var(--bg3)" title="Inventario \u00f7 despacho REAL reportado en Registro Diario (informativo, no editable)">Cob. Real<br><span style="font-weight:400;opacity:.6">\uD83D\uDCCB (d\u00edas)</span></th>'
     + '<th style="position:sticky;top:0;z-index:20;background:var(--bg3)">Fecha<br>Cob.</th>'
     + '<th style="position:sticky;top:0;z-index:20;background:var(--bg3)">Fecha<br>Repos.</th>'
     + '<th style="position:sticky;top:0;z-index:20;background:var(--bg3)">BT</th>'
@@ -19517,6 +19528,18 @@ window.openExecutiveView = openExecutiveView;
 // los inventarios y cómo van los despachos reportados. Nada de menús,
 // filtros ni tablas operativas — una sola pantalla, lectura en segundos.
 // ═══════════════════════════════════════════════════════════════════════
+// Fecha real de HOY (hora Lima), formateada legible — para dejar explícito
+// cuándo hay desfase entre "hoy calendario" y la última fecha con cierre
+// reportado (las plantas cierran su jornada en la tarde/noche, así que la
+// mañana siguiente la cobertura vigente sigue siendo la del día anterior).
+function rdHoyRealFmt() {
+  var d = new Date();
+  var lima = new Date(d.getTime() - 5 * 3600 * 1000);
+  var dd = String(lima.getUTCDate()).padStart(2,'0');
+  var mm = String(lima.getUTCMonth()+1).padStart(2,'0');
+  var yyyy = lima.getUTCFullYear();
+  return dd + '.' + mm + '.' + yyyy;
+}
 function renderVistaEjecutivaSimple() {
   var mc = document.getElementById('main-content');
   if (!mc || !Array.isArray(RAW) || !RAW.length) return;
@@ -19618,8 +19641,29 @@ function renderVistaEjecutivaSimple() {
     });
   }
 
-  // ── Coberturas — ranking visual, ordenable ───────────────────────────
+  // ── Coberturas — ranking visual, ordenable, con 2 modos de cálculo ────
+  // "Real": inventario reportado ÷ despacho REAL reportado ese día (lo que
+  // la planta escribió en Registro Diario) — la pregunta operativa del
+  // día a día: "con lo que de verdad se está despachando, ¿para cuántos
+  // días alcanza?". Es DISTINTO de la fórmula "canónica" que usa el resto
+  // del dashboard (Coberturas/cobSystemDays), que prioriza V.Factible
+  // (un supuesto de planificación, no el despacho real) — por eso el
+  // número no conversaba con lo que se ve en otras partes.
+  // "Pronóstico": inventario reportado ÷ demanda pronóstico (hoja
+  // 'pronostico' del Sheets) — la misma proyección que usa Planificación.
   if (window._execCobSort === undefined) window._execCobSort = 'desc'; // 'desc' = mayor a menor (default)
+  if (window._execCobModo === undefined) window._execCobModo = 'real'; // 'real' | 'pron'
+  function cobReal(r) {
+    var desp = r.vreal || r.dem || 0;
+    if (desp <= 0 || !(r.inv > 0)) return 0;
+    return Math.round(r.inv / desp);
+  }
+  function cobPron(r) {
+    var pronVal = (typeof pronSheet !== 'undefined' && pronSheet[r.planta+'|'+r.producto]) || r.pron_mes || r.pron || 0;
+    if (pronVal <= 0 || !(r.inv > 0)) return 0;
+    return Math.round(r.inv / pronVal);
+  }
+  function calcCob(r) { return window._execCobModo === 'pron' ? cobPron(r) : cobReal(r); }
   var datosCob = [];
   var latestRows = (typeof byLatest === 'function') ? byLatest() : [];
   if (pl === 'Nacional') {
@@ -19631,14 +19675,14 @@ function renderVistaEjecutivaSimple() {
       if (REFINERIAS.indexOf(r.planta) !== -1) return;
       if (typeof SKIP_COMBOS !== 'undefined' && SKIP_COMBOS.has((r.planta||'')+'|'+(r.producto||''))) return;
       if (prod !== 'Todos' && r.producto !== prod) return;
-      var c = cobSystemDays(r);
+      var c = calcCob(r);
       if (c <= 0) return;
       if (porPlantaCob[r.planta] === undefined || c < porPlantaCob[r.planta]) porPlantaCob[r.planta] = c;
     });
     datosCob = Object.keys(porPlantaCob).map(function(p){ return {label: p, dias: porPlantaCob[p]}; });
   } else if (!esRefineriaExec) {
     latestRows.filter(function(r){ return r.planta === pl; }).forEach(function(r) {
-      var c = cobSystemDays(r);
+      var c = calcCob(r);
       if (c <= 0) return;
       datosCob.push({label: r.producto, dias: c});
     });
@@ -19654,6 +19698,13 @@ function renderVistaEjecutivaSimple() {
       + (active ? '#0a3a5c;background:#0a3a5c;color:#fff' : 'var(--bdr);background:var(--card);color:var(--txt2)')
       + '">' + label + '</button>';
   }
+  function modoBtn(val, label) {
+    var active = window._execCobModo === val;
+    return '<button onclick="window._execCobModo=\'' + val + '\';renderVistaEjecutivaSimple();" '
+      + 'style="padding:6px 14px;border-radius:8px;font-size:11.5px;font-weight:700;cursor:pointer;border:1.5px solid '
+      + (active ? '#0e7490;background:#0e7490;color:#fff' : 'var(--bdr);background:var(--card);color:var(--txt2)')
+      + '">' + label + '</button>';
+  }
   var cobRowsHTML = datosCob.map(function(d) {
     var col = cobColor(d.dias);
     var pct = Math.max(4, Math.round((d.dias / maxDiasCob) * 100));
@@ -19666,10 +19717,19 @@ function renderVistaEjecutivaSimple() {
     '</div>';
   }).join('');
   var cobSectionHTML = '<div style="background:var(--card);border:1px solid var(--bdr);border-radius:14px;padding:22px 24px;margin-bottom:20px">' +
-      '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:14px">' +
-        '<div style="font-size:13px;font-weight:800;color:var(--txt)">📊 Cobertura ' + (pl==='Nacional'?'por planta (días mínimos)':'por producto') + (prod!=='Todos'&&pl==='Nacional'?' · '+prod:'') + '</div>' +
+      '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:10px">' +
+        '<div style="font-size:13px;font-weight:800;color:var(--txt)">📊 Cobertura ' + (pl==='Nacional'?'por planta':'por producto') + (prod!=='Todos'&&pl==='Nacional'?' · '+prod:'') + '</div>' +
         '<div style="display:flex;gap:8px">' + sortBtn('desc','Mayor → Menor') + sortBtn('asc','Menor → Mayor') + '</div>' +
       '</div>' +
+      '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">' +
+        '<span style="font-size:10.5px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.04em">Calcular con:</span>' +
+        modoBtn('real','📋 Despacho real reportado') + modoBtn('pron','🎯 Demanda pronóstico') +
+      '</div>' +
+      '<div style="font-size:11px;color:var(--txt3);margin-bottom:14px">Hoy es <b style="color:var(--txt2)">' + rdHoyRealFmt() + '</b> — ' +
+        (window._execCobModo==='pron'
+          ? 'cobertura = <b style="color:var(--txt2)">inventario reportado ÷ demanda pronóstico</b> (hoja Pronóstico)'
+          : 'cobertura = <b style="color:var(--txt2)">inventario reportado ÷ despacho real</b> reportado en Registro Diario') +
+        ', con cierre del <b style="color:var(--txt2)">' + fechaHoy.slice(8,10)+'.'+fechaHoy.slice(5,7)+'.'+fechaHoy.slice(0,4) + '</b></div>' +
       (datosCob.length
         ? '<div>' + cobRowsHTML + '</div>' +
           '<div style="display:flex;gap:16px;margin-top:14px;padding-top:12px;border-top:1px solid var(--bdr);font-size:10.5px;color:var(--txt3)">' +
@@ -19677,7 +19737,7 @@ function renderVistaEjecutivaSimple() {
             '<span><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:#e8a000;margin-right:5px"></span>Alerta (&lt;5d)</span>' +
             '<span><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:#16a34a;margin-right:5px"></span>Normal</span>' +
           '</div>'
-        : '<div style="padding:30px;text-align:center;color:var(--txt3);font-size:12px">Sin datos de cobertura para este filtro.</div>') +
+        : '<div style="padding:30px;text-align:center;color:var(--txt3);font-size:12px">Sin datos de cobertura para este filtro con el modo "' + (window._execCobModo==='pron'?'Demanda pronóstico':'Despacho real') + '" — prueba con el otro modo.</div>') +
     '</div>';
 
   function deltaHTML(delta, invertColor, valorAyer) {
