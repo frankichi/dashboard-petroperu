@@ -19588,6 +19588,21 @@ function renderVistaEjecutivaSimple() {
 function initExecutiveMode() {
   if (!EXECUTIVE_MODE) return;
   document.body.classList.add('exec-mode');
+  // Ocultar las cintas (buques/riesgos y eventos) — no son necesarias en
+  // la vista ejecutiva simplificada, que ya muestra inventario/despacho.
+  (function hideTickersExec() {
+    function apply() {
+      var shipBar = document.getElementById('ship-ops-bar');
+      if (shipBar) shipBar.style.setProperty('display', 'none', 'important');
+      var evtTicker = document.getElementById('event-ticker');
+      if (evtTicker) evtTicker.style.setProperty('display', 'none', 'important');
+      document.body.classList.remove('has-ticker');
+    }
+    apply();
+    // Las cintas se re-renderizan solas cuando llegan datos nuevos —
+    // reforzar el ocultamiento tras cada carga para que no reaparezcan.
+    setInterval(apply, 3000);
+  })();
   var banner = document.createElement('header');
   banner.className = 'exec-banner';
   banner.innerHTML =
