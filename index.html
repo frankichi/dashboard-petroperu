@@ -577,6 +577,10 @@ var _mapLibsLoaded=false;
     <span class="sb-icon"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" width="16" height="16"><path d="M3 5h14M3 10h14M3 15h14" stroke-linecap="round"/><rect x="6" y="3" width="2" height="4" rx="0.5"/><rect x="12" y="8" width="2" height="4" rx="0.5"/><rect x="9" y="13" width="2" height="4" rx="0.5"/></svg></span>
     <span class="sb-label">Coberturas <span class="sb-badge" id="sb-badge-pC" style="display:none"></span></span>
   </button>
+  <button class="sb-item" data-pid="pCapRef" onclick="showPage('pCapRef',this)" title="Capacidades por Planta/Producto">
+    <span class="sb-icon">🛢️</span>
+    <span class="sb-label">Capacidades</span>
+  </button>
   <button class="sb-item" data-pid="pSegD" onclick="showPage('pSegD',this)" title="Seguimiento Diario de Reportes">
     <span class="sb-icon"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" width="16" height="16"><circle cx="10" cy="10" r="3"/><path d="M10 2v2M10 16v2M2 10h2M16 10h2M4.5 4.5l1.4 1.4M14.1 14.1l1.4 1.4M4.5 15.5l1.4-1.4M14.1 5.9l1.4-1.4" stroke-linecap="round"/></svg></span>
     <span class="sb-label">Seg. Diario <span class="sb-badge" id="sb-badge-pSegD" style="display:none"></span></span>
@@ -664,6 +668,7 @@ var _mapLibsLoaded=false;
 <div id="pTend"    class="page"><div id="pTend-content"></div></div>
 <div id="pPronEv"  class="page"><div id="pPronEv-content"></div></div>
 <div id="p2"       class="page"><div id="p2-content"></div></div>
+<div id="pCapRef"  class="page"><div id="pCapRef-content"></div></div>
 <div id="pCtrl"    class="page"><div id="pCtrl-content"></div></div>
 <div id="pR"       class="page"><div id="pR-content"></div></div>
 <div id="pB"       class="page"><div id="pB-content"></div></div>
@@ -952,6 +957,7 @@ function _refreshAllData() {
   if (typeof _pronByMonthCache !== 'undefined') for (var k in _pronByMonthCache) delete _pronByMonthCache[k];
   if (typeof _pronRawRowsCache !== 'undefined') for (var k2 in _pronRawRowsCache) delete _pronRawRowsCache[k2];
   if (typeof _ppVentasCache !== 'undefined') for (var k3 in _ppVentasCache) delete _ppVentasCache[k3];
+  if (typeof _capRefCache !== 'undefined') _capRefCache = null;
   window._cargasNavesCache = null;
   window._navPosData = null;
   // Forzar recarga sin caché
@@ -3023,6 +3029,7 @@ function rerenderActivePage() {
     case 'pPronEv': renderPPronEv(); break;
     case 'pC':      renderPC(); break;
     case 'p2':      if (typeof renderP2 === 'function') renderP2(); break;
+    case 'pCapRef': if (typeof renderPCapRef === 'function') renderPCapRef(); break;
     case 'pD':      renderPD(); break;
     case 'pE':      renderPE(); break;
     case 'pInv':    if (typeof renderPInv === 'function') renderPInv(); break;
@@ -3483,6 +3490,7 @@ function showPage(id, tab) {
     case 'pPronEv': renderPPronEv(); break;
     case 'pC':      renderPC(); break;
     case 'p2':      if (typeof renderP2 === 'function') renderP2(); break;
+    case 'pCapRef': if (typeof renderPCapRef === 'function') renderPCapRef(); break;
     case 'pD':      renderPD(); break;
     case 'pE':      renderPE(); break;
     case 'pProg':   renderPProg(); break;
@@ -7022,6 +7030,78 @@ async function cobPropagateVfact() {
     if (statusEl) { statusEl.textContent = '⚠️ Error: ' + e.message; statusEl.style.color = 'var(--red)'; }
   }
 }
+// ═══════════════════════════════════════════════════════════════════════
+// CAPACIDADES POR PLANTA/PRODUCTO — tabla de referencia (viene de la
+// carga E&D, columna Capacidad). No cambia mucho día a día: la hoja
+// capacidad_referencia conserva el último valor cargado por planta+
+// producto, así que si el archivo de hoy no trae ese dato, se sigue
+// mostrando el más reciente conocido sin necesidad de buscar "ayer".
+// ═══════════════════════════════════════════════════════════════════════
+var _capRefCache = null;
+function renderPCapRef() {
+  var el = document.getElementById('pCapRef-content');
+  if (!el) return;
+  if (_capRefCache === null) {
+    el.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:200px;flex-direction:column;gap:12px">'
+      + '<div style="width:36px;height:36px;border:3px solid var(--bdr);border-top-color:var(--acc);border-radius:50%;animation:spin 1s linear infinite"></div>'
+      + '<div style="font-size:12px;color:var(--txt3)">Cargando capacidades…</div></div>';
+    fetch(CONFIG.API_URL + '?action=getCapacidadesTodas', {method:'GET', redirect:'follow'})
+      .then(function(r){ return r.json(); })
+      .then(function(res) {
+        _capRefCache = (res && res.capacidades) || [];
+        renderPCapRef();
+      }).catch(function(){ _capRefCache = []; renderPCapRef(); });
+    return;
+  }
+
+  var invPorPlantaProd = {};
+  if (Array.isArray(RAW) && typeof byLatest === 'function') {
+    byLatest().forEach(function(r){ invPorPlantaProd[r.planta+'|'+r.producto] = r.inv || 0; });
+  }
+
+  var filas = _capRefCache.slice().sort(function(a,b){
+    var ia = (typeof PLANTAS_18_OFICIALES!=='undefined' ? PLANTAS_18_OFICIALES.indexOf(a.planta) : -1);
+    var ib = (typeof PLANTAS_18_OFICIALES!=='undefined' ? PLANTAS_18_OFICIALES.indexOf(b.planta) : -1);
+    if (ia===-1) ia=999; if (ib===-1) ib=999;
+    if (ia!==ib) return ia-ib;
+    return (a.producto||'').localeCompare(b.producto||'');
+  });
+
+  var rowsHTML = filas.map(function(f) {
+    var invActual = invPorPlantaProd[f.planta+'|'+f.producto] || 0;
+    var pct = f.capacidad > 0 ? Math.round((invActual/f.capacidad)*100) : null;
+    var pctColor = pct===null ? 'var(--txt3)' : pct>90 ? 'var(--red)' : pct>75 ? 'var(--yel)' : 'var(--grn)';
+    return '<tr>'
+      + '<td style="padding:8px 12px;font-weight:700;color:var(--txt)">' + f.planta + '</td>'
+      + '<td style="padding:8px 12px;color:var(--txt2)">' + f.producto + '</td>'
+      + '<td style="padding:8px 12px;text-align:right;font-family:var(--mono);color:var(--txt)">' + (f.capacidad>0?f.capacidad.toLocaleString('es-PE',{maximumFractionDigits:1}):'—') + '</td>'
+      + '<td style="padding:8px 12px;text-align:right;font-family:var(--mono);color:var(--txt3)">' + (f.fondos>0?f.fondos.toLocaleString('es-PE',{maximumFractionDigits:1}):'—') + '</td>'
+      + '<td style="padding:8px 12px;text-align:right;font-family:var(--mono);color:var(--txt3)">' + (f.fondo_osinergmin>0?f.fondo_osinergmin.toLocaleString('es-PE',{maximumFractionDigits:1}):'—') + '</td>'
+      + '<td style="padding:8px 12px;text-align:right;font-family:var(--mono);color:var(--txt)">' + (invActual>0?invActual.toLocaleString('es-PE',{maximumFractionDigits:1}):'—') + '</td>'
+      + '<td style="padding:8px 12px;text-align:right;font-family:var(--mono);font-weight:800;color:' + pctColor + '">' + (pct!==null?pct+'%':'—') + '</td>'
+      + '</tr>';
+  }).join('');
+
+  el.innerHTML =
+    '<div class="page-header">' +
+      '<div class="page-header-title">🛢️ Capacidades por Planta/Producto</div>' +
+      '<div class="page-header-subtitle">Referencia de tanque — viene de la carga E&D (columna Capacidad). No cambia a diario: se conserva el último valor cargado hasta que llegue uno nuevo.</div>' +
+    '</div>' +
+    (filas.length === 0
+      ? '<div style="padding:60px;text-align:center;color:var(--txt3)">Sin datos de capacidad todavía — se cargan automáticamente la próxima vez que subas un archivo E&D.</div>'
+      : '<div style="margin:0 18px 18px;background:var(--card);border:1px solid var(--bdr);border-radius:var(--r);overflow:auto">' +
+        '<table style="width:100%;border-collapse:collapse;font-size:12px">' +
+          '<thead><tr style="background:var(--bg3)">' +
+            '<th style="padding:8px 12px;text-align:left;font-size:9px;text-transform:uppercase;color:var(--txt3);font-weight:700">Planta</th>' +
+            '<th style="padding:8px 12px;text-align:left;font-size:9px;text-transform:uppercase;color:var(--txt3);font-weight:700">Producto</th>' +
+            '<th style="padding:8px 12px;text-align:right;font-size:9px;text-transform:uppercase;color:var(--txt3);font-weight:700">Capacidad (MB)</th>' +
+            '<th style="padding:8px 12px;text-align:right;font-size:9px;text-transform:uppercase;color:var(--txt3);font-weight:700">Fondos (MB)</th>' +
+            '<th style="padding:8px 12px;text-align:right;font-size:9px;text-transform:uppercase;color:var(--txt3);font-weight:700">F. OSINERGMIN (MB)</th>' +
+            '<th style="padding:8px 12px;text-align:right;font-size:9px;text-transform:uppercase;color:var(--txt3);font-weight:700">Inv. Actual (MB)</th>' +
+            '<th style="padding:8px 12px;text-align:right;font-size:9px;text-transform:uppercase;color:var(--txt3);font-weight:700">% Lleno</th>' +
+          '</tr></thead><tbody>' + rowsHTML + '</tbody></table></div>');
+}
+
 function renderP2() {
   var today = byDateLatestPerPlant(currentDate || (DATES.length ? DATES[DATES.length-1] : ''));
   if (!today.length) {
@@ -13943,12 +14023,14 @@ async function sendEDToGS() {
     var apiRecords = Object.values(aggMap).map(function(a) {
       return {
         fecha: a.fecha, planta: a.planta, producto: a.producto,
-        inv: Math.round(a.inv * 100) / 100,     // Existencia Neta (MB)
+        inv: 0,                                   // YA NO SE ENVÍA: las plantas reportan su
+                                                    // existencia directo en Registro Diario.
         pron: 0,                                  // PRESERVE existing (from Cobertura-Análisis)
         vult7: 0,                                 // PRESERVE
-        vreal: 0,                                 // PRESERVE (from Cobertura-Análisis)
-        dem_prom: Math.round(a.pron * 1000) / 1000,  // Prom7Días (MBDC)
-        dem: Math.round(a.despacho * 1000) / 1000,
+        vreal: 0,                                 // YA NO SE ENVÍA (ver 'inv')
+        dem_prom: Math.round(a.pron * 1000) / 1000,  // Prom7Días (MBDC) — referencia, no despacho real
+        dem: 0,                                   // YA NO SE ENVÍA: el despacho lo reporta la
+                                                    // planta en Registro Diario, no el E&D.
         var_dem: 0,
         vfact: 0,                                 // PRESERVE (from Cobertura-Análisis)
         cob: a.autonomia,                         // Autonomía E&D
@@ -13962,7 +14044,7 @@ async function sendEDToGS() {
         bt2: a.bt2,
         vol_rep_bt2: Math.round(a.vol_bt2 * 100) / 100,
         vacio2: 0,
-        capacidad: Math.round(a.capacidad * 100) / 100
+        capacidad: Math.round(a.capacidad * 100) / 100  // Sí se actualiza — no cambia por Registro Diario
       };
     });
     await fetch(CONFIG.API_URL, {
@@ -13974,32 +14056,11 @@ async function sendEDToGS() {
         records: apiRecords
       })
     });
-    var ventasRecords = apiRecords
-      .filter(function(r) { return r.dem > 0; })   // solo filas con despacho > 0
-      .map(function(r) {
-        return {
-          fecha:     r.fecha,
-          planta:    r.planta,
-          producto:  r.producto,   // nombre dashboard directo ('Diesel', 'G. Regular', ...)
-          venta_mb:  r.dem         // despacho del día
-        };
-      });
-    if (ventasRecords.length > 0) {
-      var edMes = uploadEDData ? uploadEDData.fecha.slice(0, 7) : apiRecords[0].fecha.slice(0, 7);
-      await fetch(CONFIG.API_URL, {
-        method: 'POST',
-        mode: 'no-cors',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({
-          action: 'uploadVentas',
-          mes: edMes,
-          records: ventasRecords,
-          source: 'ED'   // tag de origen para distinguir de Cognos
-        })
-      });
-    }
+    // Ya no se registra "venta" derivada del despacho de E&D — el
+    // despacho ahora viene exclusivamente de Registro Diario (Cognos
+    // sigue siendo su propia carga independiente, sin cambios).
     if (status) { status.className = 'upload-status success'; status.textContent = '\u2705 Enviado correctamente (' + apiRecords.length + ' registros)'; }
-    addUploadLog(true, 'E&D enviado: ' + apiRecords.length + ' registros a Google Sheets');
+    addUploadLog(true, 'E&D enviado: ' + apiRecords.length + ' registros a Google Sheets (capacidades actualizadas · inventario/despacho de plantas no modificado)');
     _uplSetBadge('acc-ed', uploadEDData ? uploadEDData.fecha : currentDate);
     if (!window.capMap) window.capMap = {};
     apiRecords.forEach(function(r) {
@@ -19577,7 +19638,8 @@ function renderVistaEjecutivaSimple() {
 
   function periodoBtn(val, label) {
     var active = window._execPeriod === val;
-    return '<button onclick="window._execPeriod='+(typeof val==='string'?'\'\''+val+'\'\'':val)+';renderVistaEjecutivaSimple();" '
+    var valLiteral = (typeof val === 'string') ? ("'" + val + "'") : val;
+    return '<button onclick="window._execPeriod=' + valLiteral + ';renderVistaEjecutivaSimple();" '
       + 'style="padding:7px 16px;border-radius:8px;font-size:12.5px;font-weight:700;cursor:pointer;border:1.5px solid '
       + (active ? '#0a3a5c;background:#0a3a5c;color:#fff' : 'var(--bdr);background:var(--card);color:var(--txt2)')
       + '">' + label + '</button>';
@@ -19617,7 +19679,7 @@ function renderVistaEjecutivaSimple() {
     + productosDisp.map(function(p){ return '<option value="'+p+'"'+(prod===p?' selected':'')+'>'+p+'</option>'; }).join('')
     + '</select>';
 
-  var tituloScope = (pl === 'Nacional' ? 'Red Nacional' : pl) + (prod !== 'Todos' ? ' · ' + prod : '');
+  var tituloScope = (pl === 'Nacional' ? 'a nivel nacional' : pl) + (prod !== 'Todos' ? ' · ' + prod : '');
   var volverBtn = pl !== 'Nacional'
     ? '<button onclick="window._execPlanta=\'Nacional\';renderVistaEjecutivaSimple();" style="padding:6px 14px;border-radius:8px;border:1.5px solid var(--bdr);background:var(--card2);color:var(--txt2);font-size:11.5px;font-weight:700;cursor:pointer;margin-bottom:12px;display:inline-flex;align-items:center;gap:6px">← Volver a Vista Nacional</button>'
     : '';
@@ -19644,26 +19706,26 @@ function renderVistaEjecutivaSimple() {
   }
 
   box.innerHTML =
-    '<div style="position:sticky;top:0;z-index:50;background:var(--bg);margin:0 -36px 20px;padding:24px 36px 16px;border-bottom:1px solid var(--bdr)">' +
+    '<div class="exec-sticky-hdr" style="position:sticky;top:0;z-index:50;background:var(--bg);margin:0 -36px 20px;padding:24px 36px 16px;border-bottom:1px solid var(--bdr)">' +
       '<div style="margin-bottom:16px">' +
         '<div style="font-size:11px;font-weight:800;color:#c2410c;text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px">Panel de Suministro · Vista en Vivo</div>' +
-        '<div style="font-size:22px;font-weight:800;color:var(--txt)">Inventarios y Despachos — ' + tituloScope + '</div>' +
+        '<div class="exec-title-main">Inventarios y Despachos' + (pl==='Nacional' ? ' ' : ' — ') + tituloScope + '</div>' +
         '<div style="font-size:12.5px;color:var(--txt3);margin-top:2px">Datos al ' + fechaHoy + ' · actualización automática cada ' + Math.round(EXEC_AUTOREFRESH_MS/60000) + ' min</div>' +
       '</div>' +
       volverBtn +
-      '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">' +
+      '<div class="exec-periodo-row" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">' +
         periodoBar + '<div style="display:flex;gap:10px;flex-wrap:wrap">' + plantaSelector + productoSelector + '</div>' +
       '</div>' +
     '</div>' +
-    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:28px">' +
+    '<div class="exec-kpi-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:28px">' +
       '<div style="background:var(--card);border:1px solid var(--bdr);border-radius:14px;padding:24px 26px">' +
         '<div style="font-size:11px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">📦 Inventario ' + (pl==='Nacional'?'Nacional':'· '+pl) + (prod!=='Todos'?' · '+prod:'') + '</div>' +
-        '<div style="font-size:38px;font-weight:800;color:var(--txt);font-family:var(--mono);line-height:1">' + fmtMB(invHoy) + '</div>' +
+        '<div class="exec-kpi-val" style="font-size:38px;font-weight:800;color:var(--txt);font-family:var(--mono);line-height:1">' + fmtMB(invHoy) + '</div>' +
         '<div style="margin-top:10px">' + deltaHTML(deltaInv, true) + '</div>' +
       '</div>' +
       '<div style="background:var(--card);border:1px solid var(--bdr);border-radius:14px;padding:24px 26px">' +
         '<div style="font-size:11px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">🚚 Despacho Reportado Hoy' + (prod!=='Todos'?' · '+prod:'') + '</div>' +
-        '<div style="font-size:38px;font-weight:800;color:var(--txt);font-family:var(--mono);line-height:1">' + fmtMB(despHoy) + '</div>' +
+        '<div class="exec-kpi-val" style="font-size:38px;font-weight:800;color:var(--txt);font-family:var(--mono);line-height:1">' + fmtMB(despHoy) + '</div>' +
         '<div style="margin-top:10px">' + deltaHTML(despAyer!==null ? despHoy-despAyer : null, false) + '</div>' +
       '</div>' +
     '</div>' +
@@ -19717,6 +19779,32 @@ function renderVistaEjecutivaSimple() {
 function initExecutiveMode() {
   if (!EXECUTIVE_MODE) return;
   document.body.classList.add('exec-mode');
+  // ── Estilos responsivos de la Vista Ejecutiva (banner + contenido) ────
+  // El banner y el panel usaban tamaños fijos pensados para escritorio;
+  // en celulares angostos (ej. 412px) el logo, el título y el sello
+  // "Solo Lectura" se encimaban. Aquí se ajustan con @media queries.
+  var execStyle = document.createElement('style');
+  execStyle.textContent =
+    '.exec-banner{flex-wrap:wrap;row-gap:10px}' +
+    '.exec-title-main{font-size:22px;font-weight:800;color:var(--txt);line-height:1.25}' +
+    '@media (max-width:640px){' +
+      '.exec-banner{padding:10px 14px;gap:10px}' +
+      '.exec-banner-logo{width:38px;height:38px}' +
+      '.exec-banner-title .exec-h1{font-size:12px;letter-spacing:.02em}' +
+      '.exec-banner-title .exec-h2{display:none}' +
+      '.exec-banner-stamp{font-size:8px;padding:4px 8px;order:3}' +
+      '.exec-banner-meta{font-size:9px;text-align:right;order:2;margin-left:auto}' +
+      '.exec-banner-meta .exec-time{font-size:10px}' +
+      '.exec-banner-meta .exec-credit{display:none}' +
+      '#exec-simple-view{padding-left:14px!important;padding-right:14px!important}' +
+      '.exec-sticky-hdr{margin-left:-14px!important;margin-right:-14px!important;padding-left:14px!important;padding-right:14px!important}' +
+      '.exec-title-main{font-size:17px!important}' +
+      '.exec-kpi-grid{grid-template-columns:1fr!important}' +
+      '.exec-kpi-val{font-size:28px!important}' +
+      '.exec-periodo-row{flex-direction:column;align-items:stretch!important}' +
+      '.exec-periodo-row select{width:100%}' +
+    '}';
+  document.head.appendChild(execStyle);
   // Ocultar las cintas (buques/riesgos y eventos) — no son necesarias en
   // la vista ejecutiva simplificada, que ya muestra inventario/despacho.
   (function hideTickersExec() {

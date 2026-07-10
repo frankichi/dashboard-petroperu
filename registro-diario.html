@@ -906,6 +906,31 @@ function rdToggleExtra(prod) {
   if (btn) btn.innerHTML = (open ? '▸' : '▾') + ' Capacidad / Fondos / Vacío (opcional)';
 }
 
+// Detección de confusión de unidad: algunas plantas escriben el valor en
+// BARRILES en vez de MILES DE BARRILES (MB). La planta más grande del
+// sistema (Talara) no supera ~1,100 MB de capacidad total, así que un
+// valor de existencia muy por encima de eso es casi seguro un error de
+// unidad (ej. escribieron "12450" en vez de "12.45"). No bloquea el
+// guardado — solo avisa, por si el valor es real y legítimo.
+var RD_UMBRAL_EXIST_MB = 2000;   // MB — muy por encima de cualquier capacidad conocida
+var RD_UMBRAL_DESP_MB  = 100;    // MB/día — muy por encima de cualquier despacho diario real
+function rdCheckUnidadSospechosa(prod, tipo) {
+  var safeId = prod.replace(/[^a-z0-9]/gi,'_');
+  if (tipo === 'exist') {
+    var el = document.querySelector('.rd-existencia[data-prod="' + prod + '"]');
+    var warnEl = document.getElementById('unidad-warn-exist-' + safeId);
+    if (!el || !warnEl) return;
+    var v = rdParseNum(el);
+    warnEl.style.display = (v > RD_UMBRAL_EXIST_MB) ? 'block' : 'none';
+  } else {
+    var el2 = document.querySelector('.rd-despacho[data-prod="' + prod + '"]');
+    var warnEl2 = document.getElementById('unidad-warn-desp-' + safeId);
+    if (!el2 || !warnEl2) return;
+    var v2 = rdParseNum(el2);
+    warnEl2.style.display = (v2 > RD_UMBRAL_DESP_MB) ? 'block' : 'none';
+  }
+}
+
 function rdRecalcDespacho(prod) {
   // Solo actualiza autonomia si el usuario ingresa despacho propio
   var despEl = document.querySelector('.rd-despacho[data-prod="' + prod + '"]');
@@ -1068,21 +1093,23 @@ function rdRenderProdRows(productos, valores, detalle, yaReportado) {
       +   '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:10px">'
       // Existencia
       +     '<div class="fld">'
-      +       '<label style="font-size:10px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:5px">Existencia neta (MB) <span style="color:#c8102e">*</span></label>'
+      +       '<label style="font-size:10px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:5px">Existencia neta (MB — miles de barriles) <span style="color:#c8102e">*</span></label>'
       +       '<input type="number" step="0.001" min="0" class="rd-existencia" data-prod="' + p + '" value="' + existenciaVal + '" placeholder="Ej: 12.450"'
       +       (yaReportado
                 ? ' readonly style="background:#f0faf3;color:#1a7a44;font-weight:700;border-color:#1a7a4460;cursor:not-allowed"'
-                : ' data-prod="' + p + '" oninput="rdRecalc(this.dataset.prod)"')
+                : ' data-prod="' + p + '" oninput="rdRecalc(this.dataset.prod);rdCheckUnidadSospechosa(this.dataset.prod,\'exist\')"')
       +       '>'
       +       '<div class="fld-validation-err" id="err-exist-' + p.replace(/[^a-z0-9]/gi,'_') + '">⚠ Requerido</div>'
+      +       '<div class="fld-unidad-warn" id="unidad-warn-exist-' + p.replace(/[^a-z0-9]/gi,'_') + '" style="display:none;font-size:10.5px;color:#a86a00;background:#fdf3e0;border:1px solid #e8a00050;border-radius:6px;padding:6px 9px;margin-top:5px;font-weight:600">⚠ Este valor parece muy alto para <b>miles de barriles (MB)</b>. ¿Lo escribiste en barriles por error? Recuerda: 1 MB = 1,000 barriles.</div>'
       +     '</div>'
       // Despacho
       +     '<div class="fld">'
       +       '<label style="font-size:10px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:5px">Despacho del día (MB/d)</label>'
       +       '<input type="number" step="0.001" min="0" class="calc-input rd-despacho" data-prod="' + p + '" '
       +         'placeholder="' + (uc && (uc.despacho||uc.dem) > 0 ? 'Ref: ' + rdFmt(uc.despacho||uc.dem) : 'Ej: 0.170') + '" '
-      +         (yaReportado ? 'readonly style="background:#f7f8fa;cursor:not-allowed"' : 'data-prod="' + p + '" oninput="rdRecalcDespacho(this.dataset.prod)"') + '>'
+      +         (yaReportado ? 'readonly style="background:#f7f8fa;cursor:not-allowed"' : 'data-prod="' + p + '" oninput="rdRecalcDespacho(this.dataset.prod);rdCheckUnidadSospechosa(this.dataset.prod,\'desp\')"') + '>'
       +       '<div style="font-size:9px;color:#94a3b8;margin-top:3px">Ventas reales del día</div>'
+      +       '<div class="fld-unidad-warn" id="unidad-warn-desp-' + p.replace(/[^a-z0-9]/gi,'_') + '" style="display:none;font-size:10.5px;color:#a86a00;background:#fdf3e0;border:1px solid #e8a00050;border-radius:6px;padding:6px 9px;margin-top:5px;font-weight:600">⚠ Este valor parece muy alto para <b>miles de barriles (MB)</b>. Verifica que no lo hayas escrito en barriles.</div>'
       +     '</div>'
       +   '</div>'
       // ── Alerta de existencia mínima (OSINERGMIN) ──────────────────────
@@ -1229,6 +1256,61 @@ function rdAbrirConfirmacion() {
     if (blk2) { if (!blk2.classList.contains('open')) blk2.classList.add('open'); blk2.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
     return;
   }
+  // ── Aviso de hora temprana ────────────────────────────────────────────
+  // Si están reportando el cierre de HOY pero todavía es temprano (antes
+  // del mediodía), es muy probable que en realidad sea el cierre de AYER
+  // — las plantas normalmente cierran su jornada en la tarde/noche, no
+  // a mitad de mañana. Se avisa antes de abrir la confirmación final.
+  if (RD.fechaReporte === rdHoyLima() && rdHoraLima() < 12) {
+    rdMostrarAvisoHoraTemprana();
+    return;
+  }
+  rdAbrirConfirmacionFinal();
+}
+function rdMostrarAvisoHoraTemprana() {
+  var existente = document.getElementById('avisoHoraTempranaOverlay');
+  if (existente) existente.remove();
+  var d = new Date();
+  var lima = new Date(d.getTime() - 5 * 3600 * 1000);
+  var hh = String(lima.getUTCHours()).padStart(2, '0');
+  var mm = String(lima.getUTCMinutes()).padStart(2, '0');
+  var hoy = rdHoyLima();
+  var ayer = rdAyerLima();
+  var overlay = document.createElement('div');
+  overlay.id = 'avisoHoraTempranaOverlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,.55);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px';
+  overlay.innerHTML =
+    '<div style="background:#fff;border-radius:14px;max-width:420px;width:100%;padding:26px 24px;box-shadow:0 20px 60px rgba(0,0,0,.3)">' +
+      '<div style="font-size:32px;margin-bottom:10px">🌤️</div>' +
+      '<div style="font-size:16px;font-weight:800;color:#0f1e3c;margin-bottom:8px">¿Este reporte ya es el cierre del día?</div>' +
+      '<div style="font-size:13px;color:#475569;line-height:1.5;margin-bottom:18px">' +
+        'Son las <b>' + hh + ':' + mm + '</b> y estás a punto de registrar el <b>cierre de hoy (' + fmtFecha(hoy) + ')</b>. ' +
+        'Las plantas normalmente terminan su jornada y reportan en la tarde/noche — si estás reportando esta mañana, ' +
+        'es probable que en realidad sea el <b>cierre de ayer (' + fmtFecha(ayer) + ')</b> que se te pasó.' +
+      '</div>' +
+      '<div style="display:flex;flex-direction:column;gap:8px">' +
+        '<button onclick="rdCerrarAvisoHoraTemprana();rdAbrirConfirmacionFinal();" style="padding:11px;border-radius:8px;border:1.5px solid #1a7a44;background:#1a7a44;color:#fff;font-weight:700;font-size:13px;cursor:pointer">Sí, ya cerramos — es el cierre de hoy</button>' +
+        '<button onclick="rdCerrarAvisoHoraTemprana();rdCorregirFechaAAyerSinPerderDatos();" style="padding:11px;border-radius:8px;border:1.5px solid #c7d0de;background:#fff;color:#0f1e3c;font-weight:700;font-size:13px;cursor:pointer">No, es el cierre de ayer (' + fmtFecha(ayer) + ')</button>' +
+        '<button onclick="rdCerrarAvisoHoraTemprana();" style="padding:9px;border-radius:8px;border:none;background:transparent;color:#94a3b8;font-weight:600;font-size:12px;cursor:pointer">Cancelar</button>' +
+      '</div>' +
+    '</div>';
+  document.body.appendChild(overlay);
+}
+function rdCerrarAvisoHoraTemprana() {
+  var el = document.getElementById('avisoHoraTempranaOverlay');
+  if (el) el.remove();
+}
+function rdCorregirFechaAAyerSinPerderDatos() {
+  // A diferencia de rdCambiarFechaReporte (que recarga el formulario desde
+  // el servidor), aquí solo se corrige la fecha objetivo — lo que ya
+  // escribieron en existencia/despacho/comentarios se mantiene intacto,
+  // y se guarda con la fecha correcta al confirmar.
+  RD.fechaReporte = rdAyerLima();
+  rdRenderFechaBanner();
+  rdToast('\u2713 Fecha corregida a ' + fmtFecha(RD.fechaReporte) + ' — tus datos se mantuvieron', 'ok');
+  rdAbrirConfirmacionFinal();
+}
+function rdAbrirConfirmacionFinal() {
   document.getElementById('confirmFecha').textContent = RD.fechaReporte || rdHoyLima();
   document.getElementById('confirmPlanta').textContent = plantaLabel(RD.planta);
   document.getElementById('confirmModal').classList.add('open');
