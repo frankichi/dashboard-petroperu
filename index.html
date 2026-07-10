@@ -695,12 +695,26 @@ var _solCache = [];
 var _solPanelOpen = false;
 var _solPrevPendingCount = -1; // -1 = aún no cargado, evita toast en la primera carga
 
-function _solLoad() {
+function _solLoad(_isRetry) {
   var sess = window._dashSession || {};
   if (!sess.token) { console.warn('[solicitudes] sin token de sesión aún'); return; }
   fetch(CONFIG.API_URL + '?action=getTodasSolicitudes&token=' + sess.token, {redirect:'follow'})
-    .then(function(r){ return r.json(); })
-    .then(function(data) {
+    .then(function(r){ return r.text(); })
+    .then(function(txt) {
+      var data;
+      try { data = JSON.parse(txt); }
+      catch (e) {
+        // GAS a veces responde HTML (redirect/cold-start) en el primer
+        // intento — mismo comportamiento que ya se maneja en fetchData().
+        // Reintentar una vez antes de rendirse.
+        if (!_isRetry) {
+          console.warn('[solicitudes] respuesta no-JSON (cold start), reintentando en 1.2s...');
+          setTimeout(function(){ _solLoad(true); }, 1200);
+        } else {
+          console.warn('[solicitudes] respuesta no-JSON tras reintento, se omite esta carga.');
+        }
+        return;
+      }
       console.log('[solicitudes] respuesta GAS:', data);
       if (data.success === false) {
         console.warn('[solicitudes] BLOQUEADO →', data.message, data._debug || '');
@@ -716,7 +730,10 @@ function _solLoad() {
       _solCache = data.solicitudes || [];
       console.log('[solicitudes] cargadas: ' + _solCache.length + ' (filas en sheet: ' + ((data._debug && data._debug.filas_sheet) || 0) + ')');
       _solUpdateBadge();
-    }).catch(function(e){ console.warn('[solicitudes] error de red', e); });
+    }).catch(function(e){
+      if (!_isRetry) { setTimeout(function(){ _solLoad(true); }, 1200); }
+      else console.warn('[solicitudes] error de red', e);
+    });
 }
 
 function _solUpdateBadge() {
@@ -3056,6 +3073,13 @@ async function fetchData(forceRefresh) {
     setTimeout(function(){
       if (typeof _updateShipOpsBar === 'function') _updateShipOpsBar();
     }, 500);
+    // Vista Ejecutiva: renderizar en cuanto lleguen los primeros datos —
+    // sin esto, la vista quedaba en blanco hasta el primer auto-refresh
+    // (5 min después) porque initExecutiveMode() corre ANTES de que
+    // fetchData() termine de traer el inventario.
+    if (typeof EXECUTIVE_MODE !== 'undefined' && EXECUTIVE_MODE && typeof renderVistaEjecutivaSimple === 'function') {
+      renderVistaEjecutivaSimple();
+    }
   }
 
   try {
@@ -19435,6 +19459,132 @@ function openExecutiveView(evt) {
   });
 }
 window.openExecutiveView = openExecutiveView;
+// ═══════════════════════════════════════════════════════════════════════
+// VISTA EJECUTIVA SIMPLIFICADA — para Gerencia. Solo 2 cosas: cómo van
+// los inventarios y cómo van los despachos reportados. Nada de menús,
+// filtros ni tablas operativas — una sola pantalla, lectura en segundos.
+// ═══════════════════════════════════════════════════════════════════════
+function renderVistaEjecutivaSimple() {
+  var mc = document.getElementById('main-content');
+  if (!mc || !Array.isArray(RAW) || !RAW.length) return;
+
+  document.querySelectorAll('.page').forEach(function(p){ p.style.display = 'none'; });
+  var box = document.getElementById('exec-simple-view');
+  if (!box) {
+    box = document.createElement('div');
+    box.id = 'exec-simple-view';
+    box.style.cssText = 'padding:30px 36px 50px;overflow-y:auto;height:100%;box-sizing:border-box;max-width:1180px;margin:0 auto';
+    mc.appendChild(box);
+  }
+  box.style.display = 'block';
+
+  var fechaHoy  = currentDate || (DATES && DATES.length ? DATES[DATES.length-1] : '');
+  var idxHoy    = (DATES||[]).indexOf(fechaHoy);
+  var fechaAyer = idxHoy > 0 ? DATES[idxHoy-1] : '';
+
+  function sumFecha(fecha, field) {
+    var s = 0;
+    RAW.forEach(function(r) {
+      if (r.fecha !== fecha) return;
+      if (typeof SKIP_COMBOS !== 'undefined' && SKIP_COMBOS.has((r.planta||'')+'|'+(r.producto||''))) return;
+      s += (r[field] || 0);
+    });
+    return s;
+  }
+
+  var invHoy   = sumFecha(fechaHoy, 'inv');
+  var invAyer  = fechaAyer ? sumFecha(fechaAyer, 'inv') : null;
+  var deltaInv = invAyer !== null ? invHoy - invAyer : 0;
+  var despHoy  = RAW.filter(function(r){ return r.fecha===fechaHoy; })
+                     .reduce(function(s,r){ return s + (r.vreal || r.dem || 0); }, 0);
+  var despAyer = fechaAyer ? RAW.filter(function(r){ return r.fecha===fechaAyer; })
+                     .reduce(function(s,r){ return s + (r.vreal || r.dem || 0); }, 0) : null;
+
+  // Series de los últimos 30 días con datos: inventario nacional total y
+  // despacho nacional total (reportado vía Registro Diario) por fecha.
+  var dates30 = (DATES || []).slice(-30);
+  var invSerie = dates30.map(function(d){ return parseFloat(sumFecha(d,'inv').toFixed(1)); });
+  var despSerie = dates30.map(function(d){
+    var v = RAW.filter(function(r){ return r.fecha===d; }).reduce(function(s,r){ return s + (r.vreal||r.dem||0); }, 0);
+    return v > 0 ? parseFloat(v.toFixed(2)) : null;
+  });
+  var labels = dates30.map(function(d){
+    var mm = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+    return d.slice(8,10) + '-' + mm[parseInt(d.slice(5,7),10)-1];
+  });
+
+  function fmtMB(v) { return v.toLocaleString('es-PE', {maximumFractionDigits:1}) + ' MB'; }
+  function deltaHTML(delta, invertColor) {
+    if (delta === null || isNaN(delta)) return '<span style="color:#94a3b8;font-size:13px">— sin dato de ayer</span>';
+    var up = delta >= 0;
+    var good = invertColor ? !up : up; // para inventario, subir es bueno (verde); para nada más se usa por ahora
+    var col = good ? '#16a34a' : '#dc2626';
+    var arrow = up ? '▲' : '▼';
+    return '<span style="color:'+col+';font-weight:800;font-size:14px">'+arrow+' '+fmtMB(Math.abs(delta))+'</span> <span style="color:#94a3b8;font-size:12px">vs ayer</span>';
+  }
+
+  box.innerHTML =
+    '<div style="margin-bottom:26px">' +
+      '<div style="font-size:11px;font-weight:800;color:#c2410c;text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px">Panel de Suministro · Vista en Vivo</div>' +
+      '<div style="font-size:22px;font-weight:800;color:var(--txt)">Inventarios y Despachos — Red Nacional</div>' +
+      '<div style="font-size:12.5px;color:var(--txt3);margin-top:2px">Datos al ' + fechaHoy + ' · actualización automática cada ' + Math.round(EXEC_AUTOREFRESH_MS/60000) + ' min</div>' +
+    '</div>' +
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:28px">' +
+      '<div style="background:var(--card);border:1px solid var(--bdr);border-radius:14px;padding:24px 26px">' +
+        '<div style="font-size:11px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">📦 Inventario Nacional Total</div>' +
+        '<div style="font-size:38px;font-weight:800;color:var(--txt);font-family:var(--mono);line-height:1">' + fmtMB(invHoy) + '</div>' +
+        '<div style="margin-top:10px">' + deltaHTML(deltaInv, true) + '</div>' +
+      '</div>' +
+      '<div style="background:var(--card);border:1px solid var(--bdr);border-radius:14px;padding:24px 26px">' +
+        '<div style="font-size:11px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">🚚 Despacho Reportado Hoy</div>' +
+        '<div style="font-size:38px;font-weight:800;color:var(--txt);font-family:var(--mono);line-height:1">' + fmtMB(despHoy) + '</div>' +
+        '<div style="margin-top:10px">' + deltaHTML(despAyer!==null ? despHoy-despAyer : null, false) + '</div>' +
+      '</div>' +
+    '</div>' +
+    '<div style="background:var(--card);border:1px solid var(--bdr);border-radius:14px;padding:22px 24px;margin-bottom:20px">' +
+      '<div style="font-size:13px;font-weight:800;color:var(--txt);margin-bottom:14px">Inventario Nacional — últimos 30 días</div>' +
+      '<div style="position:relative;height:220px"><canvas id="exec-chart-inv"></canvas></div>' +
+    '</div>' +
+    '<div style="background:var(--card);border:1px solid var(--bdr);border-radius:14px;padding:22px 24px">' +
+      '<div style="font-size:13px;font-weight:800;color:var(--txt);margin-bottom:14px">Despachos Reportados (Registro Diario) — últimos 30 días</div>' +
+      '<div style="position:relative;height:220px"><canvas id="exec-chart-desp"></canvas></div>' +
+    '</div>';
+
+  if (typeof Chart === 'undefined') return;
+  if (window._execChartInv) { window._execChartInv.destroy(); }
+  if (window._execChartDesp) { window._execChartDesp.destroy(); }
+
+  var ctxInv = document.getElementById('exec-chart-inv');
+  if (ctxInv) {
+    window._execChartInv = new Chart(ctxInv, {
+      type: 'line',
+      data: { labels: labels, datasets: [{
+        data: invSerie, borderColor: '#0a3a5c', backgroundColor: 'rgba(10,58,92,.08)',
+        borderWidth: 2.5, pointRadius: 2, pointHoverRadius: 5, tension: 0.25, fill: true
+      }]},
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false }, tooltip: { callbacks: { label: function(c){ return fmtMB(c.parsed.y); } } } },
+        scales: { y: { ticks: { callback: function(v){ return v.toLocaleString('es-PE'); } } } }
+      }
+    });
+  }
+  var ctxDesp = document.getElementById('exec-chart-desp');
+  if (ctxDesp) {
+    window._execChartDesp = new Chart(ctxDesp, {
+      type: 'bar',
+      data: { labels: labels, datasets: [{
+        data: despSerie, backgroundColor: '#c2410c', borderRadius: 3, maxBarThickness: 22
+      }]},
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false }, tooltip: { callbacks: { label: function(c){ return fmtMB(c.parsed.y); } } } },
+        scales: { y: { ticks: { callback: function(v){ return v.toLocaleString('es-PE'); } } } }
+      }
+    });
+  }
+}
+
 function initExecutiveMode() {
   if (!EXECUTIVE_MODE) return;
   document.body.classList.add('exec-mode');
@@ -19453,13 +19603,16 @@ function initExecutiveMode() {
     +   '<div class="exec-credit">Desarrollado por <strong>Franco Urcia Castillo</strong></div>'
     + '</div>';
   document.body.insertBefore(banner, document.body.firstChild);
-  // Forzar Resumen Nacional como página de entrada — es la vista diseñada
-  // para una decisión en 10-20 segundos (semáforo + KPIs + riesgos).
-  // (Antes esto usaba '.nav-tab', una navegación de una versión anterior
-  // del dashboard que ya no existe — el código no hacía nada.)
-  if (typeof showPage === 'function') {
-    var pResumenBtn = document.querySelector('.sb-item[data-pid="pResumen"]');
-    showPage('pResumen', pResumenBtn || null);
+  // Vista ejecutiva SIMPLIFICADA — reemplaza la navegación completa
+  // (sidebar + Resumen Nacional con todas sus tablas) por una sola
+  // pantalla con lo mínimo que la Gerencia necesita: cómo van los
+  // inventarios y los despachos reportados. Sin más opciones por ahora.
+  var sidebarEl = document.getElementById('sidebar');
+  if (sidebarEl) sidebarEl.style.display = 'none';
+  var mainContentEl = document.getElementById('main-content');
+  if (mainContentEl) mainContentEl.style.cssText += ';width:100%';
+  if (typeof renderVistaEjecutivaSimple === 'function') {
+    renderVistaEjecutivaSimple();
   }
   var footer = document.createElement('div');
   footer.className = 'exec-footer';
@@ -19474,7 +19627,9 @@ function initExecutiveMode() {
   document.body.appendChild(footer);
   setInterval(function() {
     if (typeof fetchData === 'function') {
-      fetchData(true);
+      fetchData(true).then(function(){
+        if (typeof renderVistaEjecutivaSimple === 'function') renderVistaEjecutivaSimple();
+      });
       console.log('[ExecMode] Auto-refresh ejecutado');
     }
   }, EXEC_AUTOREFRESH_MS);
