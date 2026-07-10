@@ -2431,6 +2431,7 @@ const CONFIG = {
 // excluida en todo el sistema). Constante global para que cualquier
 // función del dashboard pueda usarla sin depender de CONFIG del backend
 // (que vive solo en Code.gs, no en este archivo).
+const REFINERIAS = ['Refinería Talara', 'Refinería Conchán', 'Refinería Iquitos'];
 const PLANTAS_18_OFICIALES = ['Talara','Piura','Eten','Salaverry','Chimbote','Supe','Callao','Conchán','Pisco','Mollendo','Ilo','Juliaca','Cusco','Iquitos','Pucallpa','Tarapoto','Yurimaguas','El Milagro'];
 const URL_PARAMS    = new URLSearchParams(window.location.search);
 const EXECUTIVE_MODE = URL_PARAMS.get('view') === 'executive';
@@ -7108,15 +7109,15 @@ function renderP2() {
     document.getElementById('p2-content').innerHTML = '<div style="padding:40px;text-align:center;color:var(--txt3)">Sin datos para esta fecha</div>';
     return;
   }
-  var PLANT_ORDER = ['Talara','Piura','Eten','Salaverry','Chimbote','Supe','Callao','Conch\u00e1n','Pisco','Mollendo','Ilo','Juliaca','Cusco','Iquitos','Pucallpa','Tarapoto','Yurimaguas','El Milagro','Pto. Maldonado'];
+  var PLANT_ORDER = ['Talara','Refinería Talara','Piura','Eten','Salaverry','Chimbote','Supe','Callao','Conch\u00e1n','Refinería Conch\u00e1n','Pisco','Mollendo','Ilo','Juliaca','Cusco','Iquitos','Refinería Iquitos','Pucallpa','Tarapoto','Yurimaguas','El Milagro','Pto. Maldonado'];
   var EXCLUDE_PLANTS = ['A. Iquitos','A. Tarapoto','A. LimaCallao','A. Cusco','A.Iquitos','A.Tarapoto','A.LimaCallao','A.Cusco'];
   var VALID_PRODS = {
-    'Diesel':     ['Talara','Piura','Eten','Salaverry','Chimbote','Supe','Callao','Conch\u00e1n','Pisco','Mollendo','Ilo','Juliaca','Cusco','Iquitos','Pucallpa','Tarapoto','Yurimaguas','El Milagro','Pto. Maldonado'],
-    'G. Regular': ['Talara','Piura','Eten','Salaverry','Chimbote','Supe','Callao','Conch\u00e1n','Pisco','Mollendo','Iquitos','Pucallpa','Tarapoto','Yurimaguas','El Milagro','Pto. Maldonado','Juliaca','Cusco'],
-    'G. Premium': ['Talara','Piura','Salaverry','Supe','Callao','Conch\u00e1n','Pisco','Mollendo','Ilo','Tarapoto','Pto. Maldonado'],
-    'G. 84':      ['Talara','Yurimaguas','Iquitos','El Milagro'],  // Conchán not included
-    'TA1':        ['Talara','Callao','Iquitos'],
-    'GLP':        ['Talara'],
+    'Diesel':     ['Talara','Refinería Talara','Piura','Eten','Salaverry','Chimbote','Supe','Callao','Conch\u00e1n','Refinería Conch\u00e1n','Pisco','Mollendo','Ilo','Juliaca','Cusco','Iquitos','Refinería Iquitos','Pucallpa','Tarapoto','Yurimaguas','El Milagro','Pto. Maldonado'],
+    'G. Regular': ['Talara','Refinería Talara','Piura','Eten','Salaverry','Chimbote','Supe','Callao','Conch\u00e1n','Refinería Conch\u00e1n','Pisco','Mollendo','Iquitos','Refinería Iquitos','Pucallpa','Tarapoto','Yurimaguas','El Milagro','Pto. Maldonado','Juliaca','Cusco'],
+    'G. Premium': ['Talara','Refinería Talara','Piura','Salaverry','Supe','Callao','Conch\u00e1n','Refinería Conch\u00e1n','Pisco','Mollendo','Ilo','Tarapoto','Pto. Maldonado'],
+    'G. 84':      ['Talara','Refinería Talara','Yurimaguas','Iquitos','Refinería Iquitos','El Milagro'],  // Conchán not included
+    'TA1':        ['Talara','Refinería Talara','Callao','Iquitos','Refinería Iquitos'],
+    'GLP':        ['Talara','Refinería Talara'],
     'G. Regular HS': ['Conch\u00e1n']
   };
   var grouped = {};
@@ -19560,6 +19561,10 @@ function renderVistaEjecutivaSimple() {
   var fechaAyer = idxHoy > 0 ? DATES[idxHoy-1] : '';
   var pl        = window._execPlanta;
   var prod      = window._execProducto;
+  var esRefineriaExec = REFINERIAS.indexOf(pl) !== -1;
+  // Las refinerías solo procesan/almacenan — no venden. Si el producto
+  // elegido no aplica ahí, o si veníamos con un producto fijado desde otra
+  // planta, no filtra nada raro porque sigue usando filaAplica() normal.
 
   // Nota: ya no se carga más el archivo E&D — las plantas/terminales
   // reportan directamente en Registro Diario. El campo vreal/dem de
@@ -19623,9 +19628,9 @@ function renderVistaEjecutivaSimple() {
   }
 
   // ── Lista de plantas para el selector de detalle ─────────────────────
-  var PLANTA_ORDEN_NS = ['Talara','Piura','Eten','Salaverry','Chimbote','Supe','Callao',
-    'Conchán','Pisco','Mollendo','Ilo','Juliaca','Cusco','Pucallpa','Tarapoto',
-    'Yurimaguas','El Milagro','Iquitos'];
+  var PLANTA_ORDEN_NS = ['Talara','Refinería Talara','Piura','Eten','Salaverry','Chimbote','Supe','Callao',
+    'Conchán','Refinería Conchán','Pisco','Mollendo','Ilo','Juliaca','Cusco','Pucallpa','Tarapoto',
+    'Yurimaguas','El Milagro','Iquitos','Refinería Iquitos'];
   var plantasDisp = [...new Set(RAW.map(function(r){ return r.planta; }))]
     .filter(function(p){ return p && p !== 'Nacional'; })
     .sort(function(a, b) {
@@ -19652,7 +19657,7 @@ function renderVistaEjecutivaSimple() {
   var plantaSelector = '<select id="exec-planta-select" onchange="window._execPlanta=this.value;renderVistaEjecutivaSimple();" '
     + 'style="padding:7px 14px;border-radius:8px;border:1.5px solid var(--bdr);background:var(--card);color:var(--txt);font-size:12.5px;font-weight:700;cursor:pointer;font-family:inherit">'
     + '<option value="Nacional"' + (pl==='Nacional'?' selected':'') + '>🌎 Vista Nacional</option>'
-    + plantasDisp.map(function(p){ return '<option value="'+p+'"'+(pl===p?' selected':'')+'>🏭 '+p+'</option>'; }).join('')
+    + plantasDisp.map(function(p){ return '<option value="'+p+'"'+(pl===p?' selected':'')+'>'+(REFINERIAS.indexOf(p)!==-1?'🛢️':'🏭')+' '+p+'</option>'; }).join('')
     + '</select>';
 
   var PRODUCTO_ORDEN = ['Diesel','G. Regular','G. Premium','G. 84','TA1','GLP'];
@@ -19690,17 +19695,18 @@ function renderVistaEjecutivaSimple() {
     var cards = plantasDisp.map(function(p) {
       var invP = sumFecha(fechaHoy, 'inv', p, prod);
       if (invP <= 0) return '';
+      var esRef = REFINERIAS.indexOf(p) !== -1;
       return '<button onclick="window._execPlanta=\'' + p + '\';renderVistaEjecutivaSimple();" '
         + 'style="text-align:left;padding:12px 14px;border-radius:10px;border:1px solid var(--bdr);background:var(--card);cursor:pointer;transition:border-color .15s" '
         + 'onmouseover="this.style.borderColor=\'#0a3a5c\'" onmouseout="this.style.borderColor=\'var(--bdr)\'">'
-        + '<div style="font-size:11.5px;font-weight:800;color:var(--txt);margin-bottom:3px">🏭 ' + p + '</div>'
+        + '<div style="font-size:11.5px;font-weight:800;color:var(--txt);margin-bottom:3px">' + (esRef?'🛢️':'🏭') + ' ' + p + '</div>'
         + '<div style="font-size:15px;font-weight:800;font-family:var(--mono);color:var(--acc2)">' + fmtMB(invP) + '</div>'
-        + '<div style="font-size:9.5px;color:var(--txt3);margin-top:2px">Ver detalle →</div>'
+        + '<div style="font-size:9.5px;color:var(--txt3);margin-top:2px">' + (esRef?'Solo inventario →':'Ver detalle →') + '</div>'
         + '</button>';
     }).join('');
     plantasGridHTML =
       '<div style="margin:8px 0 28px">' +
-        '<div style="font-size:11px;font-weight:800;color:var(--txt3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">Ver detalle por planta / terminal</div>' +
+        '<div style="font-size:11px;font-weight:800;color:var(--txt3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">Ver detalle por planta / terminal / refinería</div>' +
         '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px">' + cards + '</div>' +
       '</div>';
   }
@@ -19717,31 +19723,34 @@ function renderVistaEjecutivaSimple() {
         periodoBar + '<div style="display:flex;gap:10px;flex-wrap:wrap">' + plantaSelector + productoSelector + '</div>' +
       '</div>' +
     '</div>' +
-    '<div class="exec-kpi-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:28px">' +
+    (esRefineriaExec ? '<div style="margin-bottom:16px;padding:10px 14px;background:#eef2f7;border:1px solid #cbd5e1;border-radius:10px;font-size:12px;color:#475569">🛢️ <b>' + pl + '</b> es una refinería — solo procesa y almacena producto, no vende. Por eso aquí solo se muestra su <b>inventario</b>, sin despacho.</div>' : '') +
+    '<div class="exec-kpi-grid" style="display:grid;grid-template-columns:' + (esRefineriaExec ? '1fr' : '1fr 1fr') + ';gap:20px;margin-bottom:28px">' +
       '<div style="background:var(--card);border:1px solid var(--bdr);border-radius:14px;padding:24px 26px">' +
         '<div style="font-size:11px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">📦 Inventario ' + (pl==='Nacional'?'Nacional':'· '+pl) + (prod!=='Todos'?' · '+prod:'') + '</div>' +
         '<div class="exec-kpi-val" style="font-size:38px;font-weight:800;color:var(--txt);font-family:var(--mono);line-height:1">' + fmtMB(invHoy) + '</div>' +
         '<div style="margin-top:10px">' + deltaHTML(deltaInv, true) + '</div>' +
       '</div>' +
+      (esRefineriaExec ? '' :
       '<div style="background:var(--card);border:1px solid var(--bdr);border-radius:14px;padding:24px 26px">' +
         '<div style="font-size:11px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">🚚 Despacho Reportado Hoy' + (prod!=='Todos'?' · '+prod:'') + '</div>' +
         '<div class="exec-kpi-val" style="font-size:38px;font-weight:800;color:var(--txt);font-family:var(--mono);line-height:1">' + fmtMB(despHoy) + '</div>' +
         '<div style="margin-top:10px">' + deltaHTML(despAyer!==null ? despHoy-despAyer : null, false) + '</div>' +
-      '</div>' +
+      '</div>') +
     '</div>' +
     '<div style="background:var(--card);border:1px solid var(--bdr);border-radius:14px;padding:22px 24px;margin-bottom:20px">' +
       '<div style="font-size:13px;font-weight:800;color:var(--txt);margin-bottom:14px">Inventario ' + (pl==='Nacional'?'Nacional':'· '+pl) + (prod!=='Todos'?' · '+prod:'') + '</div>' +
       '<div style="position:relative;height:220px"><canvas id="exec-chart-inv"></canvas></div>' +
     '</div>' +
+    (esRefineriaExec ? '' :
     '<div style="background:var(--card);border:1px solid var(--bdr);border-radius:14px;padding:22px 24px;margin-bottom:24px">' +
       '<div style="font-size:13px;font-weight:800;color:var(--txt);margin-bottom:14px">Despachos Reportados (Registro Diario) ' + (pl==='Nacional'?'':'· '+pl) + (prod!=='Todos'?' · '+prod:'') + '</div>' +
       '<div style="position:relative;height:220px"><canvas id="exec-chart-desp"></canvas></div>' +
-    '</div>' +
+    '</div>') +
     plantasGridHTML;
 
   if (typeof Chart === 'undefined') return;
   if (window._execChartInv) { window._execChartInv.destroy(); }
-  if (window._execChartDesp) { window._execChartDesp.destroy(); }
+  if (window._execChartDesp) { window._execChartDesp.destroy(); window._execChartDesp = null; }
 
   var barMode = window._execPeriod === 'mensual';
   var ctxInv = document.getElementById('exec-chart-inv');

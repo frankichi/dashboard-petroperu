@@ -594,7 +594,12 @@ const API_URL = 'https://script.google.com/macros/s/AKfycbwL5Gec0EmZgha2rNUaORMD
 // evitar que la ñ/tilde se corrompa en el viaje cliente↔servidor. Este
 // mapa solo se usa para MOSTRAR el nombre correcto en pantalla; nunca
 // sale de este archivo, así que no puede corromperse.
-const PLANTA_DISPLAY = { 'Conchan': 'Conchán' };
+const PLANTA_DISPLAY = {
+  'Conchan': 'Conchán',
+  'Refineria Talara': 'Refinería Talara',
+  'Refineria Conchan': 'Refinería Conchán',
+  'Refineria Iquitos': 'Refinería Iquitos'
+};
 function plantaLabel(p) { return PLANTA_DISPLAY[p] || p; }
 
 const RD = {
@@ -976,8 +981,10 @@ function rdRecalc(prod) {
   }
   // Badge de cobertura (header) — misma fórmula canónica que "Coberturas"
   // del index, recalculada en vivo según lo que se está escribiendo.
+  // No aplica a refinerías (no tienen despacho/demanda, solo almacenan).
+  var esRefineriaLive = (RD.refinerias || []).indexOf(RD.planta) !== -1;
   var badgeEl = document.querySelector('[data-cobbadge="' + prod + '"]');
-  if (badgeEl && uc) {
+  if (badgeEl && uc && !esRefineriaLive) {
     // uc.pron_mes viene de PRONOSTICO_MBDC — ya es una tasa diaria, no se divide.
     var cobViva = rdCobCanonica(existencia, uc.vfact || 0, uc.pron_mes || 0);
     badgeEl.textContent = cobViva + ' d\u00edas';
@@ -1030,6 +1037,7 @@ function rdToggleMinCheck(chk) {
 function rdRenderProdRows(productos, valores, detalle, yaReportado) {
   valores = valores || {};
   RD.detalle = detalle || {};
+  var esRefineria = (RD.refinerias || []).indexOf(RD.planta) !== -1;
   var wrap = document.getElementById('prodRows');
   wrap.innerHTML = productos.map(function(p) {
     var v   = valores[p] || {};
@@ -1047,11 +1055,15 @@ function rdRenderProdRows(productos, valores, detalle, yaReportado) {
     var filled    = haVal ? ' filled' : '';
 
     var condBadge = '';
-    // uc.pron_mes viene de PRONOSTICO_MBDC — ya es una tasa diaria, no se divide.
-    var cobCanonica = (uc) ? rdCobCanonica(existenciaNum, uc.vfact || 0, uc.pron_mes || 0) : 0;
-    if (uc) {
-      var cls = cobCanonica < 3 ? 'crit' : cobCanonica < 5 ? 'warn' : 'ok';
-      condBadge = '<span class="prod-cond-badge ' + cls + '" data-cobbadge="' + p + '">' + cobCanonica + ' d\u00edas</span>';
+    if (esRefineria) {
+      condBadge = '<span class="prod-cond-badge" style="background:#eef2f7;color:#475569;border-color:#cbd5e1" data-cobbadge="' + p + '">🛢️ Solo almacenamiento</span>';
+    } else {
+      // uc.pron_mes viene de PRONOSTICO_MBDC — ya es una tasa diaria, no se divide.
+      var cobCanonica = (uc) ? rdCobCanonica(existenciaNum, uc.vfact || 0, uc.pron_mes || 0) : 0;
+      if (uc) {
+        var cls = cobCanonica < 3 ? 'crit' : cobCanonica < 5 ? 'warn' : 'ok';
+        condBadge = '<span class="prod-cond-badge ' + cls + '" data-cobbadge="' + p + '">' + cobCanonica + ' d\u00edas</span>';
+      }
     }
     var pronMes  = uc && uc.pron_mes  > 0 ? uc.pron_mes  : 0;
     var vfactVal = uc && uc.vfact > 0 ? uc.vfact : 0;
@@ -1090,7 +1102,7 @@ function rdRenderProdRows(productos, valores, detalle, yaReportado) {
       // ── BODY (colapsable) ────────────────────────────
       + '<div class="prod-body">'
       // ── Existencia + Despacho en fila ──────────────────────────────────
-      +   '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:10px">'
+      +   '<div style="display:grid;grid-template-columns:' + (esRefineria ? '1fr' : '1fr 1fr') + ';gap:12px;margin-bottom:10px">'
       // Existencia
       +     '<div class="fld">'
       +       '<label style="font-size:10px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:5px">Existencia neta (MB — miles de barriles) <span style="color:#c8102e">*</span></label>'
@@ -1102,15 +1114,16 @@ function rdRenderProdRows(productos, valores, detalle, yaReportado) {
       +       '<div class="fld-validation-err" id="err-exist-' + p.replace(/[^a-z0-9]/gi,'_') + '">⚠ Requerido</div>'
       +       '<div class="fld-unidad-warn" id="unidad-warn-exist-' + p.replace(/[^a-z0-9]/gi,'_') + '" style="display:none;font-size:10.5px;color:#a86a00;background:#fdf3e0;border:1px solid #e8a00050;border-radius:6px;padding:6px 9px;margin-top:5px;font-weight:600">⚠ Este valor parece muy alto para <b>miles de barriles (MB)</b>. ¿Lo escribiste en barriles por error? Recuerda: 1 MB = 1,000 barriles.</div>'
       +     '</div>'
-      // Despacho
-      +     '<div class="fld">'
+      // Despacho — no aplica a refinerías (no venden, solo procesan/almacenan)
+      +     (esRefineria ? '' :
+             '<div class="fld">'
       +       '<label style="font-size:10px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:5px">Despacho del día (MB/d)</label>'
       +       '<input type="number" step="0.001" min="0" class="calc-input rd-despacho" data-prod="' + p + '" '
       +         'placeholder="' + (uc && (uc.despacho||uc.dem) > 0 ? 'Ref: ' + rdFmt(uc.despacho||uc.dem) : 'Ej: 0.170') + '" '
       +         (yaReportado ? 'readonly style="background:#f7f8fa;cursor:not-allowed"' : 'data-prod="' + p + '" oninput="rdRecalcDespacho(this.dataset.prod);rdCheckUnidadSospechosa(this.dataset.prod,\'desp\')"') + '>'
       +       '<div style="font-size:9px;color:#94a3b8;margin-top:3px">Ventas reales del día</div>'
       +       '<div class="fld-unidad-warn" id="unidad-warn-desp-' + p.replace(/[^a-z0-9]/gi,'_') + '" style="display:none;font-size:10.5px;color:#a86a00;background:#fdf3e0;border:1px solid #e8a00050;border-radius:6px;padding:6px 9px;margin-top:5px;font-weight:600">⚠ Este valor parece muy alto para <b>miles de barriles (MB)</b>. Verifica que no lo hayas escrito en barriles.</div>'
-      +     '</div>'
+      +     '</div>')
       +   '</div>'
       // ── Alerta de existencia mínima (OSINERGMIN) ──────────────────────
       +   (yaReportado ? '' : '<div class="min-warn" id="min-warn-' + p.replace(/[^a-z0-9]/gi,'_') + '" style="display:none">'
@@ -1931,6 +1944,7 @@ function rdLoadCatalogo() {
   return rdGet('rdGetPlantas').then(res => {
     if (!res.success) return;
     RD.plantas = res.plantas; RD.productosPorPlanta = res.productosPorPlanta;
+    RD.refinerias = res.refinerias || [];
     const sel = document.getElementById('regPlanta');
     sel.innerHTML = '<option value="">Selecciona tu instalación…</option>' +
       res.plantas.map(p => '<option value="' + p + '">' + plantaLabel(p) + '</option>').join('');
