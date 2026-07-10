@@ -266,6 +266,32 @@ var _mapLibsLoaded=false;
     dec.async=true;dec.onerror=function(){};document.head.appendChild(dec);
   }
   </script>
+  <!-- Corrección de sidebar con zoom del navegador: el label de cada ítem
+       (flex:1) no truncaba bien por faltarle min-width:0 — bug clásico de
+       flexbox que hace que el texto se desborde/envuelva en vez de
+       truncarse con "...", más notorio a niveles de zoom altos. También
+       se da un poco más de ancho y aire al título de cada sección para
+       que no se vea cortado arriba. Bloque aparte del CSS existente para
+       no arriesgar tocar la hoja de estilos original. -->
+  <style>
+    :root{ --sideW: 226px; }
+    #sidebar .sb-item{ min-width:0; }
+    #sidebar .sb-icon{ min-width:22px; }
+    #sidebar .sb-label{
+      min-width:0 !important;
+      flex:1 1 auto !important;
+      white-space:nowrap !important;
+      overflow:hidden !important;
+      text-overflow:ellipsis !important;
+      display:block;
+    }
+    #sidebar .sb-group{
+      margin-top:4px;
+      line-height:1.5;
+    }
+    #sidebar .sb-group:first-of-type{ margin-top:2px; }
+    #sidebar .sb-badge{ flex-shrink:0; }
+  </style>
 </head>
 <body>
 <!-- ═══ LOGIN OVERLAY (estático, siempre en DOM) ═══════════════════════ -->
@@ -7382,10 +7408,21 @@ function renderP2() {
         + (function() {
             // Despacho REAL reportado por la planta en Registro Diario ese
             // día (campo vreal/dem) — dato crudo, tal cual lo escribió la
-            // planta, sin ningún cálculo derivado.
+            // planta. Editable con el botón "Editar" (reutiliza el mismo
+            // guardado que ya usa la columna "Despacho / Día Ant.", ambas
+            // columnas leen y escriben el mismo campo vreal/dem).
             if (esRefFila) return '<td class="r" title="Refiner\u00eda: no despacha"><span style="color:var(--txt3);font-size:10px">\u2014</span></td>';
             var dR = r.vreal || r.dem || 0;
-            return '<td class="r" title="Despacho reportado por la planta en Registro Diario"><span style="font-family:var(--mono);font-weight:700;font-size:10.5px;color:var(--txt2)">' + (dR > 0 ? dR.toFixed(2) : '\u2014') + '</span></td>';
+            if (cobEditMode) {
+              return '<td class="r" style="white-space:nowrap">'
+                + '<input class="cob-edit" type="number" step="0.01" min="0" value="' + dR.toFixed(2) + '" style="width:62px" '
+                + 'onchange="cobOnDespChange(\'' + r.planta.replace(/'/g,"\\'") + '\',\'' + r.producto.replace(/'/g,"\\'") + '\',this.value)" '
+                + 'oninput="cobOnDespChange(\'' + r.planta.replace(/'/g,"\\'") + '\',\'' + r.producto.replace(/'/g,"\\'") + '\',this.value)">'
+                + (cobDespachoOverrides[key] !== undefined
+                  ? '<span style="font-size:7px;color:var(--ora);font-weight:700;margin-left:2px" title="Modificado, sin guardar">\u270e</span>' : '')
+                + '</td>';
+            }
+            return '<td class="r" title="Despacho reportado por la planta en Registro Diario \u2014 clic en Editar para modificar"><span style="font-family:var(--mono);font-weight:700;font-size:10.5px;color:var(--txt2)">' + (dR > 0 ? dR.toFixed(2) : '\u2014') + '</span></td>';
           })()
         + (function() {
             // Cobertura "real": inventario ÷ despacho REAL reportado ese día
