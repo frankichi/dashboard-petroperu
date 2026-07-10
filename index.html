@@ -19594,9 +19594,23 @@ function renderVistaEjecutivaSimple() {
     + '</select>';
 
   var PRODUCTO_ORDEN = ['Diesel','G. Regular','G. Premium','G. 84','TA1','GLP'];
+  // Si hay una planta específica seleccionada, solo mostrar los productos
+  // que ESA planta/terminal realmente atiende (con datos en el Sheets) —
+  // no todos los productos a nivel nacional. Con "Nacional" se ven todos.
   var productosDisp = PRODUCTO_ORDEN.filter(function(pr){
-    return RAW.some(function(r){ return r.producto === pr; });
+    return RAW.some(function(r){
+      if (r.producto !== pr) return false;
+      if (pl !== 'Nacional' && r.planta !== pl) return false;
+      if (typeof SKIP_COMBOS !== 'undefined' && SKIP_COMBOS.has((r.planta||'')+'|'+pr)) return false;
+      return true;
+    });
   });
+  // Si el producto elegido ya no aplica a la planta seleccionada (ej. se
+  // cambió de planta y esa no maneja G.84), volver a "Todos" para no
+  // quedar en un filtro vacío/inconsistente.
+  if (prod !== 'Todos' && productosDisp.indexOf(prod) === -1) {
+    window._execProducto = prod = 'Todos';
+  }
   var productoSelector = '<select id="exec-producto-select" onchange="window._execProducto=this.value;renderVistaEjecutivaSimple();" '
     + 'style="padding:7px 14px;border-radius:8px;border:1.5px solid var(--bdr);background:var(--card);color:var(--txt);font-size:12.5px;font-weight:700;cursor:pointer;font-family:inherit">'
     + '<option value="Todos"' + (prod==='Todos'?' selected':'') + '>⛽ Todos los productos</option>'
