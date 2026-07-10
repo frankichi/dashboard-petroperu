@@ -19469,60 +19469,142 @@ function renderVistaEjecutivaSimple() {
   }
   box.style.display = 'block';
 
-  var fechaHoy  = currentDate || (DATES && DATES.length ? DATES[DATES.length-1] : '');
-  var idxHoy    = (DATES||[]).indexOf(fechaHoy);
-  var fechaAyer = idxHoy > 0 ? DATES[idxHoy-1] : '';
+  if (window._execPeriod === undefined) window._execPeriod = 30;   // 15 | 30 | 60 | 'mensual'
+  if (window._execPlanta === undefined) window._execPlanta = 'Nacional';
 
-  function sumFecha(fecha, field) {
+  function fmtMB(v) { return (v||0).toLocaleString('es-PE', {maximumFractionDigits:1}) + ' MB'; }
+  function mesCorto(d) {
+    var mm = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+    return d.slice(8,10) + '-' + mm[parseInt(d.slice(5,7),10)-1];
+  }
+  function sumFecha(fecha, field, planta) {
     var s = 0;
     RAW.forEach(function(r) {
       if (r.fecha !== fecha) return;
+      if (planta && planta !== 'Nacional' && r.planta !== planta) return;
       if (typeof SKIP_COMBOS !== 'undefined' && SKIP_COMBOS.has((r.planta||'')+'|'+(r.producto||''))) return;
       s += (r[field] || 0);
     });
     return s;
   }
 
-  var invHoy   = sumFecha(fechaHoy, 'inv');
-  var invAyer  = fechaAyer ? sumFecha(fechaAyer, 'inv') : null;
+  var fechaHoy  = currentDate || (DATES && DATES.length ? DATES[DATES.length-1] : '');
+  var idxHoy    = (DATES||[]).indexOf(fechaHoy);
+  var fechaAyer = idxHoy > 0 ? DATES[idxHoy-1] : '';
+  var pl        = window._execPlanta;
+
+  // Nota: ya no se carga más el archivo E&D — las plantas/terminales
+  // reportan directamente en Registro Diario. El campo vreal/dem de
+  // "inventario" refleja lo que cada planta escribió ahí, sin mezcla.
+  var invHoy   = sumFecha(fechaHoy, 'inv', pl);
+  var invAyer  = fechaAyer ? sumFecha(fechaAyer, 'inv', pl) : null;
   var deltaInv = invAyer !== null ? invHoy - invAyer : 0;
-  var despHoy  = RAW.filter(function(r){ return r.fecha===fechaHoy; })
+  var despHoy  = RAW.filter(function(r){ return r.fecha===fechaHoy && (pl==='Nacional' || r.planta===pl); })
                      .reduce(function(s,r){ return s + (r.vreal || r.dem || 0); }, 0);
-  var despAyer = fechaAyer ? RAW.filter(function(r){ return r.fecha===fechaAyer; })
+  var despAyer = fechaAyer ? RAW.filter(function(r){ return r.fecha===fechaAyer && (pl==='Nacional' || r.planta===pl); })
                      .reduce(function(s,r){ return s + (r.vreal || r.dem || 0); }, 0) : null;
 
-  // Series de los últimos 30 días con datos: inventario nacional total y
-  // despacho nacional total (reportado vía Registro Diario) por fecha.
-  var dates30 = (DATES || []).slice(-30);
-  var invSerie = dates30.map(function(d){ return parseFloat(sumFecha(d,'inv').toFixed(1)); });
-  var despSerie = dates30.map(function(d){
-    var v = RAW.filter(function(r){ return r.fecha===d; }).reduce(function(s,r){ return s + (r.vreal||r.dem||0); }, 0);
-    return v > 0 ? parseFloat(v.toFixed(2)) : null;
-  });
-  var labels = dates30.map(function(d){
-    var mm = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
-    return d.slice(8,10) + '-' + mm[parseInt(d.slice(5,7),10)-1];
-  });
+  // ── Construir la serie según el periodo elegido ──────────────────────
+  var labels, invSerie, despSerie;
+  if (window._execPeriod === 'mensual') {
+    // Agrupar por mes: inventario = promedio del mes, despacho = suma del mes
+    var mesesMap = {}; // {mes: {invSum, invCnt, despSum}}
+    (DATES||[]).forEach(function(d) {
+      var m = d.slice(0,7);
+      if (!mesesMap[m]) mesesMap[m] = {invSum:0, invCnt:0, despSum:0};
+      var invD = sumFecha(d, 'inv', pl);
+      if (invD > 0) { mesesMap[m].invSum += invD; mesesMap[m].invCnt++; }
+      mesesMap[m].despSum += RAW.filter(function(r){ return r.fecha===d && (pl==='Nacional'||r.planta===pl); })
+                                 .reduce(function(s,r){ return s+(r.vreal||r.dem||0); }, 0);
+    });
+    var mesesOrdenados = Object.keys(mesesMap).sort().slice(-12);
+    var mesesNombre = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+    labels = mesesOrdenados.map(function(m){ return mesesNombre[parseInt(m.slice(5,7),10)-1] + ' ' + m.slice(2,4); });
+    invSerie = mesesOrdenados.map(function(m){ var d=mesesMap[m]; return d.invCnt? parseFloat((d.invSum/d.invCnt).toFixed(1)) : null; });
+    despSerie = mesesOrdenados.map(function(m){ var d=mesesMap[m]; return d.despSum>0? parseFloat(d.despSum.toFixed(1)) : null; });
+  } else {
+    var n = window._execPeriod;
+    var datesN = (DATES || []).slice(-n);
+    labels = datesN.map(mesCorto);
+    invSerie = datesN.map(function(d){ var v=sumFecha(d,'inv',pl); return v>0?parseFloat(v.toFixed(1)):null; });
+    despSerie = datesN.map(function(d){
+      var v = RAW.filter(function(r){ return r.fecha===d && (pl==='Nacional'||r.planta===pl); })
+                 .reduce(function(s,r){ return s+(r.vreal||r.dem||0); }, 0);
+      return v>0 ? parseFloat(v.toFixed(2)) : null;
+    });
+  }
 
-  function fmtMB(v) { return v.toLocaleString('es-PE', {maximumFractionDigits:1}) + ' MB'; }
   function deltaHTML(delta, invertColor) {
     if (delta === null || isNaN(delta)) return '<span style="color:#94a3b8;font-size:13px">— sin dato de ayer</span>';
     var up = delta >= 0;
-    var good = invertColor ? !up : up; // para inventario, subir es bueno (verde); para nada más se usa por ahora
+    var good = invertColor ? !up : up;
     var col = good ? '#16a34a' : '#dc2626';
     var arrow = up ? '▲' : '▼';
     return '<span style="color:'+col+';font-weight:800;font-size:14px">'+arrow+' '+fmtMB(Math.abs(delta))+'</span> <span style="color:#94a3b8;font-size:12px">vs ayer</span>';
   }
 
+  // ── Lista de plantas para el selector de detalle ─────────────────────
+  var plantasDisp = [...new Set(RAW.map(function(r){ return r.planta; }))]
+    .filter(function(p){ return p && p !== 'Nacional'; })
+    .sort();
+
+  function periodoBtn(val, label) {
+    var active = window._execPeriod === val;
+    return '<button onclick="window._execPeriod='+(typeof val==='string'?'\'\''+val+'\'\'':val)+';renderVistaEjecutivaSimple();" '
+      + 'style="padding:7px 16px;border-radius:8px;font-size:12.5px;font-weight:700;cursor:pointer;border:1.5px solid '
+      + (active ? '#0a3a5c;background:#0a3a5c;color:#fff' : 'var(--bdr);background:var(--card);color:var(--txt2)')
+      + '">' + label + '</button>';
+  }
+
+  var periodoBar = '<div style="display:flex;gap:8px;flex-wrap:wrap">'
+    + periodoBtn(15, '15 días') + periodoBtn(30, '30 días') + periodoBtn(60, '60 días') + periodoBtn('mensual', 'Mensual')
+    + '</div>';
+
+  var plantaSelector = '<select id="exec-planta-select" onchange="window._execPlanta=this.value;renderVistaEjecutivaSimple();" '
+    + 'style="padding:7px 14px;border-radius:8px;border:1.5px solid var(--bdr);background:var(--card);color:var(--txt);font-size:12.5px;font-weight:700;cursor:pointer;font-family:inherit">'
+    + '<option value="Nacional"' + (pl==='Nacional'?' selected':'') + '>🌎 Vista Nacional</option>'
+    + plantasDisp.map(function(p){ return '<option value="'+p+'"'+(pl===p?' selected':'')+'>🏭 '+p+'</option>'; }).join('')
+    + '</select>';
+
+  var tituloScope = pl === 'Nacional' ? 'Red Nacional' : pl;
+  var volverBtn = pl !== 'Nacional'
+    ? '<button onclick="window._execPlanta=\'Nacional\';renderVistaEjecutivaSimple();" style="padding:6px 14px;border-radius:8px;border:1.5px solid var(--bdr);background:var(--card2);color:var(--txt2);font-size:11.5px;font-weight:700;cursor:pointer;margin-bottom:12px;display:inline-flex;align-items:center;gap:6px">← Volver a Vista Nacional</button>'
+    : '';
+
+  // ── Tarjetas rápidas de plantas (solo en vista Nacional) ─────────────
+  var plantasGridHTML = '';
+  if (pl === 'Nacional') {
+    var cards = plantasDisp.map(function(p) {
+      var invP = sumFecha(fechaHoy, 'inv', p);
+      if (invP <= 0) return '';
+      return '<button onclick="window._execPlanta=\'' + p + '\';renderVistaEjecutivaSimple();" '
+        + 'style="text-align:left;padding:12px 14px;border-radius:10px;border:1px solid var(--bdr);background:var(--card);cursor:pointer;transition:border-color .15s" '
+        + 'onmouseover="this.style.borderColor=\'#0a3a5c\'" onmouseout="this.style.borderColor=\'var(--bdr)\'">'
+        + '<div style="font-size:11.5px;font-weight:800;color:var(--txt);margin-bottom:3px">🏭 ' + p + '</div>'
+        + '<div style="font-size:15px;font-weight:800;font-family:var(--mono);color:var(--acc2)">' + fmtMB(invP) + '</div>'
+        + '<div style="font-size:9.5px;color:var(--txt3);margin-top:2px">Ver detalle →</div>'
+        + '</button>';
+    }).join('');
+    plantasGridHTML =
+      '<div style="margin:8px 0 28px">' +
+        '<div style="font-size:11px;font-weight:800;color:var(--txt3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">Ver detalle por planta / terminal</div>' +
+        '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px">' + cards + '</div>' +
+      '</div>';
+  }
+
   box.innerHTML =
-    '<div style="margin-bottom:26px">' +
+    '<div style="margin-bottom:22px">' +
       '<div style="font-size:11px;font-weight:800;color:#c2410c;text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px">Panel de Suministro · Vista en Vivo</div>' +
-      '<div style="font-size:22px;font-weight:800;color:var(--txt)">Inventarios y Despachos — Red Nacional</div>' +
+      '<div style="font-size:22px;font-weight:800;color:var(--txt)">Inventarios y Despachos — ' + tituloScope + '</div>' +
       '<div style="font-size:12.5px;color:var(--txt3);margin-top:2px">Datos al ' + fechaHoy + ' · actualización automática cada ' + Math.round(EXEC_AUTOREFRESH_MS/60000) + ' min</div>' +
+    '</div>' +
+    volverBtn +
+    '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:20px">' +
+      periodoBar + plantaSelector +
     '</div>' +
     '<div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:28px">' +
       '<div style="background:var(--card);border:1px solid var(--bdr);border-radius:14px;padding:24px 26px">' +
-        '<div style="font-size:11px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">📦 Inventario Nacional Total</div>' +
+        '<div style="font-size:11px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">📦 Inventario ' + (pl==='Nacional'?'Nacional':'· '+pl) + '</div>' +
         '<div style="font-size:38px;font-weight:800;color:var(--txt);font-family:var(--mono);line-height:1">' + fmtMB(invHoy) + '</div>' +
         '<div style="margin-top:10px">' + deltaHTML(deltaInv, true) + '</div>' +
       '</div>' +
@@ -19533,25 +19615,27 @@ function renderVistaEjecutivaSimple() {
       '</div>' +
     '</div>' +
     '<div style="background:var(--card);border:1px solid var(--bdr);border-radius:14px;padding:22px 24px;margin-bottom:20px">' +
-      '<div style="font-size:13px;font-weight:800;color:var(--txt);margin-bottom:14px">Inventario Nacional — últimos 30 días</div>' +
+      '<div style="font-size:13px;font-weight:800;color:var(--txt);margin-bottom:14px">Inventario ' + (pl==='Nacional'?'Nacional':'· '+pl) + '</div>' +
       '<div style="position:relative;height:220px"><canvas id="exec-chart-inv"></canvas></div>' +
     '</div>' +
-    '<div style="background:var(--card);border:1px solid var(--bdr);border-radius:14px;padding:22px 24px">' +
-      '<div style="font-size:13px;font-weight:800;color:var(--txt);margin-bottom:14px">Despachos Reportados (Registro Diario) — últimos 30 días</div>' +
+    '<div style="background:var(--card);border:1px solid var(--bdr);border-radius:14px;padding:22px 24px;margin-bottom:24px">' +
+      '<div style="font-size:13px;font-weight:800;color:var(--txt);margin-bottom:14px">Despachos Reportados (Registro Diario) ' + (pl==='Nacional'?'':'· '+pl) + '</div>' +
       '<div style="position:relative;height:220px"><canvas id="exec-chart-desp"></canvas></div>' +
-    '</div>';
+    '</div>' +
+    plantasGridHTML;
 
   if (typeof Chart === 'undefined') return;
   if (window._execChartInv) { window._execChartInv.destroy(); }
   if (window._execChartDesp) { window._execChartDesp.destroy(); }
 
+  var barMode = window._execPeriod === 'mensual';
   var ctxInv = document.getElementById('exec-chart-inv');
   if (ctxInv) {
     window._execChartInv = new Chart(ctxInv, {
       type: 'line',
       data: { labels: labels, datasets: [{
         data: invSerie, borderColor: '#0a3a5c', backgroundColor: 'rgba(10,58,92,.08)',
-        borderWidth: 2.5, pointRadius: 2, pointHoverRadius: 5, tension: 0.25, fill: true
+        borderWidth: 2.5, pointRadius: barMode?3:2, pointHoverRadius: 5, tension: 0.25, fill: true, spanGaps: true
       }]},
       options: {
         responsive: true, maintainAspectRatio: false,
@@ -19565,7 +19649,7 @@ function renderVistaEjecutivaSimple() {
     window._execChartDesp = new Chart(ctxDesp, {
       type: 'bar',
       data: { labels: labels, datasets: [{
-        data: despSerie, backgroundColor: '#c2410c', borderRadius: 3, maxBarThickness: 22
+        data: despSerie, backgroundColor: '#c2410c', borderRadius: 3, maxBarThickness: barMode?36:22
       }]},
       options: {
         responsive: true, maintainAspectRatio: false,
@@ -19575,6 +19659,7 @@ function renderVistaEjecutivaSimple() {
     });
   }
 }
+
 
 function initExecutiveMode() {
   if (!EXECUTIVE_MODE) return;
