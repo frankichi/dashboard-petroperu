@@ -19686,14 +19686,6 @@ function renderVistaEjecutivaSimple() {
     return Math.round(r.inv / pronVal);
   }
   function calcCob(r) { return window._execCobModo === 'pron' ? cobPron(r) : cobReal(r); }
-  function denomActivo(r) {
-    // El mismo denominador que usa calcCob(), para convertir MB de
-    // reposición a días equivalentes con el mismo criterio.
-    if (window._execCobModo === 'pron') {
-      return (typeof pronSheet !== 'undefined' && pronSheet[r.planta+'|'+r.producto]) || r.pron_mes || r.pron || 0;
-    }
-    return r.vreal || r.dem || 0;
-  }
   var BUQUES_MAR_EXEC = ['UCAYALI','MOCHE','TROMPETEROS','URUBAMBA','PARIÑAS','HUMBOLDT','TARAPOTO','YURIMAGUAS'];
   function esMaritimoExec(nombreBuque) {
     if (!nombreBuque) return false;
@@ -19701,7 +19693,12 @@ function renderVistaEjecutivaSimple() {
     return BUQUES_MAR_EXEC.some(function(v){ return n.indexOf(v) >= 0; });
   }
   function reposicionInfo(r) {
-    var denom = denomActivo(r);
+    // IMPORTANTE: los días de reposición SIEMPRE se calculan con la
+    // demanda pronóstico (nunca con el despacho real), sin importar qué
+    // modo esté activo para la cobertura base — son cosas distintas: la
+    // reposición es un volumen futuro que se compara contra la demanda
+    // proyectada, no contra lo que se despachó ayer.
+    var denom = (typeof pronSheet !== 'undefined' && pronSheet[r.planta+'|'+r.producto]) || r.pron_mes || r.pron || 0;
     var vol1 = r.vol_rep || 0, vol2 = r.vol_rep_bt2 || 0;
     var volTotal = vol1 + vol2;
     if (volTotal <= 0 || denom <= 0) return { diasRepos: 0, volMB: 0, tipo: '' };
@@ -19765,7 +19762,7 @@ function renderVistaEjecutivaSimple() {
     var pctBase = Math.max(3, Math.round((d.dias / maxDiasCob) * 100));
     var pctRepos = d.diasRepos > 0 ? Math.max(3, Math.round((d.diasRepos / maxDiasCob) * 100)) : 0;
     var reposTitle = d.diasRepos > 0
-      ? 'Reposici\u00f3n ' + (d.tipoRepos||'') + ': ' + d.volReposMB.toFixed(1) + ' MB \u2192 +' + d.diasRepos + ' d\u00edas equivalentes'
+      ? 'Reposici\u00f3n ' + (d.tipoRepos||'') + ': ' + d.volReposMB.toFixed(1) + ' MB \u00f7 demanda pron\u00f3stico \u2192 +' + d.diasRepos + ' d\u00edas equivalentes'
       : '';
     return '<div style="display:flex;align-items:center;gap:10px;padding:7px 0">' +
       '<div class="exec-cob-label" style="width:120px;flex-shrink:0" title="' + d.label + '">' +
