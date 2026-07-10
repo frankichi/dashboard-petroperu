@@ -2718,7 +2718,7 @@ function cobColorStd(cob) {
   if (cob < 13) return COB_COLORS.ATT;
   return COB_COLORS.OK;
 }
-const PROD_ORDER = ['Diesel','G. Regular','G. Premium','G. 84','TA1','GLP','ULSD Expo','G. Regular HS'];
+const PROD_ORDER = ['Diesel','D2S50-H','G. Regular','G. Premium','G. 84','TA1','GLP','ULSD Expo','G. Regular HS'];
 const PROD_ALIAS = {
   'TURBO':         'TA1',
   'TURBO A1':      'TA1',
@@ -7119,7 +7119,7 @@ function renderP2() {
   // listas para controlar su existencia — no como una planta de ventas
   // más (no tienen pronóstico/V.Factible/despacho, solo inventario).
   var REFINERIA_PRODUCTOS = {
-    'Refinería Talara':  ['Diesel','G. Regular','G. Premium','G. 84','TA1','GLP'],
+    'Refinería Talara':  ['Diesel','G. Regular','G. Premium','G. 84','TA1','GLP','D2S50-H'],
     'Refinería Conchán': ['Diesel','G. Regular','G. Premium'],
     'Refinería Iquitos': ['Diesel','G. Regular','G. 84','TA1']
   };
@@ -7146,6 +7146,10 @@ function renderP2() {
     'G. 84':      ['Talara','Refinería Talara','Yurimaguas','Iquitos','Refinería Iquitos','El Milagro'],  // Conchán not included
     'TA1':        ['Talara','Refinería Talara','Callao','Iquitos','Refinería Iquitos'],
     'GLP':        ['Talara','Refinería Talara'],
+    // D2S50-H (Diesel 2 S-50 – Hidrotratado): producto intermedio, SOLO en
+    // Refinería Talara — todavía no es Diesel B5S50 final (pasa a serlo en
+    // 3-4 días), por eso se reporta y muestra como producto propio.
+    'D2S50-H':    ['Refinería Talara'],
     'G. Regular HS': ['Conch\u00e1n']
   };
   var grouped = {};
@@ -19856,7 +19860,7 @@ function renderVistaEjecutivaSimple() {
     + plantasDisp.map(function(p){ return '<option value="'+p+'"'+(pl===p?' selected':'')+'>'+(REFINERIAS.indexOf(p)!==-1?'🛢️':'🏭')+' '+p+'</option>'; }).join('')
     + '</select>';
 
-  var PRODUCTO_ORDEN = ['Diesel','G. Regular','G. Premium','G. 84','TA1','GLP'];
+  var PRODUCTO_ORDEN = ['Diesel','D2S50-H','G. Regular','G. Premium','G. 84','TA1','GLP'];
   // Si hay una planta específica seleccionada, solo mostrar los productos
   // que ESA planta/terminal realmente atiende (con datos en el Sheets) —
   // no todos los productos a nivel nacional. Con "Nacional" se ven todos.

@@ -1551,7 +1551,7 @@ function rdRenderHistChart(registros, filtProd) {
   if (_ofic.length && !filtProd) rows = rows.filter(function(r){ return _ofic.indexOf(r.producto) >= 0; });
   var fechas = [...new Set(rows.map(function(r){ return r.fecha; }))].sort();
   var prods  = filtProd ? [filtProd] : [...new Set(rows.map(function(r){ return r.producto; }))];
-  var ORDER  = ['Diesel','G. Regular','G. Premium','G. 84','TA1','GLP'];
+  var ORDER  = ['Diesel','D2S50-H','G. Regular','G. Premium','G. 84','TA1','GLP'];
   prods.sort(function(a,b){
     var ia=ORDER.indexOf(a),ib=ORDER.indexOf(b);
     return (ia<0?99:ia)-(ib<0?99:ib);
@@ -1601,7 +1601,7 @@ function rdRenderPronChart(datos, mesActivo) {
   var _ofic = RD.productos || [];
   if (_ofic.length) filas = filas.filter(function(d){ return _ofic.indexOf(d.producto) >= 0; });
   if (!filas.length) { wrap.innerHTML = '<div class="chart-empty">Sin datos</div>'; return; }
-  var ORDER = ['Diesel','G. Regular','G. Premium','G. 84','TA1','GLP'];
+  var ORDER = ['Diesel','D2S50-H','G. Regular','G. Premium','G. 84','TA1','GLP'];
   filas.sort(function(a,b){
     var ia=ORDER.indexOf(a.producto),ib=ORDER.indexOf(b.producto);
     return (ia<0?99:ia)-(ib<0?99:ib);
@@ -1906,7 +1906,7 @@ function rdRenderPronCards() {
   var content = document.getElementById('pronContent');
   if (!content) return;
   if (!filas.length) { content.innerHTML = '<div class="rd-empty">Sin datos para este mes.</div>'; return; }
-  var ORDER = ['Diesel','G. Regular','G. Premium','G. 84','TA1','GLP'];
+  var ORDER = ['Diesel','D2S50-H','G. Regular','G. Premium','G. 84','TA1','GLP'];
   filas.sort(function(a,b){
     var ia=ORDER.indexOf(a.producto),ib=ORDER.indexOf(b.producto);
     return (ia<0?99:ia)-(ib<0?99:ib);
