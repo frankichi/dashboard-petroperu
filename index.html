@@ -4683,6 +4683,38 @@ function decBuildRecs() {
       accion:'Programar convoy/BT fluvial con anticipaci\u00f3n (tr\u00e1nsito Yurimaguas\u2192Iquitos ~7d)'
     });
   });
+  // R6: Reposición sugerida por VACÍO DISPONIBLE (capacidad - inventario).
+  // Para plantas con cobertura baja (crítica/alerta) y capacidad conocida,
+  // sugiere cuánto se podría/debería reponer: el mínimo entre (a) lo que
+  // realmente cabe en el tanque y (b) lo necesario para llegar a un nivel
+  // sano de cobertura — para no sugerir un volumen que no entra físicamente.
+  if (typeof _capRefCache !== 'undefined' && Array.isArray(_capRefCache) && _capRefCache.length) {
+    var capMapDec = {};
+    _capRefCache.forEach(function(c){ capMapDec[c.planta+'|'+c.producto] = c.capacidad || 0; });
+    var DIAS_OBJETIVO_SANO = 15; // mismo umbral que "Normal" en todo el dashboard
+    act.filter(function(r){
+      return r._dCob > 0 && r._dCob < CONFIG.COB_AMB  // crítico o alerta (≤14d)
+        && REFINERIAS.indexOf(r.planta) === -1          // refinerías no aplican (no despachan)
+        && (r.vol_rep||0) <= 0 && (r.vol_rep_bt2||0) <= 0; // sin reposición ya programada
+    }).forEach(function(r) {
+      var capacidad = capMapDec[r.planta+'|'+r.producto] || 0;
+      if (capacidad <= 0) return; // sin dato de capacidad para esta planta/producto
+      var vacio = Math.max(0, capacidad - (r.inv||0));
+      if (vacio <= 0) return; // tanque ya lleno, no hay espacio físico
+      var despDia = r.vreal || r.dem || pronDiarioAprobado(r) || 0;
+      if (despDia <= 0) return;
+      var volParaObjetivo = Math.max(0, (DIAS_OBJETIVO_SANO - r._dCob) * despDia);
+      var volSugerido = Math.min(vacio, volParaObjetivo);
+      if (volSugerido < 1) return; // muy poco para justificar una recomendación
+      var limitante = vacio < volParaObjetivo ? 'vac\u00edo del tanque' : 'llegar a ' + DIAS_OBJETIVO_SANO + 'd de cobertura';
+      recs.push({
+        sev: r._dCob <= 7 ? 'alta' : 'media',
+        titulo: '\u26fd Reposici\u00f3n sugerida \u00b7 ' + r.planta + ' \u00b7 ' + r.producto,
+        detalle: 'Cobertura ' + r._dCob + 'd \u00b7 Inv. ' + (r.inv||0).toFixed(1) + ' MB de ' + capacidad.toFixed(1) + ' MB capacidad \u00b7 vac\u00edo disponible ' + vacio.toFixed(1) + ' MB',
+        accion: 'Programar reposici\u00f3n de \u2248' + volSugerido.toFixed(1) + ' MB (limitado por ' + limitante + ') para llegar cerca de ' + DIAS_OBJETIVO_SANO + 'd de cobertura'
+      });
+    });
+  }
   var sevOrder={urgente:0,alta:1,media:2};
   recs.sort(function(a,b){ return sevOrder[a.sev]-sevOrder[b.sev]; });
   return recs;
@@ -4715,6 +4747,18 @@ function renderPDec() {
   } catch(e) { console.error('[pDec] cobSystemDays error:', e); }
   function cobCol(c){ return c<=0?'#ef4444':c<4?'#ef4444':c<7?'#ea580c':c<13?'#d97706':'#16a34a'; }
   // 4. Recomendaciones
+  // Reposición sugerida (R6) necesita las capacidades — si nadie visitó
+  // aún la pestaña "Capacidades" en esta sesión, se cargan aquí también.
+  if (typeof _capRefCache !== 'undefined' && _capRefCache === null) {
+    _capRefCache = undefined; // marca "cargando" para no disparar 2 fetch en paralelo
+    fetch(CONFIG.API_URL + '?action=getCapacidadesTodas', {method:'GET', redirect:'follow'})
+      .then(function(r){ return r.json(); })
+      .then(function(res) {
+        _capRefCache = (res && res.capacidades) || [];
+        var pg = document.getElementById('pDec');
+        if (pg && pg.classList.contains('active')) renderPDec();
+      }).catch(function(){ _capRefCache = []; });
+  }
   var recs = [];
   try { recs = decBuildRecs(); } catch(e) { console.error('[pDec] decBuildRecs error:', e); }
   console.log('[pDec] recs:', recs.length);
