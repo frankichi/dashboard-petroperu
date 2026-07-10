@@ -703,7 +703,13 @@ var _solPrevPendingCount = -1; // -1 = aún no cargado, evita toast en la primer
 function _solLoad(_isRetry) {
   var sess = window._dashSession || {};
   if (!sess.token) { console.warn('[solicitudes] sin token de sesión aún'); return; }
-  fetch(CONFIG.API_URL + '?action=getTodasSolicitudes&token=' + sess.token, {redirect:'follow'})
+  // No usar CONFIG.API_URL aquí: esta función puede ejecutarse muy temprano
+  // en la carga (desde el flujo de login inline), antes de que el script
+  // llegue a la declaración "const CONFIG = {...}" más abajo — acceder a
+  // un const antes de su línea de declaración lanza ReferenceError (zona
+  // muerta temporal). Se usa la URL directa como referencia segura.
+  var API_URL_SAFE = 'https://script.google.com/macros/s/AKfycbwL5Gec0EmZgha2rNUaORMDT6MBuouyIlV07tlMpQo9O1YcgkiWJdoQUmIafMQhF2kgUg/exec';
+  fetch(API_URL_SAFE + '?action=getTodasSolicitudes&token=' + sess.token, {redirect:'follow'})
     .then(function(r){ return r.text(); })
     .then(function(txt) {
       var data;
@@ -898,7 +904,8 @@ function _solResponder(id, aprobado) {
   if (btn) { btn.disabled = true; btn.textContent = aprobado ? 'Aplicando\u2026' : 'Rechazando\u2026'; }
   var sess = window._dashSession || {};
   if (!sess.token) { alert('Sesión no válida. Recarga la página.'); return; }
-  fetch(CONFIG.API_URL, {
+  var API_URL_SAFE2 = 'https://script.google.com/macros/s/AKfycbwL5Gec0EmZgha2rNUaORMDT6MBuouyIlV07tlMpQo9O1YcgkiWJdoQUmIafMQhF2kgUg/exec';
+  fetch(API_URL_SAFE2, {
     method: 'POST',
     redirect: 'follow',
     headers: { 'Content-Type': 'text/plain;charset=utf-8' },
@@ -978,7 +985,7 @@ function _refreshAllData() {
 }
 
 window._pdLoadData = function(cb) {
-  var API = CONFIG.API_URL;
+  var API = 'https://script.google.com/macros/s/AKfycbwL5Gec0EmZgha2rNUaORMDT6MBuouyIlV07tlMpQo9O1YcgkiWJdoQUmIafMQhF2kgUg/exec';
   var nc  = '&nocache=' + Date.now();
   // Cargar viajes fluviales (barcazas) y terrestres (cisternas) en paralelo
   Promise.all([
