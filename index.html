@@ -19686,31 +19686,63 @@ function renderVistaEjecutivaSimple() {
     return Math.round(r.inv / pronVal);
   }
   function calcCob(r) { return window._execCobModo === 'pron' ? cobPron(r) : cobReal(r); }
+  function denomActivo(r) {
+    // El mismo denominador que usa calcCob(), para convertir MB de
+    // reposición a días equivalentes con el mismo criterio.
+    if (window._execCobModo === 'pron') {
+      return (typeof pronSheet !== 'undefined' && pronSheet[r.planta+'|'+r.producto]) || r.pron_mes || r.pron || 0;
+    }
+    return r.vreal || r.dem || 0;
+  }
+  var BUQUES_MAR_EXEC = ['UCAYALI','MOCHE','TROMPETEROS','URUBAMBA','PARIÑAS','HUMBOLDT','TARAPOTO','YURIMAGUAS'];
+  function esMaritimoExec(nombreBuque) {
+    if (!nombreBuque) return false;
+    var n = nombreBuque.toUpperCase();
+    return BUQUES_MAR_EXEC.some(function(v){ return n.indexOf(v) >= 0; });
+  }
+  function reposicionInfo(r) {
+    var denom = denomActivo(r);
+    var vol1 = r.vol_rep || 0, vol2 = r.vol_rep_bt2 || 0;
+    var volTotal = vol1 + vol2;
+    if (volTotal <= 0 || denom <= 0) return { diasRepos: 0, volMB: 0, tipo: '' };
+    var tipo1 = vol1 > 0 ? (esMaritimoExec(r.bt) ? 'mar\u00edtima' : 'terrestre') : '';
+    var tipo2 = vol2 > 0 ? (esMaritimoExec(r.bt2) ? 'mar\u00edtima' : 'terrestre') : '';
+    var tipos = [tipo1, tipo2].filter(Boolean);
+    var tipoUnico = tipos.length === 1 ? tipos[0] : (tipos.length > 1 ? 'mixta' : '');
+    return { diasRepos: Math.round(volTotal / denom), volMB: volTotal, tipo: tipoUnico };
+  }
   var datosCob = [];
   var latestRows = (typeof byLatest === 'function') ? byLatest() : [];
   if (pl === 'Nacional') {
     // Por planta: cobertura MÍNIMA entre sus productos (mismo criterio que
     // "Plantas por nivel de riesgo" en Resumen Nacional). Refinerías no
     // tienen despacho, así que no tienen cobertura — se excluyen.
-    var porPlantaCob = {};
+    var porPlantaFila = {};
     latestRows.forEach(function(r) {
       if (REFINERIAS.indexOf(r.planta) !== -1) return;
       if (typeof SKIP_COMBOS !== 'undefined' && SKIP_COMBOS.has((r.planta||'')+'|'+(r.producto||''))) return;
       if (prod !== 'Todos' && r.producto !== prod) return;
       var c = calcCob(r);
       if (c <= 0) return;
-      if (porPlantaCob[r.planta] === undefined || c < porPlantaCob[r.planta]) porPlantaCob[r.planta] = c;
+      if (porPlantaFila[r.planta] === undefined || c < porPlantaFila[r.planta]._cobVal) {
+        porPlantaFila[r.planta] = Object.assign({}, r, { _cobVal: c });
+      }
     });
-    datosCob = Object.keys(porPlantaCob).map(function(p){ return {label: p, dias: porPlantaCob[p]}; });
+    datosCob = Object.keys(porPlantaFila).map(function(p) {
+      var r = porPlantaFila[p];
+      var rep = reposicionInfo(r);
+      return { label: p, dias: r._cobVal, invMB: r.inv||0, diasRepos: rep.diasRepos, volReposMB: rep.volMB, tipoRepos: rep.tipo };
+    });
   } else if (!esRefineriaExec) {
     latestRows.filter(function(r){ return r.planta === pl; }).forEach(function(r) {
       var c = calcCob(r);
       if (c <= 0) return;
-      datosCob.push({label: r.producto, dias: c});
+      var rep = reposicionInfo(r);
+      datosCob.push({ label: r.producto, dias: c, invMB: r.inv||0, diasRepos: rep.diasRepos, volReposMB: rep.volMB, tipoRepos: rep.tipo });
     });
   }
   datosCob.sort(function(a,b){ return window._execCobSort==='asc' ? a.dias-b.dias : b.dias-a.dias; });
-  var maxDiasCob = datosCob.reduce(function(m,d){ return Math.max(m,d.dias); }, 1);
+  var maxDiasCob = datosCob.reduce(function(m,d){ return Math.max(m, d.dias + (d.diasRepos||0)); }, 1);
 
   function cobColor(dias) { return dias <= 7 ? '#dc2626' : dias <= 14 ? '#e8a000' : '#16a34a'; }
   function sortBtn(val, label) {
@@ -19727,15 +19759,27 @@ function renderVistaEjecutivaSimple() {
       + (active ? '#0e7490;background:#0e7490;color:#fff' : 'var(--bdr);background:var(--card);color:var(--txt2)')
       + '">' + label + '</button>';
   }
+  var hayReposicion = datosCob.some(function(d){ return d.diasRepos > 0; });
   var cobRowsHTML = datosCob.map(function(d) {
     var col = cobColor(d.dias);
-    var pct = Math.max(4, Math.round((d.dias / maxDiasCob) * 100));
-    return '<div style="display:flex;align-items:center;gap:10px;padding:6px 0">' +
-      '<div class="exec-cob-label" style="width:120px;flex-shrink:0;font-size:11.5px;font-weight:700;color:var(--txt);white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="' + d.label + '">' + d.label + '</div>' +
-      '<div style="flex:1;background:var(--bg3);border-radius:6px;height:20px;position:relative;overflow:hidden">' +
-        '<div style="height:100%;width:' + pct + '%;background:' + col + ';border-radius:6px;transition:width .4s"></div>' +
+    var pctBase = Math.max(3, Math.round((d.dias / maxDiasCob) * 100));
+    var pctRepos = d.diasRepos > 0 ? Math.max(3, Math.round((d.diasRepos / maxDiasCob) * 100)) : 0;
+    var reposTitle = d.diasRepos > 0
+      ? 'Reposici\u00f3n ' + (d.tipoRepos||'') + ': ' + d.volReposMB.toFixed(1) + ' MB \u2192 +' + d.diasRepos + ' d\u00edas equivalentes'
+      : '';
+    return '<div style="display:flex;align-items:center;gap:10px;padding:7px 0">' +
+      '<div class="exec-cob-label" style="width:120px;flex-shrink:0" title="' + d.label + '">' +
+        '<div style="font-size:11.5px;font-weight:700;color:var(--txt);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + d.label + '</div>' +
+        '<div style="font-size:9.5px;color:var(--txt3);font-family:var(--mono);margin-top:1px">' + fmtMB(d.invMB) + '</div>' +
       '</div>' +
-      '<div style="width:56px;flex-shrink:0;text-align:right;font-family:var(--mono);font-weight:800;font-size:13px;color:' + col + '">' + d.dias + 'd</div>' +
+      '<div style="flex:1;background:var(--bg3);border-radius:6px;height:22px;position:relative;overflow:hidden;display:flex">' +
+        '<div style="height:100%;width:' + pctBase + '%;background:' + col + ';border-radius:' + (pctRepos>0?'6px 0 0 6px':'6px') + ';transition:width .4s"></div>' +
+        (pctRepos > 0 ? '<div title="' + reposTitle + '" style="height:100%;width:' + pctRepos + '%;background:repeating-linear-gradient(45deg,#2563eb,#2563eb 5px,#3b82f6 5px,#3b82f6 10px);border-radius:0 6px 6px 0;transition:width .4s;cursor:help"></div>' : '') +
+      '</div>' +
+      '<div style="width:70px;flex-shrink:0;text-align:right">' +
+        '<div style="font-family:var(--mono);font-weight:800;font-size:13px;color:' + col + '">' + d.dias + 'd</div>' +
+        (d.diasRepos > 0 ? '<div style="font-family:var(--mono);font-size:9px;color:#2563eb;font-weight:700" title="' + reposTitle + '">+' + d.diasRepos + 'd \uD83D\uDEA2</div>' : '') +
+      '</div>' +
     '</div>';
   }).join('');
   var cobSectionHTML = '<div style="background:var(--card);border:1px solid var(--bdr);border-radius:14px;padding:22px 24px;margin-bottom:20px">' +
@@ -19758,6 +19802,7 @@ function renderVistaEjecutivaSimple() {
             '<span><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:#dc2626;margin-right:5px"></span>Crítico (\u2264 7d)</span>' +
             '<span><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:#e8a000;margin-right:5px"></span>Alerta (8\u201314d)</span>' +
             '<span><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:#16a34a;margin-right:5px"></span>Normal</span>' +
+            (hayReposicion ? '<span><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:repeating-linear-gradient(45deg,#2563eb,#2563eb 2px,#3b82f6 2px,#3b82f6 4px);margin-right:5px"></span>\uD83D\uDEA2 Reposici\u00f3n programada (d\u00edas equivalentes)</span>' : '') +
           '</div>'
         : '<div style="padding:30px;text-align:center;color:var(--txt3);font-size:12px">Sin datos de cobertura para este filtro con el modo "' + (window._execCobModo==='pron'?'Demanda pronóstico':'Despacho real') + '" — prueba con el otro modo.</div>') +
     '</div>';
