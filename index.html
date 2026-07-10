@@ -981,6 +981,23 @@ function _refreshAllData() {
   if (typeof _capRefCache !== 'undefined') _capRefCache = null;
   window._cargasNavesCache = null;
   window._navPosData = null;
+  // Buques/barcazas del mapa (Simulador BT / fluvial): se cargaban UNA
+  // sola vez al abrir la página (bandera simInited nunca se reseteaba),
+  // así que "Actualizar" nunca los volvía a traer del Sheets aunque se
+  // hubiera guardado una simulación nueva. Se resetea la bandera y se
+  // vuelve a disparar la carga junto con el resto de datos.
+  if (typeof simInited !== 'undefined') simInited = false;
+  if (typeof _simAutoLoadFromGS === 'function') {
+    simInited = true; // evitar que otro disparador la vuelva a lanzar en paralelo
+    _simAutoLoadFromGS().then(function() {
+      console.log('[Actualizar] simShips refrescado:', (typeof simShips !== 'undefined' && simShips) ? simShips.length : 0, 'buques/barcazas');
+      if (typeof renderP1 === 'function') renderP1();
+      if (typeof renderPInv === 'function') renderPInv();
+      if (typeof _updateShipOpsBar === 'function') _updateShipOpsBar();
+      var activePageEl = document.querySelector('.page.active');
+      if (activePageEl && activePageEl.id === 'pA' && typeof renderPA === 'function') renderPA();
+    }).catch(function(e){ console.warn('[Actualizar] error recargando buques/barcazas:', e); });
+  }
   // Forzar recarga sin caché
   if (typeof fetchData === 'function') {
     fetchData(true);
