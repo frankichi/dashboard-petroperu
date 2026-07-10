@@ -7331,11 +7331,33 @@ function renderP2() {
             // (Registro Diario) — distinta de la columna anterior, que usa
             // V.Factible (el supuesto de planificación). Es informativa,
             // no editable — para comparar sin tocar el flujo de edición.
+            //
+            // Regla de respaldo: si la cobertura con despacho real supera
+            // 80 días (el despacho reportado ese día fue anormalmente
+            // bajo), se recalcula SOLO esa fila/día con la demanda
+            // pronóstico en su lugar — más representativo que un número
+            // disparado por un despacho puntual casi en cero.
+            var COB_REAL_FALLBACK_UMBRAL = 80;
             var despReal = r.vreal || r.dem || 0;
-            var cobReal = (despReal > 0 && (r.inv||0) > 0) ? Math.round(r.inv / despReal) : 0;
-            var colReal = cobReal <= 0 ? 'var(--txt3)' : cobReal < CONFIG.COB_RED ? 'var(--red)' : cobReal < CONFIG.COB_AMB ? 'var(--yel)' : 'var(--grn)';
+            var cobRealRaw = (despReal > 0 && (r.inv||0) > 0) ? Math.round(r.inv / despReal) : 0;
             if (esRefFila) return '<td class="r" title="Refiner\u00eda: no aplica"><span style="color:var(--txt3);font-size:10px">\u2014</span></td>';
-            return '<td class="r" title="Inventario \u00f7 despacho real reportado en Registro Diario"><span style="font-family:var(--mono);font-weight:700;font-size:10.5px;color:' + colReal + '">' + (cobReal > 0 ? cobReal + 'd' : '\u2014') + '</span></td>';
+            var cobFinal = cobRealRaw, usandoPron = false;
+            if (cobRealRaw > COB_REAL_FALLBACK_UMBRAL) {
+              var pronVal = (typeof pronDiarioAprobado === 'function') ? pronDiarioAprobado(r) : 0;
+              if (pronVal > 0 && (r.inv||0) > 0) {
+                cobFinal = Math.round(r.inv / pronVal);
+                usandoPron = true;
+              }
+            }
+            if (usandoPron) {
+              var colPron = cobFinal <= 0 ? 'var(--txt3)' : cobFinal < CONFIG.COB_RED ? 'var(--red)' : cobFinal < CONFIG.COB_AMB ? 'var(--yel)' : 'var(--grn)';
+              return '<td class="r" title="Despacho real de ese d\u00eda fue anormalmente bajo (' + despReal.toFixed(3) + ' MB/d, cobertura real ' + cobRealRaw + 'd) \u2014 se us\u00f3 la demanda pron\u00f3stico en su lugar para este d\u00eda"><span style="font-family:var(--mono);font-weight:700;font-size:10.5px;color:' + colPron + ';cursor:help">\uD83C\uDFAF ' + cobFinal + 'd</span></td>';
+            }
+            if (cobRealRaw > COB_REAL_FALLBACK_UMBRAL) {
+              return '<td class="r" title="Despacho reportado (' + despReal.toFixed(3) + ' MB/d) es demasiado bajo, y tampoco hay pron\u00f3stico disponible para respaldar el c\u00e1lculo"><span style="font-family:var(--mono);font-weight:700;font-size:10px;color:#a86a00;cursor:help">\u26a0 ' + cobRealRaw + 'd</span></td>';
+            }
+            var colReal = cobRealRaw <= 0 ? 'var(--txt3)' : cobRealRaw < CONFIG.COB_RED ? 'var(--red)' : cobRealRaw < CONFIG.COB_AMB ? 'var(--yel)' : 'var(--grn)';
+            return '<td class="r" title="Inventario \u00f7 despacho real reportado en Registro Diario"><span style="font-family:var(--mono);font-weight:700;font-size:10.5px;color:' + colReal + '">' + (cobRealRaw > 0 ? cobRealRaw + 'd' : '\u2014') + '</span></td>';
           })()
         + '<td id="cob-fecha-' + sid + '">' + (fechaCob ? fmtDate(fechaCob) : '\u2014') + '</td>'
         + '<td title="' + btTooltip + '"' + (bts.hasConfirmed || bts.hasProjected ? ' class="bt-cell-hybrid"' : '') + '>'
@@ -19730,15 +19752,30 @@ function renderVistaEjecutivaSimple() {
   // 'pronostico' del Sheets) — la misma proyección que usa Planificación.
   if (window._execCobSort === undefined) window._execCobSort = 'desc'; // 'desc' = mayor a menor (default)
   if (window._execCobModo === undefined) window._execCobModo = 'real'; // 'real' | 'pron'
-  function cobReal(r) {
-    var desp = r.vreal || r.dem || 0;
-    if (desp <= 0 || !(r.inv > 0)) return 0;
-    return Math.round(r.inv / desp);
-  }
+  var COB_SANO_MAX_EXEC = 90; // más de 90 días es señal de un despacho/pronóstico
+                               // casi cero (dato sospechoso) — se excluye del
+                               // gráfico en vez de mostrar un número sin sentido.
+  var COB_REAL_FALLBACK_UMBRAL_EXEC = 80; // si la cobertura con despacho real
+                               // supera este umbral, se recalcula esa fila
+                               // con la demanda pronóstico en su lugar.
   function cobPron(r) {
     var pronVal = (typeof pronSheet !== 'undefined' && pronSheet[r.planta+'|'+r.producto]) || r.pron_mes || r.pron || 0;
     if (pronVal <= 0 || !(r.inv > 0)) return 0;
-    return Math.round(r.inv / pronVal);
+    var c = Math.round(r.inv / pronVal);
+    return c > COB_SANO_MAX_EXEC ? 0 : c;
+  }
+  function cobReal(r) {
+    var desp = r.vreal || r.dem || 0;
+    if (desp <= 0 || !(r.inv > 0)) return 0;
+    var c = Math.round(r.inv / desp);
+    // Regla de respaldo: despacho real anormalmente bajo ese día → usar
+    // la demanda pronóstico solo para esta fila, en vez de un número
+    // disparado por un dato puntual casi en cero.
+    if (c > COB_REAL_FALLBACK_UMBRAL_EXEC) {
+      var cPron = cobPron(r);
+      if (cPron > 0) return cPron;
+    }
+    return c > COB_SANO_MAX_EXEC ? 0 : c;
   }
   function calcCob(r) { return window._execCobModo === 'pron' ? cobPron(r) : cobReal(r); }
   var BUQUES_MAR_EXEC = ['UCAYALI','MOCHE','TROMPETEROS','URUBAMBA','PARIÑAS','HUMBOLDT','TARAPOTO','YURIMAGUAS'];
