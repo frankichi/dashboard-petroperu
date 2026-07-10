@@ -19618,13 +19618,78 @@ function renderVistaEjecutivaSimple() {
     });
   }
 
-  function deltaHTML(delta, invertColor) {
+  // ── Coberturas — ranking visual, ordenable ───────────────────────────
+  if (window._execCobSort === undefined) window._execCobSort = 'desc'; // 'desc' = mayor a menor (default)
+  var datosCob = [];
+  var latestRows = (typeof byLatest === 'function') ? byLatest() : [];
+  if (pl === 'Nacional') {
+    // Por planta: cobertura MÍNIMA entre sus productos (mismo criterio que
+    // "Plantas por nivel de riesgo" en Resumen Nacional). Refinerías no
+    // tienen despacho, así que no tienen cobertura — se excluyen.
+    var porPlantaCob = {};
+    latestRows.forEach(function(r) {
+      if (REFINERIAS.indexOf(r.planta) !== -1) return;
+      if (typeof SKIP_COMBOS !== 'undefined' && SKIP_COMBOS.has((r.planta||'')+'|'+(r.producto||''))) return;
+      if (prod !== 'Todos' && r.producto !== prod) return;
+      var c = cobSystemDays(r);
+      if (c <= 0) return;
+      if (porPlantaCob[r.planta] === undefined || c < porPlantaCob[r.planta]) porPlantaCob[r.planta] = c;
+    });
+    datosCob = Object.keys(porPlantaCob).map(function(p){ return {label: p, dias: porPlantaCob[p]}; });
+  } else if (!esRefineriaExec) {
+    latestRows.filter(function(r){ return r.planta === pl; }).forEach(function(r) {
+      var c = cobSystemDays(r);
+      if (c <= 0) return;
+      datosCob.push({label: r.producto, dias: c});
+    });
+  }
+  datosCob.sort(function(a,b){ return window._execCobSort==='asc' ? a.dias-b.dias : b.dias-a.dias; });
+  var maxDiasCob = datosCob.reduce(function(m,d){ return Math.max(m,d.dias); }, 1);
+
+  function cobColor(dias) { return dias < 3 ? '#dc2626' : dias < 5 ? '#e8a000' : '#16a34a'; }
+  function sortBtn(val, label) {
+    var active = window._execCobSort === val;
+    return '<button onclick="window._execCobSort=\'' + val + '\';renderVistaEjecutivaSimple();" '
+      + 'style="padding:6px 14px;border-radius:8px;font-size:11.5px;font-weight:700;cursor:pointer;border:1.5px solid '
+      + (active ? '#0a3a5c;background:#0a3a5c;color:#fff' : 'var(--bdr);background:var(--card);color:var(--txt2)')
+      + '">' + label + '</button>';
+  }
+  var cobRowsHTML = datosCob.map(function(d) {
+    var col = cobColor(d.dias);
+    var pct = Math.max(4, Math.round((d.dias / maxDiasCob) * 100));
+    return '<div style="display:flex;align-items:center;gap:10px;padding:6px 0">' +
+      '<div class="exec-cob-label" style="width:120px;flex-shrink:0;font-size:11.5px;font-weight:700;color:var(--txt);white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="' + d.label + '">' + d.label + '</div>' +
+      '<div style="flex:1;background:var(--bg3);border-radius:6px;height:20px;position:relative;overflow:hidden">' +
+        '<div style="height:100%;width:' + pct + '%;background:' + col + ';border-radius:6px;transition:width .4s"></div>' +
+      '</div>' +
+      '<div style="width:56px;flex-shrink:0;text-align:right;font-family:var(--mono);font-weight:800;font-size:13px;color:' + col + '">' + d.dias + 'd</div>' +
+    '</div>';
+  }).join('');
+  var cobSectionHTML = '<div style="background:var(--card);border:1px solid var(--bdr);border-radius:14px;padding:22px 24px;margin-bottom:20px">' +
+      '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:14px">' +
+        '<div style="font-size:13px;font-weight:800;color:var(--txt)">📊 Cobertura ' + (pl==='Nacional'?'por planta (días mínimos)':'por producto') + (prod!=='Todos'&&pl==='Nacional'?' · '+prod:'') + '</div>' +
+        '<div style="display:flex;gap:8px">' + sortBtn('desc','Mayor → Menor') + sortBtn('asc','Menor → Mayor') + '</div>' +
+      '</div>' +
+      (datosCob.length
+        ? '<div>' + cobRowsHTML + '</div>' +
+          '<div style="display:flex;gap:16px;margin-top:14px;padding-top:12px;border-top:1px solid var(--bdr);font-size:10.5px;color:var(--txt3)">' +
+            '<span><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:#dc2626;margin-right:5px"></span>Crítico (&lt;3d)</span>' +
+            '<span><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:#e8a000;margin-right:5px"></span>Alerta (&lt;5d)</span>' +
+            '<span><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:#16a34a;margin-right:5px"></span>Normal</span>' +
+          '</div>'
+        : '<div style="padding:30px;text-align:center;color:var(--txt3);font-size:12px">Sin datos de cobertura para este filtro.</div>') +
+    '</div>';
+
+  function deltaHTML(delta, invertColor, valorAyer) {
     if (delta === null || isNaN(delta)) return '<span style="color:#94a3b8;font-size:13px">— sin dato de ayer</span>';
     var up = delta >= 0;
-    var good = invertColor ? !up : up;
-    var col = good ? '#16a34a' : '#dc2626';
-    var arrow = up ? '▲' : '▼';
-    return '<span style="color:'+col+';font-weight:800;font-size:14px">'+arrow+' '+fmtMB(Math.abs(delta))+'</span> <span style="color:#94a3b8;font-size:12px">vs ayer</span>';
+    // Regla simple y consistente: subió = verde, bajó = rojo (sin excepciones
+    // por contexto — antes "invertColor" invertía esto para inventario y
+    // confundía más de lo que aclaraba).
+    var col = up ? '#16a34a' : '#dc2626';
+    var signo = up ? '+' : '−';
+    var ayerTxt = (valorAyer !== undefined && valorAyer !== null) ? ' <span style="color:#94a3b8;font-size:11.5px">· ayer: ' + fmtMB(valorAyer) + '</span>' : '';
+    return '<span style="color:'+col+';font-weight:800;font-size:14px">'+signo+' '+fmtMB(Math.abs(delta))+'</span> <span style="color:#94a3b8;font-size:12px">vs ayer</span>' + ayerTxt;
   }
 
   // ── Lista de plantas para el selector de detalle ─────────────────────
@@ -19728,13 +19793,13 @@ function renderVistaEjecutivaSimple() {
       '<div style="background:var(--card);border:1px solid var(--bdr);border-radius:14px;padding:24px 26px">' +
         '<div style="font-size:11px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">📦 Inventario ' + (pl==='Nacional'?'Nacional':'· '+pl) + (prod!=='Todos'?' · '+prod:'') + '</div>' +
         '<div class="exec-kpi-val" style="font-size:38px;font-weight:800;color:var(--txt);font-family:var(--mono);line-height:1">' + fmtMB(invHoy) + '</div>' +
-        '<div style="margin-top:10px">' + deltaHTML(deltaInv, true) + '</div>' +
+        '<div style="margin-top:10px">' + deltaHTML(deltaInv, true, invAyer) + '</div>' +
       '</div>' +
       (esRefineriaExec ? '' :
       '<div style="background:var(--card);border:1px solid var(--bdr);border-radius:14px;padding:24px 26px">' +
         '<div style="font-size:11px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">🚚 Despacho Reportado Hoy' + (prod!=='Todos'?' · '+prod:'') + '</div>' +
         '<div class="exec-kpi-val" style="font-size:38px;font-weight:800;color:var(--txt);font-family:var(--mono);line-height:1">' + fmtMB(despHoy) + '</div>' +
-        '<div style="margin-top:10px">' + deltaHTML(despAyer!==null ? despHoy-despAyer : null, false) + '</div>' +
+        '<div style="margin-top:10px">' + deltaHTML(despAyer!==null ? despHoy-despAyer : null, false, despAyer) + '</div>' +
       '</div>') +
     '</div>' +
     '<div style="background:var(--card);border:1px solid var(--bdr);border-radius:14px;padding:22px 24px;margin-bottom:20px">' +
@@ -19746,6 +19811,7 @@ function renderVistaEjecutivaSimple() {
       '<div style="font-size:13px;font-weight:800;color:var(--txt);margin-bottom:14px">Despachos Reportados (Registro Diario) ' + (pl==='Nacional'?'':'· '+pl) + (prod!=='Todos'?' · '+prod:'') + '</div>' +
       '<div style="position:relative;height:220px"><canvas id="exec-chart-desp"></canvas></div>' +
     '</div>') +
+    cobSectionHTML +
     plantasGridHTML;
 
   if (typeof Chart === 'undefined') return;
@@ -19812,6 +19878,7 @@ function initExecutiveMode() {
       '.exec-kpi-val{font-size:28px!important}' +
       '.exec-periodo-row{flex-direction:column;align-items:stretch!important}' +
       '.exec-periodo-row select{width:100%}' +
+      '.exec-cob-label{width:78px!important;font-size:10.5px!important}' +
     '}';
   document.head.appendChild(execStyle);
   // Ocultar las cintas (buques/riesgos y eventos) — no son necesarias en
