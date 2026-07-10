@@ -7166,7 +7166,7 @@ function renderP2() {
     document.getElementById('p2-content').innerHTML = '<div style="padding:40px;text-align:center;color:var(--txt3)">Sin datos para esta fecha</div>';
     return;
   }
-  var PLANT_ORDER = ['Talara','Refinería Talara','Piura','Eten','Salaverry','Chimbote','Supe','Callao','Conch\u00e1n','Refinería Conch\u00e1n','Pisco','Mollendo','Ilo','Juliaca','Cusco','Iquitos','Refinería Iquitos','Pucallpa','Tarapoto','Yurimaguas','El Milagro','Pto. Maldonado'];
+  var PLANT_ORDER = ['Refinería Talara','Refinería Conch\u00e1n','Refinería Iquitos','Talara','Piura','Eten','Salaverry','Chimbote','Supe','Callao','Conch\u00e1n','Pisco','Mollendo','Ilo','Juliaca','Cusco','Iquitos','Pucallpa','Tarapoto','Yurimaguas','El Milagro','Pto. Maldonado'];
   var EXCLUDE_PLANTS = ['A. Iquitos','A. Tarapoto','A. LimaCallao','A. Cusco','A.Iquitos','A.Tarapoto','A.LimaCallao','A.Cusco'];
   var VALID_PRODS = {
     'Diesel':     ['Talara','Refinería Talara','Piura','Eten','Salaverry','Chimbote','Supe','Callao','Conch\u00e1n','Refinería Conch\u00e1n','Pisco','Mollendo','Ilo','Juliaca','Cusco','Iquitos','Refinería Iquitos','Pucallpa','Tarapoto','Yurimaguas','El Milagro','Pto. Maldonado'],
@@ -7205,7 +7205,7 @@ function renderP2() {
     var pillBg = minCobInt < CONFIG.COB_RED ? 'var(--red)1a' : minCobInt < CONFIG.COB_YEL ? 'var(--yel)1a' : 'var(--grn)14';
     var isCollapsed = cobCollapsed[planta] !== false; // Default collapsed
     tbody += '<tr class="cob-planta-row' + (isCollapsed ? ' collapsed' : '') + '" id="cob-ph-' + safePlanta + '" onclick="cobTogglePlanta(\'' + planta.replace(/'/g, "\\'") + '\')">'
-      + '<td colspan="16"><span class="toggle-arrow">\u25BC</span>' + planta
+      + '<td colspan="17"><span class="toggle-arrow">\u25BC</span>' + planta
       + '<span class="pill" style="background:' + pillBg + ';color:' + cobColor + '">' + rows.length + ' prod.</span>'
       + (minCobInt < 999 ? '<span class="pill" style="background:' + pillBg + ';color:' + cobColor + '">min ' + minCobInt + 'd</span>' : '')
       + '<span class="cobal-palert" id="cobal-pa-' + safePlanta + '"></span>'
@@ -7319,6 +7319,14 @@ function renderP2() {
         + '<td class="r" id="cob-reduc-' + sid + '" style="color:' + reducColor + ';font-weight:700;font-size:10px">' + reducStr + '</td>'
         + '<td class="r"' + (esRefFila ? ' title="Refiner\u00eda: no vende, no aplica cobertura por demanda"' : '') + '><span id="cob-days-' + sid + '" class="cob-cov-cell ' + cobClass + '" style="' + (esRefFila?'color:var(--txt3);font-weight:600':'') + '">' + (esRefFila ? '\uD83D\uDEE2\uFE0F almacena' : (cob > 0 ? cob + 'd' : '\u2014')) + '</span></td>'
         + (function() {
+            // Despacho REAL reportado por la planta en Registro Diario ese
+            // día (campo vreal/dem) — dato crudo, tal cual lo escribió la
+            // planta, sin ningún cálculo derivado.
+            if (esRefFila) return '<td class="r" title="Refiner\u00eda: no despacha"><span style="color:var(--txt3);font-size:10px">\u2014</span></td>';
+            var dR = r.vreal || r.dem || 0;
+            return '<td class="r" title="Despacho reportado por la planta en Registro Diario"><span style="font-family:var(--mono);font-weight:700;font-size:10.5px;color:var(--txt2)">' + (dR > 0 ? dR.toFixed(2) : '\u2014') + '</span></td>';
+          })()
+        + (function() {
             // Cobertura "real": inventario ÷ despacho REAL reportado ese día
             // (Registro Diario) — distinta de la columna anterior, que usa
             // V.Factible (el supuesto de planificación). Es informativa,
@@ -7400,7 +7408,7 @@ function renderP2() {
         + '<td id="cob-nfecha-' + sid + '">' + (fechaNuevaCob ? '<span style="color:var(--acc2);font-weight:700">' + fmtDate(fechaNuevaCob) + '</span>' : '\u2014') + '</td>'
         + '</tr>'
         + ((alerta.nivel === 'quiebre' || alerta.nivel === 'critico')
-            ? '<tr class="cob-data-' + safePlanta + hiddenClass + ' cobal-msgrow ' + COB_NIVEL_CLS[alerta.nivel] + '"><td></td><td colspan="15"><span style="margin-right:5px">' + alerta.icon + '</span>' + alerta.msg + '</td></tr>'
+            ? '<tr class="cob-data-' + safePlanta + hiddenClass + ' cobal-msgrow ' + COB_NIVEL_CLS[alerta.nivel] + '"><td></td><td colspan="16"><span style="margin-right:5px">' + alerta.icon + '</span>' + alerta.msg + '</td></tr>'
             : '')
         + (function() {
             var prevRec = byDate(prevDateStr).find(function(x){ return x.planta===r.planta && x.producto===r.producto; });
@@ -7434,7 +7442,7 @@ function renderP2() {
             ].filter(Boolean).join('');
             if (!pills) return '';
             return '<tr class="cob-data-' + safePlanta + hiddenClass + ' cob-hist-row">'
-              + '<td></td><td colspan="15">' + pills + '</td></tr>';
+              + '<td></td><td colspan="16">' + pills + '</td></tr>';
           })();
     });
   });
@@ -7575,6 +7583,7 @@ function renderP2() {
     + '<th class="r" style="position:sticky;top:0;z-index:20;background:var(--bg3);color:var(--acc2)">V. Factible<br><span style="font-weight:400;opacity:.6">\u270F\uFE0F MBDC</span></th>'
     + '<th class="r" style="position:sticky;top:0;z-index:20;background:var(--bg3)">Reduc.</th>'
     + '<th class="r" style="position:sticky;top:0;z-index:20;background:var(--bg3)">Cob.<br><span style="font-weight:400;opacity:.6">(d\u00edas)</span></th>'
+    + '<th class="r" style="position:sticky;top:0;z-index:20;background:var(--bg3)" title="Despacho que la planta reporta directo en Registro Diario (campo vreal/dem) — dato crudo, no derivado">Desp. Real<br><span style="font-weight:400;opacity:.6">\uD83D\uDCCB MB/d</span></th>'
     + '<th class="r" style="position:sticky;top:0;z-index:20;background:var(--bg3)" title="Inventario \u00f7 despacho REAL reportado en Registro Diario (informativo, no editable)">Cob. Real<br><span style="font-weight:400;opacity:.6">\uD83D\uDCCB (d\u00edas)</span></th>'
     + '<th style="position:sticky;top:0;z-index:20;background:var(--bg3)">Fecha<br>Cob.</th>'
     + '<th style="position:sticky;top:0;z-index:20;background:var(--bg3)">Fecha<br>Repos.</th>'
