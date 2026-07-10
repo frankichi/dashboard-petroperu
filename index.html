@@ -2455,6 +2455,14 @@ const CONFIG = {
 // función del dashboard pueda usarla sin depender de CONFIG del backend
 // (que vive solo en Code.gs, no en este archivo).
 const REFINERIAS = ['Refinería Talara', 'Refinería Conchán', 'Refinería Iquitos'];
+// IMPORTANTE — solo aplica a Conchán e Iquitos: lo que reporta la
+// refinería YA INCLUYE el inventario que reporta su planta de ventas
+// (confirmado por Planificación de Suministro) — NO son cifras
+// independientes como sí lo son Talara y Refinería Talara. Sumar ambas
+// en un total nacional duplicaría esa porción. Se usa SOLO para excluir
+// del TOTAL AGREGADO (nacional) — cada planta sigue mostrando su propio
+// inventario/cobertura normalmente en Coberturas, Registro Diario, etc.
+const PLANTAS_DUPLICADAS_EN_REFINERIA = ['Conchán', 'Iquitos'];
 const PLANTAS_18_OFICIALES = ['Talara','Piura','Eten','Salaverry','Chimbote','Supe','Callao','Conchán','Pisco','Mollendo','Ilo','Juliaca','Cusco','Iquitos','Pucallpa','Tarapoto','Yurimaguas','El Milagro'];
 const URL_PARAMS    = new URLSearchParams(window.location.search);
 const EXECUTIVE_MODE = URL_PARAMS.get('view') === 'executive';
@@ -3579,7 +3587,12 @@ function renderPResumen() {
   });
 
   var plantas = Object.keys(porPlanta);
-  var invTotal = plantas.reduce(function(s,p){ return s + porPlanta[p].inv; }, 0);
+  // Total nacional de inventario: Conchán e Iquitos (ventas) quedan fuera
+  // de esta SUMA porque su inventario ya está incluido dentro de lo que
+  // reporta su refinería — sumarlos aparte duplicaría esa porción. Siguen
+  // apareciendo normalmente en la tabla por planta (porPlanta) de abajo.
+  var plantasParaTotal = plantas.filter(function(p){ return PLANTAS_DUPLICADAS_EN_REFINERIA.indexOf(p) === -1; });
+  var invTotal = plantasParaTotal.reduce(function(s,p){ return s + porPlanta[p].inv; }, 0);
   var cobProm = plantas.length ? plantas.reduce(function(s,p){ var o=porPlanta[p]; return s+(o.n?o.cobSum/o.n:0); },0) / plantas.length : 0;
   var criticas = plantas.filter(function(p){ return porPlanta[p].cobMin < CONFIG.COB_RED; });
   var alertas  = plantas.filter(function(p){ return porPlanta[p].cobMin >= CONFIG.COB_RED && porPlanta[p].cobMin < CONFIG.COB_AMB; });
@@ -3587,7 +3600,7 @@ function renderPResumen() {
 
   // Variación vs día anterior
   var fechaAyer = fechas[fechas.length-2] || '';
-  var invAyer = fechaAyer ? RAW.filter(function(r){return r.fecha===fechaAyer && r.inv>0;}).reduce(function(s,r){return s+(r.inv||0);},0) : 0;
+  var invAyer = fechaAyer ? RAW.filter(function(r){return r.fecha===fechaAyer && r.inv>0 && PLANTAS_DUPLICADAS_EN_REFINERIA.indexOf(r.planta)===-1;}).reduce(function(s,r){return s+(r.inv||0);},0) : 0;
   var deltaInv = invTotal - invAyer;
 
   // Top riesgos: TODAS las plantas con cobertura mínima válida, peor primero.
@@ -3952,7 +3965,9 @@ function openProductModal(prod) {
   }
   const COB_CRIT = (typeof window.COB_CRIT === 'number') ? window.COB_CRIT : 8;
   const COB_WARN = (typeof window.COB_WARN === 'number') ? window.COB_WARN : 15;
-  const totalInv   = rows.reduce((s,r) => s + (r.inv||0), 0);
+  // Conchán e Iquitos (ventas) ya están incluidos dentro de su refinería —
+  // se excluyen del total de inventario para no duplicar esa porción.
+  const totalInv   = rows.filter(r => PLANTAS_DUPLICADAS_EN_REFINERIA.indexOf(r.planta)===-1).reduce((s,r) => s + (r.inv||0), 0);
   const totalVfact = rows.reduce((s,r) => s + (r.vfact||0), 0);
   const totalVreal = rows.reduce((s,r) => s + (r.vreal||0), 0);
   const totalVult7 = rows.reduce((s,r) => s + (r.vult7||0), 0);
@@ -19621,6 +19636,12 @@ function renderVistaEjecutivaSimple() {
     RAW.forEach(function(r) {
       if (r.fecha !== fecha) return;
       if (!filaAplica(r, planta, producto)) return;
+      // Total Nacional de INVENTARIO: Conchán e Iquitos (ventas) ya están
+      // incluidos dentro de lo que reporta su refinería — no se suman
+      // aparte para evitar duplicar. NO aplica a despacho (las refinerías
+      // no despachan, ese dato solo existe en la planta de ventas), ni
+      // cuando se selecciona la planta específica en el filtro.
+      if (field === 'inv' && (!planta || planta === 'Nacional') && PLANTAS_DUPLICADAS_EN_REFINERIA.indexOf(r.planta) !== -1) return;
       s += (r[field] || 0);
     });
     return s;
@@ -20361,7 +20382,7 @@ function getCapacidad(planta, producto) {
     if (!prods.includes(_pInvProd)) _pInvProd = prods[0];
     const cfg = PROD_CFG[_pInvProd] || { color:'#1B3A6B' };
     const rows = getRows(_pInvDate, _pInvProd);
-    const totalInv = rows.reduce((s,r)=>s+r.inv,0);
+    const totalInv = rows.filter(r=>PLANTAS_DUPLICADAS_EN_REFINERIA.indexOf(r.planta)===-1).reduce((s,r)=>s+r.inv,0);
     const totalRep = rows.reduce((s,r)=>s+r.rep,0);
     const maxCob   = rows.reduce((s,r)=>Math.max(s,r.cob),0);
     const minCob   = rows.filter(r=>r.cob>0).reduce((s,r)=>Math.min(s,r.cob),99999);
