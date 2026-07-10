@@ -4211,14 +4211,11 @@ function pronDiarioAprobado(r) {
   // La hoja 'pronostico' tiene columna PRONOSTICO_MBDC — MBDC = Miles de
   // Barriles Día Calendario, YA es una tasa diaria (confirmado directo en
   // el Sheets). NO se divide entre días del mes.
-  // "Talara" (y otros hubs) es la suma de varias sub-plantas
-  // (VENTAS_AGG_RULES) — mismo criterio en TODO el dashboard (Coberturas,
-  // Restricciones, Tendencia, etc.), no solo en el gráfico de Tendencia.
-  var fuentes = (typeof VENTAS_AGG_RULES !== 'undefined' && VENTAS_AGG_RULES[r.planta+'|'+r.producto]) || [r.planta];
-  var val = 0;
-  if (typeof pronSheet !== 'undefined') {
-    fuentes.forEach(function(pl){ val += (pronSheet[pl+'|'+r.producto] || 0); });
-  }
+  // IMPORTANTE: en esta hoja, el valor de "Talara" YA VIENE con Piura,
+  // Tarapoto, Yurimaguas y El Milagro sumados dentro (confirmado por
+  // Planificación de Suministro). NO se debe volver a sumar por fuera —
+  // eso duplicaba el conteo. Se usa el valor de la fila tal cual.
+  var val = (typeof pronSheet !== 'undefined' && pronSheet[r.planta+'|'+r.producto]) || 0;
   if (!val) val = r.pron_mes || 0;
   if (val > 0) return val;
   return r.pron || r.dem_prom || 0;
@@ -6540,12 +6537,11 @@ function cobCalcFecha(baseDate, days) {
 function cobGetPron(r) {
   var key = r.planta + '|' + r.producto;
   if (cobPronOverrides[key] !== undefined) return cobPronOverrides[key];
-  // "Talara" (y otros hubs) es la suma de varias sub-plantas
-  // (VENTAS_AGG_RULES) — mismo criterio en todo el dashboard.
-  var fuentes = (typeof VENTAS_AGG_RULES !== 'undefined' && VENTAS_AGG_RULES[key]) || [r.planta];
-  var sum = 0;
-  fuentes.forEach(function(pl){ sum += (pronSheet[pl+'|'+r.producto] || 0); });
-  if (sum > 0) return sum; // PRONOSTICO_MBDC ya es diario
+  // IMPORTANTE: en esta hoja, el valor de "Talara" YA VIENE con Piura,
+  // Tarapoto, Yurimaguas y El Milagro sumados dentro. NO se debe volver
+  // a sumar por fuera — eso duplicaba el conteo.
+  var val = pronSheet[key] || 0;
+  if (val > 0) return val; // PRONOSTICO_MBDC ya es diario
   if (r.pron && r.pron > 0) return r.pron;
   return r.dem_prom || 0;
 }
@@ -10529,28 +10525,25 @@ function renderPTend() {
         var mesesVisibles = [...new Set(dateLabels.map(function(d){ return d.slice(0,7); }))];
         var lineas = [];
         lineas.push('DIAGNÓSTICO PRONÓSTICO — ' + planta + ' · ' + prod);
-        var fuentesDbg = (typeof VENTAS_AGG_RULES !== 'undefined' && VENTAS_AGG_RULES[planta+'|'+prod]) || [planta];
-        lineas.push('Plantas que se suman: ' + fuentesDbg.join(', '));
+        lineas.push('(Búsqueda directa en el Sheets — el valor de "Talara" ya incluye Piura/Tarapoto/Yurimaguas/El Milagro sumados, no se vuelve a agregar por fuera)');
+        var key = planta + '|' + prod;
         mesesVisibles.forEach(function(m) {
           var map = _pronByMonthCache[m];
           if (map === undefined) { lineas.push(m + ': (aún cargando desde el Sheets...)'); return; }
           var rawByKey = _pronRawRowsCache[m] || {};
-          fuentesDbg.forEach(function(pl) {
-            var key = pl + '|' + prod;
-            var filas = rawByKey[key] || [];
-            if (!filas.length) { lineas.push(m + ' · ' + pl + ': SIN DATO en Sheets'); return; }
-            if (filas.length > 1) {
-              lineas.push(m + ' · ' + pl + ': \u26a0 ' + filas.length + ' FILAS encontradas para esta misma clave (posible duplicado en el Sheets):');
-              filas.forEach(function(f, idx){
-                lineas.push('    fila ' + (idx+1) + ': planta="' + f.planta_raw + '" producto="' + f.producto_raw + '" mes="' + f.mes_raw + '" pron=' + f.pron + ' MBDC');
-              });
-              lineas.push('    SUMA actual = ' + filas.reduce(function(s,f){return s+f.pron;},0).toFixed(3) + ' MBDC \u2190 esto puede estar mal si son duplicados, no productos distintos');
-            } else {
-              lineas.push(m + ' · ' + pl + ': ' + filas[0].pron + ' MBDC (1 fila, sin duplicados)');
-            }
-          });
-          var totalDiario = fuentesDbg.reduce(function(s,pl){ return s + (map[pl+'|'+prod]||0); }, 0);
-          lineas.push(m + ' TOTAL Demanda pron\u00f3stico = ' + totalDiario.toFixed(3) + ' MB/d\u00eda');
+          var filas = rawByKey[key] || [];
+          if (!filas.length) {
+            lineas.push(m + ' · ' + planta + ': SIN DATO en Sheets para "' + prod + '"');
+          } else if (filas.length > 1) {
+            lineas.push(m + ' · ' + planta + ': \u26a0 ' + filas.length + ' FILAS encontradas para esta misma clave (posible duplicado en el Sheets):');
+            filas.forEach(function(f, idx){
+              lineas.push('    fila ' + (idx+1) + ': planta="' + f.planta_raw + '" producto="' + f.producto_raw + '" mes="' + f.mes_raw + '" pron=' + f.pron + ' MBDC');
+            });
+            lineas.push('    Se usa la ÚLTIMA fila = ' + (map[key]||0).toFixed(3) + ' MBDC');
+          } else {
+            lineas.push(m + ' · ' + planta + ': ' + filas[0].pron + ' MBDC (1 fila, sin duplicados)');
+          }
+          lineas.push(m + ' TOTAL Demanda pronóstico = ' + (map[key]||0).toFixed(3) + ' MB/día');
           lineas.push('');
         });
         dbg.textContent = lineas.join('\n');
@@ -10809,13 +10802,11 @@ function _pTendPronParaFecha(fecha, planta, prod) {
     });
     return tot;
   }
-  // "Talara" (y otros hubs) en Ventas es la suma de varias sub-plantas
-  // (VENTAS_AGG_RULES) — el pronóstico se suma con el MISMO criterio, si
-  // no, se compara "Ventas de 5 plantas" contra "Pronóstico de 1 sola".
-  var fuentes = (typeof VENTAS_AGG_RULES !== 'undefined' && VENTAS_AGG_RULES[planta+'|'+prod]) || [planta];
-  var totPlanta = 0;
-  fuentes.forEach(function(pl){ totPlanta += (map[pl+'|'+prod] || 0); });
-  return totPlanta;
+  // IMPORTANTE: en la hoja 'pronostico', el valor de "Talara" YA VIENE
+  // con Piura, Tarapoto, Yurimaguas y El Milagro sumados dentro
+  // (confirmado por Planificación de Suministro). Sumar de nuevo por
+  // fuera duplicaba el conteo. Se usa la fila tal cual, sin agregación.
+  return map[planta+'|'+prod] || 0;
 }
 window._pTendSetProd = function(p) {
   // Verificar que el producto tiene datos para la planta actual
