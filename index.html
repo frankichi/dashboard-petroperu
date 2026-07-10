@@ -3008,6 +3008,7 @@ function selectDate(fecha) {
     if (typeof cobOverrides !== 'undefined')         cobOverrides = {};
     if (typeof cobInvOverrides !== 'undefined')      cobInvOverrides = {};
     if (typeof cobDespachoOverrides !== 'undefined') cobDespachoOverrides = {};
+    if (typeof cobDespRealOverrides !== 'undefined') cobDespRealOverrides = {};
     if (typeof cobEditMode !== 'undefined')          cobEditMode = false;
   }
   currentDate = fecha;
@@ -6422,6 +6423,7 @@ let cobOverrides = {};
 let cobPronOverrides = {};
 let cobInvOverrides = {};
 let cobDespachoOverrides = {};   // planta|producto → venta_mb manually entered
+let cobDespRealOverrides = {};   // planta|producto → vreal (Desp. Real, escribe directo a inventario del día actual)
 let cobEditMode = false;         // unified: when true, INV + DESPACHO + VFACT all editable
 let cobPronPanelOpen = false;
 let cobCollapsed = {};
@@ -6731,6 +6733,26 @@ function cobOnInvChange(planta, producto, valMb) {
   var vfact = cobGetVfact(r);
   cobOnVfactChange(planta, producto, vfact); // Triggers full recalc
 }
+// Desp. Real: distinto del "Despacho / Día Ant." legado (que guarda una
+// venta para el día ANTERIOR en la hoja ventas_diarias) — esto escribe
+// directo al campo vreal de inventario para el día actual, la misma
+// fuente que ya usan Registro Diario y la Vista Ejecutiva.
+function cobOnDespRealChange(planta, producto, val) {
+  var numVal = parseFloat(val);
+  if (isNaN(numVal) || numVal < 0) return;
+  cobDespRealOverrides[planta + '|' + producto] = numVal;
+  var today = byLatest();
+  var r = today.find(function(x) { return x.planta === planta && x.producto === producto; });
+  if (r) { r.vreal = numVal; } // reflejar de inmediato en RAW local (Cob. Real recalcula al re-render)
+  var sid = cobSafeId(planta, producto);
+  var row = document.getElementById('cob-row-' + sid);
+  if (row) row.classList.add('cob-changed');
+  var totalCambios = Object.keys(cobOverrides).length + Object.keys(cobInvOverrides).length + Object.keys(cobDespRealOverrides).length;
+  var badge = document.getElementById('cob-save-badge');
+  if (badge) badge.textContent = totalCambios;
+  var saveBtn = document.getElementById('cob-save-btn');
+  if (saveBtn) saveBtn.style.display = 'inline-flex';
+}
 function cobOnVfactChange(planta, producto, valMbdc) {
   var numVal = parseFloat(valMbdc);
   if (isNaN(numVal) || numVal < 0) return;
@@ -6880,7 +6902,7 @@ async function cobChangePronMes(mes) {
   }
 }
 function cobResetOverrides() {
-  cobOverrides = {}; cobPronOverrides = {}; cobInvOverrides = {}; cobDespachoOverrides = {};
+  cobOverrides = {}; cobPronOverrides = {}; cobInvOverrides = {}; cobDespachoOverrides = {}; cobDespRealOverrides = {};
   cobEditMode = false;
   renderP2();
 }
@@ -6941,6 +6963,21 @@ async function cobSaveToGS() {
         field: 'inv', value: r ? cobGetInv(r) : (cobInvOverrides[key] || 0)
       });
     });
+    // Desp. Real: escribe directo a inventario.vreal del día que se está
+    // viendo (mismo patrón que invRecords) — NO usa la ruta de
+    // "Despacho / Día Ant." (que guarda como venta del día anterior).
+    var despRealRecords = [];
+    Object.keys(cobDespRealOverrides).forEach(function(key) {
+      var parts   = key.split('|');
+      var planta  = parts[0];
+      var producto= parts.slice(1).join('|');
+      var r = today.find(function(x) { return x.planta===planta && x.producto===producto; });
+      var fecha = (r && r.fecha && !r._synthetic) ? r.fecha : fechaObjetivo;
+      despRealRecords.push({
+        fecha: fecha, planta: planta, producto: producto,
+        field: 'vreal', value: cobDespRealOverrides[key]
+      });
+    });
     var despKeys    = Object.keys(cobDespachoOverrides);
     var prevD       = new Date(fechaObjetivo + 'T12:00:00');
     prevD.setDate(prevD.getDate() - 1);
@@ -6949,7 +6986,7 @@ async function cobSaveToGS() {
       var parts = k.split('|');
       return { fecha: prevDateStr, planta: parts[0], producto: parts[1], venta_mb: cobDespachoOverrides[k] };
     });
-    var allFieldChanges = vfactRecords.concat(invRecords);
+    var allFieldChanges = vfactRecords.concat(invRecords).concat(despRealRecords);
     var hasFieldChanges  = allFieldChanges.length > 0;
     var hasDespChanges   = despRecords.length > 0;
     if (!hasFieldChanges && !hasDespChanges) {
@@ -6992,6 +7029,10 @@ async function cobSaveToGS() {
       var r = RAW.find(function(x) { return x.fecha===fechaObjetivo && x.planta===rec.planta && x.producto===rec.producto; });
       if (r) r.inv = rec.value;
     });
+    despRealRecords.forEach(function(rec) {
+      var r = RAW.find(function(x) { return x.fecha===rec.fecha && x.planta===rec.planta && x.producto===rec.producto; });
+      if (r) r.vreal = rec.value;
+    });
     despRecords.forEach(function(rec) {
       ventasManualesMap[rec.fecha + '|' + rec.planta + '|' + rec.producto] = rec.venta_mb;
     });
@@ -7001,7 +7042,7 @@ async function cobSaveToGS() {
       statusEl.style.color = 'var(--grn)';
     }
     if (btn) btn.disabled = false;
-    cobOverrides = {}; cobInvOverrides = {}; cobDespachoOverrides = {};
+    cobOverrides = {}; cobInvOverrides = {}; cobDespachoOverrides = {}; cobDespRealOverrides = {};
     cobEditMode  = false;
     renderP1(); renderP2();
     if (typeof updateEventTicker === 'function') updateEventTicker();
@@ -7407,18 +7448,20 @@ function renderP2() {
         + '<td class="r"' + (esRefFila ? ' title="Refiner\u00eda: no vende, no aplica cobertura por demanda"' : '') + '><span id="cob-days-' + sid + '" class="cob-cov-cell ' + cobClass + '" style="' + (esRefFila?'color:var(--txt3);font-weight:600':'') + '">' + (esRefFila ? '\uD83D\uDEE2\uFE0F almacena' : (cob > 0 ? cob + 'd' : '\u2014')) + '</span></td>'
         + (function() {
             // Despacho REAL reportado por la planta en Registro Diario ese
-            // día (campo vreal/dem) — dato crudo, tal cual lo escribió la
-            // planta. Editable con el botón "Editar" (reutiliza el mismo
-            // guardado que ya usa la columna "Despacho / Día Ant.", ambas
-            // columnas leen y escriben el mismo campo vreal/dem).
+            // día (campo vreal/dem) — dato crudo. Editable con el botón
+            // "Editar"; a diferencia de la columna "Despacho / Día Ant."
+            // (que guarda como venta del día ANTERIOR en ventas_diarias),
+            // esta escribe DIRECTO al campo vreal de inventario, con la
+            // fecha del día que se está viendo — mismo destino que ya usan
+            // Registro Diario y la Vista Ejecutiva.
             if (esRefFila) return '<td class="r" title="Refiner\u00eda: no despacha"><span style="color:var(--txt3);font-size:10px">\u2014</span></td>';
             var dR = r.vreal || r.dem || 0;
             if (cobEditMode) {
               return '<td class="r" style="white-space:nowrap">'
                 + '<input class="cob-edit" type="number" step="0.01" min="0" value="' + dR.toFixed(2) + '" style="width:62px" '
-                + 'onchange="cobOnDespChange(\'' + r.planta.replace(/'/g,"\\'") + '\',\'' + r.producto.replace(/'/g,"\\'") + '\',this.value)" '
-                + 'oninput="cobOnDespChange(\'' + r.planta.replace(/'/g,"\\'") + '\',\'' + r.producto.replace(/'/g,"\\'") + '\',this.value)">'
-                + (cobDespachoOverrides[key] !== undefined
+                + 'onchange="cobOnDespRealChange(\'' + r.planta.replace(/'/g,"\\'") + '\',\'' + r.producto.replace(/'/g,"\\'") + '\',this.value)" '
+                + 'oninput="cobOnDespRealChange(\'' + r.planta.replace(/'/g,"\\'") + '\',\'' + r.producto.replace(/'/g,"\\'") + '\',this.value)">'
+                + (cobDespRealOverrides[key] !== undefined
                   ? '<span style="font-size:7px;color:var(--ora);font-weight:700;margin-left:2px" title="Modificado, sin guardar">\u270e</span>' : '')
                 + '</td>';
             }
