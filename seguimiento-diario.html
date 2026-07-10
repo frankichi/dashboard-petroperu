@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Seguimiento Diario — Petroperú</title>
+<style>
+  :root{
+    --bg:#f4f6f9; --card:#fff; --bdr:#e2e8f0; --txt:#0f1e3c; --txt2:#475569; --txt3:#94a3b8;
+    --grn:#16a34a; --grn-bg:#e9f7ee; --yel:#a86a00; --yel-bg:#fdf3e0; --red:#dc2626;
+    --navy:#0a3a5c; --navy2:#1e3a8a; --acc:#c2410c;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:'Inter',system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--txt);-webkit-font-smoothing:antialiased}
+  .banner{position:sticky;top:0;z-index:100;background:linear-gradient(90deg,var(--navy) 0%,var(--navy2) 100%);color:#fff;padding:12px 20px;display:flex;align-items:center;gap:14px;border-bottom:3px solid var(--acc);box-shadow:0 2px 12px rgba(10,58,92,.25);flex-wrap:wrap}
+  .banner-logo{width:42px;height:42px;background:#fff;border-radius:6px;display:flex;align-items:center;justify-content:center;flex-shrink:0;padding:4px;box-shadow:0 1px 3px rgba(0,0,0,.18)}
+  .banner-logo svg{width:100%;height:100%}
+  .banner-title{flex:1;min-width:180px}
+  .banner-title h1{font-size:14px;font-weight:800;letter-spacing:.03em;text-transform:uppercase;margin:0 0 2px}
+  .banner-title p{font-size:10.5px;color:rgba(255,255,255,.8);margin:0;font-weight:400}
+  .banner-meta{text-align:right;font-size:10px;color:rgba(255,255,255,.78);white-space:nowrap}
+  .banner-meta .live{font-weight:700;color:#fff;font-size:11.5px;font-family:ui-monospace,monospace}
+  .live-dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:#22c55e;margin-right:5px;animation:pulse 2s infinite}
+  @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(34,197,94,.6)}70%{box-shadow:0 0 0 7px rgba(34,197,94,0)}100%{box-shadow:0 0 0 0 rgba(34,197,94,0)}}
+  .wrap{max-width:1080px;margin:0 auto;padding:20px 16px 60px}
+  .toolbar{background:var(--card);border:1px solid var(--bdr);border-radius:12px;padding:14px 16px;margin-bottom:18px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+  .toolbar label{font-size:10.5px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.4px}
+  .toolbar input[type=date]{padding:7px 10px;border-radius:7px;border:1px solid var(--bdr);background:#f8fafc;color:var(--txt);font-family:ui-monospace,monospace;font-size:12.5px;font-weight:600}
+  .btn{padding:7px 16px;border-radius:7px;font-size:11.5px;font-weight:700;cursor:pointer;border:1.5px solid var(--bdr);background:var(--card);color:var(--txt2);font-family:inherit;transition:all .15s}
+  .btn:hover{border-color:var(--navy);color:var(--navy)}
+  .btn.primary{background:var(--navy);border-color:var(--navy);color:#fff}
+  .btn.primary:hover{background:var(--navy2);opacity:.92}
+  .btn:disabled{opacity:.5;cursor:not-allowed}
+  .kpi-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:20px}
+  .kpi{background:var(--card);border:1px solid var(--bdr);border-radius:12px;padding:18px 20px}
+  .kpi-label{font-size:10.5px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px}
+  .kpi-val{font-size:32px;font-weight:800;font-family:ui-monospace,monospace;line-height:1}
+  .kpi.ok .kpi-val{color:var(--grn)}
+  .kpi.warn .kpi-val{color:var(--yel)}
+  .kpi-sub{font-size:10.5px;color:var(--txt3);margin-top:4px}
+  .section-title{font-size:11px;font-weight:800;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px;margin:22px 0 10px;display:flex;align-items:center;gap:8px}
+  .section-title::before{content:'';width:3px;height:14px;border-radius:1px;background:var(--acc)}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:10px}
+  .card{background:var(--card);border:1px solid var(--bdr);border-left:4px solid var(--bdr);border-radius:10px;padding:13px 15px}
+  .card.done{border-left-color:var(--grn)}
+  .card.pend{border-left-color:var(--yel)}
+  .card-name{font-size:13px;font-weight:800;color:var(--txt);margin-bottom:7px;display:flex;align-items:center;gap:6px}
+  .badge{display:inline-flex;align-items:center;gap:4px;padding:3px 9px;border-radius:20px;font-size:9.5px;font-weight:800;text-transform:uppercase;letter-spacing:.3px}
+  .badge.done{background:var(--grn-bg);color:var(--grn)}
+  .badge.pend{background:var(--yel-bg);color:var(--yel)}
+  .card-user{margin-top:9px;font-size:11px;color:var(--txt2);display:flex;align-items:center;gap:6px}
+  .card-user .who{font-weight:700;color:var(--txt)}
+  .card-time{font-size:10px;color:var(--txt3);margin-top:2px}
+  .card-lastseen{margin-top:8px;padding-top:8px;border-top:1px solid var(--bdr);font-size:10px;color:var(--txt3)}
+  .card-lastseen b{color:var(--txt2)}
+  .empty{padding:50px 20px;text-align:center;color:var(--txt3);font-size:12.5px}
+  .spinner{width:32px;height:32px;border:3px solid var(--bdr);border-top-color:var(--navy);border-radius:50%;animation:spin 1s linear infinite;margin:0 auto 12px}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .footer{margin-top:30px;padding-top:16px;border-top:1px solid var(--bdr);font-size:10.5px;color:var(--txt3);text-align:center}
+  @media (max-width:640px){
+    .banner{padding:9px 12px;gap:8px}
+    .banner-logo{width:34px;height:34px}
+    .banner-title h1{font-size:11.5px}
+    .banner-title p{display:none}
+    .banner-meta{font-size:9px}
+    .banner-meta .live{font-size:10px}
+    .wrap{padding:14px 10px 40px}
+    .toolbar{padding:11px 12px;gap:8px}
+    .kpi-row{grid-template-columns:1fr 1fr;gap:8px}
+    .kpi{padding:13px 14px}
+    .kpi-val{font-size:24px}
+    .grid{grid-template-columns:1fr 1fr;gap:8px}
+  }
+  @media (max-width:400px){ .grid{grid-template-columns:1fr} }
+</style>
+</head>
+<body>
+
+<div class="banner">
+  <div class="banner-logo">
+    <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <rect width="24" height="24" rx="4" fill="#0a3a5c"/>
+      <path d="M12 4c-3 3-5 6-5 9a5 5 0 0 0 10 0c0-3-2-6-5-9z" fill="#fff"/>
+      <path d="M12 4c-1.5 3-2 5.5-2 8a2 2 0 0 0 4 0c0-2.5-.5-5-2-8z" fill="#c2410c"/>
+    </svg>
+  </div>
+  <div class="banner-title">
+    <h1>Seguimiento Diario · Petroperú</h1>
+    <p>Planificación de Suministro — Registro Diario de Inventarios</p>
+  </div>
+  <div class="banner-meta">
+    <span class="live-dot"></span><span class="live">Conectado</span>
+    <div id="clockTime" style="margin-top:3px">—</div>
+  </div>
+</div>
+
+<div class="wrap">
+
+  <div class="toolbar">
+    <label>Fecha</label>
+    <input type="date" id="fechaInput">
+    <button class="btn" onclick="irFecha(-1)">← Día anterior</button>
+    <button class="btn" onclick="irHoy()">Hoy</button>
+    <button class="btn" onclick="irFecha(1)">Día siguiente →</button>
+    <button class="btn primary" id="btnActualizar" onclick="cargar()" style="margin-left:auto">↻ Actualizar</button>
+  </div>
+
+  <div id="kpiZone"></div>
+  <div id="cuerpoZone">
+    <div class="empty"><div class="spinner"></div>Cargando seguimiento…</div>
+  </div>
+
+  <div class="footer">
+    PETROPERÚ S.A. · Planificación de Suministro · Vista de solo lectura, actualización automática cada 3 min<br>
+    Desarrollado por <strong>Franco Urcia Castillo</strong>
+  </div>
+</div>
+
+<script>
+const API_URL = 'https://script.google.com/macros/s/AKfycbwL5Gec0EmZgha2rNUaORMDT6MBuouyIlV07tlMpQo9O1YcgkiWJdoQUmIafMQhF2kgUg/exec';
+const AUTO_REFRESH_MS = 3 * 60 * 1000;
+
+function hoyLima() {
+  var d = new Date();
+  var lima = new Date(d.getTime() - 5 * 3600 * 1000);
+  return lima.toISOString().slice(0, 10);
+}
+function fmtFechaLarga(iso) {
+  if (!iso) return '—';
+  var meses = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+  var p = iso.split('-');
+  return p[2] + ' ' + meses[parseInt(p[1],10)-1] + '. ' + p[0];
+}
+function plantaLabel(p) {
+  return (p||'').replace('Refineria', 'Refinería').replace('Conchan', 'Conchán');
+}
+function esRefineria(p) {
+  return (p||'').indexOf('Refineria') === 0 || (p||'').indexOf('Refinería') === 0;
+}
+
+function updateClock() {
+  var d = new Date();
+  var lima = new Date(d.getTime() - 5 * 3600 * 1000);
+  var hh = String(lima.getUTCHours()).padStart(2,'0');
+  var mm = String(lima.getUTCMinutes()).padStart(2,'0');
+  document.getElementById('clockTime').textContent = fmtFechaLarga(lima.toISOString().slice(0,10)) + ' · ' + hh + ':' + mm + ' Lima';
+}
+updateClock();
+setInterval(updateClock, 30000);
+
+document.getElementById('fechaInput').value = hoyLima();
+document.getElementById('fechaInput').addEventListener('change', cargar);
+
+function irHoy() { document.getElementById('fechaInput').value = hoyLima(); cargar(); }
+function irFecha(delta) {
+  var el = document.getElementById('fechaInput');
+  var d = new Date(el.value + 'T12:00:00');
+  d.setDate(d.getDate() + delta);
+  el.value = d.toISOString().slice(0,10);
+  cargar();
+}
+
+var _ultimoReporteCache = {};
+
+function cargar() {
+  var fecha = document.getElementById('fechaInput').value || hoyLima();
+  var btn = document.getElementById('btnActualizar');
+  btn.disabled = true; btn.textContent = '↻ Cargando…';
+  fetch(API_URL + '?action=rdGetTrackingHoy&fecha=' + encodeURIComponent(fecha), {method:'GET', redirect:'follow'})
+    .then(function(r){ return r.json(); })
+    .then(function(res){
+      btn.disabled = false; btn.textContent = '↻ Actualizar';
+      if (!res || !res.success) { mostrarError(); return; }
+      pintar(res.tracking || [], fecha);
+    })
+    .catch(function(){ btn.disabled = false; btn.textContent = '↻ Actualizar'; mostrarError(); });
+}
+
+function mostrarError() {
+  document.getElementById('cuerpoZone').innerHTML =
+    '<div class="empty" style="color:var(--red)">⚠ No se pudo conectar con el Sheets. Verifica tu conexión e inténtalo de nuevo.</div>';
+}
+
+function pintar(tracking, fecha) {
+  var esHoy = fecha === hoyLima();
+  var equipo = tracking.filter(function(t){ return !esRefineria(t.planta); });
+  var refinerias = tracking.filter(function(t){ return esRefineria(t.planta); });
+
+  var reportaron = tracking.filter(function(t){ return t.estado==='Reportado' || t.estado==='Validado'; });
+  var pendientes = tracking.filter(function(t){ return !(t.estado==='Reportado' || t.estado==='Validado'); });
+
+  document.getElementById('kpiZone').innerHTML =
+    '<div class="kpi-row">' +
+      '<div class="kpi ok"><div class="kpi-label">Reportaron</div><div class="kpi-val">' + reportaron.length + '</div><div class="kpi-sub">de ' + tracking.length + ' instalaciones</div></div>' +
+      '<div class="kpi warn"><div class="kpi-label">Pendientes</div><div class="kpi-val">' + pendientes.length + '</div><div class="kpi-sub">' + (esHoy ? 'aún no reportan hoy' : 'no reportaron ese día') + '</div></div>' +
+    '</div>' +
+    '<div style="font-size:11.5px;color:var(--txt2);margin-bottom:4px">📅 Mostrando el seguimiento del <b>' + fmtFechaLarga(fecha) + '</b>' + (esHoy ? ' (hoy)' : '') + '</div>';
+
+  function renderGrupo(titulo, lista) {
+    if (!lista.length) return '';
+    var cards = lista.map(function(t){
+      var done = t.estado === 'Reportado' || t.estado === 'Validado';
+      var horaTxt = '';
+      if (done && t.hora) {
+        try { horaTxt = new Date(t.hora).toLocaleTimeString('es-PE', {hour:'2-digit', minute:'2-digit'}); } catch(e) {}
+      }
+      var lastSeenHtml = '';
+      if (!done) {
+        var cacheKey = t.planta;
+        if (_ultimoReporteCache[cacheKey] === undefined) {
+          lastSeenHtml = '<div class="card-lastseen" id="ls-' + cacheKey.replace(/[^a-zA-Z0-9]/g,'_') + '">Buscando último reporte…</div>';
+          fetchUltimoReporte(cacheKey);
+        } else {
+          lastSeenHtml = renderLastSeen(_ultimoReporteCache[cacheKey]);
+        }
+      }
+      return '<div class="card ' + (done?'done':'pend') + '">' +
+          '<div class="card-name">' + (esRefineria(t.planta)?'🛢️':'🏭') + ' ' + plantaLabel(t.planta) + '</div>' +
+          '<span class="badge ' + (done?'done':'pend') + '">' + (done ? '✓ Reportado' : '⏳ Pendiente') + '</span>' +
+          (done
+            ? '<div class="card-user"><span class="who">' + (t.usuario || 'Sin nombre') + '</span></div>' +
+              (horaTxt ? '<div class="card-time">a las ' + horaTxt + '</div>' : '')
+            : lastSeenHtml) +
+        '</div>';
+    }).join('');
+    return '<div class="section-title">' + titulo + '</div><div class="grid">' + cards + '</div>';
+  }
+
+  document.getElementById('cuerpoZone').innerHTML =
+    (equipo.length ? renderGrupo('Plantas y Terminales', equipo) : '') +
+    (refinerias.length ? renderGrupo('Refinerías', refinerias) : '') +
+    (!tracking.length ? '<div class="empty">Sin datos para esta fecha.</div>' : '');
+}
+
+function fetchUltimoReporte(planta) {
+  fetch(API_URL + '?action=rdGetUltimoReporte&planta=' + encodeURIComponent(planta), {method:'GET', redirect:'follow'})
+    .then(function(r){ return r.json(); })
+    .then(function(res){
+      _ultimoReporteCache[planta] = (res && res.success && res.encontrado) ? res : null;
+      var el = document.getElementById('ls-' + planta.replace(/[^a-zA-Z0-9]/g,'_'));
+      if (el) el.outerHTML = renderLastSeen(_ultimoReporteCache[planta]);
+    })
+    .catch(function(){ _ultimoReporteCache[planta] = null; });
+}
+function renderLastSeen(info) {
+  if (!info) return '<div class="card-lastseen">Sin reportes previos registrados.</div>';
+  var horaTxt = '';
+  if (info.hora) { try { horaTxt = new Date(info.hora).toLocaleTimeString('es-PE', {hour:'2-digit', minute:'2-digit'}); } catch(e) {} }
+  return '<div class="card-lastseen">Último reporte: <b>' + fmtFechaLarga(info.fecha) + '</b>' +
+    (info.nombre ? ' por ' + info.nombre : '') + (horaTxt ? ' a las ' + horaTxt : '') + '</div>';
+}
+
+cargar();
+setInterval(cargar, AUTO_REFRESH_MS);
+</script>
+</body>
+</html>
