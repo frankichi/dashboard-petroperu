@@ -2423,9 +2423,11 @@ if (document.readyState === 'loading') {
 <script>
 const CONFIG = {
   API_URL: 'https://script.google.com/macros/s/AKfycbwL5Gec0EmZgha2rNUaORMDT6MBuouyIlV07tlMpQo9O1YcgkiWJdoQUmIafMQhF2kgUg/exec',
-  COB_RED: 3,  // Crítico
-  COB_AMB: 5,  // Advertencia
-  COB_YEL: 7   // Precaución
+  // Criterio de severidad de cobertura (días) — unificado en todo el
+  // dashboard: ≤7 días = Crítico · 8–14 días = Alerta/Atención · ≥15 días = Normal.
+  COB_RED: 8,  // < 8 días (es decir ≤7) = Crítico
+  COB_AMB: 15, // < 15 días (es decir 8–14) = Alerta
+  COB_YEL: 15  // igual a COB_AMB — colapsa el 4to nivel intermedio que existía antes
 };
 // Lista canónica de las 18 instalaciones oficiales (sin "Pto. Maldonado",
 // excluida en todo el sistema). Constante global para que cualquier
@@ -3927,8 +3929,8 @@ function openProductModal(prod) {
     alert('Sin datos para ' + prod);
     return;
   }
-  const COB_CRIT = (typeof window.COB_CRIT === 'number') ? window.COB_CRIT : 4;
-  const COB_WARN = (typeof window.COB_WARN === 'number') ? window.COB_WARN : 7;
+  const COB_CRIT = (typeof window.COB_CRIT === 'number') ? window.COB_CRIT : 8;
+  const COB_WARN = (typeof window.COB_WARN === 'number') ? window.COB_WARN : 15;
   const totalInv   = rows.reduce((s,r) => s + (r.inv||0), 0);
   const totalVfact = rows.reduce((s,r) => s + (r.vfact||0), 0);
   const totalVreal = rows.reduce((s,r) => s + (r.vreal||0), 0);
@@ -4779,8 +4781,8 @@ function renderP1() {
   const EXCLUIR = ['ULSD EXPO','Regular HS'];
   const DIESEL_EXCL_INV = ['Pucallpa','Iquitos'];
   const active = today.filter(r => !EXCLUIR.some(x => r.producto && r.producto.toUpperCase().includes(x.toUpperCase())) && !SKIP_COMBOS.has((r.planta||'')+'|'+(r.producto||'')));
-  const COB_CRIT = 4;
-  const COB_WARN = 7;
+  const COB_CRIT = 8;
+  const COB_WARN = 15;
   window.COB_CRIT = COB_CRIT;
   window.COB_WARN = COB_WARN;
   active.forEach(r => { r._sysCob = cobSystemDays(r); if ((r.inv||0) > 0 && r._sysCob === 0) r._sysCob = 999; });
@@ -7105,6 +7107,25 @@ function renderPCapRef() {
 
 function renderP2() {
   var today = byDateLatestPerPlant(currentDate || (DATES.length ? DATES[DATES.length-1] : ''));
+  // Refinerías: mostrar siempre sus productos en la tabla (aunque aún no
+  // hayan reportado inventario vía Registro Diario), como "casillas"
+  // listas para controlar su existencia — no como una planta de ventas
+  // más (no tienen pronóstico/V.Factible/despacho, solo inventario).
+  var REFINERIA_PRODUCTOS = {
+    'Refinería Talara':  ['Diesel','G. Regular','G. Premium','G. 84','TA1','GLP'],
+    'Refinería Conchán': ['Diesel','G. Regular','G. Premium'],
+    'Refinería Iquitos': ['Diesel','G. Regular','G. 84','TA1']
+  };
+  var todayKeys = new Set(today.map(function(r){ return r.planta+'|'+r.producto; }));
+  Object.keys(REFINERIA_PRODUCTOS).forEach(function(pl) {
+    REFINERIA_PRODUCTOS[pl].forEach(function(pr) {
+      var key = pl + '|' + pr;
+      if (todayKeys.has(key)) return;
+      today.push({ fecha: currentDate || (DATES.length ? DATES[DATES.length-1] : ''),
+        planta: pl, producto: pr, inv: 0, pron: 0, vfact: 0, vreal: 0, dem: 0,
+        var_dem: 0, cob: 0, _synthetic: true, _esRefineria: true });
+    });
+  });
   if (!today.length) {
     document.getElementById('p2-content').innerHTML = '<div style="padding:40px;text-align:center;color:var(--txt3)">Sin datos para esta fecha</div>';
     return;
@@ -7126,7 +7147,7 @@ function renderP2() {
     if (SKIP_COMBOS.has((r.planta||'')+'|'+(r.producto||''))) return;
     var validPlants = VALID_PRODS[r.producto];
     if (validPlants && validPlants.indexOf(r.planta) < 0) return;
-    var isMandatory = MANDATORY_COMBOS.some(function(m){ return m.planta===r.planta && m.producto===r.producto; });
+    var isMandatory = MANDATORY_COMBOS.some(function(m){ return m.planta===r.planta && m.producto===r.producto; }) || REFINERIAS.indexOf(r.planta) !== -1;
     if (!isMandatory && (r.inv || 0) <= 0 && (r.pron || 0) <= 0 && (r.vfact || 0) <= 0 && (r.vreal || 0) <= 0 && !pronSheet[r.planta + '|' + r.producto]) return;
     if (!grouped[r.planta]) grouped[r.planta] = [];
     grouped[r.planta].push(r);
@@ -7186,6 +7207,8 @@ function renderP2() {
       var cob = cobCalcDays(invTotal, vfactCalc);
       var fechaCob = cobCalcFecha(currentDate, cob);
       var cobClass = cob <= 0 ? 'cob-cov-warn' : cob < CONFIG.COB_RED ? 'cob-cov-crit' : cob < CONFIG.COB_YEL ? 'cob-cov-warn' : 'cob-cov-ok';
+      var esRefFila = REFINERIAS.indexOf(r.planta) !== -1;
+      if (esRefFila) cobClass = ''; // neutro — no aplica cobertura (no vende, solo almacena)
       var pronBarW = 0;
       var reducPct = (pronMbdc > 0 && vfactDisplay > 0) ? ((vfactDisplay - pronMbdc) / pronMbdc * 100) : 0;
       var reducColor = reducPct < -10 ? 'var(--red)' : reducPct < 0 ? 'var(--yel)' : 'var(--grn)';
@@ -7254,7 +7277,7 @@ function renderP2() {
               + 'style="background:#1d6fd622;border:1px solid #1d6fd644;border-radius:4px;color:#4d9de0;cursor:pointer;font-size:10px;padding:2px 6px;font-weight:700">↑P</button>' : ''))
         + '</div></td>'
         + '<td class="r" id="cob-reduc-' + sid + '" style="color:' + reducColor + ';font-weight:700;font-size:10px">' + reducStr + '</td>'
-        + '<td class="r"><span id="cob-days-' + sid + '" class="cob-cov-cell ' + cobClass + '">' + (cob > 0 ? cob + 'd' : '\u2014') + '</span></td>'
+        + '<td class="r"' + (esRefFila ? ' title="Refiner\u00eda: no vende, no aplica cobertura por demanda"' : '') + '><span id="cob-days-' + sid + '" class="cob-cov-cell ' + cobClass + '" style="' + (esRefFila?'color:var(--txt3);font-weight:600':'') + '">' + (esRefFila ? '\uD83D\uDEE2\uFE0F almacena' : (cob > 0 ? cob + 'd' : '\u2014')) + '</span></td>'
         + (function() {
             // Cobertura "real": inventario ÷ despacho REAL reportado ese día
             // (Registro Diario) — distinta de la columna anterior, que usa
@@ -7262,7 +7285,8 @@ function renderP2() {
             // no editable — para comparar sin tocar el flujo de edición.
             var despReal = r.vreal || r.dem || 0;
             var cobReal = (despReal > 0 && (r.inv||0) > 0) ? Math.round(r.inv / despReal) : 0;
-            var colReal = cobReal <= 0 ? 'var(--txt3)' : cobReal < 3 ? 'var(--red)' : cobReal < 5 ? 'var(--yel)' : 'var(--grn)';
+            var colReal = cobReal <= 0 ? 'var(--txt3)' : cobReal < CONFIG.COB_RED ? 'var(--red)' : cobReal < CONFIG.COB_AMB ? 'var(--yel)' : 'var(--grn)';
+            if (esRefFila) return '<td class="r" title="Refiner\u00eda: no aplica"><span style="color:var(--txt3);font-size:10px">\u2014</span></td>';
             return '<td class="r" title="Inventario \u00f7 despacho real reportado en Registro Diario"><span style="font-family:var(--mono);font-weight:700;font-size:10.5px;color:' + colReal + '">' + (cobReal > 0 ? cobReal + 'd' : '\u2014') + '</span></td>';
           })()
         + '<td id="cob-fecha-' + sid + '">' + (fechaCob ? fmtDate(fechaCob) : '\u2014') + '</td>'
@@ -8167,9 +8191,8 @@ function renderPA() {
   });
   function cobColor(cob) {
     if (!cob || cob <= 0) return {bg:'#450a0a', border:'#dc2626', text:'#fca5a5', label:'Agotado'};
-    if (cob < 4)  return {bg:'#dc2626', border:'#b91c1c', text:'#fff',    label:'Crítico'};
-    if (cob < 8)  return {bg:'#ea580c', border:'#c2410c', text:'#fff',    label:'Bajo'};
-    if (cob < 13) return {bg:'#d97706', border:'#b45309', text:'#fff',    label:'Atención'};
+    if (cob <= 7)  return {bg:'#dc2626', border:'#b91c1c', text:'#fff',    label:'Crítico'};
+    if (cob <= 14) return {bg:'#d97706', border:'#b45309', text:'#fff',    label:'Alerta'};
     return             {bg:'#16a34a', border:'#15803d', text:'#fff',    label:'Normal'};
   }
   const nCrit = Object.values(plantaMap).filter(d=>d.minCob>0&&d.minCob<4).length;
@@ -11724,9 +11747,8 @@ function renderPE() {
   liveActive.forEach(r => { cobMap[r.planta + '||' + r.producto] = r; });
   function cobColor(c) {
     if (!c || c <= 0) return '#e03434';
-    if (c < 4)  return '#e03434';
-    if (c < 8)  return '#d96b1a';
-    if (c < 13) return '#c9970a';
+    if (c <= 7)  return '#e03434';
+    if (c <= 14) return '#c9970a';
     return '#1a9e50';
   }
   function fmtD(d) {
@@ -19690,7 +19712,7 @@ function renderVistaEjecutivaSimple() {
   datosCob.sort(function(a,b){ return window._execCobSort==='asc' ? a.dias-b.dias : b.dias-a.dias; });
   var maxDiasCob = datosCob.reduce(function(m,d){ return Math.max(m,d.dias); }, 1);
 
-  function cobColor(dias) { return dias < 3 ? '#dc2626' : dias < 5 ? '#e8a000' : '#16a34a'; }
+  function cobColor(dias) { return dias <= 7 ? '#dc2626' : dias <= 14 ? '#e8a000' : '#16a34a'; }
   function sortBtn(val, label) {
     var active = window._execCobSort === val;
     return '<button onclick="window._execCobSort=\'' + val + '\';renderVistaEjecutivaSimple();" '
@@ -19733,8 +19755,8 @@ function renderVistaEjecutivaSimple() {
       (datosCob.length
         ? '<div>' + cobRowsHTML + '</div>' +
           '<div style="display:flex;gap:16px;margin-top:14px;padding-top:12px;border-top:1px solid var(--bdr);font-size:10.5px;color:var(--txt3)">' +
-            '<span><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:#dc2626;margin-right:5px"></span>Crítico (&lt;3d)</span>' +
-            '<span><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:#e8a000;margin-right:5px"></span>Alerta (&lt;5d)</span>' +
+            '<span><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:#dc2626;margin-right:5px"></span>Crítico (\u2264 7d)</span>' +
+            '<span><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:#e8a000;margin-right:5px"></span>Alerta (8\u201314d)</span>' +
             '<span><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:#16a34a;margin-right:5px"></span>Normal</span>' +
           '</div>'
         : '<div style="padding:30px;text-align:center;color:var(--txt3);font-size:12px">Sin datos de cobertura para este filtro con el modo "' + (window._execCobModo==='pron'?'Demanda pronóstico':'Despacho real') + '" — prueba con el otro modo.</div>') +

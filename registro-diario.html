@@ -988,7 +988,7 @@ function rdRecalc(prod) {
     // uc.pron_mes viene de PRONOSTICO_MBDC — ya es una tasa diaria, no se divide.
     var cobViva = rdCobCanonica(existencia, uc.vfact || 0, uc.pron_mes || 0);
     badgeEl.textContent = cobViva + ' d\u00edas';
-    badgeEl.className = 'prod-cond-badge ' + (cobViva < 3 ? 'crit' : cobViva < 5 ? 'warn' : 'ok');
+    badgeEl.className = 'prod-cond-badge ' + (cobViva <= 7 ? 'crit' : cobViva <= 14 ? 'warn' : 'ok');
   }
   rdMarkFilled(prod);
   rdCheckExistenciaMinima(prod, existencia);
@@ -1061,7 +1061,7 @@ function rdRenderProdRows(productos, valores, detalle, yaReportado) {
       // uc.pron_mes viene de PRONOSTICO_MBDC — ya es una tasa diaria, no se divide.
       var cobCanonica = (uc) ? rdCobCanonica(existenciaNum, uc.vfact || 0, uc.pron_mes || 0) : 0;
       if (uc) {
-        var cls = cobCanonica < 3 ? 'crit' : cobCanonica < 5 ? 'warn' : 'ok';
+        var cls = cobCanonica <= 7 ? 'crit' : cobCanonica <= 14 ? 'warn' : 'ok';
         condBadge = '<span class="prod-cond-badge ' + cls + '" data-cobbadge="' + p + '">' + cobCanonica + ' d\u00edas</span>';
       }
     }
