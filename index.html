@@ -7,6 +7,20 @@
 <!-- Script de detección temprana: corre ANTES del resto del HTML -->
 <script>
 (function(){
+  // Detectar ?view=executive antes de que se rendericen las cintas —
+  // sin esto, las cintas se veían un instante antes de que el JS
+  // principal (mucho más abajo) las ocultara.
+  var ve = (location.search||'').match(/[?&]view=([^&]+)/);
+  if (!ve || ve[1] !== 'executive') return;
+  var st = document.createElement('style');
+  st.id = 'exec-early-hide';
+  st.textContent = '#ship-ops-bar,#event-ticker{display:none!important}';
+  document.head.appendChild(st);
+})();
+</script>
+<!-- Script de detección temprana: corre ANTES del resto del HTML -->
+<script>
+(function(){
   // Detectar ?view=plan-dist antes de que cargue el resto del archivo
   var vp = (location.search||'').match(/[?&]view=([^&]+)/);
   if (!vp || vp[1] !== 'plan-dist') return;
@@ -19793,11 +19807,11 @@ function renderVistaEjecutivaSimple() {
   var cobSectionHTML = '<div style="background:var(--card);border:1px solid var(--bdr);border-radius:14px;padding:22px 24px;margin-bottom:20px">' +
       '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:10px">' +
         '<div style="font-size:13px;font-weight:800;color:var(--txt)">📊 Cobertura ' + (pl==='Nacional'?'por planta':'por producto') + (prod!=='Todos'&&pl==='Nacional'?' · '+prod:'') + '</div>' +
-        '<div style="display:flex;gap:8px">' + sortBtn('desc','Mayor → Menor') + sortBtn('asc','Menor → Mayor') + '</div>' +
+        '<div class="exec-btn-grid" style="display:flex;gap:8px">' + sortBtn('desc','Mayor → Menor') + sortBtn('asc','Menor → Mayor') + '</div>' +
       '</div>' +
-      '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">' +
+      '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap">' +
         '<span style="font-size:10.5px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.04em">Calcular con:</span>' +
-        modoBtn('real','📋 Despacho real reportado') + modoBtn('pron','🎯 Demanda pronóstico') +
+        '<div class="exec-btn-grid" style="display:flex;gap:8px">' + modoBtn('real','📋 Despacho real') + modoBtn('pron','🎯 Pronóstico') + '</div>' +
       '</div>' +
       '<div style="font-size:11px;color:var(--txt3);margin-bottom:14px">Hoy es <b style="color:var(--txt2)">' + rdHoyRealFmt() + '</b> — ' +
         (window._execCobModo==='pron'
@@ -19850,7 +19864,7 @@ function renderVistaEjecutivaSimple() {
       + '">' + label + '</button>';
   }
 
-  var periodoBar = '<div style="display:flex;gap:8px;flex-wrap:wrap">'
+  var periodoBar = '<div class="exec-btn-grid" style="display:flex;gap:8px;flex-wrap:wrap">'
     + periodoBtn(15, '15 días') + periodoBtn(30, '30 días') + periodoBtn(60, '60 días') + periodoBtn('mensual', 'Mensual')
     + '</div>';
 
@@ -19912,12 +19926,8 @@ function renderVistaEjecutivaSimple() {
   }
 
   box.innerHTML =
-    '<div class="exec-sticky-hdr" style="position:sticky;top:0;z-index:50;background:var(--bg);margin:0 -36px 20px;padding:24px 36px 16px;border-bottom:1px solid var(--bdr)">' +
-      '<div style="margin-bottom:16px">' +
-        '<div style="font-size:11px;font-weight:800;color:#c2410c;text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px">Panel de Suministro · Vista en Vivo</div>' +
-        '<div class="exec-title-main">Inventarios y Despachos' + (pl==='Nacional' ? ' ' : ' — ') + tituloScope + '</div>' +
-        '<div style="font-size:12.5px;color:var(--txt3);margin-top:2px">Datos al ' + fechaHoy + ' · actualización automática cada ' + Math.round(EXEC_AUTOREFRESH_MS/60000) + ' min</div>' +
-      '</div>' +
+    '<div class="exec-sticky-hdr" style="position:sticky;top:0;z-index:50;background:var(--bg);margin:0 -36px 20px;padding:18px 36px 14px;border-bottom:1px solid var(--bdr)">' +
+      '<div class="exec-title-main" style="margin-bottom:14px">Inventarios y Despachos' + (pl==='Nacional' ? ' ' : ' — ') + tituloScope + '</div>' +
       volverBtn +
       '<div class="exec-periodo-row" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">' +
         periodoBar + '<div style="display:flex;gap:10px;flex-wrap:wrap">' + plantaSelector + productoSelector + '</div>' +
@@ -19995,42 +20005,35 @@ function initExecutiveMode() {
   // "Solo Lectura" se encimaban. Aquí se ajustan con @media queries.
   var execStyle = document.createElement('style');
   execStyle.textContent =
-    '.exec-banner{flex-wrap:wrap;row-gap:10px}' +
+    '.exec-banner{flex-wrap:wrap;row-gap:8px}' +
     '.exec-title-main{font-size:22px;font-weight:800;color:var(--txt);line-height:1.25}' +
     '@media (max-width:640px){' +
-      '.exec-banner{padding:10px 14px;gap:10px}' +
-      '.exec-banner-logo{width:38px;height:38px}' +
-      '.exec-banner-title .exec-h1{font-size:12px;letter-spacing:.02em}' +
+      '.exec-banner{padding:8px 12px;gap:8px}' +
+      '.exec-banner-logo{width:32px;height:32px}' +
+      '.exec-banner-title .exec-h1{font-size:11px;letter-spacing:.01em}' +
       '.exec-banner-title .exec-h2{display:none}' +
-      '.exec-banner-stamp{font-size:8px;padding:4px 8px;order:3}' +
-      '.exec-banner-meta{font-size:9px;text-align:right;order:2;margin-left:auto}' +
-      '.exec-banner-meta .exec-time{font-size:10px}' +
-      '.exec-banner-meta .exec-credit{display:none}' +
-      '#exec-simple-view{padding-left:14px!important;padding-right:14px!important}' +
-      '.exec-sticky-hdr{margin-left:-14px!important;margin-right:-14px!important;padding-left:14px!important;padding-right:14px!important}' +
-      '.exec-title-main{font-size:17px!important}' +
-      '.exec-kpi-grid{grid-template-columns:1fr!important}' +
-      '.exec-kpi-val{font-size:28px!important}' +
-      '.exec-periodo-row{flex-direction:column;align-items:stretch!important}' +
-      '.exec-periodo-row select{width:100%}' +
-      '.exec-cob-label{width:78px!important;font-size:10.5px!important}' +
+      '.exec-banner-stamp{font-size:8px;padding:3px 7px;order:3}' +
+      '.exec-banner-meta{font-size:8.5px;text-align:right;order:2;margin-left:auto}' +
+      '.exec-banner-meta .exec-time{font-size:9px}' +
+      '.exec-banner-meta .exec-credit{display:block!important;font-size:8px;opacity:.75}' +
+      '#exec-simple-view{padding-left:12px!important;padding-right:12px!important}' +
+      '.exec-sticky-hdr{margin-left:-12px!important;margin-right:-12px!important;padding-left:12px!important;padding-right:12px!important;padding-top:12px!important;padding-bottom:10px!important}' +
+      '.exec-title-main{font-size:15px!important;margin-bottom:10px!important}' +
+      '.exec-kpi-grid{grid-template-columns:1fr!important;gap:12px!important}' +
+      '.exec-kpi-val{font-size:26px!important}' +
+      // Botones de periodo/orden/modo: grilla compacta de 2 columnas en
+      // vez de apilarse uno debajo del otro (antes ocupaban media pantalla).
+      '.exec-btn-grid{display:grid!important;grid-template-columns:1fr 1fr!important;gap:6px!important;width:100%}' +
+      '.exec-btn-grid button{width:100%;padding:8px 6px!important;font-size:10.5px!important;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}' +
+      '.exec-periodo-row{flex-direction:column;align-items:stretch!important;gap:8px!important}' +
+      '.exec-periodo-row select{width:100%;padding:7px 10px!important;font-size:11.5px!important}' +
+      '.exec-cob-label{width:70px!important;font-size:10px!important}' +
     '}';
   document.head.appendChild(execStyle);
-  // Ocultar las cintas (buques/riesgos y eventos) — no son necesarias en
-  // la vista ejecutiva simplificada, que ya muestra inventario/despacho.
-  (function hideTickersExec() {
-    function apply() {
-      var shipBar = document.getElementById('ship-ops-bar');
-      if (shipBar) shipBar.style.setProperty('display', 'none', 'important');
-      var evtTicker = document.getElementById('event-ticker');
-      if (evtTicker) evtTicker.style.setProperty('display', 'none', 'important');
-      document.body.classList.remove('has-ticker');
-    }
-    apply();
-    // Las cintas se re-renderizan solas cuando llegan datos nuevos —
-    // reforzar el ocultamiento tras cada carga para que no reaparezcan.
-    setInterval(apply, 3000);
-  })();
+  // Las cintas (buques/riesgos y eventos) ya quedan ocultas de forma
+  // permanente por el CSS inyectado al inicio del <head> (#exec-early-hide,
+  // con !important) — no hace falta más lógica JS aquí.
+  document.body.classList.remove('has-ticker');
   var banner = document.createElement('header');
   banner.className = 'exec-banner';
   banner.innerHTML =
