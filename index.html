@@ -10325,8 +10325,13 @@ function renderPTend() {
       // reporta su refinería (no se suman aparte para no duplicar), y
       // cualquier fila con un valor de existencia fuera de rango (dato
       // en barriles, no MB) se excluye del total hasta que se corrija.
+      // SKIP_COMBOS (ej. Pisco|TA1, El Milagro|TA1) también se respeta
+      // aquí — antes esta página era la única que no lo aplicaba, lo que
+      // causaba que el total de TA1 no coincidiera con Coberturas/Vista
+      // Ejecutiva/Inv. Nacional.
       if (planta==='Nacional' && PLANTAS_DUPLICADAS_EN_REFINERIA.indexOf(r.planta)!==-1) return false;
       if (!invFilaValida(r)) return false;
+      if (typeof SKIP_COMBOS !== 'undefined' && SKIP_COMBOS.has((r.planta||'')+'|'+(r.producto||''))) return false;
       return true;
     });
     if (!rows.length) return;
