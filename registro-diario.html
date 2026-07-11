@@ -1480,7 +1480,17 @@ function rdConfirmarGuardar() {
   rdPost('rdGuardarReporte', payload).then(function(res) {
     btn.disabled = false; btn.textContent = 'Confirmar';
     rdCerrarConfirmacion();
-    if (res.success) { rdToast(res.message, 'ok'); rdRefreshMiReporte(); }
+    if (res.success) {
+      rdToast(res.message, 'ok');
+      // Bloquear el botón principal DE INMEDIATO — antes esto solo pasaba
+      // al terminar rdRefreshMiReporte() (una llamada de red aparte), y en
+      // esa ventana el operador podía volver a hacer clic en "Guardar
+      // reporte" pensando que no había funcionado, generando un reporte
+      // duplicado con los mismos datos.
+      var btnPrincipal = document.getElementById('btnGuardar');
+      if (btnPrincipal) { btnPrincipal.disabled = true; btnPrincipal.title = 'Guardado ✓'; btnPrincipal.style.opacity = '.45'; btnPrincipal.style.cursor = 'not-allowed'; }
+      rdRefreshMiReporte();
+    }
     else { rdToast(res.message || 'Error al guardar', 'error'); if (/sesi\u00f3n/i.test(res.message || '')) rdLogout(); }
   }).catch(function() {
     btn.disabled = false; btn.textContent = 'Confirmar';
