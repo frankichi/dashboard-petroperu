@@ -1032,12 +1032,37 @@ function rdRecalc(prod) {
   // escribiendo es mayor a la del último reporte conocido, es señal de
   // que llegó producto — se muestra el panel para que digan por dónde
   // (cabotaje, cisternas o vía refinería) y quede registrado.
+  //
+  // OJO — la mayoría de plantas no trabaja domingo (no reportan ese día),
+  // así que "el último reporte conocido" puede ser de varios días atrás
+  // (ej. viernes), no necesariamente "ayer". Sin este cuidado, el panel
+  // podía sugerir que hubo una reposición cuando en realidad solo pasó
+  // más tiempo entre reportes de lo normal — el mensaje ahora deja
+  // explícito CONTRA QUÉ FECHA se está comparando, y el umbral se ajusta
+  // según cuántos días pasaron, para no disparar en falso por un simple
+  // fin de semana sin reportar.
   (function rdCheckReposicion() {
     var panel = document.getElementById('repos-panel-' + prod.replace(/[^a-z0-9]/gi,'_'));
+    var msgEl = document.getElementById('repos-msg-' + prod.replace(/[^a-z0-9]/gi,'_'));
     if (!panel) return;
     var ucInv = (uc && uc.inv) || 0;
-    var UMBRAL_REPOS = 0.3; // MB — margen para no disparar con redondeos/typos menores
+    var ucFecha = uc && uc.fecha;
+    var diasGap = 1;
+    if (ucFecha) {
+      var fechaHoyRD = (RD.fechaReporte || rdHoyLima());
+      var msDiff = new Date(fechaHoyRD + 'T12:00:00') - new Date(ucFecha + 'T12:00:00');
+      diasGap = Math.max(1, Math.round(msDiff / 86400000));
+    }
+    // Margen proporcional a los días transcurridos — con más días de por
+    // medio, un incremento moderado no necesariamente es una reposición
+    // puntual, así que se pide un salto más claro para disparar el aviso.
+    var UMBRAL_REPOS = 0.3 * diasGap;
     var subioDeVerdad = ucInv > 0 && existencia > (ucInv + UMBRAL_REPOS);
+    if (subioDeVerdad && msgEl) {
+      var fechaTxt = ucFecha ? ucFecha.split('-').reverse().join('.') : '—';
+      var gapTxt = diasGap > 1 ? ' (hace ' + diasGap + ' días — revisa si tu planta no reporta fines de semana)' : '';
+      msgEl.innerHTML = '📈 La existencia subió respecto a tu <b>último reporte del ' + fechaTxt + '</b>' + gapTxt + ' — ¿cómo llegó el producto?';
+    }
     panel.style.display = subioDeVerdad ? 'block' : 'none';
   })();
   var autoEl = document.querySelector('[data-auto-calc="' + prod + '"]');
@@ -1242,7 +1267,7 @@ function rdRenderProdRows(productos, valores, detalle, yaReportado) {
       // llegó producto y conviene registrar por dónde.
       +   (yaReportado ? '' :
            '<div class="repos-panel" id="repos-panel-' + p.replace(/[^a-z0-9]/gi,'_') + '" style="display:none;margin-top:10px;padding:10px 12px;background:#eef6ff;border:1px solid #bfdbfe;border-radius:8px">'
-           + '<div style="font-size:11px;font-weight:700;color:#1e40af;margin-bottom:7px">📈 La existencia subió respecto al último reporte — ¿cómo llegó el producto?</div>'
+           + '<div id="repos-msg-' + p.replace(/[^a-z0-9]/gi,'_') + '" style="font-size:11px;font-weight:700;color:#1e40af;margin-bottom:7px">📈 La existencia subió respecto al último reporte — ¿cómo llegó el producto?</div>'
            + '<div style="display:flex;gap:6px;flex-wrap:wrap">'
            +   '<button type="button" onclick="rdMarcarReposicion(\'' + p + '\',\'Cabotaje Mar\u00edtimo\',\'\u26f4\ufe0f\')" style="padding:6px 12px;border-radius:16px;border:1.5px solid #0284c7;background:#fff;color:#0284c7;font-size:11px;font-weight:700;cursor:pointer">\u26f4\ufe0f Cabotaje Mar\u00edtimo</button>'
            +   '<button type="button" onclick="rdMarcarReposicion(\'' + p + '\',\'Cisternas Terrestres\',\'\ud83d\ude9b\')" style="padding:6px 12px;border-radius:16px;border:1.5px solid #ca8a04;background:#fff;color:#ca8a04;font-size:11px;font-weight:700;cursor:pointer">\ud83d\ude9b Cisternas Terrestres</button>'
