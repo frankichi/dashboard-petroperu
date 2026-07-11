@@ -10307,8 +10307,16 @@ function renderPTend() {
   var baseByDate = [], marByDate = [], terrByDate = [], dateLabels = [], invRawByDate = [];
   dates.forEach(function(d) {
     var rows = RAW.filter(function(r){
-      return r.fecha===d && r.producto===prod
-        && (planta==='Nacional' || r.planta===planta);
+      if (r.fecha!==d || r.producto!==prod) return false;
+      if (planta!=='Nacional' && r.planta!==planta) return false;
+      // Mismo criterio que el resto del dashboard y la Vista Ejecutiva:
+      // Conchán/Iquitos (ventas) ya están incluidos dentro de lo que
+      // reporta su refinería (no se suman aparte para no duplicar), y
+      // cualquier fila con un valor de existencia fuera de rango (dato
+      // en barriles, no MB) se excluye del total hasta que se corrija.
+      if (planta==='Nacional' && PLANTAS_DUPLICADAS_EN_REFINERIA.indexOf(r.planta)!==-1) return false;
+      if (!invFilaValida(r)) return false;
+      return true;
     });
     if (!rows.length) return;
     var totInv=0, totMar=0, totTerr=0, totInvRaw=0;
@@ -10354,6 +10362,8 @@ function renderPTend() {
   // Se toma del registro más reciente de cada planta para el producto.
   var _pronCob = 0;
   var _lastRows = byLatest().filter(function(r){ return r.producto === prod; });
+  // Se excluyen sub-plantas de VENTAS_AGG_RULES para evitar doble conteo en ventas
+  var _subPlantas = typeof VENTAS_SUB_PLANTS !== 'undefined' ? VENTAS_SUB_PLANTS : new Set();
   function _demSys(r) {
     var pron = pronDiarioAprobado(r);
     return (r.vfact||0) > 0 ? r.vfact : pron;
@@ -10409,7 +10419,6 @@ function renderPTend() {
   // Plantas disponibles: las que tienen inventario en RAW para este producto
   // (no en ventasDiariasMap, que podría estar vacío)
   // Se excluyen sub-plantas de VENTAS_AGG_RULES para evitar doble conteo en ventas
-  var _subPlantas = typeof VENTAS_SUB_PLANTS !== 'undefined' ? VENTAS_SUB_PLANTS : new Set();
   var _plantasConInv = new Set();
   RAW.forEach(function(r) {
     if (r.producto === prod && (r.inv||0) > 0) _plantasConInv.add(r.planta);
@@ -10423,6 +10432,7 @@ function renderPTend() {
   var COL_TERR = '#0d9488';   // teal    — cisternas
   var PROD_CFG_T = {
     'Diesel':     {bar:'#1B3A6B',barLight:'rgba(29,58,107,0.65)'},
+    'D2S50-H':    {bar:'#4338ca',barLight:'rgba(67,56,202,0.65)'},
     'G. Regular': {bar:'#166534',barLight:'rgba(22,101,52,0.65)'},
     'G. Premium': {bar:'#7c2d12',barLight:'rgba(124,45,18,0.65)'},
     'G. 84':      {bar:'#713f12',barLight:'rgba(113,63,18,0.65)'},
@@ -10448,7 +10458,7 @@ function renderPTend() {
     return (d.getDate()<10?'0':'')+d.getDate()+'-'+months[d.getMonth()];
   };
   var xLabels = dateLabels.map(fmtLabel);
-  var PROD_COLORS={'Diesel':'#1B3A6B','G. Regular':'#166534','G. Premium':'#7c2d12','G. 84':'#713f12','TA1':'#1e1b4b','GLP':'#0f766e'};
+  var PROD_COLORS={'Diesel':'#1B3A6B','D2S50-H':'#4338ca','G. Regular':'#166534','G. Premium':'#7c2d12','G. 84':'#713f12','TA1':'#1e1b4b','GLP':'#0f766e'};
   // Qué productos tienen datos para esta planta (usando normProd para unificar nombres)
   var prodsConDatos = new Set();
   RAW.forEach(function(r) {
@@ -10483,7 +10493,7 @@ function renderPTend() {
       +'<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:'+c+';margin-right:5px;vertical-align:middle"></span>'+p+'</button>';
   }).join('');
   var totalNac = lastMar + lastTerr;
-  var PROD_COL = {'Diesel':'#1B3A6B','G. Regular':'#166534','G. Premium':'#7c2d12','G. 84':'#713f12','TA1':'#1e1b4b','GLP':'#0f766e'};
+  var PROD_COL = {'Diesel':'#1B3A6B','D2S50-H':'#4338ca','G. Regular':'#166534','G. Premium':'#7c2d12','G. 84':'#713f12','TA1':'#1e1b4b','GLP':'#0f766e'};
   var plantaHtml = plantaRows.length ? plantaRows.map(function(r) {
     var pctOfNac = totalNac > 0 ? (r.total / totalNac * 100) : 0;
     var btRaw    = (r.bt || '').replace(/\s+\d+$/, '');
@@ -20107,11 +20117,7 @@ function renderVistaEjecutivaSimple() {
         '<span style="font-size:10.5px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.04em">Calcular con:</span>' +
         '<div class="exec-btn-grid" style="display:flex;gap:8px">' + modoBtn('real','📋 Despacho real') + modoBtn('pron','🎯 Pronóstico') + '</div>' +
       '</div>' +
-      '<div style="font-size:11px;color:var(--txt3);margin-bottom:14px">Hoy es <b style="color:var(--txt2)">' + rdHoyRealFmt() + '</b> — ' +
-        (window._execCobModo==='pron'
-          ? 'cobertura = <b style="color:var(--txt2)">inventario reportado ÷ demanda pronóstico</b> (hoja Pronóstico)'
-          : 'cobertura = <b style="color:var(--txt2)">inventario reportado ÷ despacho real</b> reportado en Registro Diario') +
-        ', con cierre del <b style="color:var(--txt2)">' + fechaHoy.slice(8,10)+'.'+fechaHoy.slice(5,7)+'.'+fechaHoy.slice(0,4) + '</b></div>' +
+      '<div style="font-size:11px;color:var(--txt3);margin-bottom:14px">Datos al cierre del <b style="color:var(--txt2)">' + fechaHoy.slice(8,10)+'.'+fechaHoy.slice(5,7)+'.'+fechaHoy.slice(0,4) + '</b></div>' +
       (datosCob.length
         ? '<div>' + cobRowsHTML + '</div>' +
           '<div style="display:flex;gap:16px;margin-top:14px;padding-top:12px;border-top:1px solid var(--bdr);font-size:10.5px;color:var(--txt3)">' +
