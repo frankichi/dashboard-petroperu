@@ -19812,6 +19812,21 @@ window.openExecutiveView = openExecutiveView;
 // cuándo hay desfase entre "hoy calendario" y la última fecha con cierre
 // reportado (las plantas cierran su jornada en la tarde/noche, así que la
 // mañana siguiente la cobertura vigente sigue siendo la del día anterior).
+// Asegura que los meses de pronóstico necesarios para la Vista Ejecutiva
+// estén cargados (misma caché que usa "Tendencia Inv.") — si falta
+// alguno, lo pide y vuelve a renderizar la vista cuando llega.
+function _pTendEnsurePronMesesExec(meses) {
+  if (typeof _pronByMonthCache === 'undefined' || typeof _pTendLoadPronMes !== 'function') return;
+  var pendientes = (meses||[]).filter(function(m){ return _pronByMonthCache[m] === undefined; });
+  if (!pendientes.length) return;
+  var restantes = pendientes.length;
+  pendientes.forEach(function(m) {
+    _pTendLoadPronMes(m).then(function(){
+      restantes--;
+      if (restantes === 0 && typeof renderVistaEjecutivaSimple === 'function') renderVistaEjecutivaSimple();
+    });
+  });
+}
 function rdHoyRealFmt() {
   var d = new Date();
   var lima = new Date(d.getTime() - 5 * 3600 * 1000);
@@ -19899,7 +19914,21 @@ function renderVistaEjecutivaSimple() {
                      .reduce(function(s,r){ return s + despRow(r); }, 0) : null;
 
   // ── Construir la serie según el periodo elegido ──────────────────────
-  var labels, invSerie, despSerie;
+  var labels, invSerie, despSerie, pronSerie;
+  // Pronóstico mensual — misma fuente y agregación que usa "Tendencia Inv."
+  // del dashboard (hoja 'pronostico', ya en MBDC diario). Si 'Todos' los
+  // productos está seleccionado, se suma el pronóstico de cada producto.
+  function pronParaFechaExec(fecha, planta, prod) {
+    if (typeof _pTendPronParaFecha !== 'function') return 0;
+    if (prod === 'Todos') {
+      var tot = 0;
+      (typeof PRODUCTO_ORDEN !== 'undefined' ? PRODUCTO_ORDEN : []).forEach(function(p) {
+        tot += (_pTendPronParaFecha(fecha, planta, p) || 0);
+      });
+      return tot;
+    }
+    return _pTendPronParaFecha(fecha, planta, prod) || 0;
+  }
   if (window._execPeriod === 'mensual') {
     // Agrupar por mes: inventario = promedio del mes, despacho = suma del mes
     var mesesMap = {}; // {mes: {invSum, invCnt, despSum}}
@@ -19916,6 +19945,11 @@ function renderVistaEjecutivaSimple() {
     labels = mesesOrdenados.map(function(m){ return mesesNombre[parseInt(m.slice(5,7),10)-1] + ' ' + m.slice(2,4); });
     invSerie = mesesOrdenados.map(function(m){ var d=mesesMap[m]; return d.invCnt? parseFloat((d.invSum/d.invCnt).toFixed(1)) : null; });
     despSerie = mesesOrdenados.map(function(m){ var d=mesesMap[m]; return d.despSum>0? parseFloat(d.despSum.toFixed(1)) : null; });
+    pronSerie = mesesOrdenados.map(function(m){
+      var v = pronParaFechaExec(m + '-15', pl, prod); // día 15 del mes como referencia
+      return v > 0 ? parseFloat(v.toFixed(2)) : null;
+    });
+    _pTendEnsurePronMesesExec(mesesOrdenados);
   } else {
     var n = window._execPeriod;
     var datesN = (DATES || []).slice(-n);
@@ -19926,6 +19960,11 @@ function renderVistaEjecutivaSimple() {
                  .reduce(function(s,r){ return s+despRow(r); }, 0);
       return v>0 ? parseFloat(v.toFixed(2)) : null;
     });
+    pronSerie = datesN.map(function(d){
+      var v = pronParaFechaExec(d, pl, prod);
+      return v > 0 ? parseFloat(v.toFixed(2)) : null;
+    });
+    _pTendEnsurePronMesesExec([...new Set(datesN.map(function(d){return d.slice(0,7);}))]);
   }
 
   // ── Coberturas — ranking visual, ordenable, con 2 modos de cálculo ────
@@ -20230,11 +20269,13 @@ function renderVistaEjecutivaSimple() {
   var barMode = window._execPeriod === 'mensual';
   var ctxInv = document.getElementById('exec-chart-inv');
   if (ctxInv) {
+    // Barras — a futuro se apilará aquí el cabotaje (terrestre/marítimo)
+    // por planta y producto, encima del inventario base.
     window._execChartInv = new Chart(ctxInv, {
-      type: 'line',
+      type: 'bar',
       data: { labels: labels, datasets: [{
-        data: invSerie, borderColor: '#0a3a5c', backgroundColor: 'rgba(10,58,92,.08)',
-        borderWidth: 2.5, pointRadius: barMode?3:2, pointHoverRadius: 5, tension: 0.25, fill: true, spanGaps: true
+        label: 'Inventario',
+        data: invSerie, backgroundColor: '#0a3a5c', borderRadius: 3, maxBarThickness: barMode?36:26
       }]},
       options: {
         responsive: true, maintainAspectRatio: false,
@@ -20245,14 +20286,30 @@ function renderVistaEjecutivaSimple() {
   }
   var ctxDesp = document.getElementById('exec-chart-desp');
   if (ctxDesp) {
+    var hayPron = pronSerie.some(function(v){ return v!=null; });
+    var despDatasets = [{
+      label: 'Despachos',
+      data: despSerie, borderColor: '#c2410c', backgroundColor: 'rgba(194,65,12,.08)',
+      borderWidth: 2.5, pointRadius: 3.5, pointHoverRadius: 6, pointBackgroundColor: '#c2410c',
+      tension: 0.2, fill: false, spanGaps: true
+    }];
+    if (hayPron) {
+      despDatasets.push({
+        label: 'Demanda pronóstico',
+        data: pronSerie, borderColor: '#059669', backgroundColor: 'transparent',
+        borderWidth: 2.5, borderDash: [8,4], pointRadius: 0, pointHoverRadius: 0,
+        tension: 0, fill: false, spanGaps: true
+      });
+    }
     window._execChartDesp = new Chart(ctxDesp, {
-      type: 'bar',
-      data: { labels: labels, datasets: [{
-        data: despSerie, backgroundColor: '#c2410c', borderRadius: 3, maxBarThickness: barMode?36:22
-      }]},
+      type: 'line',
+      data: { labels: labels, datasets: despDatasets },
       options: {
         responsive: true, maintainAspectRatio: false,
-        plugins: { legend: { display: false }, tooltip: { callbacks: { label: function(c){ return fmtMB(c.parsed.y); } } } },
+        plugins: {
+          legend: { display: hayPron, position: 'top', align: 'end', labels: { boxWidth: 14, font: { size: 10.5 } } },
+          tooltip: { callbacks: { label: function(c){ return (c.dataset.label||'') + ': ' + fmtMB(c.parsed.y); } } }
+        },
         scales: { y: { ticks: { callback: function(v){ return v.toLocaleString('es-PE'); } } } }
       }
     });
