@@ -10985,14 +10985,23 @@ function renderPTend() {
       //    de Registro Diario ("Despacho del día"), campo vreal/dem de
       //    inventario. Para 'Nacional' se suma el despacho de todas las
       //    plantas de ese producto (mismo universo que las demás líneas).
+      //    Mismos guards que usa Panel Gerencial (despRow): tope de 60
+      //    MB/día por outlier, y Conchán/Iquitos (ventas) excluidos del
+      //    total Nacional por ya estar dentro de su refinería — antes
+      //    esta línea no tenía ninguno de los dos, por eso no coincidía.
+      var DESP_MAX_RAZONABLE_T = 60; // MB/día por planta+producto — igual que Panel Gerencial
       var despachoData = dateLabels.map(function(d) {
         var filas = RAW.filter(function(r) {
           if (r.fecha !== d || r.producto !== prod) return false;
           if (SKIP_COMBOS && SKIP_COMBOS.has((r.planta||'')+'|'+(r.producto||''))) return false;
+          if (planta === 'Nacional' && PLANTAS_DUPLICADAS_EN_REFINERIA.indexOf(r.planta) !== -1) return false;
           return planta === 'Nacional' ? true : r.planta === planta;
         });
         if (!filas.length) return null;
-        var tot = filas.reduce(function(s,r){ return s + (r.vreal || r.dem || 0); }, 0);
+        var tot = filas.reduce(function(s,r){
+          var v = r.vreal || r.dem || 0;
+          return s + ((v > 0 && v <= DESP_MAX_RAZONABLE_T) ? v : 0);
+        }, 0);
         return tot > 0 ? parseFloat(tot.toFixed(3)) : null;
       });
       var hasAny = pronLineData.some(function(v){ return v != null; })
