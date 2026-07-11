@@ -19935,7 +19935,7 @@ function renderVistaEjecutivaSimple() {
                      .reduce(function(s,r){ return s + despRow(r); }, 0) : null;
 
   // ── Construir la serie según el periodo elegido ──────────────────────
-  var labels, invSerie, despSerie, pronSerie;
+  var labels, invSerie, despSerie, pronSerie, reposSerie;
   // Pronóstico mensual — misma fuente y agregación que usa "Tendencia Inv."
   // del dashboard (hoja 'pronostico', ya en MBDC diario). Si 'Todos' los
   // productos está seleccionado, se suma el pronóstico de cada producto.
@@ -19952,20 +19952,26 @@ function renderVistaEjecutivaSimple() {
   }
   if (window._execPeriod === 'mensual') {
     // Agrupar por mes: inventario = promedio del mes, despacho = suma del mes
-    var mesesMap = {}; // {mes: {invSum, invCnt, despSum}}
+    var mesesMap = {}; // {mes: {invSum, invCnt, despSum, reposSum}}
     (DATES||[]).forEach(function(d) {
       var m = d.slice(0,7);
-      if (!mesesMap[m]) mesesMap[m] = {invSum:0, invCnt:0, despSum:0};
+      if (!mesesMap[m]) mesesMap[m] = {invSum:0, invCnt:0, despSum:0, reposSum:0};
       var invD = sumFecha(d, 'inv', pl, prod);
       if (invD > 0) { mesesMap[m].invSum += invD; mesesMap[m].invCnt++; }
       mesesMap[m].despSum += RAW.filter(function(r){ return r.fecha===d && filaAplica(r, pl, prod); })
                                  .reduce(function(s,r){ return s+despRow(r); }, 0);
+      RAW.forEach(function(r){
+        if (r.fecha!==d || !filaAplica(r, pl, prod)) return;
+        var tag = parseReposicionTag(r.comentario_prod);
+        if (tag) mesesMap[m].reposSum += tag.volumenMB;
+      });
     });
     var mesesOrdenados = Object.keys(mesesMap).sort().slice(-12);
     var mesesNombre = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
     labels = mesesOrdenados.map(function(m){ return mesesNombre[parseInt(m.slice(5,7),10)-1] + ' ' + m.slice(2,4); });
     invSerie = mesesOrdenados.map(function(m){ var d=mesesMap[m]; return d.invCnt? parseFloat((d.invSum/d.invCnt).toFixed(1)) : null; });
     despSerie = mesesOrdenados.map(function(m){ var d=mesesMap[m]; return d.despSum>0? parseFloat(d.despSum.toFixed(1)) : null; });
+    reposSerie = mesesOrdenados.map(function(m){ var d=mesesMap[m]; return d.reposSum>0? parseFloat(d.reposSum.toFixed(1)) : null; });
     pronSerie = mesesOrdenados.map(function(m){
       var v = pronParaFechaExec(m + '-15', pl, prod); // día 15 del mes como referencia
       return v > 0 ? parseFloat(v.toFixed(2)) : null;
@@ -19980,6 +19986,18 @@ function renderVistaEjecutivaSimple() {
       var v = RAW.filter(function(r){ return r.fecha===d && filaAplica(r, pl, prod); })
                  .reduce(function(s,r){ return s+despRow(r); }, 0);
       return v>0 ? parseFloat(v.toFixed(2)) : null;
+    });
+    // Volumen de reposición "pintado" en la barra de inventario — leído
+    // de la etiqueta estructurada que deja Registro Diario al marcar
+    // cómo llegó el producto (cabotaje/cisternas/refinería).
+    reposSerie = datesN.map(function(d){
+      var tot = 0;
+      RAW.forEach(function(r){
+        if (r.fecha!==d || !filaAplica(r, pl, prod)) return;
+        var tag = parseReposicionTag(r.comentario_prod);
+        if (tag) tot += tag.volumenMB;
+      });
+      return tot > 0 ? parseFloat(tot.toFixed(2)) : null;
     });
     pronSerie = datesN.map(function(d){
       var v = pronParaFechaExec(d, pl, prod);
@@ -20316,27 +20334,49 @@ function renderVistaEjecutivaSimple() {
   var ctxInv = document.getElementById('exec-chart-inv');
   if (ctxInv) {
     // Degradado azul corporativo — más impactante que un color plano para
-    // una vista de nivel gerencial. A futuro se apilará aquí el cabotaje
-    // (terrestre/marítimo) por planta y producto, encima del inventario base.
+    // una vista de nivel gerencial. Encima se apila (con otro color) el
+    // volumen recibido por reposición ese día, leído de la etiqueta que
+    // deja Registro Diario al marcar cabotaje/cisternas/refinería.
     var gInv = ctxInv.getContext('2d').createLinearGradient(0, 0, 0, 220);
     gInv.addColorStop(0, '#1e5f8f');
     gInv.addColorStop(1, '#0a3a5c');
+    var hayRepos = reposSerie.some(function(v){ return v!=null; });
+    // invSerie YA INCLUYE el volumen recibido (es la existencia total
+    // reportada ese día). Para apilar correctamente sin duplicar, la
+    // base debe ser "lo que había antes de recibir" = inv − repos, y el
+    // segmento de reposición se apila encima — la suma da el total real.
+    var invBaseSerie = invSerie.map(function(v, i) {
+      if (v == null) return null;
+      var r = reposSerie[i] || 0;
+      return parseFloat((v - r).toFixed(1));
+    });
+    var invDatasets = [{
+      label: 'Inventario',
+      data: hayRepos ? invBaseSerie : invSerie, backgroundColor: gInv, hoverBackgroundColor: '#2f7ab8',
+      borderRadius: hayRepos ? 0 : 5, maxBarThickness: barMode?36:26, stack: 'inv'
+    }];
+    if (hayRepos) {
+      invDatasets.push({
+        label: 'Reposición recibida',
+        data: reposSerie, backgroundColor: '#2563eb', hoverBackgroundColor: '#3b82f6',
+        borderRadius: 5, maxBarThickness: barMode?36:26, stack: 'inv'
+      });
+    }
     window._execChartInv = new Chart(ctxInv, {
       type: 'bar',
-      data: { labels: labels, datasets: [{
-        label: 'Inventario',
-        data: invSerie, backgroundColor: gInv, hoverBackgroundColor: '#2f7ab8',
-        borderRadius: 5, maxBarThickness: barMode?36:26
-      }]},
+      data: { labels: labels, datasets: invDatasets },
       options: {
         responsive: true, maintainAspectRatio: false,
-        plugins: { legend: { display: false }, tooltip: {
-          backgroundColor: '#0a3a5c', padding: 10, cornerRadius: 8, titleFont: {weight:'700'},
-          callbacks: { label: function(c){ return fmtMB(c.parsed.y); } }
-        } },
+        plugins: {
+          legend: { display: hayRepos, position: 'top', align: 'end', labels: { boxWidth: 14, font: { size: 10.5 } } },
+          tooltip: {
+            backgroundColor: '#0a3a5c', padding: 10, cornerRadius: 8, titleFont: {weight:'700'},
+            callbacks: { label: function(c){ return (c.dataset.label||'') + ': ' + fmtMB(c.parsed.y); } }
+          }
+        },
         scales: {
-          y: { ticks: { callback: function(v){ return v.toLocaleString('es-PE'); } }, grid: { color: 'rgba(148,163,184,.15)' } },
-          x: { grid: { display: false } }
+          y: { stacked: true, ticks: { callback: function(v){ return v.toLocaleString('es-PE'); } }, grid: { color: 'rgba(148,163,184,.15)' } },
+          x: { stacked: true, grid: { display: false } }
         }
       }
     });
