@@ -10315,7 +10315,7 @@ function renderPTend() {
   // NOTA: el gráfico refleja EXCLUSIVAMENTE los datos de Coberturas (RAW:
   // inv + vol_rep/BT del E&D). Las CARGAS DE NAVES se muestran solo como
   // información en el ticker, KPIs logísticos y popups del mapa.
-  var baseByDate = [], marByDate = [], terrByDate = [], dateLabels = [], invRawByDate = [];
+  var baseByDate = [], marByDate = [], terrByDate = [], reposByDate = [], dateLabels = [], invRawByDate = [];
   dates.forEach(function(d) {
     var rows = RAW.filter(function(r){
       if (r.fecha!==d || r.producto!==prod) return false;
@@ -10357,10 +10357,22 @@ function renderPTend() {
       else               totTerr += vol;
     });
     totInv = totInvRaw;
+    // Reposición MARCADA por la propia planta en Registro Diario (etiqueta
+    // "[REPOS|...]" en el comentario del producto) — YA está incluida
+    // dentro de totInvRaw (es la existencia reportada, no un extra), así
+    // que se separa de la base para apilarla con otro color, igual que
+    // en la Vista Ejecutiva: base = existencia − reposición marcada.
+    var totRepos = 0;
+    rows.forEach(function(r) {
+      var tag = parseReposicionTag(r.comentario_prod);
+      if (tag) totRepos += tag.volumenMB;
+    });
+    var baseSinRepos = Math.max(0, totInvRaw - totRepos);
     // base = INVENTARIO DISPONIBLE (RAW, igual que INV.DISP en Coberturas)
     // El cabotaje (vol_rep del BT) se apila ENCIMA: es producto en tránsito,
     // NO incluido en el inventario físico de la planta.
-    baseByDate.push(parseFloat(totInvRaw.toFixed(2)));
+    baseByDate.push(parseFloat(baseSinRepos.toFixed(2)));
+    reposByDate.push(totRepos > 0 ? parseFloat(totRepos.toFixed(2)) : 0);
     marByDate.push(parseFloat(totMar.toFixed(2)));
     terrByDate.push(parseFloat(totTerr.toFixed(2)));
     invRawByDate.push(parseFloat(totInvRaw.toFixed(2)));
@@ -10452,14 +10464,21 @@ function renderPTend() {
   };
   var cfg = PROD_CFG_T[prod]||{bar:'#1B3A6B',barLight:'rgba(29,58,107,0.65)'};
   var lastBase  = baseByDate[baseByDate.length-1]||0;
+  var lastRepos = reposByDate[reposByDate.length-1]||0;
   var lastMar   = marByDate[marByDate.length-1]||0;
   var lastTerr  = terrByDate[terrByDate.length-1]||0;
   // KPI Inventario Total = inventario DISPONIBLE (RAW), igual que Coberturas.
-  // El cabotaje se reporta aparte (KPIs propios), no se suma al inventario.
-  var lastTotal = lastBase;
-  var prevTotal = (baseByDate[baseByDate.length-2]||0);
+  // baseByDate ya no incluye la porción de reposición marcada (se separó
+  // para apilarla con otro color en el gráfico) — se vuelve a sumar aquí
+  // para que el KPI siga mostrando la existencia real total reportada.
+  // El cabotaje BT (marítimo/terrestre) se reporta aparte (KPIs propios),
+  // no se suma al inventario.
+  var lastTotal = lastBase + lastRepos;
+  var prevBase  = (baseByDate[baseByDate.length-2]||0);
+  var prevRepos = (reposByDate[reposByDate.length-2]||0);
+  var prevTotal = prevBase + prevRepos;
   var delta     = lastTotal-prevTotal;
-  var allTotals = baseByDate.slice();
+  var allTotals = baseByDate.map(function(v,i){ return v + (reposByDate[i]||0); });
   var avgTotal  = allTotals.reduce(function(a,b){return a+b;},0)/(allTotals.length||1);
   var totalCabLast = lastMar+lastTerr;
   var fmtLabel = function(iso) {
@@ -10773,6 +10792,18 @@ function renderPTend() {
             yAxisID: 'y',
             borderRadius: { topLeft:0, topRight:0, bottomLeft:3, bottomRight:3 },
             borderSkipped: 'bottom',
+          },
+          {
+            type: 'bar',
+            label: '📦 Reposición marcada',
+            data: reposByDate,
+            backgroundColor: '#2563eb',
+            borderColor: '#1d4ed8',
+            borderWidth: 1,
+            stack: 'inv',
+            yAxisID: 'y',
+            borderRadius: { topLeft:0, topRight:0, bottomLeft:0, bottomRight:0 },
+            borderSkipped: false,
           },
           {
             type: 'bar',
