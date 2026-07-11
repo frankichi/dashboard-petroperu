@@ -73,24 +73,8 @@
   }
   @media (max-width:400px){ .grid{grid-template-columns:1fr} }
 
-  /* ── Impresión / Exportar a PDF ────────────────────────────────────
-     Formato corporativo: oculta controles interactivos, fuerza colores
-     de fondo a imprimirse, y ordena todo en una sola columna limpia
-     para que se vea bien en papel A4 / como PDF. */
-  @media print{
-    body{background:#fff}
-    .toolbar,.btn,#btnExcel,#btnPdf,.banner-meta .live-dot{display:none !important}
-    .banner{position:static;box-shadow:none;-webkit-print-color-adjust:exact;print-color-adjust:exact}
-    .wrap{max-width:100%;padding:0}
-    .card,.kpi{-webkit-print-color-adjust:exact;print-color-adjust:exact;break-inside:avoid}
-    .grid{grid-template-columns:repeat(3,1fr) !important}
-    .section-title{break-after:avoid}
-    .footer{break-inside:avoid}
-    #printHeader{display:block !important}
-  }
-  #printHeader{display:none}
+
 </style>
-<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
 </head>
 <body>
 
@@ -106,15 +90,6 @@
   </div>
 </div>
 
-<div id="printHeader" style="padding:18px 0 10px;border-bottom:2px solid #0a3a5c;margin-bottom:14px">
-  <div style="display:flex;align-items:center;gap:12px">
-    <img src="data:image/jpeg;base64,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" alt="Petroper\u00fa" style="width:36px;height:36px;object-fit:cover;border-radius:6px;flex-shrink:0">
-    <div>
-      <div style="font-size:15px;font-weight:800;color:#0a3a5c;text-transform:uppercase;letter-spacing:.03em">PETROPERÚ S.A. — Seguimiento Diario de Reportes</div>
-      <div style="font-size:10.5px;color:#64748b">Planificación de Suministro · Registro Diario de Inventarios · Reporte generado el <span id="printFecha"></span></div>
-    </div>
-  </div>
-</div>
 
 <div class="wrap">
 
@@ -125,8 +100,6 @@
     <button class="btn" onclick="irHoy()">Hoy</button>
     <button class="btn" onclick="irFecha(1)">Día siguiente →</button>
     <button class="btn primary" id="btnActualizar" onclick="cargar()" style="margin-left:auto">↻ Actualizar</button>
-    <button class="btn" id="btnExcel" onclick="exportarExcel()">📊 Excel</button>
-    <button class="btn" id="btnPdf" onclick="exportarPDF()">🖨️ PDF</button>
   </div>
 
   <div id="kpiZone"></div>
@@ -246,13 +219,24 @@ function pintar(tracking, fecha) {
       '<button class="btn' + (_filtroVista==='pendientes'?' primary':'') + '" onclick="cambiarFiltro(\'pendientes\')">⏳ Solo pendientes (' + totalPend + ')</button>' +
     '</div>';
 
+  // Orden geográfico norte-sur (el mismo que usa el resto del dashboard)
+  // — dentro de "pendientes" y "reportados" se respeta este orden, no
+  // alfabético.
+  var ORDEN_NS = ['Talara','Refinería Talara','Piura','Eten','Salaverry','Chimbote','Supe','Callao',
+    'Conchán','Refinería Conchán','Pisco','Mollendo','Ilo','Juliaca','Cusco','Pucallpa','Tarapoto',
+    'Yurimaguas','El Milagro','Iquitos','Refinería Iquitos'];
+  function ordenNS(planta) {
+    var i = ORDEN_NS.indexOf(plantaLabel(planta));
+    return i === -1 ? 999 : i;
+  }
+
   function renderGrupo(titulo, lista) {
     // Pendientes primero, para identificarlos rápido y poder reportarlos/darles seguimiento
     var ordenada = lista.slice().sort(function(a, b) {
       var da = (a.estado==='Reportado'||a.estado==='Validado') ? 1 : 0;
       var db = (b.estado==='Reportado'||b.estado==='Validado') ? 1 : 0;
       if (da !== db) return da - db; // pendientes (0) antes que reportados (1)
-      return plantaLabel(a.planta).localeCompare(plantaLabel(b.planta));
+      return ordenNS(a.planta) - ordenNS(b.planta); // luego, orden geográfico norte-sur
     });
     var visibles = _filtroVista === 'pendientes'
       ? ordenada.filter(function(t){ return !(t.estado==='Reportado'||t.estado==='Validado'); })
@@ -312,63 +296,6 @@ function renderLastSeen(info) {
   if (info.hora) { try { horaTxt = new Date(info.hora).toLocaleTimeString('es-PE', {hour:'2-digit', minute:'2-digit'}); } catch(e) {} }
   return '<div class="card-lastseen">Último reporte: <b>' + fmtFechaLarga(info.fecha) + '</b>' +
     (info.nombre ? ' por ' + info.nombre : '') + (horaTxt ? ' a las ' + horaTxt : '') + '</div>';
-}
-
-// ── Exportar a Excel (formato corporativo, listo para compartir) ────────
-function exportarExcel() {
-  if (!_ultimaTracking.length) { alert('Aún no hay datos cargados para exportar.'); return; }
-  if (typeof XLSX === 'undefined') { alert('La librería de Excel aún está cargando, intenta de nuevo en unos segundos.'); return; }
-
-  var filas = [];
-  filas.push(['PETROPERÚ S.A. — SEGUIMIENTO DIARIO DE REPORTES']);
-  filas.push(['Planificación de Suministro · Registro Diario de Inventarios']);
-  filas.push(['Fecha del reporte:', fmtFechaLarga(_ultimaFecha)]);
-  filas.push(['Generado el:', fmtFechaLarga(hoyLima()) + ' — ' + new Date().toLocaleTimeString('es-PE',{hour:'2-digit',minute:'2-digit'})]);
-  filas.push([]);
-  filas.push(['Planta / Terminal / Refinería', 'Tipo', 'Estado', 'Reportado por', 'Hora']);
-
-  var ordenados = _ultimaTracking.slice().sort(function(a,b){
-    var ea = (a.estado==='Reportado'||a.estado==='Validado') ? 0 : 1;
-    var eb = (b.estado==='Reportado'||b.estado==='Validado') ? 0 : 1;
-    if (ea !== eb) return ea - eb;
-    return plantaLabel(a.planta).localeCompare(plantaLabel(b.planta));
-  });
-
-  ordenados.forEach(function(t){
-    var done = t.estado === 'Reportado' || t.estado === 'Validado';
-    var horaTxt = '';
-    if (done && t.hora) { try { horaTxt = new Date(t.hora).toLocaleTimeString('es-PE',{hour:'2-digit',minute:'2-digit'}); } catch(e) {} }
-    filas.push([
-      plantaLabel(t.planta),
-      esRefineria(t.planta) ? 'Refinería' : 'Planta/Terminal',
-      done ? 'Reportado' : 'Pendiente',
-      done ? (t.usuario || '') : '',
-      horaTxt
-    ]);
-  });
-
-  var reportaron = _ultimaTracking.filter(function(t){ return t.estado==='Reportado'||t.estado==='Validado'; }).length;
-  filas.push([]);
-  filas.push(['Resumen:', reportaron + ' de ' + _ultimaTracking.length + ' instalaciones reportaron']);
-
-  var ws = XLSX.utils.aoa_to_sheet(filas);
-  ws['!cols'] = [{wch:32},{wch:16},{wch:14},{wch:26},{wch:10}];
-  ws['!merges'] = [
-    {s:{r:0,c:0}, e:{r:0,c:4}},
-    {s:{r:1,c:0}, e:{r:1,c:4}}
-  ];
-  var wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, 'Seguimiento');
-  var nombreArchivo = 'Seguimiento_Diario_Petroperu_' + _ultimaFecha + '.xlsx';
-  XLSX.writeFile(wb, nombreArchivo);
-}
-
-// ── Exportar a PDF (usa el diálogo de impresión del navegador, con un
-//    formato dedicado para PDF/papel — ver @media print en el CSS) ──────
-function exportarPDF() {
-  document.getElementById('printFecha').textContent =
-    fmtFechaLarga(hoyLima()) + ' a las ' + new Date().toLocaleTimeString('es-PE',{hour:'2-digit',minute:'2-digit'});
-  window.print();
 }
 
 cargar();
