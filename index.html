@@ -2553,6 +2553,17 @@ const INV_SANO_MAX = 2000;
 function invFilaValida(r) {
   return (r.inv || 0) <= INV_SANO_MAX;
 }
+// Lee la etiqueta estructurada que Registro Diario antepone al comentario
+// cuando un operador marca una reposición recibida (botón "¿Cómo llegó el
+// producto?"): "[REPOS|MARITIMO|12.45] texto libre..." — así el dashboard
+// puede mostrarla en gráficas/listas, no solo como texto suelto.
+const REPOS_TIPO_LABEL = { MARITIMO: '⛴️ Cabotaje Marítimo', TERRESTRE: '🚛 Cisternas Terrestres', REFINERIA: '🏭 Vía Refinería' };
+function parseReposicionTag(comentario) {
+  if (!comentario) return null;
+  var m = /^\[REPOS\|(\w+)\|([\d.]+)\]/.exec(comentario);
+  if (!m) return null;
+  return { tipo: m[1], tipoLabel: REPOS_TIPO_LABEL[m[1]] || m[1], volumenMB: parseFloat(m[2]) || 0 };
+}
 const PLANTAS_18_OFICIALES = ['Talara','Piura','Eten','Salaverry','Chimbote','Supe','Callao','Conchán','Pisco','Mollendo','Ilo','Juliaca','Cusco','Iquitos','Pucallpa','Tarapoto','Yurimaguas','El Milagro'];
 const URL_PARAMS    = new URLSearchParams(window.location.search);
 const EXECUTIVE_MODE = URL_PARAMS.get('view') === 'executive';
@@ -20108,6 +20119,34 @@ function renderVistaEjecutivaSimple() {
       '</div>' +
     '</div>';
   }).join('');
+  // ── Reposiciones recibidas — parseadas de la etiqueta que deja
+  // Registro Diario al marcar "¿cómo llegó el producto?" (comentario_prod
+  // con formato "[REPOS|TIPO|VOLUMEN]"). Esto es lo que SÍ conecta ese
+  // comentario con una vista real, no solo texto suelto en el Sheets.
+  var reposicionesHoy = [];
+  RAW.forEach(function(r) {
+    if (r.fecha !== fechaHoy) return;
+    if (pl !== 'Nacional' && r.planta !== pl) return;
+    if (prod !== 'Todos' && r.producto !== prod) return;
+    var tag = parseReposicionTag(r.comentario_prod);
+    if (tag) reposicionesHoy.push({ planta: r.planta, producto: r.producto, tag: tag });
+  });
+  var reposSectionHTML = '';
+  if (reposicionesHoy.length) {
+    var reposItemsHTML = reposicionesHoy.map(function(x) {
+      return '<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--bdr)">' +
+        '<div><span style="font-weight:700;color:var(--txt)">' + x.planta + '</span> <span style="color:var(--txt3)">· ' + x.producto + '</span></div>' +
+        '<div style="display:flex;align-items:center;gap:10px">' +
+          '<span style="font-size:11px;color:var(--txt2)">' + x.tag.tipoLabel + '</span>' +
+          '<span style="font-family:var(--mono);font-weight:800;color:#2563eb">+' + x.tag.volumenMB.toFixed(1) + ' MB</span>' +
+        '</div></div>';
+    }).join('');
+    reposSectionHTML = '<div style="background:var(--card);border:1px solid var(--bdr);border-radius:14px;padding:22px 24px;margin-bottom:20px">' +
+        '<div style="font-size:13px;font-weight:800;color:var(--txt);margin-bottom:4px">🚢 Reposiciones recibidas hoy</div>' +
+        '<div style="font-size:11px;color:var(--txt3);margin-bottom:10px">Marcadas por las plantas en Registro Diario al reportar existencia</div>' +
+        '<div>' + reposItemsHTML + '</div>' +
+      '</div>';
+  }
   var cobSectionHTML = '<div style="background:var(--card);border:1px solid var(--bdr);border-radius:14px;padding:22px 24px;margin-bottom:20px">' +
       '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:10px">' +
         '<div style="font-size:13px;font-weight:800;color:var(--txt)">📊 Cobertura ' + (pl==='Nacional'?'por planta':'por producto') + (prod!=='Todos'&&pl==='Nacional'?' · '+prod:'') + '</div>' +
@@ -20265,6 +20304,7 @@ function renderVistaEjecutivaSimple() {
       '<div style="font-size:13px;font-weight:800;color:var(--txt);margin-bottom:14px">Despachos Reportados (Registro Diario) ' + (pl==='Nacional'?'':'· '+pl) + (prod!=='Todos'?' · '+prod:'') + '</div>' +
       '<div style="position:relative;height:220px"><canvas id="exec-chart-desp"></canvas></div>' +
     '</div>') +
+    reposSectionHTML +
     cobSectionHTML +
     plantasGridHTML;
 

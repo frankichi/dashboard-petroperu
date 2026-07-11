@@ -944,15 +944,23 @@ function rdToggleExtra(prod) {
 var RD_UMBRAL_EXIST_MB = 2000;   // MB — muy por encima de cualquier capacidad conocida
 var RD_UMBRAL_DESP_MB  = 100;    // MB/día — muy por encima de cualquier despacho diario real
 // Al marcar el origen de una reposición detectada, se antepone una
-// etiqueta al comentario del producto y se deja el cursor listo para que
-// agreguen el detalle (volumen, nombre del buque/BT, etc.) — así queda
-// registrado exactamente qué se recibió y por dónde, sin necesitar un
-// campo nuevo aparte del comentario que ya se guarda correctamente.
+// etiqueta ESTRUCTURADA (que el dashboard sabe leer para mostrarla en
+// gráficas) más una parte legible para las personas. El volumen se
+// calcula solo (existencia de hoy − existencia del último reporte), no
+// depende de que el operador lo escriba bien.
 function rdMarcarReposicion(prod, tipo, emoji) {
+  var existEl = document.querySelector('.rd-existencia[data-prod="' + prod + '"]');
+  var existencia = existEl ? rdParseNum(existEl) : 0;
+  var ref = (RD.detalle && RD.detalle[prod]) || {};
+  var ucInv = (ref.ultimo_calculo && ref.ultimo_calculo.inv) || 0;
+  var volumen = Math.max(0, Math.round((existencia - ucInv) * 1000) / 1000);
+  var tipoCodigo = tipo === 'Cabotaje Marítimo' ? 'MARITIMO' : tipo === 'Cisternas Terrestres' ? 'TERRESTRE' : 'REFINERIA';
   var ta = document.querySelector('.rd-coment-prod[data-prod="' + prod + '"]');
   if (ta) {
-    var etiqueta = '[REPOSICIÓN ' + emoji + ' ' + tipo.toUpperCase() + '] ';
-    if (ta.value.indexOf('[REPOSICIÓN') !== 0) ta.value = etiqueta + ta.value;
+    // Prefijo estructurado (lo lee el dashboard) + texto legible para
+    // cualquiera que abra el Sheets directamente.
+    var etiqueta = '[REPOS|' + tipoCodigo + '|' + volumen + '] ' + emoji + ' Reposición ' + tipo + ' — ' + rdFmt(volumen) + ' MB recibidos. ';
+    if (ta.value.indexOf('[REPOS|') !== 0) ta.value = etiqueta + ta.value;
     ta.focus();
     ta.setSelectionRange(ta.value.length, ta.value.length);
   }
