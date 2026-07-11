@@ -235,7 +235,26 @@ input.input-error{border-color:var(--red)!important;box-shadow:0 0 0 3px rgba(20
 .sol-item.pending{background:#fdf3e0;border-color:#e8a00050}
 .sol-item.rejected{background:#fdecec;border-color:#c8102e40}
 .sol-item b{display:block;font-size:11px;color:var(--navy);margin-bottom:2px}
+
+/* ── Impresión / Exportar a PDF del Histórico ──────────────────────────
+   El PDF es un DOCUMENTO APARTE (#rdPrintReport), construido con su
+   propio diseño (tarjetas, franjas, badges de color) — no es una
+   captura de la app tal cual. Al imprimir se oculta TODA la app y solo
+   se ve ese documento. Se activa con body.rd-print-mode antes de
+   window.print(). */
+#rdPrintReport{ display:none; }
+body.rd-print-mode > *:not(#rdPrintReport){ display:none !important; }
+body.rd-print-mode #rdPrintReport{
+  display:block; max-width:900px; margin:20px auto; background:#fff;
+}
+@media print{
+  body.rd-print-mode{ background:#fff; margin:0; }
+  body.rd-print-mode #rdPrintReport{ margin:0; max-width:100%; }
+  body.rd-print-mode *{ -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+  @page{ margin:14mm 12mm; }
+}
 </style>
+<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
 </head>
 <body>
 
@@ -401,6 +420,11 @@ input.input-error{border-color:var(--red)!important;box-shadow:0 0 0 3px rgba(20
     <style>
     @media(max-width:640px){#histChartsRow{grid-template-columns:1fr}}
     </style>
+
+    <div style="display:flex;align-items:center;justify-content:flex-end;gap:8px;margin-bottom:10px">
+      <button class="btn btn-secondary" id="btnHistExcel" onclick="rdExportarHistExcel()" style="display:flex;align-items:center;gap:6px;padding:7px 14px;font-size:11.5px">📊 Exportar a Excel</button>
+      <button class="btn btn-secondary" id="btnHistPdf" onclick="rdExportarHistPDF()" style="display:flex;align-items:center;gap:6px;padding:7px 14px;font-size:11.5px">🖨️ Exportar a PDF</button>
+    </div>
 
     <div id="histContent"><div class="rd-loading">⏳ Cargando histórico…</div></div>
   </div>
@@ -919,6 +943,22 @@ function rdToggleExtra(prod) {
 // guardado — solo avisa, por si el valor es real y legítimo.
 var RD_UMBRAL_EXIST_MB = 2000;   // MB — muy por encima de cualquier capacidad conocida
 var RD_UMBRAL_DESP_MB  = 100;    // MB/día — muy por encima de cualquier despacho diario real
+// Al marcar el origen de una reposición detectada, se antepone una
+// etiqueta al comentario del producto y se deja el cursor listo para que
+// agreguen el detalle (volumen, nombre del buque/BT, etc.) — así queda
+// registrado exactamente qué se recibió y por dónde, sin necesitar un
+// campo nuevo aparte del comentario que ya se guarda correctamente.
+function rdMarcarReposicion(prod, tipo, emoji) {
+  var ta = document.querySelector('.rd-coment-prod[data-prod="' + prod + '"]');
+  if (ta) {
+    var etiqueta = '[REPOSICIÓN ' + emoji + ' ' + tipo.toUpperCase() + '] ';
+    if (ta.value.indexOf('[REPOSICIÓN') !== 0) ta.value = etiqueta + ta.value;
+    ta.focus();
+    ta.setSelectionRange(ta.value.length, ta.value.length);
+  }
+  var panel = document.getElementById('repos-panel-' + prod.replace(/[^a-z0-9]/gi,'_'));
+  if (panel) panel.style.display = 'none';
+}
 function rdCheckUnidadSospechosa(prod, tipo) {
   var safeId = prod.replace(/[^a-z0-9]/gi,'_');
   if (tipo === 'exist') {
@@ -968,6 +1008,18 @@ function rdRecalc(prod) {
   if (vacioEl) { vacioEl.textContent = rdFmt(vacio); vacioEl.style.color = vacio < 0 ? '#c8102e' : ''; }
   var ref = (RD.detalle && RD.detalle[prod]) || {};
   var uc  = ref.ultimo_calculo;
+  // Detección inteligente de reposición: si la existencia que se está
+  // escribiendo es mayor a la del último reporte conocido, es señal de
+  // que llegó producto — se muestra el panel para que digan por dónde
+  // (cabotaje, cisternas o vía refinería) y quede registrado.
+  (function rdCheckReposicion() {
+    var panel = document.getElementById('repos-panel-' + prod.replace(/[^a-z0-9]/gi,'_'));
+    if (!panel) return;
+    var ucInv = (uc && uc.inv) || 0;
+    var UMBRAL_REPOS = 0.3; // MB — margen para no disparar con redondeos/typos menores
+    var subioDeVerdad = ucInv > 0 && existencia > (ucInv + UMBRAL_REPOS);
+    panel.style.display = subioDeVerdad ? 'block' : 'none';
+  })();
   var autoEl = document.querySelector('[data-auto-calc="' + prod + '"]');
   if (autoEl) {
     // Prioridad: 1) despacho que el operador acaba de escribir hoy,
@@ -1038,6 +1090,10 @@ function rdRenderProdRows(productos, valores, detalle, yaReportado) {
   valores = valores || {};
   RD.detalle = detalle || {};
   var esRefineria = (RD.refinerias || []).indexOf(RD.planta) !== -1;
+  // Talara, Conchan e Iquitos tienen una refinería hermana que puede
+  // abastecerlas directamente — para esas plantas se ofrece "Vía
+  // Refinería" como origen de reposición, además de cabotaje/cisternas.
+  var esRefineriaHermana = ['Talara', 'Conchan', 'Iquitos'].indexOf(RD.planta) !== -1;
   var wrap = document.getElementById('prodRows');
   wrap.innerHTML = productos.map(function(p) {
     var v   = valores[p] || {};
@@ -1160,6 +1216,21 @@ function rdRenderProdRows(productos, valores, detalle, yaReportado) {
           +   '<div class="calc-item hl"><span class="calc-lbl">Autonomía estimada</span><span class="calc-val" data-auto-calc="' + p + '">' + autoIni + '</span></div>'
           + '</div>' : '')
       +   infoRow
+      // ── Detección inteligente de reposición ───────────────────────────
+      // Se muestra automáticamente (vía rdRecalc) cuando la existencia
+      // escrita es mayor a la del último reporte conocido — indica que
+      // llegó producto y conviene registrar por dónde.
+      +   (yaReportado ? '' :
+           '<div class="repos-panel" id="repos-panel-' + p.replace(/[^a-z0-9]/gi,'_') + '" style="display:none;margin-top:10px;padding:10px 12px;background:#eef6ff;border:1px solid #bfdbfe;border-radius:8px">'
+           + '<div style="font-size:11px;font-weight:700;color:#1e40af;margin-bottom:7px">📈 La existencia subió respecto al último reporte — ¿cómo llegó el producto?</div>'
+           + '<div style="display:flex;gap:6px;flex-wrap:wrap">'
+           +   '<button type="button" onclick="rdMarcarReposicion(\'' + p + '\',\'Cabotaje Mar\u00edtimo\',\'\u26f4\ufe0f\')" style="padding:6px 12px;border-radius:16px;border:1.5px solid #0284c7;background:#fff;color:#0284c7;font-size:11px;font-weight:700;cursor:pointer">\u26f4\ufe0f Cabotaje Mar\u00edtimo</button>'
+           +   '<button type="button" onclick="rdMarcarReposicion(\'' + p + '\',\'Cisternas Terrestres\',\'\ud83d\ude9b\')" style="padding:6px 12px;border-radius:16px;border:1.5px solid #ca8a04;background:#fff;color:#ca8a04;font-size:11px;font-weight:700;cursor:pointer">\ud83d\ude9b Cisternas Terrestres</button>'
+           +   (esRefineriaHermana
+                ? '<button type="button" onclick="rdMarcarReposicion(\'' + p + '\',\'V\u00eda Refiner\u00eda\',\'\ud83c\udfed\')" style="padding:6px 12px;border-radius:16px;border:1.5px solid #7c3aed;background:#fff;color:#7c3aed;font-size:11px;font-weight:700;cursor:pointer">\ud83c\udfed V\u00eda Refiner\u00eda</button>'
+                : '')
+           + '</div>'
+           + '</div>')
       // ── Comentario por producto ──────────────────────────────────────────
       +   '<div class="prod-comentario-wrap">'
       +     '<label>Comentario del producto</label>'
@@ -1835,6 +1906,165 @@ function rdRenderHistoricoTable() {
   html += '</tbody></table></div>'
     + '<div style="font-size:10px;color:var(--txt3);text-align:right;margin-top:4px">' + rows.length + ' registros encontrados</div>';
   content.innerHTML = html;
+}
+
+// ── Exportar Histórico a Excel (formato corporativo) ─────────────────────
+// Lee directo de la tabla ya renderizada en pantalla, así garantiza que
+// el Excel muestre EXACTAMENTE lo mismo que el operador está viendo
+// (misma cobertura, mismos filtros de producto/periodo aplicados).
+function rdExportarHistExcel() {
+  var tabla = document.querySelector('#histContent table.hist-tbl');
+  if (!tabla) { rdToast('No hay datos de hist\u00f3rico cargados todav\u00eda.', 'error'); return; }
+  if (typeof XLSX === 'undefined') { rdToast('La librer\u00eda de Excel a\u00fan est\u00e1 cargando, intenta de nuevo.', 'error'); return; }
+
+  var filas = [];
+  filas.push(['PETROPER\u00da S.A. \u2014 HIST\u00d3RICO DE INVENTARIO']);
+  filas.push(['Registro Diario \u00b7 Planificaci\u00f3n de Suministro']);
+  filas.push(['Planta:', plantaLabel(RD.planta || '')]);
+  filas.push(['Generado el:', new Date().toLocaleDateString('es-PE') + ' ' + new Date().toLocaleTimeString('es-PE',{hour:'2-digit',minute:'2-digit'})]);
+  filas.push([]);
+  filas.push(['Fecha', 'Producto', 'Existencia (MB)', 'Dem. Real (MB/d)', 'Pron. Mensual (MB)', 'Cobertura', 'Cabotaje / Nave']);
+
+  var fechaActual = '';
+  tabla.querySelectorAll('tbody tr').forEach(function(tr) {
+    var celdas = tr.querySelectorAll('td');
+    if (!celdas.length) return;
+    var fechaCelda = celdas[0].textContent.trim();
+    if (fechaCelda) fechaActual = fechaCelda; // la fecha solo se muestra en la primera fila del grupo
+    var fila = [fechaActual];
+    for (var i = 1; i < celdas.length; i++) fila.push(celdas[i].textContent.trim());
+    filas.push(fila);
+  });
+
+  var ws = XLSX.utils.aoa_to_sheet(filas);
+  ws['!cols'] = [{wch:10},{wch:14},{wch:15},{wch:15},{wch:17},{wch:11},{wch:26}];
+  ws['!merges'] = [{s:{r:0,c:0}, e:{r:0,c:6}}, {s:{r:1,c:0}, e:{r:1,c:6}}];
+  var wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Hist\u00f3rico');
+  XLSX.writeFile(wb, 'Historico_' + (RD.planta||'planta').replace(/[^a-zA-Z0-9]/g,'_') + '_' + rdHoyLima() + '.xlsx');
+}
+
+// ── Exportar Histórico a PDF — documento diseñado aparte (no la vista web) ─
+// Construye un reporte propio con tarjetas resumen y una tabla con buen
+// diseño (franjas alternadas, badges de color por cobertura, agrupado
+// por fecha) — no es una captura de la pantalla tal cual.
+function rdExportarHistPDF() {
+  var tabla = document.querySelector('#histContent table.hist-tbl');
+  if (!tabla) { rdToast('No hay datos de hist\u00f3rico cargados todav\u00eda.', 'error'); return; }
+
+  // Extraer los datos ya calculados de la tabla en pantalla (misma fuente
+  // que el Excel), agrupados por fecha para el nuevo diseño.
+  var grupos = [];
+  var grupoActual = null;
+  tabla.querySelectorAll('tbody tr').forEach(function(tr) {
+    var celdas = tr.querySelectorAll('td');
+    if (!celdas.length) return;
+    var fechaCelda = celdas[0].textContent.trim();
+    if (fechaCelda) { grupoActual = { fecha: fechaCelda, filas: [] }; grupos.push(grupoActual); }
+    if (!grupoActual) return;
+    grupoActual.filas.push({
+      producto: celdas[1] ? celdas[1].textContent.trim() : '',
+      exist:    celdas[2] ? celdas[2].textContent.trim() : '',
+      desp:     celdas[3] ? celdas[3].textContent.trim() : '',
+      pron:     celdas[4] ? celdas[4].textContent.trim() : '',
+      cob:      celdas[5] ? celdas[5].textContent.trim() : '',
+      cab:      celdas[6] ? celdas[6].textContent.trim() : ''
+    });
+  });
+  if (!grupos.length) { rdToast('No hay filas para exportar.', 'error'); return; }
+
+  // KPIs rápidos: total de registros, cuántos críticos/alerta/normal
+  var totalFilas = 0, critCount = 0, alertCount = 0, okCount = 0;
+  grupos.forEach(function(g){ g.filas.forEach(function(f){
+    totalFilas++;
+    var n = parseFloat(f.cob);
+    if (!isNaN(n)) { if (n <= 7) critCount++; else if (n <= 14) alertCount++; else okCount++; }
+  }); });
+
+  function cobPillHTML(cobTxt) {
+    var n = parseFloat(cobTxt);
+    if (isNaN(n)) return '<span style="color:#94a3b8">—</span>';
+    var bg = n <= 7 ? '#fdecec' : n <= 14 ? '#fdf3e0' : '#e9f7ee';
+    var col = n <= 7 ? '#c8102e' : n <= 14 ? '#a86a00' : '#1a7a44';
+    return '<span style="display:inline-block;padding:2px 9px;border-radius:10px;background:' + bg + ';color:' + col + ';font-weight:800;font-size:10.5px">' + cobTxt + '</span>';
+  }
+
+  var filasHTML = '';
+  grupos.forEach(function(g, gi) {
+    filasHTML += '<tr style="background:#eef2f7"><td colspan="6" style="padding:7px 10px;font-weight:800;color:#0a3a5c;font-size:11px;border-top:2px solid #0a3a5c">📅 ' + g.fecha + '</td></tr>';
+    g.filas.forEach(function(f, fi) {
+      var stripe = fi % 2 === 0 ? '#ffffff' : '#f8fafc';
+      filasHTML += '<tr style="background:' + stripe + '">'
+        + '<td style="padding:6px 10px;font-weight:700;color:#0f1e3c">' + f.producto + '</td>'
+        + '<td style="padding:6px 10px;text-align:right;font-family:ui-monospace,monospace">' + f.exist + '</td>'
+        + '<td style="padding:6px 10px;text-align:right;font-family:ui-monospace,monospace;color:#0891b2">' + f.desp + '</td>'
+        + '<td style="padding:6px 10px;text-align:right;font-family:ui-monospace,monospace;color:#7c3aed">' + f.pron + '</td>'
+        + '<td style="padding:6px 10px;text-align:center">' + cobPillHTML(f.cob) + '</td>'
+        + '<td style="padding:6px 10px;font-size:10px;color:#475569">' + (f.cab && f.cab !== '—' ? f.cab : '—') + '</td>'
+        + '</tr>';
+    });
+  });
+
+  var ahora = new Date();
+  var fechaGen = ahora.toLocaleDateString('es-PE') + ' a las ' + ahora.toLocaleTimeString('es-PE',{hour:'2-digit',minute:'2-digit'});
+
+  var reporteHTML =
+    '<div style="font-family:Inter,system-ui,sans-serif;color:#0f1e3c;max-width:100%">' +
+      '<div style="background:linear-gradient(90deg,#0a3a5c,#1e3a8a);padding:20px 24px;border-radius:10px 10px 0 0;display:flex;align-items:center;gap:14px">' +
+        '<img src="data:image/jpeg;base64,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" alt="Petroper\u00fa" style="width:38px;height:38px;object-fit:cover;border-radius:6px;flex-shrink:0">' +
+        '<div>' +
+          '<div style="color:#fff;font-size:16px;font-weight:800;letter-spacing:.02em">PETROPERÚ S.A.</div>' +
+          '<div style="color:rgba(255,255,255,.85);font-size:11px">Histórico de Inventario · Registro Diario · Planificación de Suministro</div>' +
+        '</div>' +
+      '</div>' +
+      '<div style="border:1px solid #e2e8f0;border-top:none;padding:16px 24px;background:#f8fafc">' +
+        '<table style="width:100%;font-size:11px"><tr>' +
+          '<td><b>Planta / Terminal:</b> ' + plantaLabel(RD.planta||'') + '</td>' +
+          '<td style="text-align:right"><b>Generado el:</b> ' + fechaGen + '</td>' +
+        '</tr></table>' +
+      '</div>' +
+      '<div style="display:flex;gap:10px;padding:16px 24px;background:#fff;border:1px solid #e2e8f0;border-top:none">' +
+        '<div style="flex:1;background:#f0f4fa;border-radius:8px;padding:12px 14px;text-align:center">' +
+          '<div style="font-size:22px;font-weight:800;color:#0a3a5c">' + totalFilas + '</div>' +
+          '<div style="font-size:9px;color:#64748b;text-transform:uppercase;letter-spacing:.4px">Registros</div></div>' +
+        '<div style="flex:1;background:#fdecec;border-radius:8px;padding:12px 14px;text-align:center">' +
+          '<div style="font-size:22px;font-weight:800;color:#c8102e">' + critCount + '</div>' +
+          '<div style="font-size:9px;color:#64748b;text-transform:uppercase;letter-spacing:.4px">Cr\u00edticos (\u22647d)</div></div>' +
+        '<div style="flex:1;background:#fdf3e0;border-radius:8px;padding:12px 14px;text-align:center">' +
+          '<div style="font-size:22px;font-weight:800;color:#a86a00">' + alertCount + '</div>' +
+          '<div style="font-size:9px;color:#64748b;text-transform:uppercase;letter-spacing:.4px">Alerta (8\u201314d)</div></div>' +
+        '<div style="flex:1;background:#e9f7ee;border-radius:8px;padding:12px 14px;text-align:center">' +
+          '<div style="font-size:22px;font-weight:800;color:#1a7a44">' + okCount + '</div>' +
+          '<div style="font-size:9px;color:#64748b;text-transform:uppercase;letter-spacing:.4px">Normal (\u226515d)</div></div>' +
+      '</div>' +
+      '<table style="width:100%;border-collapse:collapse;font-size:10.5px;border:1px solid #e2e8f0;border-top:none">' +
+        '<thead><tr style="background:#0a3a5c">' +
+          '<th style="padding:8px 10px;text-align:left;color:#fff;font-size:9.5px;text-transform:uppercase;letter-spacing:.3px">Producto</th>' +
+          '<th style="padding:8px 10px;text-align:right;color:#fff;font-size:9.5px;text-transform:uppercase;letter-spacing:.3px">Existencia (MB)</th>' +
+          '<th style="padding:8px 10px;text-align:right;color:#fff;font-size:9.5px;text-transform:uppercase;letter-spacing:.3px">Desp. Real (MB/d)</th>' +
+          '<th style="padding:8px 10px;text-align:right;color:#fff;font-size:9.5px;text-transform:uppercase;letter-spacing:.3px">Pron. (MBDC)</th>' +
+          '<th style="padding:8px 10px;text-align:center;color:#fff;font-size:9.5px;text-transform:uppercase;letter-spacing:.3px">Cobertura</th>' +
+          '<th style="padding:8px 10px;text-align:left;color:#fff;font-size:9.5px;text-transform:uppercase;letter-spacing:.3px">Cabotaje / Nave</th>' +
+        '</tr></thead><tbody>' + filasHTML + '</tbody>' +
+      '</table>' +
+      '<div style="padding:12px 24px;border:1px solid #e2e8f0;border-top:none;border-radius:0 0 10px 10px;font-size:9px;color:#94a3b8;text-align:center">' +
+        'Documento generado autom\u00e1ticamente por el Sistema de Registro Diario de Inventarios \u00b7 PETROPER\u00da S.A. \u00b7 Planificaci\u00f3n de Suministro' +
+      '</div>' +
+    '</div>';
+
+  var contenedor = document.getElementById('rdPrintReport');
+  if (!contenedor) {
+    contenedor = document.createElement('div');
+    contenedor.id = 'rdPrintReport';
+    document.body.appendChild(contenedor);
+  }
+  contenedor.innerHTML = reporteHTML;
+
+  document.body.classList.add('rd-print-mode');
+  window.print();
+  var restaurar = function(){ document.body.classList.remove('rd-print-mode'); window.removeEventListener('afterprint', restaurar); };
+  window.addEventListener('afterprint', restaurar);
+  setTimeout(restaurar, 4000);
 }
 
 // ═══════════════════════════════════════════
