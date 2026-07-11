@@ -2538,6 +2538,21 @@ const REFINERIAS = ['Refinería Talara', 'Refinería Conchán', 'Refinería Iqui
 // del TOTAL AGREGADO (nacional) — cada planta sigue mostrando su propio
 // inventario/cobertura normalmente en Coberturas, Registro Diario, etc.
 const PLANTAS_DUPLICADAS_EN_REFINERIA = ['Conchán', 'Iquitos'];
+// Guard de sanidad para el TOTAL NACIONAL de inventario: si una sola
+// fila (planta+producto) reporta más de esto, casi seguro está en
+// BARRILES en vez de MILES DE BARRILES (MB) — la planta más grande del
+// sistema (Talara) no supera ~1,100 MB de capacidad total. Iquitos
+// reportó así históricamente (valores como "6657", "7812"); ya se les
+// indicó reportar en MB en adelante, pero mientras el histórico tenga
+// datos viejos en barriles, esta fila se excluye del TOTAL para no
+// inflarlo — no se borra el dato, solo no participa en la suma
+// nacional. Mismo criterio usado en TODOS los puntos donde se calcula
+// un total nacional (index y Vista Ejecutiva), para que siempre
+// conversen la misma cifra.
+const INV_SANO_MAX = 2000;
+function invFilaValida(r) {
+  return (r.inv || 0) <= INV_SANO_MAX;
+}
 const PLANTAS_18_OFICIALES = ['Talara','Piura','Eten','Salaverry','Chimbote','Supe','Callao','Conchán','Pisco','Mollendo','Ilo','Juliaca','Cusco','Iquitos','Pucallpa','Tarapoto','Yurimaguas','El Milagro'];
 const URL_PARAMS    = new URLSearchParams(window.location.search);
 const EXECUTIVE_MODE = URL_PARAMS.get('view') === 'executive';
@@ -3651,7 +3666,7 @@ function renderPResumen() {
   filasDia.forEach(function(r) {
     var pl = r.planta;
     if (!porPlanta[pl]) porPlanta[pl] = { inv: 0, cobMin: 999, cobSum: 0, n: 0, prods: [] };
-    porPlanta[pl].inv += (r.inv || 0);
+    if (invFilaValida(r)) porPlanta[pl].inv += (r.inv || 0); // dato en barriles, no MB — no participa hasta que se corrija
     var cob = r.cob || 0;
     if (cob > COB_SANO_MAX) {
       cobOutliers.push({ planta: pl, producto: r.producto, cob: cob });
@@ -3676,7 +3691,7 @@ function renderPResumen() {
 
   // Variación vs día anterior
   var fechaAyer = fechas[fechas.length-2] || '';
-  var invAyer = fechaAyer ? RAW.filter(function(r){return r.fecha===fechaAyer && r.inv>0 && PLANTAS_DUPLICADAS_EN_REFINERIA.indexOf(r.planta)===-1;}).reduce(function(s,r){return s+(r.inv||0);},0) : 0;
+  var invAyer = fechaAyer ? RAW.filter(function(r){return r.fecha===fechaAyer && r.inv>0 && PLANTAS_DUPLICADAS_EN_REFINERIA.indexOf(r.planta)===-1 && invFilaValida(r);}).reduce(function(s,r){return s+(r.inv||0);},0) : 0;
   var deltaInv = invTotal - invAyer;
 
   // Top riesgos: TODAS las plantas con cobertura mínima válida, peor primero.
@@ -3699,7 +3714,7 @@ function renderPResumen() {
   // ── Sparkline 7 días para inventario nacional ────────────────────────
   function sparkline(fechas7, rawd) {
     var vals = fechas7.map(function(f){
-      var rows = rawd.filter(function(r){return r.fecha===f && r.inv>0;});
+      var rows = rawd.filter(function(r){return r.fecha===f && r.inv>0 && PLANTAS_DUPLICADAS_EN_REFINERIA.indexOf(r.planta)===-1 && invFilaValida(r);});
       return rows.reduce(function(s,r){return s+(r.inv||0);},0);
     }).filter(function(v){return v>0;});
     if (vals.length < 2) return '';
@@ -4043,7 +4058,7 @@ function openProductModal(prod) {
   const COB_WARN = (typeof window.COB_WARN === 'number') ? window.COB_WARN : 15;
   // Conchán e Iquitos (ventas) ya están incluidos dentro de su refinería —
   // se excluyen del total de inventario para no duplicar esa porción.
-  const totalInv   = rows.filter(r => PLANTAS_DUPLICADAS_EN_REFINERIA.indexOf(r.planta)===-1).reduce((s,r) => s + (r.inv||0), 0);
+  const totalInv   = rows.filter(r => PLANTAS_DUPLICADAS_EN_REFINERIA.indexOf(r.planta)===-1 && invFilaValida(r)).reduce((s,r) => s + (r.inv||0), 0);
   const totalVfact = rows.reduce((s,r) => s + (r.vfact||0), 0);
   const totalVreal = rows.reduce((s,r) => s + (r.vreal||0), 0);
   const totalVult7 = rows.reduce((s,r) => s + (r.vult7||0), 0);
@@ -4935,7 +4950,6 @@ function renderP1() {
   const prev  = byDate(DATES[DATES.indexOf(currentDate) - 1] || '');
   if (!today.length) return;
   const EXCLUIR = ['ULSD EXPO','Regular HS'];
-  const DIESEL_EXCL_INV = ['Pucallpa','Iquitos'];
   const active = today.filter(r => !EXCLUIR.some(x => r.producto && r.producto.toUpperCase().includes(x.toUpperCase())) && !SKIP_COMBOS.has((r.planta||'')+'|'+(r.producto||'')));
   const COB_CRIT = 8;
   const COB_WARN = 15;
@@ -4973,7 +4987,7 @@ function renderP1() {
   var _hasVentasData = Object.keys(ventasDiariasMap).length > 0;
   const byProd = {};
   active.forEach(r => {
-    const skipInv = r.producto === 'Diesel' && DIESEL_EXCL_INV.includes(r.planta);
+    const skipInv = r.producto === 'Diesel' && !invFilaValida(r); // dato en barriles, no MB
     if (!byProd[r.producto]) byProd[r.producto] = {inv:0, invCosta:0, invCisternas:0, cob:[], vreal:0, vult7:0, pron:0, volRep:0, volRep2:0, plantas:[]};
     const p = byProd[r.producto];
     if (!skipInv) {
@@ -17410,7 +17424,7 @@ function _buildInventoryReportHTML() {
   function cobLabel(d){return d<=3?'CR\u00cdTICO':d<=7?'ALERTA':d<=15?'NORMAL':'HOLGADO';}
   var recMap={},gT=0,vT=0,cS=0,cC=0,pTot={};
   today.forEach(function(r){recMap[(r.planta||'')+'|'+(r.producto||'')]=r;});
-  PO.forEach(function(p){var inv=0;today.forEach(function(r){if(r.producto!==p)return;inv+=gi(r);});if(inv>0.01){pTot[p]={inv:inv};gT+=inv;}});
+  PO.forEach(function(p){var inv=0;today.forEach(function(r){if(r.producto!==p)return;if(PLANTAS_DUPLICADAS_EN_REFINERIA.indexOf(r.planta)!==-1)return;if(!invFilaValida(r))return;inv+=gi(r);});if(inv>0.01){pTot[p]={inv:inv};gT+=inv;}});
   today.forEach(function(r){var vf=gv(r);if(vf>0)vT+=vf;var c=gc(r);if(c>0){cS+=c;cC++;}});
   var cP=cC>0?Math.round(cS/cC):0;
   var fStr='',fSh='';
@@ -19846,6 +19860,7 @@ function renderVistaEjecutivaSimple() {
       // no despachan, ese dato solo existe en la planta de ventas), ni
       // cuando se selecciona la planta específica en el filtro.
       if (field === 'inv' && (!planta || planta === 'Nacional') && PLANTAS_DUPLICADAS_EN_REFINERIA.indexOf(r.planta) !== -1) return;
+      if (field === 'inv' && !invFilaValida(r)) return; // dato en barriles, no MB — no participa hasta que se corrija
       s += (r[field] || 0);
     });
     return s;
@@ -20524,14 +20539,13 @@ function getCapacidad(planta, producto) {
     return PROD_ORDER.filter(p => found.includes(p)).concat(found.filter(p => !PROD_ORDER.includes(p)));
   }
   const PINV_EXCLUIR_PROD  = ['ULSD EXPO', 'Regular HS'];
-  const PINV_DIESEL_EXCL   = ['Pucallpa', 'Iquitos'];   // Diesel: no inv in selva receptions
   function getRows(date, prod) {
     const rawRows = (typeof RAW !== 'undefined' ? RAW : [])
       .filter(r => {
         if (r.fecha !== date || r.producto !== prod) return false;
         if (PINV_EXCLUIR_PROD.some(x => r.producto && r.producto.toUpperCase().includes(x.toUpperCase()))) return false;
         if (SKIP_COMBOS && SKIP_COMBOS.has((r.planta||'')+'|'+(r.producto||''))) return false;
-        if (prod === 'Diesel' && PINV_DIESEL_EXCL.includes(r.planta)) return false;
+        if (!invFilaValida(r)) return false; // dato en barriles, no MB — no participa hasta que se corrija
         return true;
       });
     const existing = new Set(rawRows.map(r => r.planta));
