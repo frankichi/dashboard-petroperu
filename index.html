@@ -20230,9 +20230,10 @@ function renderVistaEjecutivaSimple() {
   }
 
   // ── Lista de plantas para el selector de detalle ─────────────────────
-  var PLANTA_ORDEN_NS = ['Talara','Refinería Talara','Piura','Eten','Salaverry','Chimbote','Supe','Callao',
-    'Conchán','Refinería Conchán','Pisco','Mollendo','Ilo','Juliaca','Cusco','Pucallpa','Tarapoto',
-    'Yurimaguas','El Milagro','Iquitos','Refinería Iquitos'];
+  var PLANTA_ORDEN_NS = ['Refinería Talara','Refinería Conchán','Refinería Iquitos',
+    'Talara','Piura','Eten','Salaverry','Chimbote','Supe','Callao',
+    'Conchán','Pisco','Mollendo','Ilo','Juliaca','Cusco','Pucallpa','Tarapoto',
+    'Yurimaguas','El Milagro','Iquitos'];
   var plantasDisp = [...new Set(RAW.map(function(r){ return r.planta; }))]
     .filter(function(p){ return p && p !== 'Nacional'; })
     .sort(function(a, b) {
