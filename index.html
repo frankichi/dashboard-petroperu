@@ -10278,7 +10278,7 @@ function renderPTend() {
   var el = document.getElementById('pTend-content');
   if (!el) return;
   _pTendEnsureCargas();  // carga lazy de CARGAS DE NAVES para cabotaje en tránsito
-  var prods = ['Diesel','G. Regular','G. Premium','G. 84','TA1','GLP'];
+  var prods = ['Diesel','D2S50-H','G. Regular','G. Premium','G. 84','TA1','GLP'];
   var dates = _pTendDatesForRange(DATES, _pTendRange);
   if (!dates.length) {
     el.innerHTML = '<div style="padding:60px;text-align:center;color:var(--txt3)">Sin datos disponibles.</div>';
@@ -10414,7 +10414,7 @@ function renderPTend() {
   RAW.forEach(function(r) {
     if (r.producto === prod && (r.inv||0) > 0) _plantasConInv.add(r.planta);
   });
-  var plantasDisp = ['Nacional'].concat(PLANTAS_18_OFICIALES);
+  var plantasDisp = ['Nacional'].concat(PLANTAS_18_OFICIALES).concat(REFINERIAS);
   // Nota: ya no se resetea a Nacional automáticamente si la planta elegida
   // no tiene inventario para este producto — el usuario puede navegar
   // libremente entre las 18 plantas y ver el estado "sin datos" cuando
@@ -20269,48 +20269,61 @@ function renderVistaEjecutivaSimple() {
   var barMode = window._execPeriod === 'mensual';
   var ctxInv = document.getElementById('exec-chart-inv');
   if (ctxInv) {
-    // Barras — a futuro se apilará aquí el cabotaje (terrestre/marítimo)
-    // por planta y producto, encima del inventario base.
+    // Degradado azul corporativo — más impactante que un color plano para
+    // una vista de nivel gerencial. A futuro se apilará aquí el cabotaje
+    // (terrestre/marítimo) por planta y producto, encima del inventario base.
+    var gInv = ctxInv.getContext('2d').createLinearGradient(0, 0, 0, 220);
+    gInv.addColorStop(0, '#1e5f8f');
+    gInv.addColorStop(1, '#0a3a5c');
     window._execChartInv = new Chart(ctxInv, {
       type: 'bar',
       data: { labels: labels, datasets: [{
         label: 'Inventario',
-        data: invSerie, backgroundColor: '#0a3a5c', borderRadius: 3, maxBarThickness: barMode?36:26
+        data: invSerie, backgroundColor: gInv, hoverBackgroundColor: '#2f7ab8',
+        borderRadius: 5, maxBarThickness: barMode?36:26
       }]},
       options: {
         responsive: true, maintainAspectRatio: false,
-        plugins: { legend: { display: false }, tooltip: { callbacks: { label: function(c){ return fmtMB(c.parsed.y); } } } },
-        scales: { y: { ticks: { callback: function(v){ return v.toLocaleString('es-PE'); } } } }
+        plugins: { legend: { display: false }, tooltip: {
+          backgroundColor: '#0a3a5c', padding: 10, cornerRadius: 8, titleFont: {weight:'700'},
+          callbacks: { label: function(c){ return fmtMB(c.parsed.y); } }
+        } },
+        scales: {
+          y: { ticks: { callback: function(v){ return v.toLocaleString('es-PE'); } }, grid: { color: 'rgba(148,163,184,.15)' } },
+          x: { grid: { display: false } }
+        }
       }
     });
   }
   var ctxDesp = document.getElementById('exec-chart-desp');
   if (ctxDesp) {
-    var hayPron = pronSerie.some(function(v){ return v!=null; });
-    var despDatasets = [{
-      label: 'Despachos',
-      data: despSerie, borderColor: '#c2410c', backgroundColor: 'rgba(194,65,12,.08)',
-      borderWidth: 2.5, pointRadius: 3.5, pointHoverRadius: 6, pointBackgroundColor: '#c2410c',
-      tension: 0.2, fill: false, spanGaps: true
-    }];
-    if (hayPron) {
-      despDatasets.push({
-        label: 'Demanda pronóstico',
-        data: pronSerie, borderColor: '#059669', backgroundColor: 'transparent',
-        borderWidth: 2.5, borderDash: [8,4], pointRadius: 0, pointHoverRadius: 0,
-        tension: 0, fill: false, spanGaps: true
-      });
-    }
+    // Degradado ámbar/naranja intenso con relleno bajo la línea — mismo
+    // criterio de impacto visual que el gráfico de inventario.
+    var gDesp = ctxDesp.getContext('2d').createLinearGradient(0, 0, 0, 220);
+    gDesp.addColorStop(0, 'rgba(234,88,12,.35)');
+    gDesp.addColorStop(1, 'rgba(234,88,12,0)');
     window._execChartDesp = new Chart(ctxDesp, {
       type: 'line',
-      data: { labels: labels, datasets: despDatasets },
+      data: { labels: labels, datasets: [{
+        label: 'Despachos',
+        data: despSerie, borderColor: '#ea580c', backgroundColor: gDesp,
+        borderWidth: 3, pointRadius: 4, pointHoverRadius: 7,
+        pointBackgroundColor: '#ea580c', pointBorderColor: '#fff', pointBorderWidth: 2,
+        tension: 0.25, fill: true, spanGaps: true
+      }] },
       options: {
         responsive: true, maintainAspectRatio: false,
         plugins: {
-          legend: { display: hayPron, position: 'top', align: 'end', labels: { boxWidth: 14, font: { size: 10.5 } } },
-          tooltip: { callbacks: { label: function(c){ return (c.dataset.label||'') + ': ' + fmtMB(c.parsed.y); } } }
+          legend: { display: false },
+          tooltip: {
+            backgroundColor: '#ea580c', padding: 10, cornerRadius: 8, titleFont: {weight:'700'},
+            callbacks: { label: function(c){ return fmtMB(c.parsed.y); } }
+          }
         },
-        scales: { y: { ticks: { callback: function(v){ return v.toLocaleString('es-PE'); } } } }
+        scales: {
+          y: { ticks: { callback: function(v){ return v.toLocaleString('es-PE'); } }, grid: { color: 'rgba(148,163,184,.15)' } },
+          x: { grid: { display: false } }
+        }
       }
     });
   }
