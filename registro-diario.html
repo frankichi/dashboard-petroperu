@@ -1072,7 +1072,6 @@ function rdRenderProdRows(productos, valores, detalle, yaReportado) {
       ? '<div class="prod-info-row">'
         + '<span style="color:var(--txt3)">Sistema al ' + (uc.fecha||'\u2014') + ':</span>'
         + '<span>Desp. <b style="color:var(--navy)">' + rdFmt(despVal) + ' MB/d\u00eda</b></span>'
-        + '<span>V. Factible <b style="color:#c8102e">' + rdFmt(vfactVal) + ' MBDC</b></span>'
         + (pronMes > 0 ? '<span>Pron. mensual <b style="color:#0891b2">' + rdFmt(pronMes) + ' MB</b></span>' : '')
         + '</div>'
       : '<div class="prod-info-empty">Sin c\u00e1lculo del sistema para este producto.</div>';
@@ -1796,19 +1795,25 @@ function rdRenderHistoricoTable() {
       var exist = parseFloat(r.existencia || r.inv_mb || r.inventario || 0) || 0;
       var cap   = parseFloat(r.capacidad || r.cap || 0) || 0;
       var fond  = parseFloat(r.fondos || r.fondo || 0) || 0;
-      // Recalcular cob si viene en 0 (inventario nuevo sin cálculo central)
-      var _inv   = parseFloat(r.existencia || r.inv || 0) || 0;
-      var _vfact = parseFloat(r.vfact || 0) || 0;
-      var _cobRaw = r.cob || r.cobertura || r.dias_cob || 0;
-      var _cobCalc = (!_cobRaw && _vfact > 0) ? Math.round(_inv / _vfact * 10) / 10 : _cobRaw;
-      var cob   = _cobCalc || '—';
-      var cobNum = parseFloat(cob);
-      var cobColor = !isNaN(cobNum) ? (cobNum <= 3 ? '#c8102e' : cobNum <= 5 ? '#a86a00' : '#1a7a44') : 'inherit';
-      var cobStr = !isNaN(cobNum) ? cobNum.toFixed(1) + 'd' : String(cob);
+      // Pronóstico de ESTE mes/producto (ya en MBDC — tasa diaria, no se divide)
       var _rMes   = (r.fecha || '').slice(0,7);
       var _mesPron = pronByMesProd[_rMes] || pronByMesProd[mesesDisp.filter(function(m){return m<=_rMes;}).pop()||''] || {};
       var pronMes  = _mesPron[r.producto] || 0;
       var pronStr  = pronMes > 0 ? rdFmt(pronMes) : '—';
+      // Cobertura: misma cadena de prioridad que usa todo el dashboard —
+      // V.Factible (si Planificación lo cargó) → despacho REAL reportado
+      // ese día (columna "Dem. Real" de esta misma fila) → demanda
+      // pronóstico. Antes esto solo intentaba V.Factible (casi nunca
+      // presente en un reporte de planta) y por eso salía "—" siempre,
+      // aunque hubiera despacho real o pronóstico disponibles.
+      var _inv   = exist;
+      var _vfact = parseFloat(r.vfact || 0) || 0;
+      var _despReal = parseFloat(r.vreal || r.dem || 0) || 0;
+      var _denom = _vfact > 0 ? _vfact : (_despReal > 0 ? _despReal : pronMes);
+      var cob = (_inv > 0 && _denom > 0) ? Math.round(_inv / _denom) : '—';
+      var cobNum = parseFloat(cob);
+      var cobColor = !isNaN(cobNum) ? (cobNum <= 7 ? '#c8102e' : cobNum <= 14 ? '#a86a00' : '#1a7a44') : 'inherit';
+      var cobStr = !isNaN(cobNum) ? Math.round(cobNum) + 'd' : String(cob);
       html += '<tr>'
         + '<td class="hist-date">' + (i === 0 ? fmtFecha(fecha) : '') + '</td>'
         + '<td style="font-weight:700;color:var(--navy)">' + (r.producto || '—') + '</td>'
