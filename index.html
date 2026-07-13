@@ -17539,6 +17539,16 @@ function renderInventoryReport() {
   root.innerHTML=_buildInventoryReportHTML();
 }
 window.renderInventoryReport = renderInventoryReport;
+// Permite elegir manualmente qué día ver en la Vista Gerencial (antes
+// quedaba fija al último día con datos — "el cierre del día anterior" —
+// sin forma de revisar, por ejemplo, un domingo específico cuyo total
+// todavía no está completo, o cualquier fecha anterior).
+function setInvReportDate(nuevaFecha) {
+  if (!nuevaFecha || !/^\d{4}-\d{2}-\d{2}$/.test(nuevaFecha)) return;
+  currentDate = nuevaFecha;
+  renderInventoryReport();
+}
+window.setInvReportDate = setInvReportDate;
 function _buildInventoryReportHTML() {
   var today=(typeof RAW!=='undefined'?RAW:[]).filter(function(r){return r.fecha===currentDate;});
   var PO=['Diesel','G. Regular','G. Premium','G. 84','TA1','GLP'];
@@ -17578,9 +17588,11 @@ function _buildInventoryReportHTML() {
   var regions={};pData.forEach(function(p){if(!regions[p.region])regions[p.region]=[];regions[p.region].push(p);});
   var plH='';
   RO.forEach(function(region){var rP=regions[region];if(!rP||!rP.length)return;plH+='<div style="margin-bottom:32px"><div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;padding-bottom:10px;border-bottom:2px solid '+RC[region]+'33"><span style="background:'+RC[region]+';color:#fff;font-size:10px;font-weight:800;padding:3px 10px;border-radius:20px;letter-spacing:.08em;text-transform:uppercase">'+region+'</span><span style="font-size:12px;color:#6b7280;font-weight:600">'+rP.length+' planta'+(rP.length>1?'s':'')+'</span></div><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:12px">';rP.forEach(function(p){var minCob=999,hasCob=false;p.rows.forEach(function(r){if(r.cob>0){minCob=Math.min(minCob,r.cob);hasCob=true;}});var crit=p.rows.filter(function(r){return r.cob>0&&r.cob<=5;}).length;var bdr=crit>0?'#dc2626':hasCob&&minCob<=7?'#d97706':'#e5e7eb';plH+='<div style="background:#fff;border-radius:12px;box-shadow:0 1px 8px rgba(0,0,0,.07);padding:16px 18px;border-left:4px solid '+bdr+'"><div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px"><div><div style="font-size:14px;font-weight:800;color:#111827">'+p.planta+'</div><div style="font-size:10px;color:#6b7280;font-weight:500;margin-top:2px">'+p.total.toFixed(1)+' MB inventario total</div></div>'+(hasCob?'<div style="text-align:right;flex-shrink:0"><div style="font-size:20px;font-weight:900;color:'+cc(minCob)+'">'+minCob+'d</div><div style="font-size:9px;font-weight:700;color:'+cc(minCob)+';text-transform:uppercase;letter-spacing:.04em">'+cobLabel(minCob)+'</div></div>':'')+'</div><div style="display:flex;flex-direction:column;gap:8px">';p.rows.forEach(function(r){var hC=r.cob>0,bW=hC?cobBarW(r.cob):0,bC=hC?cbBar(r.cob):'#d1d5db';plH+='<div><div style="display:flex;align-items:center;gap:6px;margin-bottom:4px"><span style="font-size:13px;flex-shrink:0">'+PE[r.prod]+'</span><span style="font-size:11px;font-weight:700;color:#374151;flex:1">'+PL[r.prod]+'</span><span style="font-size:11px;font-weight:700;color:#111827">'+r.inv.toFixed(1)+'<span style="font-size:10px;font-weight:400;color:#9ca3af"> MB</span></span>'+(hC?'<span style="background:'+cb(r.cob)+';color:'+cc(r.cob)+';font-size:9px;font-weight:800;padding:2px 7px;border-radius:10px;min-width:32px;text-align:center;flex-shrink:0">'+r.cob+'d</span>':'')+'</div>'+(hC?'<div style="position:relative;background:#f3f4f6;border-radius:4px;height:6px;overflow:hidden"><div style="position:absolute;left:0;top:0;height:100%;width:'+bW+'%;background:'+bC+';border-radius:4px"></div><div style="position:absolute;left:23%;top:0;height:100%;width:1px;background:rgba(0,0,0,.15)"></div><div style="position:absolute;left:50%;top:0;height:100%;width:1px;background:rgba(0,0,0,.15)"></div></div>':'<div style="background:#f3f4f6;border-radius:4px;height:6px"></div>')+'</div>';});plH+='</div></div>';});plH+='</div></div>';});
+  var minD=(DATES&&DATES.length)?DATES[0]:'',maxD=(DATES&&DATES.length)?DATES[DATES.length-1]:'';
+  var datePicker=INVENTORY_REPORT_MODE?('<input type="date" id="inv-date-picker" value="'+(currentDate||'')+'" min="'+minD+'" max="'+maxD+'" onchange="setInvReportDate(this.value)" style="background:rgba(255,255,255,.15);color:#fff;border:1.5px solid rgba(255,255,255,.3);padding:8px 12px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;color-scheme:dark">'):'';
   var shareBtn=INVENTORY_REPORT_MODE?'<button onclick="copyPageLink()" style="background:rgba(255,255,255,.15);color:#fff;border:1.5px solid rgba(255,255,255,.3);padding:9px 18px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">\ud83d\udd17 Copiar link</button>':'';
   return '<style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#f1f5f9;min-height:100vh}@media print{.no-print{display:none!important}}</style>'
-    +'<div style="background:linear-gradient(135deg,#0a3a5c 0%,#1e3a8a 60%,#0f4c81 100%);padding:28px 32px 24px;position:sticky;top:0;z-index:100"><div style="max-width:1200px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:16px"><div style="display:flex;align-items:center;gap:16px"><div style="background:rgba(255,255,255,.15);border-radius:14px;width:52px;height:52px;display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:900;color:#fff;border:1.5px solid rgba(255,255,255,.25)">PP</div><div><div style="color:#fff;font-size:22px;font-weight:800;letter-spacing:-.3px">Inventario PETROPER\u00da</div><div style="color:rgba(255,255,255,.7);font-size:12px;margin-top:3px;font-weight:500">'+fStr+' \u00b7 Planificaci\u00f3n de Suministro</div></div></div><div class="no-print" style="display:flex;gap:10px;flex-wrap:wrap">'+shareBtn+'<button onclick="copyWA()" style="background:rgba(255,255,255,.15);color:#fff;border:1.5px solid rgba(255,255,255,.3);padding:9px 18px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">\ud83d\udccb Copiar WhatsApp</button><button onclick="window.print()" style="background:rgba(255,255,255,.15);color:#fff;border:1.5px solid rgba(255,255,255,.3);padding:9px 18px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">\ud83d\udda8\ufe0f PDF</button></div></div></div>'
+    +'<div style="background:linear-gradient(135deg,#0a3a5c 0%,#1e3a8a 60%,#0f4c81 100%);padding:28px 32px 24px;position:sticky;top:0;z-index:100"><div style="max-width:1200px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:16px"><div style="display:flex;align-items:center;gap:16px"><div style="background:rgba(255,255,255,.15);border-radius:14px;width:52px;height:52px;display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:900;color:#fff;border:1.5px solid rgba(255,255,255,.25)">PP</div><div><div style="color:#fff;font-size:22px;font-weight:800;letter-spacing:-.3px">Inventario PETROPER\u00da</div><div style="color:rgba(255,255,255,.7);font-size:12px;margin-top:3px;font-weight:500">'+fStr+' \u00b7 Planificaci\u00f3n de Suministro</div></div></div><div class="no-print" style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">'+datePicker+shareBtn+'<button onclick="copyWA()" style="background:rgba(255,255,255,.15);color:#fff;border:1.5px solid rgba(255,255,255,.3);padding:9px 18px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">\ud83d\udccb Copiar WhatsApp</button><button onclick="window.print()" style="background:rgba(255,255,255,.15);color:#fff;border:1.5px solid rgba(255,255,255,.3);padding:9px 18px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">\ud83d\udda8\ufe0f PDF</button></div></div></div>'
     +'<div style="background:#fff;border-bottom:1px solid #e5e7eb;padding:20px 32px"><div style="max-width:1200px;margin:0 auto;display:flex;gap:32px;flex-wrap:wrap;align-items:center"><div><div style="font-size:28px;font-weight:900;color:#0a3a5c;letter-spacing:-.5px">'+gT.toFixed(1)+'<span style="font-size:16px;font-weight:600;color:#6b7280;margin-left:4px">MB</span></div><div style="font-size:10px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:.08em;margin-top:2px">Total nacional</div></div><div style="width:1px;height:40px;background:#e5e7eb"></div>'+(vT>0?'<div><div style="font-size:28px;font-weight:900;color:#065f46;letter-spacing:-.5px">'+vT.toFixed(1)+'<span style="font-size:16px;font-weight:600;color:#6b7280;margin-left:4px">MBDC</span></div><div style="font-size:10px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:.08em;margin-top:2px">Venta factible diaria</div></div><div style="width:1px;height:40px;background:#e5e7eb"></div>':'')+(cP>0?'<div><div style="font-size:28px;font-weight:900;color:'+cc(cP)+';letter-spacing:-.5px">'+cP+'<span style="font-size:16px;font-weight:600;color:#6b7280;margin-left:4px">d\u00edas</span></div><div style="font-size:10px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:.08em;margin-top:2px">Cobertura promedio</div></div>':'')+'</div></div>'
     +'<div style="max-width:1200px;margin:0 auto;padding:28px 32px">'
     +'<div style="margin-bottom:32px"><div style="display:flex;align-items:center;gap:10px;margin-bottom:16px"><div style="width:4px;height:20px;background:#0a3a5c;border-radius:2px"></div><h2 style="font-size:15px;font-weight:800;color:#0a3a5c;text-transform:uppercase;letter-spacing:.06em">Por Producto</h2></div><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px">'+pcH+'</div></div>'
@@ -20439,11 +20451,12 @@ function renderVistaEjecutivaSimple() {
         '<div style="display:flex;align-items:center;gap:8px">' +
           '<label style="font-size:10.5px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.4px">📅 Ver fecha</label>' +
           '<input type="date" id="exec-mapa-fecha-input" value="' + (window._execMapaFecha || fechaHoy) + '" min="' + ((DATES&&DATES[0])||'') + '" max="' + ((DATES&&DATES[DATES.length-1])||'') + '" onchange="window._execMapaSetFecha(this.value)" style="padding:6px 10px;border-radius:7px;border:1px solid var(--bdr);background:var(--card2);color:var(--txt);font-family:var(--mono);font-size:12px;font-weight:600">' +
+          '<button id="exec-mapa-toggle-btn" onclick="toggleExecMapa()" style="padding:6px 12px;border-radius:7px;border:1px solid var(--bdr);background:var(--card2);color:var(--txt2);font-size:11.5px;font-weight:700;cursor:pointer;white-space:nowrap">' + (window._execMapaOculto ? '👁️ Mostrar mapa' : '🙈 Ocultar mapa') + '</button>' +
           '<div id="exec-mapa-kpis"></div>' +
         '</div>' +
       '</div>' +
-      '<div id="exec-mapa-container" style="height:460px;border-radius:10px;overflow:hidden;background:#eef2f7;position:relative;z-index:1;isolation:isolate"></div>' +
-      '<div style="font-size:10.5px;color:var(--txt3);margin-top:8px">📍 Toca cualquier instalación para ver existencia, despacho real, pronóstico y cobertura por producto</div>' +
+      '<div id="exec-mapa-container" style="height:460px;border-radius:10px;overflow:hidden;background:#eef2f7;position:relative;z-index:1;isolation:isolate;' + (window._execMapaOculto ? 'display:none' : '') + '"></div>' +
+      '<div id="exec-mapa-hint" style="font-size:10.5px;color:var(--txt3);margin-top:8px;' + (window._execMapaOculto ? 'display:none' : '') + '">📍 Toca cualquier instalación para ver existencia, despacho real, pronóstico y cobertura por producto</div>' +
     '</div>' +
     '<div style="background:var(--card);border:1px solid var(--bdr);border-radius:14px;padding:22px 24px;margin-bottom:20px">' +
       '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:14px">' +
@@ -20461,9 +20474,13 @@ function renderVistaEjecutivaSimple() {
     cobSectionHTML +
     plantasGridHTML;
 
-  // Mapa Nacional — siempre visible; si hay una planta/refinería
-  // específica seleccionada, se centra ahí y abre su ficha automática.
-  if (document.getElementById('exec-mapa-container')) {
+  // Mapa Nacional — visible salvo que el usuario lo haya ocultado con el
+  // botón "Ocultar mapa" (window._execMapaOculto, persiste entre
+  // refrescos de este panel). Si está oculto, no se inicializa Leaflet
+  // dentro de un contenedor display:none (causa problemas de tiles mal
+  // dimensionados al mostrarlo después) — se inicializa recién al
+  // volver a mostrarlo, ver toggleExecMapa().
+  if (!window._execMapaOculto && document.getElementById('exec-mapa-container')) {
     if (typeof _loadMapLibs === 'function') {
       _loadMapLibs(function() { if (typeof renderExecMapa === 'function') renderExecMapa(pl); });
     }
@@ -20725,6 +20742,36 @@ window._execMapaSetFecha = function(fecha) {
     renderExecMapa(pl);
   }
 };
+// Muestra/oculta el mapa de Perú en Vista Ejecutiva sin recargar todo el
+// panel. El estado (window._execMapaOculto) persiste entre refrescos —
+// si el usuario lo oculta y luego cambia de planta/fecha/período, sigue
+// oculto hasta que lo vuelva a mostrar.
+function toggleExecMapa() {
+  window._execMapaOculto = !window._execMapaOculto;
+  var cont = document.getElementById('exec-mapa-container');
+  var hint = document.getElementById('exec-mapa-hint');
+  var btn  = document.getElementById('exec-mapa-toggle-btn');
+  if (window._execMapaOculto) {
+    if (cont) cont.style.display = 'none';
+    if (hint) hint.style.display = 'none';
+    if (btn) btn.innerHTML = '👁️ Mostrar mapa';
+  } else {
+    if (cont) cont.style.display = '';
+    if (hint) hint.style.display = '';
+    if (btn) btn.innerHTML = '🙈 Ocultar mapa';
+    // El mapa nunca se inicializó mientras estaba oculto (para evitar
+    // tiles mal dimensionados) — se inicializa recién ahora.
+    if (typeof _loadMapLibs === 'function') {
+      _loadMapLibs(function() {
+        if (typeof renderExecMapa === 'function') {
+          var pl = (typeof window._execPlanta !== 'undefined') ? window._execPlanta : 'Nacional';
+          renderExecMapa(pl);
+        }
+      });
+    }
+  }
+}
+window.toggleExecMapa = toggleExecMapa;
 function renderExecMapa(plantaSeleccionada) {
   var el = document.getElementById('exec-mapa-container');
   if (!el || typeof L === 'undefined') return;
