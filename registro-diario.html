@@ -126,6 +126,25 @@ input.input-error{border-color:var(--red)!important;box-shadow:0 0 0 3px rgba(20
 .bt-fields{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-top:14px;display:none}
 .bt-fields.open{display:grid}
 @media(max-width:640px){.prod-row{grid-template-columns:1fr}.bt-fields{grid-template-columns:1fr}.calc-grid{grid-template-columns:1fr 1fr}}
+/* ── Mobile: el topbar (logo+título+planta+usuario+salir) se desbordaba
+   en pantallas angostas — título partido en 3 líneas, botón "Salir"
+   cortado. Se reorganiza en 2 filas: fila 1 = logo+título compacto,
+   fila 2 = planta/usuario/salir con wrap libre. ── */
+@media(max-width:600px){
+  .topbar{height:auto;flex-wrap:wrap;padding:10px 14px;gap:8px 10px;row-gap:8px}
+  .tb-logo{width:32px;height:32px}
+  .tb-title .t1{font-size:12px;line-height:1.25}
+  .tb-title .t2{display:none}
+  .tb-right{margin-left:0;width:100%;flex-wrap:wrap;gap:6px;justify-content:flex-start}
+  .tb-user{font-size:10.5px}
+  .tb-planta-badge{font-size:9.5px;padding:2px 9px}
+  .tb-right .btn{padding:6px 12px;font-size:11px;margin-left:auto}
+  #appShell{padding:16px 12px 50px}
+  .center-wrap{padding:16px}
+  .authcard{padding:20px 18px}
+  .rd-tab{padding:9px 12px;font-size:11px}
+  h1,.page-title{font-size:18px}
+}
 
 
 .actions-bar{display:flex;gap:10px;justify-content:flex-end;margin-top:6px;flex-wrap:wrap}
@@ -425,9 +444,9 @@ body.rd-print-mode #rdPrintReport{
     @media(max-width:640px){#histChartsRow{grid-template-columns:1fr}}
     </style>
 
-    <div style="display:flex;align-items:center;justify-content:flex-end;gap:8px;margin-bottom:10px">
-      <button class="btn btn-export-excel" id="btnHistExcel" onclick="rdExportarHistExcel()" style="display:flex;align-items:center;gap:6px;padding:7px 14px;font-size:11.5px">📊 Exportar a Excel</button>
-      <button class="btn btn-export-pdf" id="btnHistPdf" onclick="rdExportarHistPDF()" style="display:flex;align-items:center;gap:6px;padding:7px 14px;font-size:11.5px">🖨️ Exportar a PDF</button>
+    <div style="display:flex;align-items:center;justify-content:flex-end;gap:8px;margin-bottom:10px;flex-wrap:wrap">
+      <button class="btn btn-export-excel" id="btnHistExcel" onclick="rdExportarHistExcel()" style="display:flex;align-items:center;justify-content:center;gap:6px;padding:7px 14px;font-size:11.5px;flex:1 1 auto;min-width:150px">📊 Exportar a Excel</button>
+      <button class="btn btn-export-pdf" id="btnHistPdf" onclick="rdExportarHistPDF()" style="display:flex;align-items:center;justify-content:center;gap:6px;padding:7px 14px;font-size:11.5px;flex:1 1 auto;min-width:150px">🖨️ Exportar a PDF</button>
     </div>
 
     <div id="histContent"><div class="rd-loading">⏳ Cargando histórico…</div></div>
@@ -447,7 +466,7 @@ body.rd-print-mode #rdPrintReport{
 
     <div class="chart-card">
       <div class="chart-card-title">📊 Volumen por producto</div>
-      <div id="pronChartWrap" style="position:relative;height:220px"><div class="chart-empty">Cargando…</div></div>
+      <div id="pronChartWrap" style="position:relative;height:280px"><div class="chart-empty">Cargando…</div></div>
     </div>
 
     <div id="pronContent"><div class="rd-loading">⏳ Cargando pronóstico…</div></div>
@@ -1346,9 +1365,12 @@ function rdRefreshMiReporte() {
       pill.className = 'status-pill done';
       var hora = res.estado.hora ? ' · ' + new Date(res.estado.hora).toLocaleTimeString('es-PE', {hour:'2-digit',minute:'2-digit'}) : '';
       pill.innerHTML = '<span class="status-dot"></span> ✓ Reporte registrado' + hora + ' por <b>' + res.estado.nombre + '</b>';
-      // Cargar comentario general guardado
+      // Cargar comentario general guardado — SIEMPRE se asigna (incluso
+      // si viene vacío) para que refleje la fecha actual y no arrastre
+      // texto de una fecha vista antes.
       var ta = document.getElementById('comentario');
-      if (ta && res.estado.comentario) { ta.value = res.estado.comentario; rdUpdateComentGeneral(); }
+      if (ta) { ta.value = res.estado.comentario || ''; rdUpdateComentGeneral(); }
+      RD._ultimaFechaCargada = hoy;
       // Bloquear botón guardar
       var btn = document.getElementById('btnGuardar');
       if (btn) { btn.disabled = true; btn.title = 'Ya registrado hoy'; btn.style.opacity = '.45'; btn.style.cursor = 'not-allowed'; }
@@ -1369,6 +1391,20 @@ function rdRefreshMiReporte() {
       // Quitar banner bloqueado si existe
       var bnr = document.getElementById('rdBannerReportado');
       if (bnr) bnr.remove();
+      // ⚠️ Limpiar el comentario general — es un textarea FIJO en el
+      // shell de la página (no se regenera por fecha como las filas de
+      // producto), así que si el operador antes vio una fecha YA
+      // reportada (que sí precarga su comentario, líneas arriba) y luego
+      // cambia a una fecha pendiente, el texto viejo se quedaba pegado
+      // en pantalla — pudiendo guardarse por error como si fuera el
+      // comentario de HOY. Se limpia siempre que la fecha esté pendiente,
+      // salvo que ya sea la misma fecha que se estaba viendo (para no
+      // borrar un borrador que el operador ya empezó a escribir).
+      if (RD._ultimaFechaCargada !== hoy) {
+        var taGen = document.getElementById('comentario');
+        if (taGen) { taGen.value = ''; rdUpdateComentGeneral(); }
+      }
+      RD._ultimaFechaCargada = hoy;
       // Aviso NO bloqueante: hay data cargada de otro origen (ej.
       // Coberturas) para hoy, pero el formulario sigue editable — el
       // operador puede y debe reportar normalmente.
@@ -1782,19 +1818,35 @@ function rdRenderPronChart(datos, mesActivo) {
     var ia=ORDER.indexOf(a.producto),ib=ORDER.indexOf(b.producto);
     return (ia<0?99:ia)-(ib<0?99:ib);
   });
-  wrap.innerHTML = '<canvas id="pronChartCanvas" style="height:220px"></canvas>';
+  wrap.innerHTML = '<canvas id="pronChartCanvas" style="height:280px"></canvas>';
   var ctx = document.getElementById('pronChartCanvas');
   if (!ctx || typeof Chart === 'undefined') return;
+  // MBDO = mismo pronóstico mensual (MBDC), repartido solo entre los días
+  // operativos del mes (sin domingos) — misma conversión que ya usan las
+  // tarjetas de arriba (rdRenderPronCards). Antes el gráfico solo
+  // mostraba MBDC.
   _pronChart = new Chart(ctx, {
     type:'bar',
     data:{ labels:filas.map(function(f){ return f.producto; }),
-      datasets:[{ label:'Pronóstico MB',
-        data:filas.map(function(f){ return parseFloat(f.pron_mb)||0; }),
-        backgroundColor:filas.map(function(f){ return prodColor(f.producto)+'cc'; }),
-        borderColor:filas.map(function(f){ return prodColor(f.producto); }),
-        borderWidth:1.5, borderRadius:5 }]},
+      datasets:[
+        { label:'MBDC · día calendario',
+          data:filas.map(function(f){ return parseFloat(f.pron_mb)||0; }),
+          backgroundColor:filas.map(function(f){ return prodColor(f.producto)+'cc'; }),
+          borderColor:filas.map(function(f){ return prodColor(f.producto); }),
+          borderWidth:1.5, borderRadius:5 },
+        { label:'MBDO · día operativo',
+          data:filas.map(function(f){
+            var mbdc = parseFloat(f.pron_mb)||0;
+            var dias = rdDiasOperativosMes(f.mes);
+            return mbdc > 0 ? (mbdc * dias.calendario / dias.operativos) : 0;
+          }),
+          backgroundColor:'#7c3aedcc',
+          borderColor:'#7c3aed',
+          borderWidth:1.5, borderRadius:5 }
+      ]},
     options:{ indexAxis:'y', responsive:true, maintainAspectRatio:false,
-      plugins:{ legend:{display:false}, tooltip:{ callbacks:{ label:function(ctx){ return ' '+ctx.parsed.x.toFixed(2)+' MB'; }}}},
+      plugins:{ legend:{display:true, position:'top', labels:{boxWidth:11, font:{size:10}}},
+        tooltip:{ callbacks:{ label:function(ctx){ return ' '+ctx.dataset.label+': '+ctx.parsed.x.toFixed(2)+' MB'; }}}},
       scales:{ x:{beginAtZero:true,ticks:{font:{size:9}},grid:{color:'#f1f5f9'}},
                y:{ticks:{font:{size:11,weight:'600'}},grid:{display:false}} }}
   });
