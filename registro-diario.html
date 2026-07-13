@@ -38,10 +38,6 @@ body{font-family:var(--sans);font-size:13px;background:var(--bg);color:var(--txt
 .btn-ghost-dark{background:rgba(255,255,255,.08);color:#dfe4ee;border-color:rgba(255,255,255,.18)}
 .btn-ghost-dark:hover{background:rgba(255,255,255,.14)}
 .btn-block{width:100%}
-.btn-export-excel{background:#1a7a44;color:#fff;border-color:#1a7a44}
-.btn-export-excel:hover{background:#156337}
-.btn-export-pdf{background:var(--navy);color:#fff;border-color:var(--navy)}
-.btn-export-pdf:hover{background:#0a1428}
 .center-wrap{min-height:calc(100vh - 60px);display:flex;align-items:center;justify-content:center;padding:24px}
 .authcard{width:100%;max-width:400px;background:var(--card);border:1px solid var(--bdr);border-radius:14px;padding:32px 28px;box-shadow:var(--shadow)}
 .authcard h1{font-size:19px;font-weight:800;margin-bottom:4px;letter-spacing:-.01em;color:var(--navy)}
@@ -126,25 +122,6 @@ input.input-error{border-color:var(--red)!important;box-shadow:0 0 0 3px rgba(20
 .bt-fields{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-top:14px;display:none}
 .bt-fields.open{display:grid}
 @media(max-width:640px){.prod-row{grid-template-columns:1fr}.bt-fields{grid-template-columns:1fr}.calc-grid{grid-template-columns:1fr 1fr}}
-/* ── Mobile: el topbar (logo+título+planta+usuario+salir) se desbordaba
-   en pantallas angostas — título partido en 3 líneas, botón "Salir"
-   cortado. Se reorganiza en 2 filas: fila 1 = logo+título compacto,
-   fila 2 = planta/usuario/salir con wrap libre. ── */
-@media(max-width:600px){
-  .topbar{height:auto;flex-wrap:wrap;padding:10px 14px;gap:8px 10px;row-gap:8px}
-  .tb-logo{width:32px;height:32px}
-  .tb-title .t1{font-size:12px;line-height:1.25}
-  .tb-title .t2{display:none}
-  .tb-right{margin-left:0;width:100%;flex-wrap:wrap;gap:6px;justify-content:flex-start}
-  .tb-user{font-size:10.5px}
-  .tb-planta-badge{font-size:9.5px;padding:2px 9px}
-  .tb-right .btn{padding:6px 12px;font-size:11px;margin-left:auto}
-  #appShell{padding:16px 12px 50px}
-  .center-wrap{padding:16px}
-  .authcard{padding:20px 18px}
-  .rd-tab{padding:9px 12px;font-size:11px}
-  h1,.page-title{font-size:18px}
-}
 
 
 .actions-bar{display:flex;gap:10px;justify-content:flex-end;margin-top:6px;flex-wrap:wrap}
@@ -163,7 +140,7 @@ input.input-error{border-color:var(--red)!important;box-shadow:0 0 0 3px rgba(20
 .toast.show{display:block;animation:toastIn .2s ease}
 @keyframes toastIn{from{opacity:0;transform:translate(-50%,10px)}to{opacity:1;transform:translate(-50%,0)}}
 
-.loader{display:none;position:fixed;top:0;left:0;width:100%;height:100%;align-items:center;justify-content:center;flex-direction:column;gap:14px;background:var(--bg);z-index:9999}
+.loader{display:none;align-items:center;justify-content:center;min-height:100vh;flex-direction:column;gap:14px}
 .loader.show{display:flex}
 .spinner{width:40px;height:40px;border:3px solid var(--bdr);border-top-color:var(--red);border-radius:50%;animation:spin 1s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
@@ -258,26 +235,7 @@ input.input-error{border-color:var(--red)!important;box-shadow:0 0 0 3px rgba(20
 .sol-item.pending{background:#fdf3e0;border-color:#e8a00050}
 .sol-item.rejected{background:#fdecec;border-color:#c8102e40}
 .sol-item b{display:block;font-size:11px;color:var(--navy);margin-bottom:2px}
-
-/* ── Impresión / Exportar a PDF del Histórico ──────────────────────────
-   El PDF es un DOCUMENTO APARTE (#rdPrintReport), construido con su
-   propio diseño (tarjetas, franjas, badges de color) — no es una
-   captura de la app tal cual. Al imprimir se oculta TODA la app y solo
-   se ve ese documento. Se activa con body.rd-print-mode antes de
-   window.print(). */
-#rdPrintReport{ display:none; }
-body.rd-print-mode > *:not(#rdPrintReport){ display:none !important; }
-body.rd-print-mode #rdPrintReport{
-  display:block; max-width:900px; margin:20px auto; background:#fff;
-}
-@media print{
-  body.rd-print-mode{ background:#fff; margin:0; }
-  body.rd-print-mode #rdPrintReport{ margin:0; max-width:100%; }
-  body.rd-print-mode *{ -webkit-print-color-adjust:exact; print-color-adjust:exact; }
-  @page{ margin:14mm 12mm; }
-}
 </style>
-<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
 </head>
 <body>
 
@@ -444,11 +402,6 @@ body.rd-print-mode #rdPrintReport{
     @media(max-width:640px){#histChartsRow{grid-template-columns:1fr}}
     </style>
 
-    <div style="display:flex;align-items:center;justify-content:flex-end;gap:8px;margin-bottom:10px;flex-wrap:wrap">
-      <button class="btn btn-export-excel" id="btnHistExcel" onclick="rdExportarHistExcel()" style="display:flex;align-items:center;justify-content:center;gap:6px;padding:7px 14px;font-size:11.5px;flex:1 1 auto;min-width:150px">📊 Exportar a Excel</button>
-      <button class="btn btn-export-pdf" id="btnHistPdf" onclick="rdExportarHistPDF()" style="display:flex;align-items:center;justify-content:center;gap:6px;padding:7px 14px;font-size:11.5px;flex:1 1 auto;min-width:150px">🖨️ Exportar a PDF</button>
-    </div>
-
     <div id="histContent"><div class="rd-loading">⏳ Cargando histórico…</div></div>
   </div>
 
@@ -466,7 +419,7 @@ body.rd-print-mode #rdPrintReport{
 
     <div class="chart-card">
       <div class="chart-card-title">📊 Volumen por producto</div>
-      <div id="pronChartWrap" style="position:relative;height:280px"><div class="chart-empty">Cargando…</div></div>
+      <div id="pronChartWrap" style="position:relative;height:220px"><div class="chart-empty">Cargando…</div></div>
     </div>
 
     <div id="pronContent"><div class="rd-loading">⏳ Cargando pronóstico…</div></div>
@@ -532,19 +485,6 @@ function rdAyerLima() {
   var d = new Date();
   var lima = new Date(d.getTime() - 5 * 3600 * 1000 - 24 * 3600 * 1000);
   return lima.toISOString().slice(0, 10);
-}
-// Nombre de reporte para exports (Excel/PDF) — ej. "Reporte Inventarios y
-// Despachos Pisco al 12.07.2026". devuelveDisplay=true → con espacios y
-// mayúsculas para mostrar (title del documento); false → sanitizado para
-// nombre de archivo.
-function rdNombreReporte(devuelveDisplay) {
-  var iso = rdHoyLima(); // YYYY-MM-DD
-  var partes = iso.split('-');
-  var ddmmyyyy = partes[2] + '.' + partes[1] + '.' + partes[0];
-  var planta = plantaLabel(RD.planta || '');
-  var base = 'Reporte Inventarios y Despachos ' + planta + ' al ' + ddmmyyyy;
-  if (devuelveDisplay) return base;
-  return base.replace(/[^a-zA-Z0-9.]/g, '_');
 }
 function rdHoraLima() {
   var d = new Date();
@@ -832,18 +772,6 @@ function fmtFecha(f) {
   return String(d).padStart(2,'0') + '-' + (_MESES_CORTO[m] || f.slice(5,7));
 }
 
-// Lee la etiqueta estructurada que se antepone al comentario cuando se
-// marca una reposición recibida (ver rdMarcarReposicion): formato
-// "[REPOS|MARITIMO|12.45] texto libre...". Misma lógica que usa el
-// dashboard principal para mostrarla en gráficas — se comparte el
-// formato para que ambos lados siempre lean lo mismo.
-var REPOS_TIPO_LABEL_RD = { MARITIMO: '⛴️ Cabotaje Marítimo', TERRESTRE: '🚛 Cisternas Terrestres', REFINERIA: '🏭 Vía Refinería' };
-function parseReposicionTag(comentario) {
-  if (!comentario) return null;
-  var m = /^\[REPOS\|(\w+)\|([\d.]+)\]/.exec(comentario);
-  if (!m) return null;
-  return { tipo: m[1], tipoLabel: REPOS_TIPO_LABEL_RD[m[1]] || m[1], volumenMB: parseFloat(m[2]) || 0 };
-}
 function rdFmt(n) {
   if (n === null || n === undefined || isNaN(n)) return '—';
   return Number(n).toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 3 });
@@ -991,39 +919,6 @@ function rdToggleExtra(prod) {
 // guardado — solo avisa, por si el valor es real y legítimo.
 var RD_UMBRAL_EXIST_MB = 2000;   // MB — muy por encima de cualquier capacidad conocida
 var RD_UMBRAL_DESP_MB  = 100;    // MB/día — muy por encima de cualquier despacho diario real
-// Al marcar el origen de una reposición detectada, se antepone una
-// etiqueta ESTRUCTURADA (que el dashboard sabe leer para mostrarla en
-// gráficas) más una parte legible para las personas. El volumen se
-// calcula solo (existencia de hoy − existencia del último reporte), no
-// depende de que el operador lo escriba bien.
-// Descartar el aviso de reposición sin marcar ningún origen — para
-// plantas con ventas casi nulas donde la existencia puede variar
-// mínimamente de un día a otro sin que haya llegado producto realmente.
-// El aviso NUNCA bloqueaba el guardado, pero se agrega este botón para
-// que quede clarísimo y no genere ninguna duda al operador.
-function rdDescartarReposicion(prod) {
-  var panel = document.getElementById('repos-panel-' + prod.replace(/[^a-z0-9]/gi,'_'));
-  if (panel) panel.style.display = 'none';
-}
-function rdMarcarReposicion(prod, tipo, emoji) {
-  var existEl = document.querySelector('.rd-existencia[data-prod="' + prod + '"]');
-  var existencia = existEl ? rdParseNum(existEl) : 0;
-  var ref = (RD.detalle && RD.detalle[prod]) || {};
-  var ucInv = (ref.ultimo_calculo && ref.ultimo_calculo.inv) || 0;
-  var volumen = Math.max(0, Math.round((existencia - ucInv) * 1000) / 1000);
-  var tipoCodigo = tipo === 'Cabotaje Marítimo' ? 'MARITIMO' : tipo === 'Cisternas Terrestres' ? 'TERRESTRE' : 'REFINERIA';
-  var ta = document.querySelector('.rd-coment-prod[data-prod="' + prod + '"]');
-  if (ta) {
-    // Prefijo estructurado (lo lee el dashboard) + texto legible para
-    // cualquiera que abra el Sheets directamente.
-    var etiqueta = '[REPOS|' + tipoCodigo + '|' + volumen + '] ' + emoji + ' Reposición ' + tipo + ' — ' + rdFmt(volumen) + ' MB recibidos. ';
-    if (ta.value.indexOf('[REPOS|') !== 0) ta.value = etiqueta + ta.value;
-    ta.focus();
-    ta.setSelectionRange(ta.value.length, ta.value.length);
-  }
-  var panel = document.getElementById('repos-panel-' + prod.replace(/[^a-z0-9]/gi,'_'));
-  if (panel) panel.style.display = 'none';
-}
 function rdCheckUnidadSospechosa(prod, tipo) {
   var safeId = prod.replace(/[^a-z0-9]/gi,'_');
   if (tipo === 'exist') {
@@ -1073,43 +968,6 @@ function rdRecalc(prod) {
   if (vacioEl) { vacioEl.textContent = rdFmt(vacio); vacioEl.style.color = vacio < 0 ? '#c8102e' : ''; }
   var ref = (RD.detalle && RD.detalle[prod]) || {};
   var uc  = ref.ultimo_calculo;
-  // Detección inteligente de reposición: si la existencia que se está
-  // escribiendo es mayor a la del último reporte conocido, es señal de
-  // que llegó producto — se muestra el panel para que digan por dónde
-  // (cabotaje, cisternas o vía refinería) y quede registrado.
-  //
-  // OJO — la mayoría de plantas no trabaja domingo (no reportan ese día),
-  // así que "el último reporte conocido" puede ser de varios días atrás
-  // (ej. viernes), no necesariamente "ayer". Sin este cuidado, el panel
-  // podía sugerir que hubo una reposición cuando en realidad solo pasó
-  // más tiempo entre reportes de lo normal — el mensaje ahora deja
-  // explícito CONTRA QUÉ FECHA se está comparando, y el umbral se ajusta
-  // según cuántos días pasaron, para no disparar en falso por un simple
-  // fin de semana sin reportar.
-  (function rdCheckReposicion() {
-    var panel = document.getElementById('repos-panel-' + prod.replace(/[^a-z0-9]/gi,'_'));
-    var msgEl = document.getElementById('repos-msg-' + prod.replace(/[^a-z0-9]/gi,'_'));
-    if (!panel) return;
-    var ucInv = (uc && uc.inv) || 0;
-    var ucFecha = uc && uc.fecha;
-    var diasGap = 1;
-    if (ucFecha) {
-      var fechaHoyRD = (RD.fechaReporte || rdHoyLima());
-      var msDiff = new Date(fechaHoyRD + 'T12:00:00') - new Date(ucFecha + 'T12:00:00');
-      diasGap = Math.max(1, Math.round(msDiff / 86400000));
-    }
-    // Margen proporcional a los días transcurridos — con más días de por
-    // medio, un incremento moderado no necesariamente es una reposición
-    // puntual, así que se pide un salto más claro para disparar el aviso.
-    var UMBRAL_REPOS = 0.3 * diasGap;
-    var subioDeVerdad = ucInv > 0 && existencia > (ucInv + UMBRAL_REPOS);
-    if (subioDeVerdad && msgEl) {
-      var fechaTxt = ucFecha ? ucFecha.split('-').reverse().join('.') : '—';
-      var gapTxt = diasGap > 1 ? ' (hace ' + diasGap + ' días — revisa si tu planta no reporta fines de semana)' : '';
-      msgEl.innerHTML = '📈 La existencia subió respecto a tu <b>último reporte del ' + fechaTxt + '</b>' + gapTxt + ' — ¿cómo llegó el producto?';
-    }
-    panel.style.display = subioDeVerdad ? 'block' : 'none';
-  })();
   var autoEl = document.querySelector('[data-auto-calc="' + prod + '"]');
   if (autoEl) {
     // Prioridad: 1) despacho que el operador acaba de escribir hoy,
@@ -1180,10 +1038,6 @@ function rdRenderProdRows(productos, valores, detalle, yaReportado) {
   valores = valores || {};
   RD.detalle = detalle || {};
   var esRefineria = (RD.refinerias || []).indexOf(RD.planta) !== -1;
-  // Talara, Conchan e Iquitos tienen una refinería hermana que puede
-  // abastecerlas directamente — para esas plantas se ofrece "Vía
-  // Refinería" como origen de reposición, además de cabotaje/cisternas.
-  var esRefineriaHermana = ['Talara', 'Conchan', 'Iquitos'].indexOf(RD.planta) !== -1;
   var wrap = document.getElementById('prodRows');
   wrap.innerHTML = productos.map(function(p) {
     var v   = valores[p] || {};
@@ -1218,6 +1072,7 @@ function rdRenderProdRows(productos, valores, detalle, yaReportado) {
       ? '<div class="prod-info-row">'
         + '<span style="color:var(--txt3)">Sistema al ' + (uc.fecha||'\u2014') + ':</span>'
         + '<span>Desp. <b style="color:var(--navy)">' + rdFmt(despVal) + ' MB/d\u00eda</b></span>'
+        + '<span>V. Factible <b style="color:#c8102e">' + rdFmt(vfactVal) + ' MBDC</b></span>'
         + (pronMes > 0 ? '<span>Pron. mensual <b style="color:#0891b2">' + rdFmt(pronMes) + ' MB</b></span>' : '')
         + '</div>'
       : '<div class="prod-info-empty">Sin c\u00e1lculo del sistema para este producto.</div>';
@@ -1306,25 +1161,6 @@ function rdRenderProdRows(productos, valores, detalle, yaReportado) {
           +   '<div class="calc-item hl"><span class="calc-lbl">Autonomía estimada</span><span class="calc-val" data-auto-calc="' + p + '">' + autoIni + '</span></div>'
           + '</div>' : '')
       +   infoRow
-      // ── Detección inteligente de reposición ───────────────────────────
-      // Se muestra automáticamente (vía rdRecalc) cuando la existencia
-      // escrita es mayor a la del último reporte conocido — indica que
-      // llegó producto y conviene registrar por dónde. NUNCA bloquea el
-      // guardado — es solo informativo, con opción clara de descartarlo
-      // si no aplica (ej. plantas con ventas casi nulas donde la
-      // existencia varía poco de un día a otro sin que haya reposición).
-      +   (yaReportado ? '' :
-           '<div class="repos-panel" id="repos-panel-' + p.replace(/[^a-z0-9]/gi,'_') + '" style="display:none;margin-top:10px;padding:10px 12px;background:#eef6ff;border:1px solid #bfdbfe;border-radius:8px">'
-           + '<div id="repos-msg-' + p.replace(/[^a-z0-9]/gi,'_') + '" style="font-size:11px;font-weight:700;color:#1e40af;margin-bottom:7px">📈 La existencia subió respecto al último reporte — ¿cómo llegó el producto? (opcional, no es obligatorio para guardar)</div>'
-           + '<div style="display:flex;gap:6px;flex-wrap:wrap">'
-           +   '<button type="button" onclick="rdMarcarReposicion(\'' + p + '\',\'Cabotaje Mar\u00edtimo\',\'\u26f4\ufe0f\')" style="padding:6px 12px;border-radius:16px;border:1.5px solid #0284c7;background:#fff;color:#0284c7;font-size:11px;font-weight:700;cursor:pointer">\u26f4\ufe0f Cabotaje Mar\u00edtimo</button>'
-           +   '<button type="button" onclick="rdMarcarReposicion(\'' + p + '\',\'Cisternas Terrestres\',\'\ud83d\ude9b\')" style="padding:6px 12px;border-radius:16px;border:1.5px solid #ca8a04;background:#fff;color:#ca8a04;font-size:11px;font-weight:700;cursor:pointer">\ud83d\ude9b Cisternas Terrestres</button>'
-           +   (esRefineriaHermana
-                ? '<button type="button" onclick="rdMarcarReposicion(\'' + p + '\',\'V\u00eda Refiner\u00eda\',\'\ud83c\udfed\')" style="padding:6px 12px;border-radius:16px;border:1.5px solid #7c3aed;background:#fff;color:#7c3aed;font-size:11px;font-weight:700;cursor:pointer">\ud83c\udfed V\u00eda Refiner\u00eda</button>'
-                : '')
-           +   '<button type="button" onclick="rdDescartarReposicion(\'' + p + '\')" style="padding:6px 12px;border-radius:16px;border:1.5px solid #94a3b8;background:#fff;color:#64748b;font-size:11px;font-weight:700;cursor:pointer">\u2715 No aplica, cerrar aviso</button>'
-           + '</div>'
-           + '</div>')
       // ── Comentario por producto ──────────────────────────────────────────
       +   '<div class="prod-comentario-wrap">'
       +     '<label>Comentario del producto</label>'
@@ -1365,12 +1201,9 @@ function rdRefreshMiReporte() {
       pill.className = 'status-pill done';
       var hora = res.estado.hora ? ' · ' + new Date(res.estado.hora).toLocaleTimeString('es-PE', {hour:'2-digit',minute:'2-digit'}) : '';
       pill.innerHTML = '<span class="status-dot"></span> ✓ Reporte registrado' + hora + ' por <b>' + res.estado.nombre + '</b>';
-      // Cargar comentario general guardado — SIEMPRE se asigna (incluso
-      // si viene vacío) para que refleje la fecha actual y no arrastre
-      // texto de una fecha vista antes.
+      // Cargar comentario general guardado
       var ta = document.getElementById('comentario');
-      if (ta) { ta.value = res.estado.comentario || ''; rdUpdateComentGeneral(); }
-      RD._ultimaFechaCargada = hoy;
+      if (ta && res.estado.comentario) { ta.value = res.estado.comentario; rdUpdateComentGeneral(); }
       // Bloquear botón guardar
       var btn = document.getElementById('btnGuardar');
       if (btn) { btn.disabled = true; btn.title = 'Ya registrado hoy'; btn.style.opacity = '.45'; btn.style.cursor = 'not-allowed'; }
@@ -1391,33 +1224,6 @@ function rdRefreshMiReporte() {
       // Quitar banner bloqueado si existe
       var bnr = document.getElementById('rdBannerReportado');
       if (bnr) bnr.remove();
-      // ⚠️ Limpiar el comentario general — es un textarea FIJO en el
-      // shell de la página (no se regenera por fecha como las filas de
-      // producto), así que si el operador antes vio una fecha YA
-      // reportada (que sí precarga su comentario, líneas arriba) y luego
-      // cambia a una fecha pendiente, el texto viejo se quedaba pegado
-      // en pantalla — pudiendo guardarse por error como si fuera el
-      // comentario de HOY. Se limpia siempre que la fecha esté pendiente,
-      // salvo que ya sea la misma fecha que se estaba viendo (para no
-      // borrar un borrador que el operador ya empezó a escribir).
-      if (RD._ultimaFechaCargada !== hoy) {
-        var taGen = document.getElementById('comentario');
-        if (taGen) { taGen.value = ''; rdUpdateComentGeneral(); }
-      }
-      RD._ultimaFechaCargada = hoy;
-      // Aviso NO bloqueante: hay data cargada de otro origen (ej.
-      // Coberturas) para hoy, pero el formulario sigue editable — el
-      // operador puede y debe reportar normalmente.
-      var prevAviso = document.getElementById('rdBannerAvisoOrigen');
-      if (prevAviso) prevAviso.remove();
-      if (res.avisoOrigenExterno) {
-        var avEl = document.createElement('div');
-        avEl.id = 'rdBannerAvisoOrigen';
-        avEl.style.cssText = 'background:#fdf3e0;border:1.5px solid #a86a00;border-radius:8px;padding:10px 16px;margin-bottom:14px;font-size:12px;color:#8a5800;font-weight:600;display:flex;align-items:center;gap:8px';
-        avEl.innerHTML = '<span style="font-size:16px">⚠️</span><span style="flex:1">' + res.avisoOrigenExterno.mensaje + '</span>';
-        var shell2 = document.getElementById('rdPanel-registro');
-        if (shell2) { var firstCard2 = shell2.querySelector('.card'); if (firstCard2) shell2.insertBefore(avEl, firstCard2); }
-      }
     }
   }).catch(() => { rdShowLoader(false); rdToast('No se pudo cargar tu reporte', 'error'); });
 }
@@ -1559,17 +1365,7 @@ function rdConfirmarGuardar() {
   rdPost('rdGuardarReporte', payload).then(function(res) {
     btn.disabled = false; btn.textContent = 'Confirmar';
     rdCerrarConfirmacion();
-    if (res.success) {
-      rdToast(res.message, 'ok');
-      // Bloquear el botón principal DE INMEDIATO — antes esto solo pasaba
-      // al terminar rdRefreshMiReporte() (una llamada de red aparte), y en
-      // esa ventana el operador podía volver a hacer clic en "Guardar
-      // reporte" pensando que no había funcionado, generando un reporte
-      // duplicado con los mismos datos.
-      var btnPrincipal = document.getElementById('btnGuardar');
-      if (btnPrincipal) { btnPrincipal.disabled = true; btnPrincipal.title = 'Guardado ✓'; btnPrincipal.style.opacity = '.45'; btnPrincipal.style.cursor = 'not-allowed'; }
-      rdRefreshMiReporte();
-    }
+    if (res.success) { rdToast(res.message, 'ok'); rdRefreshMiReporte(); }
     else { rdToast(res.message || 'Error al guardar', 'error'); if (/sesi\u00f3n/i.test(res.message || '')) rdLogout(); }
   }).catch(function() {
     btn.disabled = false; btn.textContent = 'Confirmar';
@@ -1651,15 +1447,7 @@ function rdLoadHistorico() {
                 cob:        parseFloat(r.cob || 0) || 0,
                 vfact:      parseFloat(r.vfact || 0) || 0,
                 vreal:      parseFloat(r.vreal || r.dem || 0) || 0,
-                // Fallback legacy (getHistorico/fetchAllRecords): r.comentario
-                // es la columna COMENTARIO de inventario (a nivel de fila
-                // producto), no el general de planta — este fallback no hace
-                // el cruce con reporte_estado, así que comentario_planta
-                // queda vacío aquí (solo se usa si el endpoint principal
-                // rdGetHistoricoInventario falla).
-                comentario_inv:    r.comentario || '',
-                comentario_planta: '',
-                comentario_prod:   r.comentario_prod || ''
+                comentario: r.comentario || ''
               };
             });
           });
@@ -1818,35 +1606,19 @@ function rdRenderPronChart(datos, mesActivo) {
     var ia=ORDER.indexOf(a.producto),ib=ORDER.indexOf(b.producto);
     return (ia<0?99:ia)-(ib<0?99:ib);
   });
-  wrap.innerHTML = '<canvas id="pronChartCanvas" style="height:280px"></canvas>';
+  wrap.innerHTML = '<canvas id="pronChartCanvas" style="height:220px"></canvas>';
   var ctx = document.getElementById('pronChartCanvas');
   if (!ctx || typeof Chart === 'undefined') return;
-  // MBDO = mismo pronóstico mensual (MBDC), repartido solo entre los días
-  // operativos del mes (sin domingos) — misma conversión que ya usan las
-  // tarjetas de arriba (rdRenderPronCards). Antes el gráfico solo
-  // mostraba MBDC.
   _pronChart = new Chart(ctx, {
     type:'bar',
     data:{ labels:filas.map(function(f){ return f.producto; }),
-      datasets:[
-        { label:'MBDC · día calendario',
-          data:filas.map(function(f){ return parseFloat(f.pron_mb)||0; }),
-          backgroundColor:filas.map(function(f){ return prodColor(f.producto)+'cc'; }),
-          borderColor:filas.map(function(f){ return prodColor(f.producto); }),
-          borderWidth:1.5, borderRadius:5 },
-        { label:'MBDO · día operativo',
-          data:filas.map(function(f){
-            var mbdc = parseFloat(f.pron_mb)||0;
-            var dias = rdDiasOperativosMes(f.mes);
-            return mbdc > 0 ? (mbdc * dias.calendario / dias.operativos) : 0;
-          }),
-          backgroundColor:'#7c3aedcc',
-          borderColor:'#7c3aed',
-          borderWidth:1.5, borderRadius:5 }
-      ]},
+      datasets:[{ label:'Pronóstico MB',
+        data:filas.map(function(f){ return parseFloat(f.pron_mb)||0; }),
+        backgroundColor:filas.map(function(f){ return prodColor(f.producto)+'cc'; }),
+        borderColor:filas.map(function(f){ return prodColor(f.producto); }),
+        borderWidth:1.5, borderRadius:5 }]},
     options:{ indexAxis:'y', responsive:true, maintainAspectRatio:false,
-      plugins:{ legend:{display:true, position:'top', labels:{boxWidth:11, font:{size:10}}},
-        tooltip:{ callbacks:{ label:function(ctx){ return ' '+ctx.dataset.label+': '+ctx.parsed.x.toFixed(2)+' MB'; }}}},
+      plugins:{ legend:{display:false}, tooltip:{ callbacks:{ label:function(ctx){ return ' '+ctx.parsed.x.toFixed(2)+' MB'; }}}},
       scales:{ x:{beginAtZero:true,ticks:{font:{size:9}},grid:{color:'#f1f5f9'}},
                y:{ticks:{font:{size:11,weight:'600'}},grid:{display:false}} }}
   });
@@ -1997,9 +1769,7 @@ function rdRenderHistoricoTable() {
     + '<th style="text-align:right">Dem. Real (MB/d)</th>'
     + '<th style="text-align:right">Pron. Mensual (MB)</th>'
     + '<th style="text-align:right">Cobertura</th>'
-    + '<th>⚓ Cabotaje / Nave</th>'
-    + '<th>📦 Reposición marcada</th>'
-    + '<th>💬 Comentario</th></tr></thead><tbody>';
+    + '<th>⚓ Cabotaje / Nave</th></tr></thead><tbody>';
 
   // Mapa de pronóstico mensual por producto Y mes: pronByMesProd[mes][producto] = pron_mb
   // Si _pronData no está cargado, iniciar carga (lazy loading)
@@ -2021,57 +1791,26 @@ function rdRenderHistoricoTable() {
 
   fechas.forEach(function(fecha) {
     var filas = byDate[fecha];
-    // Comentario GENERAL de la planta — fuente real: hoja reporte_estado,
-    // UNO SOLO por FECHA+PLANTA (backend ya hace el cruce en
-    // rdGetHistoricoInventario y lo entrega en comentario_planta). NO es
-    // la columna COMENTARIO de inventario: esa es una copia histórica que
-    // un proceso viejo duplicaba en cada fila de producto de ese día (o,
-    // en filas antiguas, solo trae códigos de estatus corto N/RS/RP que
-    // no son comentarios reales) — por eso antes se veía "General"
-    // repetido en cada producto.
-    // Se muestra en su PROPIA fila (banner ancho, antes de los productos)
-    // para que quede visualmente separado de los comentarios por
-    // producto (columna comentario_prod, uno por fila/producto).
-    var _generalYaImpreso = false;
-    (function() {
-      var STATUS_CODES = ['N', 'S', 'RS', 'RP', 'RSN', 'RPN']; // filtro defensivo (solo aplica al fallback legacy)
-      var generalRaw = (filas[0] && filas[0].comentario_planta || '').trim();
-      var general = (generalRaw && STATUS_CODES.indexOf(generalRaw.toUpperCase()) === -1) ? generalRaw : '';
-      if (!general) return;
-      _generalYaImpreso = true;
-      html += '<tr class="hist-row-general">'
-        + '<td class="hist-date">' + fmtFecha(fecha) + '</td>'
-        + '<td colspan="8" style="font-size:10px;background:#f5f3ff;border-left:3px solid #7c3aed">'
-        + '<span style="font-weight:700;color:#7c3aed;font-size:9px;text-transform:uppercase;letter-spacing:.3px">🏭 General de planta:</span> '
-        + '<span style="color:var(--txt2)">' + general.replace(/</g,'&lt;') + '</span></td>'
-        + '</tr>';
-    })();
     filas.forEach(function(r, i) {
       // Soporta varios nombres de campo posibles del GAS
       var exist = parseFloat(r.existencia || r.inv_mb || r.inventario || 0) || 0;
       var cap   = parseFloat(r.capacidad || r.cap || 0) || 0;
       var fond  = parseFloat(r.fondos || r.fondo || 0) || 0;
-      // Pronóstico de ESTE mes/producto (ya en MBDC — tasa diaria, no se divide)
+      // Recalcular cob si viene en 0 (inventario nuevo sin cálculo central)
+      var _inv   = parseFloat(r.existencia || r.inv || 0) || 0;
+      var _vfact = parseFloat(r.vfact || 0) || 0;
+      var _cobRaw = r.cob || r.cobertura || r.dias_cob || 0;
+      var _cobCalc = (!_cobRaw && _vfact > 0) ? Math.round(_inv / _vfact * 10) / 10 : _cobRaw;
+      var cob   = _cobCalc || '—';
+      var cobNum = parseFloat(cob);
+      var cobColor = !isNaN(cobNum) ? (cobNum <= 3 ? '#c8102e' : cobNum <= 5 ? '#a86a00' : '#1a7a44') : 'inherit';
+      var cobStr = !isNaN(cobNum) ? cobNum.toFixed(1) + 'd' : String(cob);
       var _rMes   = (r.fecha || '').slice(0,7);
       var _mesPron = pronByMesProd[_rMes] || pronByMesProd[mesesDisp.filter(function(m){return m<=_rMes;}).pop()||''] || {};
       var pronMes  = _mesPron[r.producto] || 0;
       var pronStr  = pronMes > 0 ? rdFmt(pronMes) : '—';
-      // Cobertura: misma cadena de prioridad que usa todo el dashboard —
-      // V.Factible (si Planificación lo cargó) → despacho REAL reportado
-      // ese día (columna "Dem. Real" de esta misma fila) → demanda
-      // pronóstico. Antes esto solo intentaba V.Factible (casi nunca
-      // presente en un reporte de planta) y por eso salía "—" siempre,
-      // aunque hubiera despacho real o pronóstico disponibles.
-      var _inv   = exist;
-      var _vfact = parseFloat(r.vfact || 0) || 0;
-      var _despReal = parseFloat(r.vreal || r.dem || 0) || 0;
-      var _denom = _vfact > 0 ? _vfact : (_despReal > 0 ? _despReal : pronMes);
-      var cob = (_inv > 0 && _denom > 0) ? Math.round(_inv / _denom) : '—';
-      var cobNum = parseFloat(cob);
-      var cobColor = !isNaN(cobNum) ? (cobNum <= 7 ? '#c8102e' : cobNum <= 14 ? '#a86a00' : '#1a7a44') : 'inherit';
-      var cobStr = !isNaN(cobNum) ? Math.round(cobNum) + 'd' : String(cob);
       html += '<tr>'
-        + '<td class="hist-date">' + (i === 0 && !_generalYaImpreso ? fmtFecha(fecha) : '') + '</td>'
+        + '<td class="hist-date">' + (i === 0 ? fmtFecha(fecha) : '') + '</td>'
         + '<td style="font-weight:700;color:var(--navy)">' + (r.producto || '—') + '</td>'
         + '<td class="hist-num">' + rdFmt(exist) + '</td>'
         + '<td class="hist-num" style="color:#0891b2;font-weight:700">' + (r.vreal>0 ? rdFmt(r.vreal) : '—') + '</td>'
@@ -2084,33 +1823,6 @@ function rdRenderHistoricoTable() {
         if (!cabs.length) return '<td style="color:#94a3b8;font-size:10.5px;text-align:center">—</td>';
         return rdRenderCabCell(cabs);
       })()
-        + (function() {
-        var tag = parseReposicionTag(r.comentario_prod);
-        if (!tag) return '<td style="color:#94a3b8;font-size:10.5px;text-align:center">—</td>';
-        return '<td style="font-size:10.5px"><span style="font-weight:700;color:#1e40af">' + tag.tipoLabel + '</span> '
-          + '<span style="font-family:var(--mono);font-weight:800;color:#2563eb">+' + tag.volumenMB.toFixed(1) + ' MB</span></td>';
-      })()
-        + (function() {
-        // Comentario a nivel de PRODUCTO — hay 2 fuentes posibles para
-        // este mismo producto/fecha, y se muestran AMBAS si existen (el
-        // general de planta ya se ve aparte, en la fila-banner de arriba):
-        //  - comentario_inv:  nota de E&D/Planificación (col COMENTARIO
-        //                     de inventario, a nivel de fila producto)
-        //  - comentario_prod: nota del operador vía Registro Diario (col
-        //                     COMENTARIO_PROD), sin el prefijo interno
-        //                     "[REPOS|...]" que ya se ve en la columna
-        //                     de Reposición marcada
-        var partes = [];
-        var comInv = (r.comentario_inv || '').trim();
-        if (comInv) partes.push(comInv);
-        var comProd = (r.comentario_prod || '').trim().replace(/^\[REPOS\|\w+\|[\d.]+\]\s*/, '');
-        if (comProd) partes.push(comProd);
-        if (!partes.length) return '<td style="color:#94a3b8;font-size:10.5px;text-align:center">—</td>';
-        var html2 = partes.map(function(t) {
-          return '<div><span style="font-weight:700;color:#0891b2;font-size:9px;text-transform:uppercase;letter-spacing:.3px">🧪 ' + (r.producto||'') + ':</span> <span style="color:var(--txt2)">' + t.replace(/</g,'&lt;') + '</span></div>';
-        }).join('');
-        return '<td style="font-size:10px;max-width:240px">' + html2 + '</td>';
-      })()
         + '</tr>';
     });
   });
@@ -2118,197 +1830,6 @@ function rdRenderHistoricoTable() {
   html += '</tbody></table></div>'
     + '<div style="font-size:10px;color:var(--txt3);text-align:right;margin-top:4px">' + rows.length + ' registros encontrados</div>';
   content.innerHTML = html;
-}
-
-// ── Exportar Histórico a Excel (formato corporativo) ─────────────────────
-// Lee directo de la tabla ya renderizada en pantalla, así garantiza que
-// el Excel muestre EXACTAMENTE lo mismo que el operador está viendo
-// (misma cobertura, mismos filtros de producto/periodo aplicados).
-function rdExportarHistExcel() {
-  var tabla = document.querySelector('#histContent table.hist-tbl');
-  if (!tabla) { rdToast('No hay datos de hist\u00f3rico cargados todav\u00eda.', 'error'); return; }
-  if (typeof XLSX === 'undefined') { rdToast('La librer\u00eda de Excel a\u00fan est\u00e1 cargando, intenta de nuevo.', 'error'); return; }
-
-  var filas = [];
-  filas.push(['PETROPER\u00da S.A. \u2014 HIST\u00d3RICO DE INVENTARIO']);
-  filas.push(['Registro Diario \u00b7 Planificaci\u00f3n de Suministro']);
-  filas.push(['Planta:', plantaLabel(RD.planta || '')]);
-  filas.push(['Generado el:', new Date().toLocaleDateString('es-PE') + ' ' + new Date().toLocaleTimeString('es-PE',{hour:'2-digit',minute:'2-digit'})]);
-  filas.push([]);
-  filas.push(['Fecha', 'Producto', 'Existencia (MB)', 'Dem. Real (MB/d)', 'Pron. Mensual (MB)', 'Cobertura', 'Cabotaje / Nave', 'Reposición marcada', 'Comentario']);
-
-  var fechaActual = '';
-  tabla.querySelectorAll('tbody tr').forEach(function(tr) {
-    var celdas = tr.querySelectorAll('td');
-    if (!celdas.length) return;
-    var fechaCelda = celdas[0].textContent.trim();
-    if (fechaCelda) fechaActual = fechaCelda; // la fecha solo se muestra en la primera fila del grupo
-    if (tr.classList.contains('hist-row-general')) {
-      // Fila-banner del comentario general de planta: solo tiene 2 <td>
-      // (fecha + celda colspan). Se coloca en la columna Comentario para
-      // mantener alineadas las 9 columnas, y las columnas intermedias
-      // quedan vacías (no aplican a un comentario general de planta).
-      filas.push([fechaActual, '', '', '', '', '', '', '', celdas[1].textContent.trim()]);
-      return;
-    }
-    var fila = [fechaActual];
-    for (var i = 1; i < celdas.length; i++) fila.push(celdas[i].textContent.trim());
-    filas.push(fila);
-  });
-
-  var ws = XLSX.utils.aoa_to_sheet(filas);
-  ws['!cols'] = [{wch:10},{wch:14},{wch:15},{wch:15},{wch:17},{wch:11},{wch:26}];
-  ws['!merges'] = [{s:{r:0,c:0}, e:{r:0,c:6}}, {s:{r:1,c:0}, e:{r:1,c:6}}];
-  var wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, 'Hist\u00f3rico');
-  XLSX.writeFile(wb, rdNombreReporte(false) + '.xlsx');
-}
-
-// ── Exportar Histórico a PDF — documento diseñado aparte (no la vista web) ─
-// Construye un reporte propio con tarjetas resumen y una tabla con buen
-// diseño (franjas alternadas, badges de color por cobertura, agrupado
-// por fecha) — no es una captura de la pantalla tal cual.
-function rdExportarHistPDF() {
-  var tabla = document.querySelector('#histContent table.hist-tbl');
-  if (!tabla) { rdToast('No hay datos de hist\u00f3rico cargados todav\u00eda.', 'error'); return; }
-
-  // Extraer los datos ya calculados de la tabla en pantalla (misma fuente
-  // que el Excel), agrupados por fecha para el nuevo diseño.
-  var grupos = [];
-  var grupoActual = null;
-  tabla.querySelectorAll('tbody tr').forEach(function(tr) {
-    var celdas = tr.querySelectorAll('td');
-    if (!celdas.length) return;
-    var fechaCelda = celdas[0].textContent.trim();
-    if (fechaCelda) { grupoActual = { fecha: fechaCelda, general: '', filas: [] }; grupos.push(grupoActual); }
-    if (!grupoActual) return;
-    if (tr.classList.contains('hist-row-general')) {
-      // Fila-banner del comentario general de planta (no es un producto):
-      // se guarda aparte en g.general para renderizarla como su propio
-      // banner, no mezclada con las filas de producto.
-      grupoActual.general = celdas[1] ? celdas[1].textContent.trim() : '';
-      return;
-    }
-    grupoActual.filas.push({
-      producto: celdas[1] ? celdas[1].textContent.trim() : '',
-      exist:    celdas[2] ? celdas[2].textContent.trim() : '',
-      desp:     celdas[3] ? celdas[3].textContent.trim() : '',
-      pron:     celdas[4] ? celdas[4].textContent.trim() : '',
-      cob:      celdas[5] ? celdas[5].textContent.trim() : '',
-      cab:      celdas[6] ? celdas[6].textContent.trim() : '',
-      repos:    celdas[7] ? celdas[7].textContent.trim() : '',
-      coment:   celdas[8] ? celdas[8].textContent.trim() : ''
-    });
-  });
-  if (!grupos.length) { rdToast('No hay filas para exportar.', 'error'); return; }
-
-  // KPIs rápidos: total de registros, cuántos críticos/alerta/normal
-  var totalFilas = 0, critCount = 0, alertCount = 0, okCount = 0;
-  grupos.forEach(function(g){ g.filas.forEach(function(f){
-    totalFilas++;
-    var n = parseFloat(f.cob);
-    if (!isNaN(n)) { if (n <= 7) critCount++; else if (n <= 14) alertCount++; else okCount++; }
-  }); });
-
-  function cobPillHTML(cobTxt) {
-    var n = parseFloat(cobTxt);
-    if (isNaN(n)) return '<span style="color:#94a3b8">—</span>';
-    var bg = n <= 7 ? '#fdecec' : n <= 14 ? '#fdf3e0' : '#e9f7ee';
-    var col = n <= 7 ? '#c8102e' : n <= 14 ? '#a86a00' : '#1a7a44';
-    return '<span style="display:inline-block;padding:2px 9px;border-radius:10px;background:' + bg + ';color:' + col + ';font-weight:800;font-size:10.5px">' + cobTxt + '</span>';
-  }
-
-  var filasHTML = '';
-  grupos.forEach(function(g, gi) {
-    filasHTML += '<tr style="background:#eef2f7"><td colspan="8" style="padding:7px 10px;font-weight:800;color:#0a3a5c;font-size:11px;border-top:2px solid #0a3a5c">📅 ' + g.fecha + '</td></tr>';
-    if (g.general) {
-      filasHTML += '<tr style="background:#f5f3ff"><td colspan="8" style="padding:5px 10px;font-size:9.5px;border-left:3px solid #7c3aed">'
-        + '<span style="font-weight:800;color:#7c3aed;text-transform:uppercase;letter-spacing:.3px">🏭 General de planta:</span> '
-        + '<span style="color:#475569">' + g.general + '</span></td></tr>';
-    }
-    g.filas.forEach(function(f, fi) {
-      var stripe = fi % 2 === 0 ? '#ffffff' : '#f8fafc';
-      filasHTML += '<tr style="background:' + stripe + '">'
-        + '<td style="padding:6px 10px;font-weight:700;color:#0f1e3c">' + f.producto + '</td>'
-        + '<td style="padding:6px 10px;text-align:right;font-family:ui-monospace,monospace">' + f.exist + '</td>'
-        + '<td style="padding:6px 10px;text-align:right;font-family:ui-monospace,monospace;color:#0891b2">' + f.desp + '</td>'
-        + '<td style="padding:6px 10px;text-align:right;font-family:ui-monospace,monospace;color:#7c3aed">' + f.pron + '</td>'
-        + '<td style="padding:6px 10px;text-align:center">' + cobPillHTML(f.cob) + '</td>'
-        + '<td style="padding:6px 10px;font-size:10px;color:#475569">' + (f.cab && f.cab !== '—' ? f.cab : '—') + '</td>'
-        + '<td style="padding:6px 10px;font-size:10px;color:#1e40af;font-weight:600">' + (f.repos && f.repos !== '—' ? f.repos : '—') + '</td>'
-        + '<td style="padding:6px 10px;font-size:9.5px;color:#475569;max-width:180px">' + (f.coment && f.coment !== '—' ? f.coment : '—') + '</td>'
-        + '</tr>';
-    });
-  });
-
-  var ahora = new Date();
-  var fechaGen = ahora.toLocaleDateString('es-PE') + ' a las ' + ahora.toLocaleTimeString('es-PE',{hour:'2-digit',minute:'2-digit'});
-
-  var reporteHTML =
-    '<div style="font-family:Inter,system-ui,sans-serif;color:#0f1e3c;max-width:100%">' +
-      '<div style="background:linear-gradient(90deg,#0a3a5c,#1e3a8a);padding:20px 24px;border-radius:10px 10px 0 0;display:flex;align-items:center;gap:14px">' +
-        '<img src="data:image/jpeg;base64,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" alt="Petroper\u00fa" style="width:38px;height:38px;object-fit:cover;border-radius:6px;flex-shrink:0">' +
-        '<div>' +
-          '<div style="color:#fff;font-size:16px;font-weight:800;letter-spacing:.02em">PETROPERÚ S.A.</div>' +
-          '<div style="color:rgba(255,255,255,.85);font-size:11px">Histórico de Inventario · Registro Diario · Planificación de Suministro</div>' +
-        '</div>' +
-      '</div>' +
-      '<div style="border:1px solid #e2e8f0;border-top:none;padding:16px 24px;background:#f8fafc">' +
-        '<table style="width:100%;font-size:11px"><tr>' +
-          '<td><b>Planta / Terminal:</b> ' + plantaLabel(RD.planta||'') + '</td>' +
-          '<td style="text-align:right"><b>Generado el:</b> ' + fechaGen + '</td>' +
-        '</tr></table>' +
-      '</div>' +
-      '<div style="display:flex;gap:10px;padding:16px 24px;background:#fff;border:1px solid #e2e8f0;border-top:none">' +
-        '<div style="flex:1;background:#f0f4fa;border-radius:8px;padding:12px 14px;text-align:center">' +
-          '<div style="font-size:22px;font-weight:800;color:#0a3a5c">' + totalFilas + '</div>' +
-          '<div style="font-size:9px;color:#64748b;text-transform:uppercase;letter-spacing:.4px">Registros</div></div>' +
-        '<div style="flex:1;background:#fdecec;border-radius:8px;padding:12px 14px;text-align:center">' +
-          '<div style="font-size:22px;font-weight:800;color:#c8102e">' + critCount + '</div>' +
-          '<div style="font-size:9px;color:#64748b;text-transform:uppercase;letter-spacing:.4px">Cr\u00edticos (\u22647d)</div></div>' +
-        '<div style="flex:1;background:#fdf3e0;border-radius:8px;padding:12px 14px;text-align:center">' +
-          '<div style="font-size:22px;font-weight:800;color:#a86a00">' + alertCount + '</div>' +
-          '<div style="font-size:9px;color:#64748b;text-transform:uppercase;letter-spacing:.4px">Alerta (8\u201314d)</div></div>' +
-        '<div style="flex:1;background:#e9f7ee;border-radius:8px;padding:12px 14px;text-align:center">' +
-          '<div style="font-size:22px;font-weight:800;color:#1a7a44">' + okCount + '</div>' +
-          '<div style="font-size:9px;color:#64748b;text-transform:uppercase;letter-spacing:.4px">Normal (\u226515d)</div></div>' +
-      '</div>' +
-      '<table style="width:100%;border-collapse:collapse;font-size:10.5px;border:1px solid #e2e8f0;border-top:none">' +
-        '<thead><tr style="background:#0a3a5c">' +
-          '<th style="padding:8px 10px;text-align:left;color:#fff;font-size:9.5px;text-transform:uppercase;letter-spacing:.3px">Producto</th>' +
-          '<th style="padding:8px 10px;text-align:right;color:#fff;font-size:9.5px;text-transform:uppercase;letter-spacing:.3px">Existencia (MB)</th>' +
-          '<th style="padding:8px 10px;text-align:right;color:#fff;font-size:9.5px;text-transform:uppercase;letter-spacing:.3px">Desp. Real (MB/d)</th>' +
-          '<th style="padding:8px 10px;text-align:right;color:#fff;font-size:9.5px;text-transform:uppercase;letter-spacing:.3px">Pron. (MBDC)</th>' +
-          '<th style="padding:8px 10px;text-align:center;color:#fff;font-size:9.5px;text-transform:uppercase;letter-spacing:.3px">Cobertura</th>' +
-          '<th style="padding:8px 10px;text-align:left;color:#fff;font-size:9.5px;text-transform:uppercase;letter-spacing:.3px">Cabotaje / Nave</th>' +
-          '<th style="padding:8px 10px;text-align:left;color:#fff;font-size:9.5px;text-transform:uppercase;letter-spacing:.3px">Reposición</th>' +
-          '<th style="padding:8px 10px;text-align:left;color:#fff;font-size:9.5px;text-transform:uppercase;letter-spacing:.3px">Comentario</th>' +
-        '</tr></thead><tbody>' + filasHTML + '</tbody>' +
-      '</table>' +
-      '<div style="padding:12px 24px;border:1px solid #e2e8f0;border-top:none;border-radius:0 0 10px 10px;font-size:9px;color:#94a3b8;text-align:center">' +
-        'Documento generado autom\u00e1ticamente por el Sistema de Registro Diario de Inventarios \u00b7 PETROPER\u00da S.A. \u00b7 Planificaci\u00f3n de Suministro' +
-      '</div>' +
-    '</div>';
-
-  var contenedor = document.getElementById('rdPrintReport');
-  if (!contenedor) {
-    contenedor = document.createElement('div');
-    contenedor.id = 'rdPrintReport';
-    document.body.appendChild(contenedor);
-  }
-  contenedor.innerHTML = reporteHTML;
-
-  // El diálogo "Guardar como PDF" del navegador usa document.title como
-  // nombre de archivo sugerido — se cambia temporalmente antes de
-  // imprimir y se restaura después.
-  var _tituloOriginal = document.title;
-  document.title = rdNombreReporte(true);
-
-  document.body.classList.add('rd-print-mode');
-  window.print();
-  var restaurar = function(){ document.body.classList.remove('rd-print-mode'); document.title = _tituloOriginal; window.removeEventListener('afterprint', restaurar); };
-  window.addEventListener('afterprint', restaurar);
-  setTimeout(restaurar, 4000);
 }
 
 // ═══════════════════════════════════════════
