@@ -2555,9 +2555,9 @@ const PRODUCTOS_POR_PLANTA_EXEC = {
   'Salaverry':   ['Diesel', 'G. Regular', 'G. Premium'],
   'Chimbote':    ['Diesel', 'G. Regular'],
   'Supe':        ['Diesel', 'G. Regular', 'G. Premium'],
-  'Callao':      ['Diesel', 'G. Regular', 'G. Premium', 'TA1', 'GLP'],
-  'Conchán':     ['Diesel', 'G. Regular', 'G. Premium'],
-  'Pisco':       ['Diesel', 'G. Regular', 'G. Premium', 'TA1'],
+  'Callao':      ['Diesel', 'G. Regular', 'G. Premium', 'TA1'],
+  'Conchán':     ['Diesel', 'G. Regular', 'G. Regular HS', 'G. Premium'],
+  'Pisco':       ['Diesel', 'G. Regular', 'G. Premium'],
   'Mollendo':    ['Diesel', 'G. Regular', 'G. Premium'],
   'Ilo':         ['Diesel', 'G. Premium'],
   'Juliaca':     ['Diesel', 'G. Regular'],
@@ -2568,7 +2568,7 @@ const PRODUCTOS_POR_PLANTA_EXEC = {
   'Yurimaguas':  ['Diesel', 'G. 84'],
   'El Milagro':  ['Diesel', 'G. Regular'],
   'Refinería Talara':   ['Diesel', 'G. Regular', 'G. Premium', 'G. 84', 'TA1', 'GLP', 'D2S50-H'],
-  'Refinería Conchán':  ['Diesel', 'G. Regular', 'G. Premium'],
+  'Refinería Conchán':  ['Diesel', 'G. Regular', 'G. Regular HS', 'G. Premium'],
   'Refinería Iquitos':  ['Diesel', 'G. Regular', 'G. 84', 'TA1']
 };
 const PLANT_META_EXEC = {
@@ -4540,9 +4540,9 @@ function updateEventTicker() {
     // Universo IDÉNTICO al de la tabla de Coberturas (renderP2):
     var TK_EXCL_PLANTS = ['A. Iquitos','A. Tarapoto','A. LimaCallao','A. Cusco','A.Iquitos','A.Tarapoto','A.LimaCallao','A.Cusco'];
     var TK_VALID = {
-      'Diesel':     ['Talara','Piura','Eten','Salaverry','Chimbote','Supe','Callao','Conch\u00e1n','Pisco','Mollendo','Ilo','Juliaca','Cusco','Iquitos','Pucallpa','Tarapoto','Yurimaguas','El Milagro','Pto. Maldonado'],
-      'G. Regular': ['Talara','Piura','Eten','Salaverry','Chimbote','Supe','Callao','Conch\u00e1n','Pisco','Mollendo','Iquitos','Pucallpa','Tarapoto','Yurimaguas','El Milagro','Pto. Maldonado','Juliaca','Cusco'],
-      'G. Premium': ['Talara','Piura','Salaverry','Supe','Callao','Conch\u00e1n','Pisco','Mollendo','Ilo','Tarapoto','Pto. Maldonado'],
+      'Diesel':     ['Talara','Piura','Eten','Salaverry','Chimbote','Supe','Callao','Conch\u00e1n','Pisco','Mollendo','Ilo','Juliaca','Cusco','Iquitos','Pucallpa','Tarapoto','Yurimaguas','El Milagro'],
+      'G. Regular': ['Talara','Piura','Eten','Salaverry','Chimbote','Supe','Callao','Conch\u00e1n','Pisco','Mollendo','Iquitos','Pucallpa','Tarapoto','Yurimaguas','El Milagro','Juliaca','Cusco'],
+      'G. Premium': ['Talara','Piura','Salaverry','Supe','Callao','Conch\u00e1n','Pisco','Mollendo','Ilo','Tarapoto'],
       'G. 84':      ['Talara','Yurimaguas','Iquitos','El Milagro'],
       'TA1':        ['Talara','Callao','Iquitos'],
       'GLP':        ['Talara'],
@@ -5058,7 +5058,7 @@ function renderP1() {
   window.PRON_PLANTAS = PRON_PLANTAS;
   const PLANTAS_COSTA = new Set([
     'Talara','Piura','Eten','Salaverry','Chimbote','Supe','Callao','Conchán',
-    'Pisco','Mollendo','Ilo','Paita','Pto. Maldonado'
+    'Pisco','Mollendo','Ilo','Paita'
   ]);
   const PLANTAS_CISTERNA = new Set([
     'Juliaca','Cusco','Pucallpa','Tarapoto','Yurimaguas','El Milagro','Iquitos'
@@ -7405,7 +7405,7 @@ function renderP2() {
   // más (no tienen pronóstico/V.Factible/despacho, solo inventario).
   var REFINERIA_PRODUCTOS = {
     'Refinería Talara':  ['Diesel','G. Regular','G. Premium','G. 84','TA1','GLP','D2S50-H'],
-    'Refinería Conchán': ['Diesel','G. Regular','G. Premium'],
+    'Refinería Conchán': ['Diesel','G. Regular','G. Regular HS','G. Premium'],
     'Refinería Iquitos': ['Diesel','G. Regular','G. 84','TA1']
   };
   var todayKeys = new Set(today.map(function(r){ return r.planta+'|'+r.producto; }));
@@ -7422,12 +7422,12 @@ function renderP2() {
     document.getElementById('p2-content').innerHTML = '<div style="padding:40px;text-align:center;color:var(--txt3)">Sin datos para esta fecha</div>';
     return;
   }
-  var PLANT_ORDER = ['Refinería Talara','Refinería Conch\u00e1n','Refinería Iquitos','Talara','Piura','Eten','Salaverry','Chimbote','Supe','Callao','Conch\u00e1n','Pisco','Mollendo','Ilo','Juliaca','Cusco','Iquitos','Pucallpa','Tarapoto','Yurimaguas','El Milagro','Pto. Maldonado'];
+  var PLANT_ORDER = ['Refinería Talara','Refinería Conch\u00e1n','Refinería Iquitos','Talara','Piura','Eten','Salaverry','Chimbote','Supe','Callao','Conch\u00e1n','Pisco','Mollendo','Ilo','Juliaca','Cusco','Iquitos','Pucallpa','Tarapoto','Yurimaguas','El Milagro'];
   var EXCLUDE_PLANTS = ['A. Iquitos','A. Tarapoto','A. LimaCallao','A. Cusco','A.Iquitos','A.Tarapoto','A.LimaCallao','A.Cusco'];
   var VALID_PRODS = {
-    'Diesel':     ['Talara','Refinería Talara','Piura','Eten','Salaverry','Chimbote','Supe','Callao','Conch\u00e1n','Refinería Conch\u00e1n','Pisco','Mollendo','Ilo','Juliaca','Cusco','Iquitos','Refinería Iquitos','Pucallpa','Tarapoto','Yurimaguas','El Milagro','Pto. Maldonado'],
-    'G. Regular': ['Talara','Refinería Talara','Piura','Eten','Salaverry','Chimbote','Supe','Callao','Conch\u00e1n','Refinería Conch\u00e1n','Pisco','Mollendo','Iquitos','Refinería Iquitos','Pucallpa','Tarapoto','Yurimaguas','El Milagro','Pto. Maldonado','Juliaca','Cusco'],
-    'G. Premium': ['Talara','Refinería Talara','Piura','Salaverry','Supe','Callao','Conch\u00e1n','Refinería Conch\u00e1n','Pisco','Mollendo','Ilo','Tarapoto','Pto. Maldonado'],
+    'Diesel':     ['Talara','Refinería Talara','Piura','Eten','Salaverry','Chimbote','Supe','Callao','Conch\u00e1n','Refinería Conch\u00e1n','Pisco','Mollendo','Ilo','Juliaca','Cusco','Iquitos','Refinería Iquitos','Pucallpa','Tarapoto','Yurimaguas','El Milagro'],
+    'G. Regular': ['Talara','Refinería Talara','Piura','Eten','Salaverry','Chimbote','Supe','Callao','Conch\u00e1n','Refinería Conch\u00e1n','Pisco','Mollendo','Iquitos','Refinería Iquitos','Pucallpa','Tarapoto','Yurimaguas','El Milagro','Juliaca','Cusco'],
+    'G. Premium': ['Talara','Refinería Talara','Piura','Salaverry','Supe','Callao','Conch\u00e1n','Refinería Conch\u00e1n','Pisco','Mollendo','Ilo','Tarapoto'],
     'G. 84':      ['Talara','Refinería Talara','Yurimaguas','Iquitos','Refinería Iquitos','El Milagro'],  // Conchán not included
     'TA1':        ['Talara','Refinería Talara','Callao','Iquitos','Refinería Iquitos'],
     'GLP':        ['Talara','Refinería Talara'],
@@ -8324,7 +8324,7 @@ function renderP6() {
     'NORTE': ['Talara','Piura','Eten','Salaverry','Chimbote'],
     'CENTRO': ['Supe','Callao','Conch\u00e1n','Pisco'],
     'SUR': ['Mollendo','Ilo','Juliaca','Cusco'],
-    'ORIENTE': ['Pucallpa','Tarapoto','Yurimaguas','El Milagro','Iquitos','Pto. Maldonado']
+    'ORIENTE': ['Pucallpa','Tarapoto','Yurimaguas','El Milagro','Iquitos']
   };
   var PRODS_SHOW = ['Diesel','G. Regular','G. Premium','G. 84','TA1','GLP'];
   var matrix = {};
@@ -17546,9 +17546,9 @@ function _buildInventoryReportHTML() {
   var PE={'Diesel':'\ud83d\udee2\ufe0f','G. Regular':'\u26fd','G. Premium':'\u2728','G. 84':'\ud83d\udd35','TA1':'\u2708\ufe0f','GLP':'\ud83d\udd36'};
   var PC={'Diesel':'#0f4c81','G. Regular':'#065f46','G. Premium':'#7c2d12','G. 84':'#1e3a8a','TA1':'#4c1d95','GLP':'#78350f'};
   var PB={'Diesel':'#dbeafe','G. Regular':'#d1fae5','G. Premium':'#fee2e2','G. 84':'#e0e7ff','TA1':'#ede9fe','GLP':'#fef3c7'};
-  var PLO=['Talara','Piura','Eten','Salaverry','Chimbote','Supe','Callao','Conch\u00e1n','Pisco','Mollendo','Ilo','Cusco','Juliaca','Pto. Maldonado','Iquitos','Pucallpa','Tarapoto','Yurimaguas','El Milagro'];
-  var PReg={'Talara':'Costa Norte','Piura':'Costa Norte','Eten':'Costa Norte','Salaverry':'Costa Norte','Chimbote':'Costa Norte','Supe':'Costa Centro','Callao':'Costa Centro','Conch\u00e1n':'Costa Centro','Pisco':'Costa Centro','Mollendo':'Costa Sur','Ilo':'Costa Sur','Cusco':'Sierra Sur','Juliaca':'Sierra Sur','Pto. Maldonado':'Sierra Sur','Iquitos':'Selva','Pucallpa':'Selva','Tarapoto':'Selva','Yurimaguas':'Selva','El Milagro':'Selva'};
-  var PPr={'Talara':['Diesel','G. Regular','G. Premium','G. 84','TA1','GLP'],'Piura':['Diesel','G. Regular','G. Premium'],'Eten':['Diesel','G. Regular'],'Salaverry':['Diesel','G. Regular','G. Premium'],'Chimbote':['Diesel','G. Regular'],'Supe':['Diesel','G. Regular','G. Premium'],'Callao':['Diesel','G. Regular','G. Premium','TA1'],'Conch\u00e1n':['Diesel','G. Regular','G. Premium'],'Pisco':['Diesel','G. Regular','G. Premium'],'Mollendo':['Diesel','G. Regular','G. Premium'],'Ilo':['Diesel','G. Premium'],'Cusco':['Diesel','G. Regular'],'Juliaca':['Diesel','G. Regular'],'Pto. Maldonado':['Diesel','G. Regular','G. Premium'],'Iquitos':['Diesel','G. Regular','G. 84','TA1'],'Pucallpa':['Diesel','G. Regular'],'Tarapoto':['Diesel','G. Regular','G. Premium'],'Yurimaguas':['Diesel','G. Regular'],'El Milagro':['Diesel','G. Regular']};
+  var PLO=['Talara','Piura','Eten','Salaverry','Chimbote','Supe','Callao','Conch\u00e1n','Pisco','Mollendo','Ilo','Cusco','Juliaca','Iquitos','Pucallpa','Tarapoto','Yurimaguas','El Milagro'];
+  var PReg={'Talara':'Costa Norte','Piura':'Costa Norte','Eten':'Costa Norte','Salaverry':'Costa Norte','Chimbote':'Costa Norte','Supe':'Costa Centro','Callao':'Costa Centro','Conch\u00e1n':'Costa Centro','Pisco':'Costa Centro','Mollendo':'Costa Sur','Ilo':'Costa Sur','Cusco':'Sierra Sur','Juliaca':'Sierra Sur','Iquitos':'Selva','Pucallpa':'Selva','Tarapoto':'Selva','Yurimaguas':'Selva','El Milagro':'Selva'};
+  var PPr={'Talara':['Diesel','G. Regular','G. Premium','G. 84','TA1','GLP'],'Piura':['Diesel','G. Regular','G. Premium'],'Eten':['Diesel','G. Regular'],'Salaverry':['Diesel','G. Regular','G. Premium'],'Chimbote':['Diesel','G. Regular'],'Supe':['Diesel','G. Regular','G. Premium'],'Callao':['Diesel','G. Regular','G. Premium','TA1'],'Conch\u00e1n':['Diesel','G. Regular','G. Regular HS','G. Premium'],'Pisco':['Diesel','G. Regular','G. Premium'],'Mollendo':['Diesel','G. Regular','G. Premium'],'Ilo':['Diesel','G. Premium'],'Cusco':['Diesel','G. Regular'],'Juliaca':['Diesel','G. Regular'],'Iquitos':['Diesel','G. Regular','G. 84','TA1'],'Pucallpa':['Diesel','G. Regular'],'Tarapoto':['Diesel','G. Regular','G. Premium'],'Yurimaguas':['Diesel','G. 84'],'El Milagro':['Diesel','G. Regular']};
   var RO=['Costa Norte','Costa Centro','Costa Sur','Sierra Sur','Selva'];
   var RC={'Costa Norte':'#0f4c81','Costa Centro':'#065f46','Costa Sur':'#7c3aed','Sierra Sur':'#9a3412','Selva':'#064e3b'};
   function gi(r){return typeof cobGetInv==='function'?cobGetInv(r):(r.inv||0);}
