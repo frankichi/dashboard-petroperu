@@ -510,6 +510,19 @@ function rdAyerLima() {
   var lima = new Date(d.getTime() - 5 * 3600 * 1000 - 24 * 3600 * 1000);
   return lima.toISOString().slice(0, 10);
 }
+// Nombre de reporte para exports (Excel/PDF) — ej. "Reporte Inventarios y
+// Despachos Pisco al 12.07.2026". devuelveDisplay=true → con espacios y
+// mayúsculas para mostrar (title del documento); false → sanitizado para
+// nombre de archivo.
+function rdNombreReporte(devuelveDisplay) {
+  var iso = rdHoyLima(); // YYYY-MM-DD
+  var partes = iso.split('-');
+  var ddmmyyyy = partes[2] + '.' + partes[1] + '.' + partes[0];
+  var planta = plantaLabel(RD.planta || '');
+  var base = 'Reporte Inventarios y Despachos ' + planta + ' al ' + ddmmyyyy;
+  if (devuelveDisplay) return base;
+  return base.replace(/[^a-zA-Z0-9.]/g, '_');
+}
 function rdHoraLima() {
   var d = new Date();
   var lima = new Date(d.getTime() - 5 * 3600 * 1000);
@@ -1585,12 +1598,15 @@ function rdLoadHistorico() {
                 cob:        parseFloat(r.cob || 0) || 0,
                 vfact:      parseFloat(r.vfact || 0) || 0,
                 vreal:      parseFloat(r.vreal || r.dem || 0) || 0,
-                // Fallback legacy (getHistorico/fetchAllRecords): no hace el
-                // cruce con reporte_estado, así que este campo puede venir
-                // con el texto duplicado/códigos de estatus de la columna
-                // vieja de inventario. Es best-effort, solo se usa si el
-                // endpoint principal (rdGetHistoricoInventario) falla.
-                comentario_planta: r.comentario || ''
+                // Fallback legacy (getHistorico/fetchAllRecords): r.comentario
+                // es la columna COMENTARIO de inventario (a nivel de fila
+                // producto), no el general de planta — este fallback no hace
+                // el cruce con reporte_estado, así que comentario_planta
+                // queda vacío aquí (solo se usa si el endpoint principal
+                // rdGetHistoricoInventario falla).
+                comentario_inv:    r.comentario || '',
+                comentario_planta: '',
+                comentario_prod:   r.comentario_prod || ''
               };
             });
           });
@@ -2006,17 +2022,25 @@ function rdRenderHistoricoTable() {
           + '<span style="font-family:var(--mono);font-weight:800;color:#2563eb">+' + tag.volumenMB.toFixed(1) + ' MB</span></td>';
       })()
         + (function() {
-        // Comentario POR PRODUCTO (col comentario_prod de inventario) —
-        // el comentario general de la planta ya se muestra aparte, en su
-        // propia fila-banner al inicio del grupo de esa fecha (arriba),
-        // así que aquí solo va el texto específico de este producto.
-        var comentario = (r.comentario_prod || '').trim();
-        // Se muestra el texto completo, quitando el prefijo estructurado
-        // "[REPOS|...]" si lo hay (esa parte ya se ve en la columna
-        // anterior) — esto es el comentario propio del producto.
-        var texto = comentario.replace(/^\[REPOS\|\w+\|[\d.]+\]\s*/, '');
-        if (!texto) return '<td style="color:#94a3b8;font-size:10.5px;text-align:center">—</td>';
-        return '<td style="font-size:10px;max-width:240px"><span style="font-weight:700;color:#0891b2;font-size:9px;text-transform:uppercase;letter-spacing:.3px">🧪 ' + (r.producto||'') + ':</span> <span style="color:var(--txt2)">' + texto.replace(/</g,'&lt;') + '</span></td>';
+        // Comentario a nivel de PRODUCTO — hay 2 fuentes posibles para
+        // este mismo producto/fecha, y se muestran AMBAS si existen (el
+        // general de planta ya se ve aparte, en la fila-banner de arriba):
+        //  - comentario_inv:  nota de E&D/Planificación (col COMENTARIO
+        //                     de inventario, a nivel de fila producto)
+        //  - comentario_prod: nota del operador vía Registro Diario (col
+        //                     COMENTARIO_PROD), sin el prefijo interno
+        //                     "[REPOS|...]" que ya se ve en la columna
+        //                     de Reposición marcada
+        var partes = [];
+        var comInv = (r.comentario_inv || '').trim();
+        if (comInv) partes.push(comInv);
+        var comProd = (r.comentario_prod || '').trim().replace(/^\[REPOS\|\w+\|[\d.]+\]\s*/, '');
+        if (comProd) partes.push(comProd);
+        if (!partes.length) return '<td style="color:#94a3b8;font-size:10.5px;text-align:center">—</td>';
+        var html2 = partes.map(function(t) {
+          return '<div><span style="font-weight:700;color:#0891b2;font-size:9px;text-transform:uppercase;letter-spacing:.3px">🧪 ' + (r.producto||'') + ':</span> <span style="color:var(--txt2)">' + t.replace(/</g,'&lt;') + '</span></div>';
+        }).join('');
+        return '<td style="font-size:10px;max-width:240px">' + html2 + '</td>';
       })()
         + '</tr>';
     });
@@ -2068,7 +2092,7 @@ function rdExportarHistExcel() {
   ws['!merges'] = [{s:{r:0,c:0}, e:{r:0,c:6}}, {s:{r:1,c:0}, e:{r:1,c:6}}];
   var wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Hist\u00f3rico');
-  XLSX.writeFile(wb, 'Historico_' + (RD.planta||'planta').replace(/[^a-zA-Z0-9]/g,'_') + '_' + rdHoyLima() + '.xlsx');
+  XLSX.writeFile(wb, rdNombreReporte(false) + '.xlsx');
 }
 
 // ── Exportar Histórico a PDF — documento diseñado aparte (no la vista web) ─
@@ -2205,9 +2229,15 @@ function rdExportarHistPDF() {
   }
   contenedor.innerHTML = reporteHTML;
 
+  // El diálogo "Guardar como PDF" del navegador usa document.title como
+  // nombre de archivo sugerido — se cambia temporalmente antes de
+  // imprimir y se restaura después.
+  var _tituloOriginal = document.title;
+  document.title = rdNombreReporte(true);
+
   document.body.classList.add('rd-print-mode');
   window.print();
-  var restaurar = function(){ document.body.classList.remove('rd-print-mode'); window.removeEventListener('afterprint', restaurar); };
+  var restaurar = function(){ document.body.classList.remove('rd-print-mode'); document.title = _tituloOriginal; window.removeEventListener('afterprint', restaurar); };
   window.addEventListener('afterprint', restaurar);
   setTimeout(restaurar, 4000);
 }
