@@ -20433,6 +20433,14 @@ function renderVistaEjecutivaSimple() {
   // descargó, planta aún no reporta su cierre oficial), se avisa junto
   // al KPI para que gerencia sepa que ese número incluye un estimado.
   var invHoyTieneProyeccion = RAW.some(function(r){ return r.fecha===fechaHoy && r._proyectado && filaAplica(r, pl, prod); });
+  // Detecta si el total de hoy incluye alguna proyección por CONSUMO
+  // (planta que aún no cierra el día, estimada con último real menos
+  // demanda pronóstico) — complementa la detección de arriba, que solo
+  // cubre la proyección por descarga de buque.
+  var invHoyTieneProyeccionConsumo = (function() {
+    var plantasChequear = (!pl || pl === 'Nacional') ? PLANTAS_18_OFICIALES.concat(REFINERIAS) : [pl];
+    return plantasChequear.some(function(p2) { return _estadoPlantaHoy(p2) === 'proyectado'; });
+  })();
   var despHoy  = RAW.filter(function(r){ return r.fecha===fechaHoy && filaAplica(r, pl, prod); })
                      .reduce(function(s,r){ return s + despRow(r); }, 0);
   var despAyer = fechaAyer ? RAW.filter(function(r){ return r.fecha===fechaAyer && filaAplica(r, pl, prod); })
@@ -20866,23 +20874,70 @@ function renderVistaEjecutivaSimple() {
     : '';
 
   // ── Tarjetas rápidas de plantas (solo en vista Nacional) ─────────────
+  // Estado de cierre por planta — para saber de un vistazo cuál planta
+  // ya reportó su cierre real de hoy vs. cuál se está mostrando con el
+  // inventario proyectado (arrastre menos consumo por demanda
+  // pronóstico) porque todavía no cierra el día. Revisa TODOS los
+  // productos de la planta: si al menos uno tiene reporte real de hoy,
+  // se considera "cerrado" (aunque falte algún producto puntual); si
+  // ninguno cerró pero sí hay proyección calculable, "proyectado"; si no
+  // hay ni siquiera eso, "sin proyección" (dato viejo, sin pronóstico
+  // para estimar consumo).
+  function _estadoPlantaHoy(planta) {
+    var idx = _getInvHistIdx();
+    var tieneCerrado = false, tieneProyectado = false, tieneArrastreSinProy = false;
+    Object.keys(idx).forEach(function(key) {
+      if (key.indexOf(planta + '|') !== 0) return;
+      var producto = key.slice(planta.length + 1);
+      var r = _invArrastrado(planta, producto, fechaHoy);
+      if (!r) return;
+      if (r.fecha === fechaHoy) tieneCerrado = true;
+      else if (r._proyectadoConsumo) tieneProyectado = true;
+      else tieneArrastreSinProy = true;
+    });
+    if (tieneCerrado) return 'cerrado';
+    if (tieneProyectado) return 'proyectado';
+    if (tieneArrastreSinProy) return 'arrastre';
+    return 'sindato';
+  }
   var plantasGridHTML = '';
   if (pl === 'Nacional') {
     var cards = plantasDisp.map(function(p) {
       var invP = sumFecha(fechaHoy, 'inv', p, prod);
       if (invP <= 0) return '';
       var esRef = REFINERIAS.indexOf(p) !== -1;
+      var estado = _estadoPlantaHoy(p);
+      var estadoBadge = estado === 'cerrado'
+        ? '<span style="font-size:8.5px;font-weight:800;color:var(--grn);display:inline-flex;align-items:center;gap:3px" title="Al menos un producto tiene reporte real de hoy">✓ cerrado</span>'
+        : estado === 'proyectado'
+          ? '<span style="font-size:8.5px;font-weight:800;color:#2563eb;font-style:italic;display:inline-flex;align-items:center;gap:3px" title="Planta aún no reporta hoy — inventario estimado con el último real menos consumo por demanda pronóstico">≈ proyectado</span>'
+          : '<span style="font-size:8.5px;font-weight:800;color:var(--ora);display:inline-flex;align-items:center;gap:3px" title="Planta aún no reporta hoy y no hay demanda pronóstico cargada para proyectar — se muestra el último dato real, sin actualizar">⚠ sin cierre ni proyección</span>';
       return '<button onclick="window._execPlanta=\'' + p + '\';renderVistaEjecutivaSimple();" '
         + 'style="text-align:left;padding:12px 14px;border-radius:10px;border:1px solid var(--bdr);background:var(--card);cursor:pointer;transition:border-color .15s" '
         + 'onmouseover="this.style.borderColor=\'#0a3a5c\'" onmouseout="this.style.borderColor=\'var(--bdr)\'">'
         + '<div style="font-size:11.5px;font-weight:800;color:var(--txt);margin-bottom:3px">' + (esRef?'🛢️':'🏭') + ' ' + p + '</div>'
         + '<div style="font-size:15px;font-weight:800;font-family:var(--mono);color:var(--acc2)">' + fmtMB(invP) + '</div>'
+        + '<div style="margin-top:3px">' + estadoBadge + '</div>'
         + '<div style="font-size:9.5px;color:var(--txt3);margin-top:2px">' + (esRef?'Solo inventario →':'Ver detalle →') + '</div>'
         + '</button>';
     }).join('');
+    // Resumen: cuántas plantas faltan por cerrar hoy — responde
+    // directamente "qué planta falta ahí" de un vistazo, sin tener que
+    // revisar tarjeta por tarjeta.
+    var plantasConDato = plantasDisp.filter(function(p){ return sumFecha(fechaHoy,'inv',p,prod) > 0; });
+    var estadosPlantas = plantasConDato.map(function(p){ return _estadoPlantaHoy(p); });
+    var nCerradas = estadosPlantas.filter(function(e){ return e==='cerrado'; }).length;
+    var nProyectadas = estadosPlantas.filter(function(e){ return e==='proyectado'; }).length;
+    var nSinProy = estadosPlantas.filter(function(e){ return e==='arrastre' || e==='sindato'; }).length;
+    var resumenCierreHTML = '<div style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:12px;font-size:11px;font-weight:700">'
+      + '<span style="color:var(--grn)">✓ ' + nCerradas + ' cerraron hoy</span>'
+      + (nProyectadas > 0 ? '<span style="color:#2563eb">≈ ' + nProyectadas + ' proyectadas (a\u00fan no cierran)</span>' : '')
+      + (nSinProy > 0 ? '<span style="color:var(--ora)">\u26a0 ' + nSinProy + ' sin cierre ni proyecci\u00f3n</span>' : '')
+      + '</div>';
     plantasGridHTML =
       '<div style="margin:8px 0 28px">' +
-        '<div style="font-size:11px;font-weight:800;color:var(--txt3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">Ver detalle por planta / terminal / refinería</div>' +
+        '<div style="font-size:11px;font-weight:800;color:var(--txt3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">Ver detalle por planta / terminal / refinería</div>' +
+        resumenCierreHTML +
         '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px">' + cards + '</div>' +
       '</div>';
   }
@@ -20903,6 +20958,7 @@ function renderVistaEjecutivaSimple() {
         '<div class="exec-kpi-val" style="font-size:38px;font-weight:800;color:var(--txt);font-family:var(--mono);line-height:1">' + fmtMB(invHoy) + '</div>' +
         '<div style="margin-top:10px">' + deltaHTML(deltaInv, true, invAyer) + '</div>' +
         (invHoyTieneProyeccion ? '<div style="margin-top:8px;font-size:10.5px;color:#2563eb;font-weight:700;display:flex;align-items:center;gap:5px">🚢 Incluye reposición proyectada (buque ya descargó, planta aún no reporta cierre)</div>' : '') +
+        (invHoyTieneProyeccionConsumo ? '<div style="margin-top:4px;font-size:10.5px;color:#2563eb;font-weight:700;display:flex;align-items:center;gap:5px">≈ Incluye inventario proyectado por consumo (plantas que aún no cierran hoy)</div>' : '') +
       '</div>' +
       (esRefineriaExec ? '' :
       '<div style="background:var(--card);border:1px solid var(--bdr);border-radius:14px;padding:24px 26px">' +
