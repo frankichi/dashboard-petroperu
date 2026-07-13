@@ -759,10 +759,18 @@ function rdPost(action, payload) {
     .catch(function(e) { clearTimeout(tid); throw e; });
 }
 function rdGet(action, params) {
-  var qs = new URLSearchParams(Object.assign({ action: action }, params || {}));
+  // ⚠️ IMPORTANTE: sin esto, el navegador puede servir una respuesta
+  // CACHEADA para esta misma URL (mismo token+fecha) en vez de ir a la
+  // red — esto causaba que, justo después de guardar un reporte, el
+  // refresco inmediato (rdRefreshMiReporte) devolviera el estado VIEJO
+  // ("Pendiente") aunque el guardado sí hubiera funcionado en el
+  // backend. El operador veía sus datos "como si no se hubiera
+  // guardado" y volvía a presionar Guardar. cache:'no-store' + un
+  // parámetro anti-caché (_t) fuerzan una petición de red real siempre.
+  var qs = new URLSearchParams(Object.assign({ action: action, _t: Date.now() }, params || {}));
   var ctrl = new AbortController();
   var tid  = setTimeout(function(){ ctrl.abort(); }, 15000);
-  return fetch(API_URL + '?' + qs.toString(), { method: 'GET', redirect: 'follow', signal: ctrl.signal })
+  return fetch(API_URL + '?' + qs.toString(), { method: 'GET', redirect: 'follow', cache: 'no-store', signal: ctrl.signal })
     .then(function(r) { clearTimeout(tid); return r.json(); })
     .catch(function(e) { clearTimeout(tid); throw e; });
 }
