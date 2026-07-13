@@ -2613,9 +2613,21 @@ const PLANTAS_DUPLICADAS_EN_REFINERIA = ['Conchán', 'Iquitos'];
 // nacional. Mismo criterio usado en TODOS los puntos donde se calcula
 // un total nacional (index y Vista Ejecutiva), para que siempre
 // conversen la misma cifra.
+//
+// ⚠️ CORREGIDO: las REFINERÍAS (Talara/Conchán/Iquitos) son plantas de
+// PROCESO, no de venta — almacenan volúmenes legítimamente mucho
+// mayores que una planta/terminal de venta (por eso 2000 MB tenía
+// sentido solo para esas). Con el límite único, inventario real de
+// refinería por encima de 2000 MB se descartaba como si fuera un error
+// de digitación (barriles en vez de MB), mostrando CERO en Vista
+// Ejecutiva, Coberturas y la Vista Gerencial aunque el dato fuera
+// correcto. Las refinerías ahora usan un techo más alto.
 const INV_SANO_MAX = 2000;
+const INV_SANO_MAX_REFINERIA = 20000;
 function invFilaValida(r) {
-  return (r.inv || 0) <= INV_SANO_MAX;
+  var esRef = (typeof REFINERIAS !== 'undefined') && REFINERIAS.indexOf(r.planta) !== -1;
+  var max = esRef ? INV_SANO_MAX_REFINERIA : INV_SANO_MAX;
+  return (r.inv || 0) <= max;
 }
 // Lee la etiqueta estructurada que Registro Diario antepone al comentario
 // cuando un operador marca una reposición recibida (botón "¿Cómo llegó el
@@ -20001,6 +20013,11 @@ function renderVistaEjecutivaSimple() {
   if (window._execPeriod === undefined) window._execPeriod = 15;   // 15 | 30 | 60 | 'mensual'
   if (window._execPlanta === undefined) window._execPlanta = 'Nacional';
   if (window._execProducto === undefined) window._execProducto = 'Todos';
+  // El mapa arranca OCULTO por defecto — solo se muestra cuando el
+  // usuario presiona "Mostrar mapa" (toggleExecMapa). Una vez que decide
+  // mostrarlo u ocultarlo, esa elección se respeta en refrescos
+  // posteriores de esta misma sesión.
+  if (window._execMapaOculto === undefined) window._execMapaOculto = true;
 
   function fmtMB(v) { return (v||0).toLocaleString('es-PE', {maximumFractionDigits:1}) + ' MB'; }
   function mesCorto(d) {
