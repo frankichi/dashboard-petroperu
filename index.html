@@ -10820,6 +10820,9 @@ function renderPTend() {
           <span id="ptend-desp-leg-ppdiaria" style="display:flex;align-items:center;gap:5px;font-size:10px;color:var(--txt3)">
             <span style="width:16px;height:3px;background:#60a5fa;display:inline-block;border-radius:2px"></span>Despachos
           </span>
+          <span id="ptend-desp-leg-ventasrep" style="display:flex;align-items:center;gap:5px;font-size:10px;color:var(--txt3)">
+            <span style="width:16px;height:3px;background:#f59e0b;display:inline-block;border-radius:2px"></span>Ventas reportadas
+          </span>
         </div>
       </div>
       <div style="position:relative;height:240px">
@@ -11172,11 +11175,30 @@ function renderPTend() {
         }, 0);
         return tot > 0 ? parseFloat(tot.toFixed(3)) : null;
       });
+      // Ventas reportadas (fuente: sábana de ventas diarias / Cognos, vía
+      // getVentaDia — misma función que ya usa Coberturas). Se llama
+      // "Ventas reportadas" en vez de "Cognos" porque el nombre del
+      // sistema de origen no le dice nada al usuario de negocio; lo que
+      // le importa es que es la venta real reportada por planta/producto,
+      // distinta del "Despacho" (Registro Diario, arriba). Mismo universo
+      // de plantas/exclusiones que despachoData para que sean comparables.
+      var ventasReportadasData = dateLabels.map(function(d) {
+        var plantasIter = planta === 'Nacional' ? PLANTAS_18_OFICIALES : [planta];
+        var tot = 0, huboDato = false;
+        plantasIter.forEach(function(pl) {
+          if (SKIP_COMBOS && SKIP_COMBOS.has(pl + '|' + prod)) return;
+          if (planta === 'Nacional' && PLANTAS_DUPLICADAS_EN_REFINERIA.indexOf(pl) !== -1) return;
+          var v = getVentaDia(d, pl, prod);
+          if (v > 0) { tot += v; huboDato = true; }
+        });
+        return huboDato ? parseFloat(tot.toFixed(3)) : null;
+      });
       var hasAny = pronLineData.some(function(v){ return v != null; })
-               || despachoData.some(function(v){ return v != null; });
+               || despachoData.some(function(v){ return v != null; })
+               || ventasReportadasData.some(function(v){ return v != null; });
       if (!hasAny) {
         ventasCanvas.style.display = 'none';
-        ['ptend-desp-leg-ppdiaria','ptend-desp-leg-pronostico'].forEach(function(id){
+        ['ptend-desp-leg-ppdiaria','ptend-desp-leg-pronostico','ptend-desp-leg-ventasrep'].forEach(function(id){
           var lEl = document.getElementById(id); if (lEl) lEl.style.display = 'none';
         });
         var hintElEmpty = document.getElementById('ptend-desp-empty-hint');
@@ -11218,14 +11240,27 @@ function renderPTend() {
             tension: 0.25, fill: true, spanGaps: false, yAxisID: 'yV',
           });
         }
+        // 3. Ventas reportadas (sábana de ventas diarias / Cognos)
+        if (ventasReportadasData.some(function(v){ return v!=null; })) {
+          datasets.push({
+            label: 'Ventas reportadas',
+            data: ventasReportadasData,
+            borderColor: '#f59e0b', backgroundColor: 'transparent',
+            borderWidth: 2.5, pointRadius: 3, pointHoverRadius: 6,
+            pointBackgroundColor: '#f59e0b', pointBorderColor: '#7c4a03', pointBorderWidth: 1.5,
+            tension: 0.25, fill: false, spanGaps: false, yAxisID: 'yV',
+          });
+        }
         // ── Sincronizar la leyenda con lo que realmente se está graficando ──
         // (evita mostrar "Pronóstico mes" o "Prom. PP acum." como si existieran
         //  cuando en realidad no hay esa data cargada — confundía al usuario)
         function _legShow(id, show){ var lEl=document.getElementById(id); if(lEl) lEl.style.display = show?'flex':'none'; }
         var tieneDespacho = despachoData.some(function(v){ return v!=null; });
         var tienePronost  = pronLineData.some(function(v){ return v!=null; });
+        var tieneVentasRep = ventasReportadasData.some(function(v){ return v!=null; });
         _legShow('ptend-desp-leg-ppdiaria', tieneDespacho);
         _legShow('ptend-desp-leg-pronostico', tienePronost);
+        _legShow('ptend-desp-leg-ventasrep', tieneVentasRep);
         var hintEl = document.getElementById('ptend-desp-empty-hint');
         if (hintEl) {
           var NOMBRES_M = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
@@ -20598,6 +20633,47 @@ function renderVistaEjecutivaSimple() {
   var barMode = window._execPeriod === 'mensual';
   var ctxInv = document.getElementById('exec-chart-inv');
   if (ctxInv) {
+    // Etiquetas de dato — plugin liviano hecho a mano (sin librería
+    // externa, para no depender de otro CDN en una vista que se comparte
+    // públicamente). En la barra apilada de Inventario se muestra el
+    // TOTAL (suma de los segmentos) arriba de cada barra, no cada
+    // segmento por separado — con 2 segmentos apilados, poner una
+    // etiqueta a cada uno se ve saturado y el total es lo que de verdad
+    // le interesa a gerencia de un vistazo.
+    var execBarTotalLabelsPlugin = {
+      id: 'execBarTotalLabels',
+      afterDatasetsDraw: function(chart) {
+        var ctx = chart.ctx;
+        var meta0 = chart.getDatasetMeta(0);
+        if (!meta0 || !meta0.data) return;
+        ctx.save();
+        ctx.font = '700 10.5px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif';
+        ctx.fillStyle = cssVar('--txt') || '#0f1e3c';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'bottom';
+        meta0.data.forEach(function(bar, i) {
+          var total = 0, huboDato = false;
+          chart.data.datasets.forEach(function(ds, dIdx) {
+            var meta = chart.getDatasetMeta(dIdx);
+            if (meta.hidden) return;
+            var v = ds.data[i];
+            if (v != null) { total += v; huboDato = true; }
+          });
+          if (!huboDato) return;
+          var topBar = bar;
+          // Con stack, el punto más alto visible es el del último dataset
+          // no oculto que tenga dato en este índice.
+          for (var dIdx = chart.data.datasets.length - 1; dIdx >= 0; dIdx--) {
+            var meta = chart.getDatasetMeta(dIdx);
+            if (meta.hidden || chart.data.datasets[dIdx].data[i] == null) continue;
+            topBar = meta.data[i];
+            break;
+          }
+          ctx.fillText(fmtMB(total), topBar.x, topBar.y - 6);
+        });
+        ctx.restore();
+      }
+    };
     // Degradado azul corporativo — más impactante que un color plano para
     // una vista de nivel gerencial. Encima se apila (con otro color) el
     // volumen recibido por reposición ese día, leído de la etiqueta que
@@ -20645,8 +20721,10 @@ function renderVistaEjecutivaSimple() {
     window._execChartInv = new Chart(ctxInv, {
       type: 'bar',
       data: { labels: labels, datasets: invDatasets },
+      plugins: [execBarTotalLabelsPlugin],
       options: {
         responsive: true, maintainAspectRatio: false,
+        layout: { padding: { top: 18 } },
         plugins: {
           legend: { display: hayRepos, position: 'top', align: 'end', labels: { boxWidth: 14, font: { size: 10.5 } } },
           tooltip: {
@@ -20668,6 +20746,25 @@ function renderVistaEjecutivaSimple() {
     var gDesp = ctxDesp.getContext('2d').createLinearGradient(0, 0, 0, 220);
     gDesp.addColorStop(0, 'rgba(234,88,12,.35)');
     gDesp.addColorStop(1, 'rgba(234,88,12,0)');
+    var execLinePointLabelsPlugin = {
+      id: 'execLinePointLabels',
+      afterDatasetsDraw: function(chart) {
+        var ctx = chart.ctx;
+        ctx.save();
+        ctx.font = '700 10px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif';
+        ctx.fillStyle = '#ea580c';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'bottom';
+        var meta = chart.getDatasetMeta(0);
+        chart.data.datasets[0].data.forEach(function(v, i) {
+          if (v == null) return;
+          var pt = meta.data[i];
+          if (!pt) return;
+          ctx.fillText(fmtMB(v), pt.x, pt.y - 8);
+        });
+        ctx.restore();
+      }
+    };
     window._execChartDesp = new Chart(ctxDesp, {
       type: 'line',
       data: { labels: labels, datasets: [{
@@ -20677,8 +20774,10 @@ function renderVistaEjecutivaSimple() {
         pointBackgroundColor: '#ea580c', pointBorderColor: '#fff', pointBorderWidth: 2,
         tension: 0.25, fill: true, spanGaps: true
       }] },
+      plugins: [execLinePointLabelsPlugin],
       options: {
         responsive: true, maintainAspectRatio: false,
+        layout: { padding: { top: 18 } },
         plugins: {
           legend: { display: false },
           tooltip: {
