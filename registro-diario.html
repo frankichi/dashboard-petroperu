@@ -38,6 +38,10 @@ body{font-family:var(--sans);font-size:13px;background:var(--bg);color:var(--txt
 .btn-ghost-dark{background:rgba(255,255,255,.08);color:#dfe4ee;border-color:rgba(255,255,255,.18)}
 .btn-ghost-dark:hover{background:rgba(255,255,255,.14)}
 .btn-block{width:100%}
+.btn-export-excel{background:#1a7a44;color:#fff;border-color:#1a7a44}
+.btn-export-excel:hover{background:#156337}
+.btn-export-pdf{background:var(--navy);color:#fff;border-color:var(--navy)}
+.btn-export-pdf:hover{background:#0a1428}
 .center-wrap{min-height:calc(100vh - 60px);display:flex;align-items:center;justify-content:center;padding:24px}
 .authcard{width:100%;max-width:400px;background:var(--card);border:1px solid var(--bdr);border-radius:14px;padding:32px 28px;box-shadow:var(--shadow)}
 .authcard h1{font-size:19px;font-weight:800;margin-bottom:4px;letter-spacing:-.01em;color:var(--navy)}
@@ -422,8 +426,8 @@ body.rd-print-mode #rdPrintReport{
     </style>
 
     <div style="display:flex;align-items:center;justify-content:flex-end;gap:8px;margin-bottom:10px">
-      <button class="btn btn-secondary" id="btnHistExcel" onclick="rdExportarHistExcel()" style="display:flex;align-items:center;gap:6px;padding:7px 14px;font-size:11.5px">📊 Exportar a Excel</button>
-      <button class="btn btn-secondary" id="btnHistPdf" onclick="rdExportarHistPDF()" style="display:flex;align-items:center;gap:6px;padding:7px 14px;font-size:11.5px">🖨️ Exportar a PDF</button>
+      <button class="btn btn-export-excel" id="btnHistExcel" onclick="rdExportarHistExcel()" style="display:flex;align-items:center;gap:6px;padding:7px 14px;font-size:11.5px">📊 Exportar a Excel</button>
+      <button class="btn btn-export-pdf" id="btnHistPdf" onclick="rdExportarHistPDF()" style="display:flex;align-items:center;gap:6px;padding:7px 14px;font-size:11.5px">🖨️ Exportar a PDF</button>
     </div>
 
     <div id="histContent"><div class="rd-loading">⏳ Cargando histórico…</div></div>
@@ -1365,6 +1369,19 @@ function rdRefreshMiReporte() {
       // Quitar banner bloqueado si existe
       var bnr = document.getElementById('rdBannerReportado');
       if (bnr) bnr.remove();
+      // Aviso NO bloqueante: hay data cargada de otro origen (ej.
+      // Coberturas) para hoy, pero el formulario sigue editable — el
+      // operador puede y debe reportar normalmente.
+      var prevAviso = document.getElementById('rdBannerAvisoOrigen');
+      if (prevAviso) prevAviso.remove();
+      if (res.avisoOrigenExterno) {
+        var avEl = document.createElement('div');
+        avEl.id = 'rdBannerAvisoOrigen';
+        avEl.style.cssText = 'background:#fdf3e0;border:1.5px solid #a86a00;border-radius:8px;padding:10px 16px;margin-bottom:14px;font-size:12px;color:#8a5800;font-weight:600;display:flex;align-items:center;gap:8px';
+        avEl.innerHTML = '<span style="font-size:16px">⚠️</span><span style="flex:1">' + res.avisoOrigenExterno.mensaje + '</span>';
+        var shell2 = document.getElementById('rdPanel-registro');
+        if (shell2) { var firstCard2 = shell2.querySelector('.card'); if (firstCard2) shell2.insertBefore(avEl, firstCard2); }
+      }
     }
   }).catch(() => { rdShowLoader(false); rdToast('No se pudo cargar tu reporte', 'error'); });
 }
@@ -2151,9 +2168,9 @@ function rdExportarHistPDF() {
 
   var filasHTML = '';
   grupos.forEach(function(g, gi) {
-    filasHTML += '<tr style="background:#eef2f7"><td colspan="6" style="padding:7px 10px;font-weight:800;color:#0a3a5c;font-size:11px;border-top:2px solid #0a3a5c">📅 ' + g.fecha + '</td></tr>';
+    filasHTML += '<tr style="background:#eef2f7"><td colspan="8" style="padding:7px 10px;font-weight:800;color:#0a3a5c;font-size:11px;border-top:2px solid #0a3a5c">📅 ' + g.fecha + '</td></tr>';
     if (g.general) {
-      filasHTML += '<tr style="background:#f5f3ff"><td colspan="6" style="padding:5px 10px;font-size:9.5px;border-left:3px solid #7c3aed">'
+      filasHTML += '<tr style="background:#f5f3ff"><td colspan="8" style="padding:5px 10px;font-size:9.5px;border-left:3px solid #7c3aed">'
         + '<span style="font-weight:800;color:#7c3aed;text-transform:uppercase;letter-spacing:.3px">🏭 General de planta:</span> '
         + '<span style="color:#475569">' + g.general + '</span></td></tr>';
     }
