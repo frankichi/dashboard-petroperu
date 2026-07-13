@@ -4022,11 +4022,18 @@ function renderPComent() {
   var raw = Array.isArray(window.RAW) ? window.RAW : [];
 
   // Construir lista de eventos de comentario, deduplicando el comentario
-  // general (se guarda repetido en cada producto de la misma planta/fecha).
+  // general (se guarda repetido en cada producto de la misma planta/fecha
+  // — la columna COMENTARIO de inventario es una copia histórica del
+  // comentario real, que vive en reporte_estado).
+  // Filtro defensivo: filas antiguas de inventario solo tienen un código
+  // de estatus corto (N/RS/RP, de un proceso más viejo) en esa columna,
+  // no un comentario real — no deben mostrarse como si lo fueran.
+  var STATUS_CODES_GEN = ['N', 'S', 'RS', 'RP', 'RSN', 'RPN'];
   var vistoGeneral = {};
   var eventos = [];
   raw.forEach(function(r) {
-    var gen  = (r.comentario || '').trim();
+    var genRaw = (r.comentario || '').trim();
+    var gen  = (genRaw && STATUS_CODES_GEN.indexOf(genRaw.toUpperCase()) === -1) ? genRaw : '';
     var prod = (r.comentario_prod || '').trim();
     if (gen) {
       var kg = r.fecha + '|' + r.planta;

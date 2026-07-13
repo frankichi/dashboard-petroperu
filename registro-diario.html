@@ -1585,7 +1585,12 @@ function rdLoadHistorico() {
                 cob:        parseFloat(r.cob || 0) || 0,
                 vfact:      parseFloat(r.vfact || 0) || 0,
                 vreal:      parseFloat(r.vreal || r.dem || 0) || 0,
-                comentario: r.comentario || ''
+                // Fallback legacy (getHistorico/fetchAllRecords): no hace el
+                // cruce con reporte_estado, así que este campo puede venir
+                // con el texto duplicado/códigos de estatus de la columna
+                // vieja de inventario. Es best-effort, solo se usa si el
+                // endpoint principal (rdGetHistoricoInventario) falla.
+                comentario_planta: r.comentario || ''
               };
             });
           });
@@ -1931,6 +1936,31 @@ function rdRenderHistoricoTable() {
 
   fechas.forEach(function(fecha) {
     var filas = byDate[fecha];
+    // Comentario GENERAL de la planta — fuente real: hoja reporte_estado,
+    // UNO SOLO por FECHA+PLANTA (backend ya hace el cruce en
+    // rdGetHistoricoInventario y lo entrega en comentario_planta). NO es
+    // la columna COMENTARIO de inventario: esa es una copia histórica que
+    // un proceso viejo duplicaba en cada fila de producto de ese día (o,
+    // en filas antiguas, solo trae códigos de estatus corto N/RS/RP que
+    // no son comentarios reales) — por eso antes se veía "General"
+    // repetido en cada producto.
+    // Se muestra en su PROPIA fila (banner ancho, antes de los productos)
+    // para que quede visualmente separado de los comentarios por
+    // producto (columna comentario_prod, uno por fila/producto).
+    var _generalYaImpreso = false;
+    (function() {
+      var STATUS_CODES = ['N', 'S', 'RS', 'RP', 'RSN', 'RPN']; // filtro defensivo (solo aplica al fallback legacy)
+      var generalRaw = (filas[0] && filas[0].comentario_planta || '').trim();
+      var general = (generalRaw && STATUS_CODES.indexOf(generalRaw.toUpperCase()) === -1) ? generalRaw : '';
+      if (!general) return;
+      _generalYaImpreso = true;
+      html += '<tr class="hist-row-general">'
+        + '<td class="hist-date">' + fmtFecha(fecha) + '</td>'
+        + '<td colspan="8" style="font-size:10px;background:#f5f3ff;border-left:3px solid #7c3aed">'
+        + '<span style="font-weight:700;color:#7c3aed;font-size:9px;text-transform:uppercase;letter-spacing:.3px">🏭 General de planta:</span> '
+        + '<span style="color:var(--txt2)">' + general.replace(/</g,'&lt;') + '</span></td>'
+        + '</tr>';
+    })();
     filas.forEach(function(r, i) {
       // Soporta varios nombres de campo posibles del GAS
       var exist = parseFloat(r.existencia || r.inv_mb || r.inventario || 0) || 0;
@@ -1956,7 +1986,7 @@ function rdRenderHistoricoTable() {
       var cobColor = !isNaN(cobNum) ? (cobNum <= 7 ? '#c8102e' : cobNum <= 14 ? '#a86a00' : '#1a7a44') : 'inherit';
       var cobStr = !isNaN(cobNum) ? Math.round(cobNum) + 'd' : String(cob);
       html += '<tr>'
-        + '<td class="hist-date">' + (i === 0 ? fmtFecha(fecha) : '') + '</td>'
+        + '<td class="hist-date">' + (i === 0 && !_generalYaImpreso ? fmtFecha(fecha) : '') + '</td>'
         + '<td style="font-weight:700;color:var(--navy)">' + (r.producto || '—') + '</td>'
         + '<td class="hist-num">' + rdFmt(exist) + '</td>'
         + '<td class="hist-num" style="color:#0891b2;font-weight:700">' + (r.vreal>0 ? rdFmt(r.vreal) : '—') + '</td>'
@@ -1976,36 +2006,17 @@ function rdRenderHistoricoTable() {
           + '<span style="font-family:var(--mono);font-weight:800;color:#2563eb">+' + tag.volumenMB.toFixed(1) + ' MB</span></td>';
       })()
         + (function() {
-        // Comentario GENERAL de la planta (uno por fecha, viene de
-        // reporte_estado) — se muestra solo en la primera fila de cada
-        // grupo de fecha, igual que ya se hace con la columna Fecha, para
-        // no repetirlo en cada producto.
-        // Comentario general de la planta (col COMENTARIO de inventario) —
-        // OJO: esta columna tiene uso mixto históricamente, en muchas
-        // filas antiguas solo contiene un código de estatus corto (N,
-        // RS, RP — de un proceso más viejo, no un comentario real). Se
-        // filtra para no mostrar esos códigos como si fueran texto.
-        var STATUS_CODES = ['N', 'S', 'RS', 'RP', 'RSN', 'RPN'];
-        var generalRaw = (r.comentario || '').trim();
-        var general = (generalRaw && STATUS_CODES.indexOf(generalRaw.toUpperCase()) === -1) ? generalRaw : '';
-        // El comentario GENERAL es uno solo por fecha (aplica a toda la
-        // planta, no a un producto en particular) — igual que la columna
-        // Fecha, se muestra SOLO en la primera fila del grupo de esa
-        // fecha (i === 0). Antes se repetía en cada fila de producto,
-        // dando la impresión de que era un comentario por producto.
-        var generalHTML = (general && i === 0)
-          ? '<div style="margin-bottom:3px"><span style="font-weight:700;color:#7c3aed;font-size:9px;text-transform:uppercase;letter-spacing:.3px">🏭 General:</span> <span style="color:var(--txt2)">' + general.replace(/</g,'&lt;') + '</span></div>'
-          : '';
+        // Comentario POR PRODUCTO (col comentario_prod de inventario) —
+        // el comentario general de la planta ya se muestra aparte, en su
+        // propia fila-banner al inicio del grupo de esa fecha (arriba),
+        // así que aquí solo va el texto específico de este producto.
         var comentario = (r.comentario_prod || '').trim();
         // Se muestra el texto completo, quitando el prefijo estructurado
         // "[REPOS|...]" si lo hay (esa parte ya se ve en la columna
         // anterior) — esto es el comentario propio del producto.
         var texto = comentario.replace(/^\[REPOS\|\w+\|[\d.]+\]\s*/, '');
-        var productoHTML = texto
-          ? '<div>' + (general ? '<span style="font-weight:700;color:#0891b2;font-size:9px;text-transform:uppercase;letter-spacing:.3px">🧪 ' + (r.producto||'') + ':</span> ' : '') + '<span style="color:var(--txt2)">' + texto.replace(/</g,'&lt;') + '</span></div>'
-          : '';
-        if (!generalHTML && !productoHTML) return '<td style="color:#94a3b8;font-size:10.5px;text-align:center">—</td>';
-        return '<td style="font-size:10px;max-width:240px">' + generalHTML + productoHTML + '</td>';
+        if (!texto) return '<td style="color:#94a3b8;font-size:10.5px;text-align:center">—</td>';
+        return '<td style="font-size:10px;max-width:240px"><span style="font-weight:700;color:#0891b2;font-size:9px;text-transform:uppercase;letter-spacing:.3px">🧪 ' + (r.producto||'') + ':</span> <span style="color:var(--txt2)">' + texto.replace(/</g,'&lt;') + '</span></td>';
       })()
         + '</tr>';
     });
@@ -2039,6 +2050,14 @@ function rdExportarHistExcel() {
     if (!celdas.length) return;
     var fechaCelda = celdas[0].textContent.trim();
     if (fechaCelda) fechaActual = fechaCelda; // la fecha solo se muestra en la primera fila del grupo
+    if (tr.classList.contains('hist-row-general')) {
+      // Fila-banner del comentario general de planta: solo tiene 2 <td>
+      // (fecha + celda colspan). Se coloca en la columna Comentario para
+      // mantener alineadas las 9 columnas, y las columnas intermedias
+      // quedan vacías (no aplican a un comentario general de planta).
+      filas.push([fechaActual, '', '', '', '', '', '', '', celdas[1].textContent.trim()]);
+      return;
+    }
     var fila = [fechaActual];
     for (var i = 1; i < celdas.length; i++) fila.push(celdas[i].textContent.trim());
     filas.push(fila);
@@ -2068,8 +2087,15 @@ function rdExportarHistPDF() {
     var celdas = tr.querySelectorAll('td');
     if (!celdas.length) return;
     var fechaCelda = celdas[0].textContent.trim();
-    if (fechaCelda) { grupoActual = { fecha: fechaCelda, filas: [] }; grupos.push(grupoActual); }
+    if (fechaCelda) { grupoActual = { fecha: fechaCelda, general: '', filas: [] }; grupos.push(grupoActual); }
     if (!grupoActual) return;
+    if (tr.classList.contains('hist-row-general')) {
+      // Fila-banner del comentario general de planta (no es un producto):
+      // se guarda aparte en g.general para renderizarla como su propio
+      // banner, no mezclada con las filas de producto.
+      grupoActual.general = celdas[1] ? celdas[1].textContent.trim() : '';
+      return;
+    }
     grupoActual.filas.push({
       producto: celdas[1] ? celdas[1].textContent.trim() : '',
       exist:    celdas[2] ? celdas[2].textContent.trim() : '',
@@ -2102,6 +2128,11 @@ function rdExportarHistPDF() {
   var filasHTML = '';
   grupos.forEach(function(g, gi) {
     filasHTML += '<tr style="background:#eef2f7"><td colspan="6" style="padding:7px 10px;font-weight:800;color:#0a3a5c;font-size:11px;border-top:2px solid #0a3a5c">📅 ' + g.fecha + '</td></tr>';
+    if (g.general) {
+      filasHTML += '<tr style="background:#f5f3ff"><td colspan="6" style="padding:5px 10px;font-size:9.5px;border-left:3px solid #7c3aed">'
+        + '<span style="font-weight:800;color:#7c3aed;text-transform:uppercase;letter-spacing:.3px">🏭 General de planta:</span> '
+        + '<span style="color:#475569">' + g.general + '</span></td></tr>';
+    }
     g.filas.forEach(function(f, fi) {
       var stripe = fi % 2 === 0 ? '#ffffff' : '#f8fafc';
       filasHTML += '<tr style="background:' + stripe + '">'
