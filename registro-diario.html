@@ -1066,7 +1066,7 @@ function rdMarcarReposicion(prod, tipo, emoji) {
   var ref = (RD.detalle && RD.detalle[prod]) || {};
   var ucInv = (ref.ultimo_calculo && ref.ultimo_calculo.inv) || 0;
   var volumen = Math.max(0, Math.round((existencia - ucInv) * 1000) / 1000);
-  var tipoCodigo = tipo === 'Cabotaje Marítimo' ? 'MARITIMO' : tipo === 'Cisternas Terrestres' ? 'TERRESTRE' : 'REFINERIA';
+  var tipoCodigo = (tipo === 'Cabotaje Marítimo' || tipo === 'Cabotaje Fluvial') ? 'MARITIMO' : tipo === 'Cisternas Terrestres' ? 'TERRESTRE' : 'REFINERIA';
   var ta = document.querySelector('.rd-coment-prod[data-prod="' + prod + '"]');
   if (ta) {
     // Prefijo estructurado (lo lee el dashboard) + texto legible para
@@ -1236,9 +1236,14 @@ function rdRenderProdRows(productos, valores, detalle, yaReportado) {
   RD.detalle = detalle || {};
   var esRefineria = (RD.refinerias || []).indexOf(RD.planta) !== -1;
   // Talara, Conchan e Iquitos tienen una refinería hermana que puede
-  // abastecerlas directamente — para esas plantas se ofrece "Vía
-  // Refinería" como origen de reposición, además de cabotaje/cisternas.
+  // abastecerlas directamente — para esas plantas se ofrece "Reposición
+  // de Refinería" como origen de reposición, además de cabotaje/cisternas.
   var esRefineriaHermana = ['Talara', 'Conchan', 'Iquitos'].indexOf(RD.planta) !== -1;
+  // Iquitos se abastece por vía FLUVIAL (barcazas por el río, ej. ruta
+  // Conchán → LPO Pucallpa → Refinería Iquitos), no por cabotaje
+  // marítimo — el botón de origen debe decir "Barcaza"/"Fluvial", no
+  // "Buque"/"Marítimo".
+  var esIquitosRD = RD.planta === 'Iquitos';
   var wrap = document.getElementById('prodRows');
   wrap.innerHTML = productos.map(function(p) {
     var v   = valores[p] || {};
@@ -1364,20 +1369,22 @@ function rdRenderProdRows(productos, valores, detalle, yaReportado) {
       // ── Detección inteligente de reposición ───────────────────────────
       // Se muestra automáticamente (vía rdRecalc) cuando la existencia
       // escrita es mayor a la del último reporte conocido — indica que
-      // llegó producto y conviene registrar por dónde. NUNCA bloquea el
-      // guardado — es solo informativo, con opción clara de descartarlo
-      // si no aplica (ej. plantas con ventas casi nulas donde la
-      // existencia varía poco de un día a otro sin que haya reposición).
+      // llegó producto y hay que registrar por dónde. AHORA ES
+      // OBLIGATORIO marcar un origen (cisterna, buque/barcaza, o
+      // refinería en las plantas que aplica) antes de poder guardar —
+      // si la existencia sube, algo tuvo que traer ese volumen, así que
+      // ya no existe la opción de "no aplica, cerrar aviso".
       +   (yaReportado ? '' :
            '<div class="repos-panel" id="repos-panel-' + p.replace(/[^a-z0-9]/gi,'_') + '" style="display:none;margin-top:10px;padding:10px 12px;background:#eef6ff;border:1px solid #bfdbfe;border-radius:8px">'
-           + '<div id="repos-msg-' + p.replace(/[^a-z0-9]/gi,'_') + '" style="font-size:11px;font-weight:700;color:#1e40af;margin-bottom:7px">📈 La existencia subió respecto al último reporte — ¿cómo llegó el producto? (opcional, no es obligatorio para guardar)</div>'
+           + '<div id="repos-msg-' + p.replace(/[^a-z0-9]/gi,'_') + '" style="font-size:11px;font-weight:700;color:#1e40af;margin-bottom:7px">📈 La existencia subió respecto al último reporte — ¿cómo llegó el producto? <b>(obligatorio para poder guardar)</b></div>'
            + '<div style="display:flex;gap:6px;flex-wrap:wrap">'
-           +   '<button type="button" onclick="rdMarcarReposicion(\'' + p + '\',\'Cabotaje Mar\u00edtimo\',\'\u26f4\ufe0f\')" style="padding:6px 12px;border-radius:16px;border:1.5px solid #0284c7;background:#fff;color:#0284c7;font-size:11px;font-weight:700;cursor:pointer">\u26f4\ufe0f Cabotaje Mar\u00edtimo</button>'
+           +   (esIquitosRD
+                ? '<button type="button" onclick="rdMarcarReposicion(\'' + p + '\',\'Cabotaje Fluvial\',\'\ud83d\udef6\')" style="padding:6px 12px;border-radius:16px;border:1.5px solid #0284c7;background:#fff;color:#0284c7;font-size:11px;font-weight:700;cursor:pointer">\ud83d\udef6 Cabotaje Fluvial (Barcaza)</button>'
+                : '<button type="button" onclick="rdMarcarReposicion(\'' + p + '\',\'Cabotaje Mar\u00edtimo\',\'\u26f4\ufe0f\')" style="padding:6px 12px;border-radius:16px;border:1.5px solid #0284c7;background:#fff;color:#0284c7;font-size:11px;font-weight:700;cursor:pointer">\u26f4\ufe0f Cabotaje Mar\u00edtimo</button>')
            +   '<button type="button" onclick="rdMarcarReposicion(\'' + p + '\',\'Cisternas Terrestres\',\'\ud83d\ude9b\')" style="padding:6px 12px;border-radius:16px;border:1.5px solid #ca8a04;background:#fff;color:#ca8a04;font-size:11px;font-weight:700;cursor:pointer">\ud83d\ude9b Cisternas Terrestres</button>'
            +   (esRefineriaHermana
-                ? '<button type="button" onclick="rdMarcarReposicion(\'' + p + '\',\'V\u00eda Refiner\u00eda\',\'\ud83c\udfed\')" style="padding:6px 12px;border-radius:16px;border:1.5px solid #7c3aed;background:#fff;color:#7c3aed;font-size:11px;font-weight:700;cursor:pointer">\ud83c\udfed V\u00eda Refiner\u00eda</button>'
+                ? '<button type="button" onclick="rdMarcarReposicion(\'' + p + '\',\'Reposici\u00f3n de Refiner\u00eda\',\'\ud83c\udfed\')" style="padding:6px 12px;border-radius:16px;border:1.5px solid #7c3aed;background:#fff;color:#7c3aed;font-size:11px;font-weight:700;cursor:pointer">\ud83c\udfed Reposici\u00f3n de Refiner\u00eda</button>'
                 : '')
-           +   '<button type="button" onclick="rdDescartarReposicion(\'' + p + '\')" style="padding:6px 12px;border-radius:16px;border:1.5px solid #94a3b8;background:#fff;color:#64748b;font-size:11px;font-weight:700;cursor:pointer">\u2715 No aplica, cerrar aviso</button>'
            + '</div>'
            + '</div>')
       // ── Comentario por producto ──────────────────────────────────────────
@@ -1516,6 +1523,21 @@ function rdAbrirConfirmacion() {
     rdToast('\u26a0 Debes confirmar la existencia mínima de: ' + pendMin.join(', '), 'error');
     var blk2 = document.querySelector('.prod-block[data-prod="' + pendMin[0] + '"]');
     if (blk2) { if (!blk2.classList.contains('open')) blk2.classList.add('open'); blk2.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+    return;
+  }
+  // ── Reposición obligatoria si la existencia subió ──────────────────
+  // Si el panel "¿cómo llegó el producto?" sigue visible para algún
+  // producto (no se marcó cisterna/buque-barcaza/refinería), no se deja
+  // guardar — un aumento de existencia siempre tiene que venir de algo,
+  // así que ya no existe la opción de descartarlo sin explicar.
+  var pendRepos = (RD.productos || []).filter(function(p) {
+    var panel = document.getElementById('repos-panel-' + p.replace(/[^a-z0-9]/gi,'_'));
+    return panel && panel.style.display !== 'none';
+  });
+  if (pendRepos.length) {
+    rdToast('\u26a0 La existencia subió en ' + pendRepos.join(', ') + ' — marca cómo llegó el producto antes de guardar', 'error');
+    var blk3 = document.querySelector('.prod-block[data-prod="' + pendRepos[0] + '"]');
+    if (blk3) { if (!blk3.classList.contains('open')) blk3.classList.add('open'); blk3.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
     return;
   }
   // ── Aviso de hora temprana ────────────────────────────────────────────
