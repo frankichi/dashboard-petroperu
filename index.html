@@ -7610,9 +7610,18 @@ function renderP2() {
         // viendo (currentDate), causando exactamente la confusión de
         // "guardé pero no se refleja": el número no cambia visualmente
         // aunque no exista ningún reporte real para el día seleccionado.
-        + (r.fecha && currentDate && r.fecha !== currentDate && !cobOverrides[key] && cobInvOverrides[key] === undefined
-            ? '<div style="font-size:8px;color:var(--ora);font-weight:700;white-space:nowrap" title="No hay reporte para ' + currentDate + ' — se muestra el último dato real, del ' + r.fecha + '">⚠ dato del ' + r.fecha + '</div>'
-            : (r.fecha === currentDate ? '<div style="font-size:8px;color:var(--grn);font-weight:700">✓ dato de hoy</div>' : ''))
+        // Tercer estado — 🚢 PROYECTADO: el buque ya confirmó descarga
+        // (Flota lo marcó COMPLETADO) pero la planta todavía no reportó
+        // su cierre oficial para esta fecha (ej. descargó domingo, la
+        // planta recién reporta el lunes en la tarde). Es una fila
+        // sintética (backend, nunca escrita al Sheets) — se muestra en
+        // AZUL para distinguirla claramente de un dato ya confirmado por
+        // la planta (verde) o un simple arrastre sin novedad (naranja).
+        + (r._proyectado
+            ? '<div style="font-size:8px;color:#2563eb;font-weight:700;white-space:nowrap" title="Buque ' + (r.bt||'') + ' confirmó descarga de ' + (r.vol_rep||0).toFixed(1) + ' MB (base: ' + (r._proyectado_base_inv||0).toFixed(1) + ' MB del ' + r._proyectado_base_fecha + ') — la planta aún no reporta su cierre oficial para ' + r.fecha + '">🚢 proyectado (BT descargó)</div>'
+            : (r.fecha && currentDate && r.fecha !== currentDate && !cobOverrides[key] && cobInvOverrides[key] === undefined
+                ? '<div style="font-size:8px;color:var(--ora);font-weight:700;white-space:nowrap" title="No hay reporte para ' + currentDate + ' — se muestra el último dato real, del ' + r.fecha + '">⚠ dato del ' + r.fecha + '</div>'
+                : (r.fecha === currentDate ? '<div style="font-size:8px;color:var(--grn);font-weight:700">✓ dato de hoy</div>' : '')))
         + '</td>'
         + '<td class="r">' + pronMbdc.toFixed(2) + '</td>'
         + '<td class="r" title="' + vrealSource + vrealSuffix + '" style="white-space:nowrap">'
@@ -20299,6 +20308,10 @@ function renderVistaEjecutivaSimple() {
   var invHoy   = sumFecha(fechaHoy, 'inv', pl, prod);
   var invAyer  = fechaAyer ? sumFecha(fechaAyer, 'inv', pl, prod) : null;
   var deltaInv = invAyer !== null ? invHoy - invAyer : 0;
+  // Si parte del total de hoy viene de una proyección (buque ya
+  // descargó, planta aún no reporta su cierre oficial), se avisa junto
+  // al KPI para que gerencia sepa que ese número incluye un estimado.
+  var invHoyTieneProyeccion = RAW.some(function(r){ return r.fecha===fechaHoy && r._proyectado && filaAplica(r, pl, prod); });
   var despHoy  = RAW.filter(function(r){ return r.fecha===fechaHoy && filaAplica(r, pl, prod); })
                      .reduce(function(s,r){ return s + despRow(r); }, 0);
   var despAyer = fechaAyer ? RAW.filter(function(r){ return r.fecha===fechaAyer && filaAplica(r, pl, prod); })
@@ -20677,6 +20690,7 @@ function renderVistaEjecutivaSimple() {
         '<div style="font-size:11px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">📦 Inventario ' + (pl==='Nacional'?'Nacional':'· '+pl) + (prod!=='Todos'?' · '+prod:'') + '</div>' +
         '<div class="exec-kpi-val" style="font-size:38px;font-weight:800;color:var(--txt);font-family:var(--mono);line-height:1">' + fmtMB(invHoy) + '</div>' +
         '<div style="margin-top:10px">' + deltaHTML(deltaInv, true, invAyer) + '</div>' +
+        (invHoyTieneProyeccion ? '<div style="margin-top:8px;font-size:10.5px;color:#2563eb;font-weight:700;display:flex;align-items:center;gap:5px">🚢 Incluye reposición proyectada (buque ya descargó, planta aún no reporta cierre)</div>' : '') +
       '</div>' +
       (esRefineriaExec ? '' :
       '<div style="background:var(--card);border:1px solid var(--bdr);border-radius:14px;padding:24px 26px">' +
