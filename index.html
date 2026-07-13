@@ -6984,6 +6984,36 @@ function cobSetPron(planta, producto) {
   }
   cobOnVfactChange(planta, producto, pronVal);
 }
+// Versión masiva del botón ↑P individual — nivela TODAS las filas
+// visibles (planta+producto) al pronóstico de una sola vez, en vez de
+// tener que hacer clic fila por fila. Respeta las mismas exclusiones que
+// ya aplica el resto de Coberturas: refinerías (no venden, no aplica
+// pronóstico de demanda) y combinaciones planta+producto no
+// comercializadas (SKIP_COMBOS). Solo toca filas con pronóstico > 0 y
+// que realmente cambian (si ya está igualado, no lo cuenta ni lo toca).
+function cobSetPronTodos() {
+  if (!cobEditMode) return;
+  var today = byDateLatestPerPlant(currentDate || (DATES.length ? DATES[DATES.length-1] : ''));
+  var n = 0;
+  today.forEach(function(r) {
+    if (typeof REFINERIAS !== 'undefined' && REFINERIAS.indexOf(r.planta) !== -1) return;
+    if (typeof SKIP_COMBOS !== 'undefined' && SKIP_COMBOS.has((r.planta||'')+'|'+(r.producto||''))) return;
+    var pronVal = cobGetPron(r);
+    if (pronVal <= 0) return;
+    var vfactActual = cobGetVfact(r);
+    if (Math.abs(vfactActual - pronVal) < 0.001) return; // ya está igualado, nada que hacer
+    cobOverrides[r.planta + '|' + r.producto] = cobOverrides[r.planta + '|' + r.producto] || {};
+    cobOverrides[r.planta + '|' + r.producto].vfact = pronVal;
+    n++;
+  });
+  renderP2();
+  var st = document.getElementById('cob-save-status');
+  if (st) {
+    st.textContent = n > 0 ? ('🎯 ' + n + ' producto' + (n===1?'':'s') + ' nivelado' + (n===1?'':'s') + ' al pronóstico — recuerda Guardar cambios') : 'Ya estaban todos nivelados al pronóstico';
+    st.style.color = n > 0 ? 'var(--acc2)' : 'var(--txt3)';
+  }
+}
+window.cobSetPronTodos = cobSetPronTodos;
 function cobVolRepChange(planta, producto, field, rawValue) {
   var val = parseFloat(rawValue) || 0;
   var key = planta + '|' + producto;
@@ -7860,6 +7890,7 @@ function renderP2() {
     + '<button id="cob-edit-btn" class="cob-pron-btn" onclick="cobToggleEdit()" '
     + 'style="' + (cobEditMode ? 'background:var(--ora);color:#fff;border-color:var(--ora);font-weight:700' : '') + '">'
     + (cobEditMode ? '✏️ Modo edición activo' : '✏️ Editar') + '</button>'
+    + (cobEditMode ? '<button class="cob-pron-btn" onclick="cobSetPronTodos()" title="Iguala el V. Factible de TODAS las filas visibles a su pronóstico mensual, sin tener que hacer clic fila por fila" style="border-color:#1d6fd666;color:#4d9de0">🎯 Nivelar todo al pronóstico</button>' : '')
     + (cobEditMode && hasOverrides ? '<button class="cob-pron-btn" onclick="cobResetOverrides()" style="border-color:var(--red)55;color:var(--red)">↺ Reset (' + (Object.keys(cobOverrides).length + Object.keys(cobInvOverrides).length + Object.keys(cobDespachoOverrides).length) + ')</button>' : '')
     + '<button id="cob-save-btn" class="cob-pron-btn" onclick="cobSaveToGS()" '
     + 'style="background:var(--acc);color:#fff;border-color:var(--acc);display:inline-flex;align-items:center;gap:5px;font-weight:700">'
