@@ -3195,7 +3195,7 @@ function buildDateBar(containerId) {
   `;
 }
 function syncAllDateBars() {
-  ['dateBarP1','dateBarP2','dateBarPA','dateBarPB','dateBarPC','dateBarPD'].forEach(id => {
+  ['dateBarP1','dateBarP2','dateBarPA','dateBarPB','dateBarPC','dateBarPD','dateBarExec'].forEach(id => {
     const input = document.getElementById('dateInput_' + id);
     if (input) input.value = currentDate || '';
     const bar = document.getElementById(id);
@@ -20424,6 +20424,7 @@ function renderVistaEjecutivaSimple() {
     '<div class="exec-sticky-hdr" style="position:sticky;top:0;z-index:50;background:var(--bg);margin:0 -36px 20px;padding:18px 36px 14px;border-bottom:1px solid var(--bdr)">' +
       '<div class="exec-title-main" style="margin-bottom:14px">Inventarios y Despachos' + (pl==='Nacional' ? ' ' : ' — ') + tituloScope + '</div>' +
       volverBtn +
+      '<div style="position:relative;z-index:500;margin-bottom:12px">' + buildDateBar('dateBarExec') + '</div>' +
       '<div class="exec-periodo-row" style="display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:12px">' +
         '<div class="exec-select-row" style="display:flex;gap:10px;flex-wrap:wrap">' + plantaSelector + productoSelector + '</div>' +
       '</div>' +
@@ -20505,10 +20506,25 @@ function renderVistaEjecutivaSimple() {
     // reportada ese día). Para apilar correctamente sin duplicar, la
     // base debe ser "lo que había antes de recibir" = inv − repos, y el
     // segmento de reposición se apila encima — la suma da el total real.
+    //
+    // ⚠️ CORREGIDO: a nivel NACIONAL (suma de todas las plantas/
+    // productos), el volumen de "reposición marcada" ese día puede ser
+    // mayor que el inventario total reportado ese mismo día (son dos
+    // cosas distintas: inv es una FOTO al cierre, repos es un FLUJO
+    // recibido) — restar sin límite generaba una base NEGATIVA y la
+    // barra se dibujaba cruzando por debajo de cero. Se acota repos a
+    // como máximo el inventario de ese día, así la base nunca baja de 0
+    // y la barra apilada nunca excede el inventario real.
+    var reposSerieAj = reposSerie.map(function(r, i) {
+      if (r == null) return null;
+      var v = invSerie[i];
+      if (v == null) return r;
+      return Math.min(r, Math.max(0, v));
+    });
     var invBaseSerie = invSerie.map(function(v, i) {
       if (v == null) return null;
-      var r = reposSerie[i] || 0;
-      return parseFloat((v - r).toFixed(1));
+      var r = reposSerieAj[i] || 0;
+      return Math.max(0, parseFloat((v - r).toFixed(1)));
     });
     var invDatasets = [{
       label: 'Inventario',
@@ -20518,7 +20534,7 @@ function renderVistaEjecutivaSimple() {
     if (hayRepos) {
       invDatasets.push({
         label: 'Reposición recibida',
-        data: reposSerie, backgroundColor: '#2563eb', hoverBackgroundColor: '#3b82f6',
+        data: reposSerieAj, backgroundColor: '#2563eb', hoverBackgroundColor: '#3b82f6',
         borderRadius: 5, maxBarThickness: barMode?36:26, stack: 'inv'
       });
     }
