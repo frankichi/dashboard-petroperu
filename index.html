@@ -14263,8 +14263,16 @@ function _parseCargasNavesText(text, fechaRpt) {
         .replace(/^[\s\-]+/,'').trim();
       var termTokens = splitLine(termRaw);
       var terminals = termTokens.filter(function(t) {
-        return VALID_TERMINALS.has(t.trim().toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'')) ||
-               VALID_TERMINALS.has(t.trim().toUpperCase());
+        var tUpper = t.trim().toUpperCase();
+        // ⚠️ Talara NUNCA es un terminal que RECIBE reposición por buque
+        // — en las rutas de esta flota siempre es el puerto de CARGA
+        // (origen, se despacha DESDE la refinería Talara). Si aparece
+        // aquí es por una tabla mal formada en el PDF de origen (ej. la
+        // que trae errores "#¡REF!" de Excel) — se descarta a propósito
+        // para no crear una reposición fantasma hacia Talara.
+        if (tUpper === 'TALARA') return false;
+        return VALID_TERMINALS.has(tUpper.normalize('NFD').replace(/[\u0300-\u036f]/g,'')) ||
+               VALID_TERMINALS.has(tUpper);
       }).map(normTerm);
       if (!terminals.length) return;
       var dateLine = blockLines[pcIdx+1];
@@ -20612,14 +20620,18 @@ function renderVistaEjecutivaSimple() {
     if (volTotal <= 0 || denom <= 0) return { diasRepos: 0, volMB: 0, tipo: '' };
     // ⚠️ CORREGIDO: cuando una planta no reporta hace varios días, se
     // arrastra (con proyección) su ÚLTIMO reporte real — pero si ese
-    // reporte viejo ya tenía una reposición marcada que a esta altura
-    // YA LLEGÓ Y SE CONSUMIÓ (su fecha_reposicion/ETA ya pasó respecto
-    // a la fecha que se está viendo), esas columnas BT/VOL_REP siguen
-    // "vivas" en la fila sin limpiarse, y volvían a mostrarse como si
-    // fuera una reposición NUEVA y pendiente — apareciendo de la nada,
-    // sin respaldo en ningún parte de Flota actual. Se descarta
-    // cualquier reposición cuya fecha de llegada ya pasó.
-    if (r.fecha_reposicion && r.fecha_reposicion < fechaHoy) {
+    // reporte viejo ya tenía una reposición marcada, sus columnas
+    // BT/VOL_REP siguen "vivas" en la fila sin limpiarse, y volvían a
+    // mostrarse como si fuera una reposición NUEVA y pendiente. Ya se
+    // filtraba cuando el ETA (fecha_reposicion) ya había pasado — pero
+    // si el ETA está simplemente VACÍO (dato viejo sin fecha registrada,
+    // como pasó con Supe), ese filtro no lo atrapaba. Ahora, para
+    // cualquier fila que NO sea el reporte real de HOY, se exige un
+    // fecha_reposicion válido y no vencido — sin eso, no hay forma de
+    // confirmar que sigue siendo una reposición pendiente real, así que
+    // se descarta. Si es el reporte de hoy mismo (dato fresco del
+    // operador), se confía tal cual sin exigir ETA.
+    if (r.fecha !== fechaHoy && (!r.fecha_reposicion || r.fecha_reposicion < fechaHoy)) {
       return { diasRepos: 0, volMB: 0, tipo: '' };
     }
     var tipo1 = vol1 > 0 ? (esMaritimoExec(r.bt) ? 'mar\u00edtima' : 'terrestre') : '';
@@ -21176,11 +21188,12 @@ function _execReposicionInfo(r, fechaRef) {
   var vol1 = r.vol_rep || 0, vol2 = r.vol_rep_bt2 || 0;
   var volTotal = vol1 + vol2;
   if (volTotal <= 0) return { diasRepos: 0, volMB: 0, tipo: '', bt: '', bt2: '' };
-  // Mismo fix que en reposicionInfo() de más abajo: si el ETA ya pasó
-  // respecto a la fecha que se está viendo en el mapa, esa reposición ya
-  // llegó/se consumió — no debe seguir mostrándose como pendiente solo
-  // porque quedó "viva" en una fila vieja arrastrada.
-  if (fechaRef && r.fecha_reposicion && r.fecha_reposicion < fechaRef) {
+  // Mismo fix que en reposicionInfo() de más abajo: para una fila que no
+  // sea el reporte real de HOY, se exige un ETA (fecha_reposicion)
+  // válido y no vencido — un ETA vacío es tan sospechoso como uno ya
+  // pasado, ambos significan que no hay forma de confirmar que sigue
+  // siendo una reposición pendiente real.
+  if (fechaRef && r.fecha !== fechaRef && (!r.fecha_reposicion || r.fecha_reposicion < fechaRef)) {
     return { diasRepos: 0, volMB: 0, tipo: '', bt: '', bt2: '' };
   }
   var tipo1 = vol1 > 0 ? (_execEsMaritimo(r.bt) ? 'marítima' : 'terrestre') : '';
