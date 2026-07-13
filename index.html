@@ -2569,7 +2569,7 @@ const PRODUCTOS_POR_PLANTA_EXEC = {
   'El Milagro':  ['Diesel', 'G. Regular'],
   'Refinería Talara':   ['Diesel', 'G. Regular', 'G. Premium', 'G. 84', 'TA1', 'GLP', 'D2S50-H'],
   'Refinería Conchán':  ['Diesel', 'G. Regular', 'G. Regular HS', 'G. Premium'],
-  'Refinería Iquitos':  ['Diesel', 'G. Regular', 'G. 84', 'TA1']
+  'Refinería Iquitos':  ['Diesel', 'G. Regular', 'G. 84', 'TA1', 'PI6']
 };
 const PLANT_META_EXEC = {
   'Talara':             {lat:-4.577,  lng:-81.272, tipo:'Terminal',  region:'Piura'},
@@ -2917,7 +2917,7 @@ function cobColorStd(cob) {
   if (cob < 13) return COB_COLORS.ATT;
   return COB_COLORS.OK;
 }
-const PROD_ORDER = ['Diesel','D2S50-H','G. Regular','G. Premium','G. 84','TA1','GLP','ULSD Expo','G. Regular HS'];
+const PROD_ORDER = ['Diesel','D2S50-H','G. Regular','G. Premium','G. 84','TA1','GLP','ULSD Expo','G. Regular HS','PI6'];
 const PROD_ALIAS = {
   'TURBO':         'TA1',
   'TURBO A1':      'TA1',
@@ -7499,7 +7499,7 @@ function renderP2() {
   var REFINERIA_PRODUCTOS = {
     'Refinería Talara':  ['Diesel','G. Regular','G. Premium','G. 84','TA1','GLP','D2S50-H'],
     'Refinería Conchán': ['Diesel','G. Regular','G. Regular HS','G. Premium'],
-    'Refinería Iquitos': ['Diesel','G. Regular','G. 84','TA1']
+    'Refinería Iquitos': ['Diesel','G. Regular','G. 84','TA1','PI6']
   };
   var todayKeys = new Set(today.map(function(r){ return r.planta+'|'+r.producto; }));
   Object.keys(REFINERIA_PRODUCTOS).forEach(function(pl) {
@@ -7528,7 +7528,10 @@ function renderP2() {
     // Refinería Talara — todavía no es Diesel B5S50 final (pasa a serlo en
     // 3-4 días), por eso se reporta y muestra como producto propio.
     'D2S50-H':    ['Refinería Talara'],
-    'G. Regular HS': ['Conch\u00e1n']
+    'G. Regular HS': ['Conch\u00e1n'],
+    // PI6 (Petróleo Industrial N°6): producto propio de Refinería Iquitos,
+    // no se comercializa en ninguna otra planta.
+    'PI6':        ['Refinería Iquitos']
   };
   var grouped = {};
   today.forEach(function(r) {
@@ -10701,7 +10704,7 @@ function renderPTend() {
     return (d.getDate()<10?'0':'')+d.getDate()+'-'+months[d.getMonth()];
   };
   var xLabels = dateLabels.map(fmtLabel);
-  var PROD_COLORS={'Diesel':'#1B3A6B','D2S50-H':'#4338ca','G. Regular':'#166534','G. Premium':'#7c2d12','G. 84':'#713f12','TA1':'#1e1b4b','GLP':'#0f766e'};
+  var PROD_COLORS={'Diesel':'#1B3A6B','D2S50-H':'#4338ca','G. Regular':'#166534','G. Premium':'#7c2d12','G. 84':'#713f12','TA1':'#1e1b4b','GLP':'#0f766e','PI6':'#78350f'};
   // Qué productos tienen datos para esta planta (usando normProd para unificar nombres)
   var prodsConDatos = new Set();
   RAW.forEach(function(r) {
@@ -20374,7 +20377,7 @@ function renderVistaEjecutivaSimple() {
       // las gráficas, como si el combustible hubiera desaparecido.
       var plantasIter = (!planta || planta === 'Nacional') ? PLANTAS_18_OFICIALES.concat(REFINERIAS) : [planta];
       var productosIter = (producto && producto !== 'Todos') ? [producto]
-        : (typeof PRODUCTO_ORDEN !== 'undefined' ? PRODUCTO_ORDEN : ['Diesel','D2S50-H','G. Regular','G. Premium','G. 84','TA1','GLP','G. Regular HS']);
+        : (typeof PRODUCTO_ORDEN !== 'undefined' ? PRODUCTO_ORDEN : ['Diesel','D2S50-H','G. Regular','G. Premium','G. 84','TA1','GLP','G. Regular HS','PI6']);
       var s = 0;
       plantasIter.forEach(function(pl2) {
         if ((!planta || planta === 'Nacional') && PLANTAS_DUPLICADAS_EN_REFINERIA.indexOf(pl2) !== -1) return;
@@ -20527,22 +20530,29 @@ function renderVistaEjecutivaSimple() {
                                // con la demanda pronóstico en su lugar.
   function cobPron(r) {
     var pronVal = (typeof pronSheet !== 'undefined' && pronSheet[r.planta+'|'+r.producto]) || r.pron_mes || r.pron || 0;
-    if (pronVal <= 0 || !(r.inv > 0)) return 0;
-    var c = Math.round(r.inv / pronVal);
-    return c > COB_SANO_MAX_EXEC ? 0 : c;
+    // ⚠️ CORREGIDO: antes exigía inv > 0, tratando un inventario en 0
+    // (real o proyectado por consumo) como "no se puede calcular" — pero
+    // 0 MB de inventario con demanda pronóstico válida SÍ es un dato
+    // calculable y muy importante: es un QUIEBRE real (0 días de
+    // cobertura), no la ausencia de información. Solo se devuelve null
+    // (verdaderamente "no calculable") cuando falta la demanda
+    // pronóstico o el inventario mismo nunca se conoció.
+    if (pronVal <= 0 || r.inv == null) return null;
+    var c = Math.round(Math.max(0, r.inv) / pronVal);
+    return c > COB_SANO_MAX_EXEC ? null : c;
   }
   function cobReal(r) {
     var desp = r.vreal || r.dem || 0;
-    if (desp <= 0 || !(r.inv > 0)) return 0;
-    var c = Math.round(r.inv / desp);
+    if (desp <= 0 || r.inv == null) return null;
+    var c = Math.round(Math.max(0, r.inv) / desp);
     // Regla de respaldo: despacho real anormalmente bajo ese día → usar
     // la demanda pronóstico solo para esta fila, en vez de un número
     // disparado por un dato puntual casi en cero.
     if (c > COB_REAL_FALLBACK_UMBRAL_EXEC) {
       var cPron = cobPron(r);
-      if (cPron > 0) return cPron;
+      if (cPron != null) return cPron;
     }
-    return c > COB_SANO_MAX_EXEC ? 0 : c;
+    return c > COB_SANO_MAX_EXEC ? null : c;
   }
   // V.Factible es la base "canónica" del sistema — la misma que usa
   // Coberturas para calcular sus alertas de QUIEBRE/CRÍTICO/ALERTA (ver
@@ -20553,34 +20563,28 @@ function renderVistaEjecutivaSimple() {
   // final antes de rendirse y marcar la fila como "sin cobertura".
   function cobFactible(r) {
     var vf = r.vfact || 0;
-    if (vf <= 0 || !(r.inv > 0)) return 0;
-    var c = Math.round(r.inv / vf);
-    return c > COB_SANO_MAX_EXEC ? 0 : c;
+    if (vf <= 0 || r.inv == null) return null;
+    var c = Math.round(Math.max(0, r.inv) / vf);
+    return c > COB_SANO_MAX_EXEC ? null : c;
   }
   function calcCob(r) {
-    // Si la fila es una PROYECCIÓN (la planta aún no cierra su día), el
-    // despacho real de "modo real" no existe para hoy — sería mezclar
-    // un inventario proyectado por pronóstico con un despacho de otro
-    // día. Se usa siempre pronóstico como base en ese caso, sin importar
-    // el modo elegido en pantalla.
+    // Se prueban las 3 bases posibles en orden de prioridad y se usa la
+    // PRIMERA que realmente se pueda calcular (no null) — ya no importa
+    // si el resultado es 0 (quiebre real, se conserva) o un número
+    // positivo. Solo se pasa a la siguiente base cuando la anterior
+    // literalmente no tiene con qué calcular (divisor faltante o
+    // inventario nunca conocido).
+    var c;
     if (r._proyectadoConsumo) {
-      var cp = cobPron(r);
-      return cp > 0 ? cp : cobFactible(r);
+      // Fila proyectada por consumo (planta aún no cierra el día): el
+      // despacho real de "modo real" no aplica — sería mezclar un
+      // inventario ya proyectado con el despacho de otro día distinto.
+      c = cobPron(r);
+    } else {
+      c = window._execCobModo === 'pron' ? cobPron(r) : cobReal(r);
     }
-    var c = window._execCobModo === 'pron' ? cobPron(r) : cobReal(r);
-    // ⚠️ CORREGIDO: antes, si despacho real Y pronóstico venían vacíos
-    // ese día puntual (ej. Eten reportó su existencia pero no cargó
-    // despacho ese día), la planta ENTERA desaparecía como "sin dato"
-    // aunque sí tuviera inventario real y un V.Factible válido — el
-    // mismo dato que Coberturas SÍ usa para calcular sus días de
-    // cobertura (por eso Coberturas mostraba "9d" y Vista Ejecutiva
-    // mostraba "sin dato" para la misma planta el mismo día). Se agrega
-    // V.Factible como último respaldo antes de rendirse.
-    if (c <= 0) {
-      var cf = cobFactible(r);
-      if (cf > 0) return cf;
-    }
-    return c;
+    if (c == null) c = cobFactible(r);
+    return c; // null si de verdad no hay ninguna base calculable
   }
   var BUQUES_MAR_EXEC = ['UCAYALI','MOCHE','TROMPETEROS','URUBAMBA','PARIÑAS','HUMBOLDT','TARAPOTO','YURIMAGUAS'];
   function esMaritimoExec(nombreBuque) {
@@ -20631,27 +20635,26 @@ function renderVistaEjecutivaSimple() {
       if (prod !== 'Todos' && r.producto !== prod) return;
       var c = calcCob(r);
       // ⚠️ CORREGIDO: antes, si NINGÚN producto de una planta tenía
-      // cobertura calculable (ej. el último reporte real tuvo despacho
-      // en 0, o falta demanda pronóstico cargada para ese producto), la
-      // planta ENTERA desaparecía de esta lista — como si no existiera.
-      // Ahora se prioriza cualquier producto con cobertura calculable
-      // (c > 0), pero si NINGUNO la tiene, igual se conserva la planta
-      // (con su inventario arrastrado real) marcada como "sin cobertura
-      // calculable" en vez de esconderla — el inventario no desaparece
-      // solo porque falta un dato para la fórmula de días.
+      // cobertura calculable, la planta ENTERA desaparecía de esta
+      // lista. Y por separado, "0 días calculados" (quiebre real, ej.
+      // inventario proyectado que ya se agotó) se confundía con "no se
+      // pudo calcular" — ambos devolvían 0. Ahora calcCob() devuelve
+      // null SOLO cuando de verdad no hay ninguna base calculable, y 0
+      // es un valor real (quiebre) que se muestra y PRIORIZA como el
+      // peor caso entre los productos de la planta (mínima cobertura).
       var actual = porPlantaFila[r.planta];
-      if (c > 0) {
-        if (!actual || actual._cobVal <= 0 || c < actual._cobVal) {
+      if (c !== null) {
+        if (!actual || actual._cobVal === null || c < actual._cobVal) {
           porPlantaFila[r.planta] = Object.assign({}, r, { _cobVal: c });
         }
       } else if (!actual) {
-        porPlantaFila[r.planta] = Object.assign({}, r, { _cobVal: 0 });
+        porPlantaFila[r.planta] = Object.assign({}, r, { _cobVal: null });
       }
     });
     datosCob = Object.keys(porPlantaFila).map(function(p) {
       var r = porPlantaFila[p];
       var rep = reposicionInfo(r);
-      return { label: p, dias: r._cobVal, invMB: r.inv||0, diasRepos: rep.diasRepos, volReposMB: rep.volMB, tipoRepos: rep.tipo, sinCob: r._cobVal <= 0, proyectado: !!r._proyectadoConsumo };
+      return { label: p, dias: r._cobVal, invMB: r.inv||0, diasRepos: rep.diasRepos, volReposMB: rep.volMB, tipoRepos: rep.tipo, sinCob: r._cobVal === null, proyectado: !!r._proyectadoConsumo };
     });
   } else if (!esRefineriaExec) {
     latestRows.filter(function(r){ return r.planta === pl; }).forEach(function(r) {
@@ -20659,7 +20662,8 @@ function renderVistaEjecutivaSimple() {
       var rep = reposicionInfo(r);
       // Mismo criterio: no se excluye un producto solo porque no se
       // pudo calcular su cobertura — se muestra igual, marcado aparte.
-      datosCob.push({ label: r.producto, dias: c, invMB: r.inv||0, diasRepos: rep.diasRepos, volReposMB: rep.volMB, tipoRepos: rep.tipo, sinCob: c <= 0, proyectado: !!r._proyectadoConsumo });
+      // 0 días (quiebre) SÍ se muestra como tal, no como "sin dato".
+      datosCob.push({ label: r.producto, dias: c, invMB: r.inv||0, diasRepos: rep.diasRepos, volReposMB: rep.volMB, tipoRepos: rep.tipo, sinCob: c === null, proyectado: !!r._proyectadoConsumo });
     });
   }
   datosCob.sort(function(a,b){
@@ -20823,7 +20827,7 @@ function renderVistaEjecutivaSimple() {
     + plantasDisp.map(function(p){ return '<option value="'+p+'"'+(pl===p?' selected':'')+'>'+(REFINERIAS.indexOf(p)!==-1?'🛢️':'🏭')+' '+p+'</option>'; }).join('')
     + '</select>';
 
-  var PRODUCTO_ORDEN = ['Diesel','D2S50-H','G. Regular','G. Premium','G. 84','TA1','GLP'];
+  var PRODUCTO_ORDEN = ['Diesel','D2S50-H','G. Regular','G. Premium','G. 84','TA1','GLP','PI6'];
   // Si hay una planta específica seleccionada, solo mostrar los productos
   // que ESA planta/terminal realmente atiende (con datos en el Sheets) —
   // no todos los productos a nivel nacional. Con "Nacional" se ven todos.
