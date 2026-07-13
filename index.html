@@ -14261,7 +14261,19 @@ function _parseCargasNavesText(text, fechaRpt) {
           var estado = 'PROGRAMADO';
           if (hasta && hasta < today) estado = 'COMPLETADO';
           else if (desde && hasta && desde <= today && today <= hasta) estado = 'ACTUAL';
-          var prodNorm=prodName;if(/^GASOLINA\s+REG/i.test(prodName))prodNorm='G. Regular';else if(/^GASOLINA\s+PREM/i.test(prodName))prodNorm='G. Premium';else if(/^DIESEL\s+B5\s*S[-.]?50/i.test(prodName))prodNorm='Diesel B5 S-50';else if(/^DIESEL\s+2\s*S50/i.test(prodName))prodNorm='Diesel 2 S50';else if(/^DIESEL\s+B5/i.test(prodName))prodNorm='Diesel B5 S-50';else if(/^TURBO\s*A[-.]?1/i.test(prodName))prodNorm='TA1';else if(/^G\.?\s*L\.?P/i.test(prodName)||/^GOP$/i.test(prodName))prodNorm='GLP';
+          // ⚠️ CORREGIDO: "DIESEL B5 S50"/"DIESEL 2 S50" son GRADOS
+          // INTERNOS de la nave/refinería (así vienen en el parte de
+          // Flota) — pero NINGUNA planta de venta (Eten, Salaverry,
+          // Mollendo, Ilo, Conchán, Pisco, Callao...) tiene un producto
+          // llamado así; todas reportan simplemente "Diesel". Antes esto
+          // se normalizaba a 'Diesel B5 S-50'/'Diesel 2 S50', que no
+          // calzan con ningún producto real de ninguna planta — el
+          // cruce en buildBTMapFromCargas() (Code.gs) nunca encontraba
+          // coincidencia, así que la reposición de diesel a cualquier
+          // planta quedaba invisible en el dashboard sin importar la
+          // fecha/estado del buque. Ahora todo variante de diesel de
+          // descarga se normaliza a 'Diesel' a secas.
+          var prodNorm=prodName;if(/^GASOLINA\s+REG/i.test(prodName))prodNorm='G. Regular';else if(/^GASOLINA\s+PREM/i.test(prodName))prodNorm='G. Premium';else if(/^DIESEL/i.test(prodName))prodNorm='Diesel';else if(/^TURBO\s*A[-.]?1/i.test(prodName))prodNorm='TA1';else if(/^G\.?\s*L\.?P/i.test(prodName)||/^GOP$/i.test(prodName))prodNorm='GLP';
           records.push({fecha_reporte:fechaRpt,buque:buque,viaje:viaje,origen:origen,terminal:terminals[vi],fecha_desde:desde||'',fecha_hasta:hasta||'',producto:prodNorm,volumen_mb:vol,estado:estado});
         }
       }
