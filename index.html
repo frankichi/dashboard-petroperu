@@ -7151,17 +7151,39 @@ async function cobSaveToGS() {
         method: 'POST', redirect: 'follow',
         headers: {'Content-Type': 'text/plain;charset=utf-8'},
         body: JSON.stringify({ action: 'updateFieldFull', updates: allFieldChanges })
-      }));
+      }).then(function(r){ return r.json().catch(function(){ return { success:false, message:'Respuesta inválida del servidor' }; }); }));
     }
     if (hasDespChanges) {
       var mes = prevDateStr.slice(0, 7);
+      // ⚠️ 'no-cors' hace que la respuesta sea SIEMPRE opaca (no se puede
+      // leer success/message aunque el servidor haya fallado) — no hay
+      // forma de verificar este resultado desde el navegador. Se asume
+      // éxito salvo que la promesa de fetch en sí falle (red caída,
+      // GAS no publicado, etc.) — limitación conocida de este endpoint.
       promises.push(fetch(CONFIG.API_URL, {
         method: 'POST', mode: 'no-cors',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({ action: 'uploadVentas', mes: mes, records: despRecords, source: 'MANUAL' })
-      }));
+      }).then(function(){ return { success:true }; }));
     }
-    await Promise.all(promises);
+    // ⚠️ CORREGIDO: antes se hacía `await Promise.all(promises)` sobre
+    // las promesas de fetch() SIN LEER la respuesta — fetch() se
+    // resuelve en cuanto llegan las cabeceras HTTP, sin importar si el
+    // CUERPO dice success:false (ej. Code.gs lanzó un error interno).
+    // Esto hacía que la UI mostrara "✅ guardado" SIEMPRE, incluso
+    // cuando el backend había rechazado el guardado — el motivo exacto
+    // por el que los datos de refinería "se guardaban" en pantalla pero
+    // nunca aparecían en el Sheets. Ahora se revisa el resultado real de
+    // cada petición antes de confirmar éxito.
+    var results = await Promise.all(promises);
+    var fallos = results.filter(function(r){ return !r || r.success === false; });
+    if (fallos.length) {
+      var msgError = fallos.map(function(f){ return f && f.message ? f.message : 'Error desconocido'; }).join(' · ');
+      if (statusEl) { statusEl.textContent = '❌ Error al guardar: ' + msgError; statusEl.style.color = 'var(--red)'; }
+      if (btn) btn.disabled = false;
+      console.error('[CobSave] Falló el guardado:', fallos);
+      return;
+    }
     vfactRecords.forEach(function(rec) {
       var r = RAW.find(function(x) { return x.fecha===fechaObjetivo && x.planta===rec.planta && x.producto===rec.producto; });
       if (r) {
@@ -7177,7 +7199,18 @@ async function cobSaveToGS() {
     });
     invRecords.forEach(function(rec) {
       var r = RAW.find(function(x) { return x.fecha===fechaObjetivo && x.planta===rec.planta && x.producto===rec.producto; });
-      if (r) r.inv = rec.value;
+      if (r) { r.inv = rec.value; }
+      else {
+        // Combo fecha+planta+producto nuevo (ej. primer dato de una
+        // refinería) — antes no se hacía nada aquí, dejando la UI sin
+        // reflejar el cambio hasta el refetch de 3s más abajo. Se
+        // agrega directo a RAW para feedback inmediato.
+        RAW.push({
+          fecha: fechaObjetivo, planta: rec.planta, producto: rec.producto,
+          inv: rec.value, pron: 0, vfact: 0, vreal: 0, dem: 0, vult7: 0,
+          bt: '', vol_rep: 0, bt2: '', vol_rep_bt2: 0, _injected: true
+        });
+      }
     });
     despRealRecords.forEach(function(rec) {
       var r = RAW.find(function(x) { return x.fecha===rec.fecha && x.planta===rec.planta && x.producto===rec.producto; });
