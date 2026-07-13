@@ -17825,7 +17825,13 @@ function exportInvReportPDF() {
 window.exportInvReportExcel = exportInvReportExcel;
 window.exportInvReportPDF = exportInvReportPDF;
 function _buildInventoryReportHTML() {
-  var today=(typeof RAW!=='undefined'?RAW:[]).filter(function(r){return r.fecha===currentDate;});
+  // ⚠️ Se usa byDateLatestPerPlant (arrastre del último reporte real por
+  // planta+producto) en vez de un filtro estricto por fecha exacta — el
+  // inventario físico no desaparece a cero ni se cae de la tabla solo
+  // porque una planta no reportó a tiempo ese día en particular. Si una
+  // planta+producto nunca reportó nada, simplemente no aparece (no se
+  // inventa un valor de la nada).
+  var today = byDateLatestPerPlant(currentDate);
   var PO=['Diesel','G. Regular','G. Premium','G. 84','TA1','GLP'];
   var PL={'Diesel':'Di\u00e9sel','G. Regular':'G. Regular','G. Premium':'G. Premium','G. 84':'G. 84','TA1':'Turbo A-1','GLP':'GLP'};
   var PE={'Diesel':'\ud83d\udee2\ufe0f','G. Regular':'\u26fd','G. Premium':'\u2728','G. 84':'\ud83d\udd35','TA1':'\u2708\ufe0f','GLP':'\ud83d\udd36'};
@@ -20307,18 +20313,67 @@ function renderVistaEjecutivaSimple() {
     if (typeof SKIP_COMBOS !== 'undefined' && SKIP_COMBOS.has((r.planta||'')+'|'+(r.producto||''))) return false;
     return true;
   }
+  // ── Índice de historial de inventario por planta+producto ────────────
+  // Para "arrastrar" el último reporte real cuando una planta no reporta
+  // un día puntual: el inventario físico NO desaparece a cero solo
+  // porque nadie lo reportó ese día, pero tampoco se debe inventar un
+  // valor que nunca existió (si nunca hubo reporte, sigue sin dato).
+  var _invHistIdx = null;
+  function _getInvHistIdx() {
+    if (_invHistIdx) return _invHistIdx;
+    var idx = {};
+    RAW.forEach(function(r) {
+      if (!r.fecha || r.inv == null) return;
+      if (!invFilaValida(r)) return; // mismo filtro de sanidad de siempre (barriles vs MB)
+      var key = r.planta + '|' + r.producto;
+      (idx[key] = idx[key] || []).push(r);
+    });
+    Object.keys(idx).forEach(function(k) {
+      idx[k].sort(function(a,b){ return a.fecha < b.fecha ? -1 : (a.fecha > b.fecha ? 1 : 0); });
+    });
+    _invHistIdx = idx;
+    return idx;
+  }
+  function _invArrastrado(planta, producto, fecha) {
+    var idx = _getInvHistIdx();
+    var arr = idx[planta + '|' + producto];
+    if (!arr || !arr.length) return null; // nunca se reportó — no se inventa nada
+    var lo = 0, hi = arr.length - 1, best = -1;
+    while (lo <= hi) {
+      var mid = (lo + hi) >> 1;
+      if (arr[mid].fecha <= fecha) { best = mid; lo = mid + 1; } else hi = mid - 1;
+    }
+    return best >= 0 ? arr[best] : null;
+  }
   function sumFecha(fecha, field, planta, producto) {
+    if (field === 'inv') {
+      // Inventario = STOCK, no un flujo del día — se arrastra el último
+      // reporte real de cada planta+producto si no hay uno exacto para
+      // esta fecha. Sin esto, un solo día sin reportar hacía que el
+      // total nacional (o el de esa planta) cayera a cero de golpe en
+      // las gráficas, como si el combustible hubiera desaparecido.
+      var plantasIter = (!planta || planta === 'Nacional') ? PLANTAS_18_OFICIALES.concat(REFINERIAS) : [planta];
+      var productosIter = (producto && producto !== 'Todos') ? [producto]
+        : (typeof PRODUCTO_ORDEN !== 'undefined' ? PRODUCTO_ORDEN : ['Diesel','D2S50-H','G. Regular','G. Premium','G. 84','TA1','GLP','G. Regular HS']);
+      var s = 0;
+      plantasIter.forEach(function(pl2) {
+        if ((!planta || planta === 'Nacional') && PLANTAS_DUPLICADAS_EN_REFINERIA.indexOf(pl2) !== -1) return;
+        productosIter.forEach(function(pr2) {
+          if (typeof SKIP_COMBOS !== 'undefined' && SKIP_COMBOS.has(pl2 + '|' + pr2)) return;
+          var r = _invArrastrado(pl2, pr2, fecha);
+          if (!r) return;
+          s += (r.inv || 0);
+        });
+      });
+      return s;
+    }
+    // Despacho/pronóstico/V.Factible/etc. son FLUJOS del día, no un
+    // stock — si no hay reporte exacto para esta fecha, es
+    // legítimamente 0 (no corresponde arrastrar un despacho de otro día).
     var s = 0;
     RAW.forEach(function(r) {
       if (r.fecha !== fecha) return;
       if (!filaAplica(r, planta, producto)) return;
-      // Total Nacional de INVENTARIO: Conchán e Iquitos (ventas) ya están
-      // incluidos dentro de lo que reporta su refinería — no se suman
-      // aparte para evitar duplicar. NO aplica a despacho (las refinerías
-      // no despachan, ese dato solo existe en la planta de ventas), ni
-      // cuando se selecciona la planta específica en el filtro.
-      if (field === 'inv' && (!planta || planta === 'Nacional') && PLANTAS_DUPLICADAS_EN_REFINERIA.indexOf(r.planta) !== -1) return;
-      if (field === 'inv' && !invFilaValida(r)) return; // dato en barriles, no MB — no participa hasta que se corrija
       s += (r[field] || 0);
     });
     return s;
@@ -20922,11 +20977,14 @@ function _execReposicionInfo(r) {
   return { diasRepos: diasRepos, volMB: volTotal, tipo: tipoUnico, bt: r.bt||'', bt2: r.bt2||'' };
 }
 function _execMapaDatos(fecha) {
-  // Fecha EXACTA (mismo criterio que usan los gráficos de abajo, vía
-  // sumFecha/fechaHoy) — antes usaba byLatest() (el último dato de cada
-  // planta sin importar el día), lo que hacía que el mapa mostrara una
-  // mezcla de fechas distinta a lo que veían los gráficos.
-  var hoy = RAW.filter(function(r){ return r.fecha === fecha; });
+  // Arrastre del último reporte real por planta+producto (mismo criterio
+  // que ahora usan los gráficos vía sumFecha) — si una planta no reportó
+  // exactamente este día, no debe verse vacía/en cero en el mapa; el
+  // inventario físico no desapareció solo porque no llegó el reporte a
+  // tiempo. Antes se usaba fecha exacta a propósito para "calzar" con
+  // los gráficos de abajo — ahora que los gráficos también arrastran,
+  // usar fecha exacta aquí volvería a desalinear ambos.
+  var hoy = byDateLatestPerPlant(fecha);
   var porInstalacion = {}; // planta o refinería -> {productos:[], minCob}
   // Índice de datos reales por planta+producto, para completar el
   // catálogo oficial (algunos productos pueden no tener reporte
