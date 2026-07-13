@@ -20544,14 +20544,43 @@ function renderVistaEjecutivaSimple() {
     }
     return c > COB_SANO_MAX_EXEC ? 0 : c;
   }
+  // V.Factible es la base "canónica" del sistema — la misma que usa
+  // Coberturas para calcular sus alertas de QUIEBRE/CRÍTICO/ALERTA (ver
+  // columna "COB (DÍAS)" ahí). A diferencia de despacho real o
+  // pronóstico (que pueden faltar en un día puntual), V.Factible casi
+  // siempre tiene un valor válido porque Planificación lo mantiene
+  // actualizado como supuesto de trabajo — por eso sirve de respaldo
+  // final antes de rendirse y marcar la fila como "sin cobertura".
+  function cobFactible(r) {
+    var vf = r.vfact || 0;
+    if (vf <= 0 || !(r.inv > 0)) return 0;
+    var c = Math.round(r.inv / vf);
+    return c > COB_SANO_MAX_EXEC ? 0 : c;
+  }
   function calcCob(r) {
     // Si la fila es una PROYECCIÓN (la planta aún no cierra su día), el
     // despacho real de "modo real" no existe para hoy — sería mezclar
     // un inventario proyectado por pronóstico con un despacho de otro
     // día. Se usa siempre pronóstico como base en ese caso, sin importar
     // el modo elegido en pantalla.
-    if (r._proyectadoConsumo) return cobPron(r);
-    return window._execCobModo === 'pron' ? cobPron(r) : cobReal(r);
+    if (r._proyectadoConsumo) {
+      var cp = cobPron(r);
+      return cp > 0 ? cp : cobFactible(r);
+    }
+    var c = window._execCobModo === 'pron' ? cobPron(r) : cobReal(r);
+    // ⚠️ CORREGIDO: antes, si despacho real Y pronóstico venían vacíos
+    // ese día puntual (ej. Eten reportó su existencia pero no cargó
+    // despacho ese día), la planta ENTERA desaparecía como "sin dato"
+    // aunque sí tuviera inventario real y un V.Factible válido — el
+    // mismo dato que Coberturas SÍ usa para calcular sus días de
+    // cobertura (por eso Coberturas mostraba "9d" y Vista Ejecutiva
+    // mostraba "sin dato" para la misma planta el mismo día). Se agrega
+    // V.Factible como último respaldo antes de rendirse.
+    if (c <= 0) {
+      var cf = cobFactible(r);
+      if (cf > 0) return cf;
+    }
+    return c;
   }
   var BUQUES_MAR_EXEC = ['UCAYALI','MOCHE','TROMPETEROS','URUBAMBA','PARIÑAS','HUMBOLDT','TARAPOTO','YURIMAGUAS'];
   function esMaritimoExec(nombreBuque) {
@@ -20670,8 +20699,8 @@ function renderVistaEjecutivaSimple() {
           '<div style="font-size:11.5px;font-weight:700;color:var(--txt);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + d.label + '</div>' +
           '<div style="font-size:9.5px;color:var(--txt3);font-family:var(--mono);margin-top:1px">' + fmtMB(d.invMB) + '</div>' +
         '</div>' +
-        '<div style="flex:1;background:var(--bg3);border-radius:6px;height:22px;position:relative;overflow:hidden;display:flex;align-items:center;padding-left:10px" title="Inventario reportado, pero sin despacho real o pron\u00f3stico suficiente para calcular d\u00edas de cobertura — probablemente a\u00fan no cierra el d\u00eda">' +
-          '<span style="font-size:10px;color:var(--txt3);font-style:italic">sin dato de despacho/pron\u00f3stico para calcular cobertura</span>' +
+        '<div style="flex:1;background:var(--bg3);border-radius:6px;height:22px;position:relative;overflow:hidden;display:flex;align-items:center;padding-left:10px" title="Inventario reportado, pero sin despacho real, pron\u00f3stico ni V.Factible v\u00e1lidos para calcular d\u00edas de cobertura — revisar en Coberturas si falta cargar alguno de estos datos">' +
+          '<span style="font-size:10px;color:var(--txt3);font-style:italic">sin despacho real, pron\u00f3stico ni V.Factible v\u00e1lidos para calcular cobertura</span>' +
         '</div>' +
         '<div style="width:70px;flex-shrink:0;text-align:right">' +
           '<div style="font-family:var(--mono);font-weight:700;font-size:12px;color:var(--txt3)">\u2014</div>' +
