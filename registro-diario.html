@@ -244,6 +244,8 @@ input.input-error{border-color:var(--red)!important;box-shadow:0 0 0 3px rgba(20
 .fecha-banner-btn.primary:hover{background:#155e35}
 .fecha-banner-btn.secondary{background:#fff;color:#0f1e3c;border-color:#c7d0de}
 .fecha-banner-btn.secondary:hover{background:#f0f4fa}
+.fecha-banner-select{padding:7px 10px;border-radius:7px;font-size:11.5px;font-weight:700;cursor:pointer;font-family:var(--sans);border:1.5px solid #c7d0de;background:#fff;color:#0f1e3c}
+.fecha-banner-select:hover{background:#f0f4fa}
 
 /* Solicitud de corrección */
 .sol-banner{background:#fdf3e0;border:1.5px solid #e8a000;border-radius:8px;padding:10px 14px;margin:10px 0;font-size:11px;color:#7a5200}
@@ -546,22 +548,31 @@ function rdDiaSemana(fechaStr) {
   var p = fechaStr.split('-').map(Number);
   return new Date(Date.UTC(p[0], p[1] - 1, p[2])).getUTCDay();
 }
-// Último día OPERATIVO anterior a una fecha dada — es decir, "ayer" salvo
-// que ayer sea domingo (no se opera/reporta domingos), en cuyo caso salta
-// al sábado. Sin esto, un lunes solo ofrecía "cerrar el domingo" como
-// alternativa, que nunca es un cierre real — dejando el sábado (el
-// verdadero último día operativo) sin ninguna forma fácil de cerrarlo.
-function rdDiaOperativoAnterior(fechaStr) {
-  var prev = rdRestarDiasFecha(fechaStr, 1);
-  if (rdDiaSemana(prev) === 0) prev = rdRestarDiasFecha(fechaStr, 2); // domingo -> sábado
-  return prev;
-}
 var RD_DIAS_SEMANA = ['domingo','lunes','martes','miércoles','jueves','viernes','sábado'];
-// Etiqueta legible para el banner: "ayer" si es literalmente el día
-// calendario anterior, o el nombre del día (ej. "sábado") si se saltó
-// el domingo.
-function rdEtiquetaDiaAlternativo(fechaAlterna, fechaBase) {
-  return (fechaAlterna === rdRestarDiasFecha(fechaBase, 1)) ? 'ayer' : RD_DIAS_SEMANA[rdDiaSemana(fechaAlterna)];
+// ⚠️ NO se asume que domingo es día no-operativo — algunas plantas SÍ
+// atienden y reportan domingo. Por eso, cuando corresponde, el selector
+// ofrece domingo como opción real (no se salta).
+//
+// La ventana de días ofrecidos es INTENCIONALMENTE corta: normalmente
+// solo hoy + ayer. La ÚNICA excepción es el LUNES, que se abre a 3 días
+// (hoy=lunes, domingo, sábado) para cubrir el fin de semana — sábado y
+// domingo no tienen "día siguiente hábil" normal donde reportarlos, a
+// diferencia de martes-viernes que sí tuvieron su oportunidad el día
+// hábil inmediato anterior durante la semana. NO se retrocede más allá
+// de esto a propósito — no es un selector de fecha libre.
+function rdNumDiasSelector() {
+  return (rdDiaSemana(rdHoyLima()) === 1) ? 3 : 2; // 1 = lunes
+}
+// Lista de los últimos N días (incluyendo hoy) para el selector de
+// fecha del formulario — cada uno con su nombre de día de la semana.
+function rdOpcionesFechaReporte(n) {
+  var hoy = rdHoyLima();
+  var out = [];
+  for (var i = 0; i < n; i++) {
+    var f = rdRestarDiasFecha(hoy, i);
+    out.push({ fecha: f, dia: RD_DIAS_SEMANA[rdDiaSemana(f)], esHoy: i === 0 });
+  }
+  return out;
 }
 // Nombre de reporte para exports (Excel/PDF) — ej. "Reporte Inventarios y
 // Despachos Pisco al 12.07.2026". devuelveDisplay=true → con espacios y
@@ -588,7 +599,7 @@ function rdHoraLima() {
 function rdInicializarFechaReporte() {
   var hora = rdHoraLima();
   RD.esMadrugada = (hora < 6);
-  RD.fechaReporte = RD.esMadrugada ? rdDiaOperativoAnterior(rdHoyLima()) : rdHoyLima();
+  RD.fechaReporte = RD.esMadrugada ? rdAyerLima() : rdHoyLima();
 }
 
 function rdCambiarFechaReporte(nuevaFecha) {
@@ -650,30 +661,36 @@ function rdRenderFechaBanner() {
   var mm = String(lima.getUTCMinutes()).padStart(2, '0');
   var fechaSel = RD.fechaReporte || rdHoyLima();
   var esHoy = fechaSel === rdHoyLima();
-  var otraFecha = esHoy ? rdDiaOperativoAnterior(rdHoyLima()) : rdHoyLima();
-  var otraLabel = esHoy ? rdEtiquetaDiaAlternativo(otraFecha, rdHoyLima()) : 'hoy';
+  // Selector con los últimos 8 días calendario (incluye hoy) — SIN saltar
+  // ningún día. No se puede asumir que domingo (u otro día) no se opera:
+  // algunas plantas sí atienden y reportan domingo, así que el sistema
+  // nunca decide por el operador — se ofrecen todos los días recientes
+  // para que elija directamente cuál está cerrando.
+  var opciones = rdOpcionesFechaReporte(rdNumDiasSelector());
+  var selectHTML = '<select class="fecha-banner-select" onchange="rdCambiarFechaReporte(this.value)">' +
+    opciones.map(function(o) {
+      var etiqueta = o.esHoy ? ('Hoy · ' + fmtFecha(o.fecha) + ' (' + o.dia + ')')
+                              : (fmtFecha(o.fecha) + ' (' + o.dia + ')');
+      return '<option value="' + o.fecha + '"' + (o.fecha === fechaSel ? ' selected' : '') + '>' + etiqueta + '</option>';
+    }).join('') +
+    '</select>';
 
   if (RD.esMadrugada) {
     el.innerHTML =
       '<div class="fecha-banner madrugada">' +
         '<span class="fecha-banner-icon">🌙</span>' +
         '<span class="fecha-banner-text">' +
-          'Son las <b>' + hh + ':' + mm + '</b> — de madrugada. Este reporte se está registrando como el <b>cierre del ' + fmtFecha(fechaSel) + '</b> (' + (esHoy ? 'hoy' : 'ayer') + ').' +
-          '<span class="fecha-banner-sub">Si reportas a esta hora, normalmente es el cierre del día anterior. Verifica antes de continuar.</span>' +
+          'Son las <b>' + hh + ':' + mm + '</b> — de madrugada. Este reporte se está registrando como el <b>cierre del ' + fmtFecha(fechaSel) + '</b> (' + RD_DIAS_SEMANA[rdDiaSemana(fechaSel)] + ').' +
+          '<span class="fecha-banner-sub">Si reportas a esta hora, normalmente es el cierre del día anterior. Verifica el día abajo antes de continuar.</span>' +
         '</span>' +
-        '<span class="fecha-banner-actions">' +
-          '<button class="fecha-banner-btn primary" disabled>✓ Cierre de ' + fmtFecha(fechaSel) + '</button>' +
-          '<button class="fecha-banner-btn secondary" onclick="rdCambiarFechaReporte(\'' + otraFecha + '\')">Es del ' + fmtFecha(otraFecha) + ' (' + otraLabel + ')</button>' +
-        '</span>' +
+        '<span class="fecha-banner-actions">' + selectHTML + '</span>' +
       '</div>';
   } else {
     el.innerHTML =
       '<div class="fecha-banner normal">' +
         '<span class="fecha-banner-icon">📅</span>' +
-        '<span class="fecha-banner-text">Reportando el cierre de <b>' + fmtFecha(fechaSel) + '</b> (' + (esHoy ? 'hoy' : 'ayer') + ')</span>' +
-        '<span class="fecha-banner-actions">' +
-          '<button class="fecha-banner-btn secondary" onclick="rdCambiarFechaReporte(\'' + otraFecha + '\')">¿Es de ' + fmtFecha(otraFecha) + ' (' + otraLabel + ')? Cambiar</button>' +
-        '</span>' +
+        '<span class="fecha-banner-text">Reportando el cierre de <b>' + fmtFecha(fechaSel) + '</b> (' + (esHoy ? 'hoy' : RD_DIAS_SEMANA[rdDiaSemana(fechaSel)]) + ')</span>' +
+        '<span class="fecha-banner-actions">' + selectHTML + '</span>' +
       '</div>';
   }
 }
@@ -1520,8 +1537,8 @@ function rdMostrarAvisoHoraTemprana() {
   var hh = String(lima.getUTCHours()).padStart(2, '0');
   var mm = String(lima.getUTCMinutes()).padStart(2, '0');
   var hoy = rdHoyLima();
-  var ayer = rdDiaOperativoAnterior(hoy);
-  var ayerLabel = rdEtiquetaDiaAlternativo(ayer, hoy);
+  var ayer = rdAyerLima();
+  var ayerLabel = 'ayer';
   var overlay = document.createElement('div');
   overlay.id = 'avisoHoraTempranaOverlay';
   overlay.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,.55);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px';
@@ -1533,6 +1550,7 @@ function rdMostrarAvisoHoraTemprana() {
         'Son las <b>' + hh + ':' + mm + '</b> y estás a punto de registrar el <b>cierre de hoy (' + fmtFecha(hoy) + ')</b>. ' +
         'Las plantas normalmente terminan su jornada y reportan en la tarde/noche — si estás reportando esta mañana, ' +
         'es probable que en realidad sea el <b>cierre de ' + ayerLabel + ' (' + fmtFecha(ayer) + ')</b> que se te pasó.' +
+        '<div style="margin-top:8px;font-size:11.5px;color:#94a3b8">¿Es un día distinto (ej. sábado o domingo)? Cancela y usa el selector de fecha de arriba.</div>' +
       '</div>' +
       '<div style="display:flex;flex-direction:column;gap:8px">' +
         '<button onclick="rdCerrarAvisoHoraTemprana();rdAbrirConfirmacionFinal();" style="padding:11px;border-radius:8px;border:1.5px solid #1a7a44;background:#1a7a44;color:#fff;font-weight:700;font-size:13px;cursor:pointer">Sí, ya cerramos — es el cierre de hoy</button>' +
@@ -1551,7 +1569,7 @@ function rdCorregirFechaAAyerSinPerderDatos() {
   // el servidor), aquí solo se corrige la fecha objetivo — lo que ya
   // escribieron en existencia/despacho/comentarios se mantiene intacto,
   // y se guarda con la fecha correcta al confirmar.
-  RD.fechaReporte = rdDiaOperativoAnterior(rdHoyLima());
+  RD.fechaReporte = rdAyerLima();
   rdRenderFechaBanner();
   rdToast('\u2713 Fecha corregida a ' + fmtFecha(RD.fechaReporte) + ' — tus datos se mantuvieron', 'ok');
   rdAbrirConfirmacionFinal();
