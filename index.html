@@ -7094,8 +7094,16 @@ async function cobSaveToGS() {
       var planta  = parts[0];
       var producto= parts.slice(1).join('|');
       var r = today.find(function(x) { return x.planta===planta && x.producto===producto; });
-      var fecha = (r && r.fecha && !r._synthetic) ? r.fecha : fechaObjetivo;
-      if (!fecha) fecha = fechaObjetivo;
+      // ⚠️ CORREGIDO: antes esto usaba r.fecha (la fecha del último
+      // reporte REAL, que puede ser muy anterior por arrastre) en vez de
+      // fechaObjetivo (la fecha que el usuario está viendo/editando).
+      // Resultado: al editar un valor mientras se ve una fecha sin
+      // reporte nuevo (ej. Refinería Talara el 12-jul, con el último
+      // reporte real del 09-jul), el guardado sobreescribía en silencio
+      // la fila VIEJA (09-jul) en vez de crear una fila nueva para la
+      // fecha que realmente se quería registrar (12-jul) — el dato
+      // "se guardaba" pero nunca aparecía en la fecha correcta.
+      var fecha = fechaObjetivo;
       vfactRecords.push({
         fecha: fecha, planta: planta, producto: producto,
         field: 'vfact', value: ov.vfact
@@ -7107,7 +7115,7 @@ async function cobSaveToGS() {
       var planta  = parts[0];
       var producto= parts.slice(1).join('|');
       var r = today.find(function(x) { return x.planta===planta && x.producto===producto; });
-      var fecha = (r && r.fecha && !r._synthetic) ? r.fecha : fechaObjetivo;
+      var fecha = fechaObjetivo;
       invRecords.push({
         fecha: fecha, planta: planta, producto: producto,
         field: 'inv', value: r ? cobGetInv(r) : (cobInvOverrides[key] || 0)
@@ -7122,7 +7130,7 @@ async function cobSaveToGS() {
       var planta  = parts[0];
       var producto= parts.slice(1).join('|');
       var r = today.find(function(x) { return x.planta===planta && x.producto===producto; });
-      var fecha = (r && r.fecha && !r._synthetic) ? r.fecha : fechaObjetivo;
+      var fecha = fechaObjetivo;
       despRealRecords.push({
         fecha: fecha, planta: planta, producto: producto,
         field: 'vreal', value: cobDespRealOverrides[key]
@@ -7854,6 +7862,31 @@ function renderP2() {
     + (cobEditMode ? '<span style="margin-left:auto;font-size:9px;color:var(--ora);font-weight:600">✏️ Editando Inv • Despacho • V.Factible — clic en Guardar para confirmar</span>'
                   : '<span style="margin-left:auto;font-size:9px;color:var(--txt3)">💡 Clic en planta para expandir/minimizar • Activa ✏️ Editar para modificar valores</span>')
     + '</div>'
+    // ⚠️ Panel de "cambios pendientes" — antes no había forma de
+    // confirmar EN PANTALLA si una edición realmente quedó registrada
+    // antes de guardar. Un valor editado que coincide con el valor ya
+    // mostrado (ej. re-confirmar el mismo arrastre sin cambiarlo) podía
+    // dar la impresión de haberse guardado sin que ningún cambio real
+    // llegara a registrarse. Esta lista muestra exactamente qué se va a
+    // enviar al servidor, con la fecha objetivo, ANTES de presionar
+    // Guardar — para poder verificar en el momento.
+    + (cobEditMode && hasOverrides ? (function() {
+        var items = [];
+        Object.keys(cobInvOverrides).forEach(function(k) {
+          var parts = k.split('|'); items.push('📦 ' + parts[0] + ' · ' + parts.slice(1).join('|') + ': Inventario → ' + cobInvOverrides[k].toFixed(2) + ' MB');
+        });
+        Object.keys(cobOverrides).forEach(function(k) {
+          var parts = k.split('|'); var ov = cobOverrides[k];
+          if (ov && typeof ov.vfact === 'number') items.push('📊 ' + parts[0] + ' · ' + parts.slice(1).join('|') + ': V.Factible → ' + ov.vfact.toFixed(2) + ' MBDC');
+        });
+        Object.keys(cobDespachoOverrides).forEach(function(k) {
+          var parts = k.split('|'); items.push('🚚 ' + parts[0] + ' · ' + parts.slice(1).join('|') + ': Despacho → ' + cobDespachoOverrides[k].toFixed(2) + ' MB');
+        });
+        return '<div style="background:#fff7ed;border-top:1px solid var(--ora)44;padding:8px 18px;font-size:10.5px">'
+          + '<div style="font-weight:800;color:var(--ora);margin-bottom:4px">📝 Se guardará para la fecha ' + currentDate + ':</div>'
+          + '<div style="display:flex;flex-direction:column;gap:2px;color:var(--txt2)">' + items.map(function(it){ return '<div>' + it + '</div>'; }).join('') + '</div>'
+          + '</div>';
+      })() : '')
     + '</div>'
     + '<div class="cob-pron-panel' + (cobPronPanelOpen ? ' open' : '') + '" id="cob-pron-panel">'
     + (function() {
