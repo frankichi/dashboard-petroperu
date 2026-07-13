@@ -20610,6 +20610,18 @@ function renderVistaEjecutivaSimple() {
     var vol1 = r.vol_rep || 0, vol2 = r.vol_rep_bt2 || 0;
     var volTotal = vol1 + vol2;
     if (volTotal <= 0 || denom <= 0) return { diasRepos: 0, volMB: 0, tipo: '' };
+    // ⚠️ CORREGIDO: cuando una planta no reporta hace varios días, se
+    // arrastra (con proyección) su ÚLTIMO reporte real — pero si ese
+    // reporte viejo ya tenía una reposición marcada que a esta altura
+    // YA LLEGÓ Y SE CONSUMIÓ (su fecha_reposicion/ETA ya pasó respecto
+    // a la fecha que se está viendo), esas columnas BT/VOL_REP siguen
+    // "vivas" en la fila sin limpiarse, y volvían a mostrarse como si
+    // fuera una reposición NUEVA y pendiente — apareciendo de la nada,
+    // sin respaldo en ningún parte de Flota actual. Se descarta
+    // cualquier reposición cuya fecha de llegada ya pasó.
+    if (r.fecha_reposicion && r.fecha_reposicion < fechaHoy) {
+      return { diasRepos: 0, volMB: 0, tipo: '' };
+    }
     var tipo1 = vol1 > 0 ? (esMaritimoExec(r.bt) ? 'mar\u00edtima' : 'terrestre') : '';
     var tipo2 = vol2 > 0 ? (esMaritimoExec(r.bt2) ? 'mar\u00edtima' : 'terrestre') : '';
     var tipos = [tipo1, tipo2].filter(Boolean);
@@ -21159,11 +21171,18 @@ function _execEsMaritimo(nombreBuque) {
   var n = nombreBuque.toUpperCase();
   return _execBuquesMarNacional.some(function(v){ return n.indexOf(v) >= 0; });
 }
-function _execReposicionInfo(r) {
+function _execReposicionInfo(r, fechaRef) {
   var denom = (typeof pronSheet !== 'undefined' && pronSheet[r.planta+'|'+r.producto]) || r.pron_mes || r.pron || 0;
   var vol1 = r.vol_rep || 0, vol2 = r.vol_rep_bt2 || 0;
   var volTotal = vol1 + vol2;
   if (volTotal <= 0) return { diasRepos: 0, volMB: 0, tipo: '', bt: '', bt2: '' };
+  // Mismo fix que en reposicionInfo() de más abajo: si el ETA ya pasó
+  // respecto a la fecha que se está viendo en el mapa, esa reposición ya
+  // llegó/se consumió — no debe seguir mostrándose como pendiente solo
+  // porque quedó "viva" en una fila vieja arrastrada.
+  if (fechaRef && r.fecha_reposicion && r.fecha_reposicion < fechaRef) {
+    return { diasRepos: 0, volMB: 0, tipo: '', bt: '', bt2: '' };
+  }
   var tipo1 = vol1 > 0 ? (_execEsMaritimo(r.bt) ? 'marítima' : 'terrestre') : '';
   var tipo2 = vol2 > 0 ? (_execEsMaritimo(r.bt2) ? 'marítima' : 'terrestre') : '';
   var tipos = [tipo1, tipo2].filter(Boolean);
@@ -21206,7 +21225,7 @@ function _execMapaDatos(fecha) {
         if (denom > 0) cobDias = Math.round(r.inv / denom);
         if (cobDias > 90) cobDias = 0; // outlier — mismo guard que el resto del sistema
       }
-      var rep = _execReposicionInfo(r);
+      var rep = _execReposicionInfo(r, fecha);
       info.productos.push({ producto: prod, existencia: r.inv||0, despReal: despReal, pron: pronVal, cob: cobDias, repos: rep });
       if (!esRef && cobDias > 0 && cobDias < info.minCob) info.minCob = cobDias;
     });
