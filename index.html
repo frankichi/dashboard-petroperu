@@ -20942,8 +20942,7 @@ function renderExecMapa(plantaSeleccionada) {
 
 function initExecutiveMode() {
   if (!EXECUTIVE_MODE) return;
-  document.body.classList.add('exec-mode');
-  // ── Estilos responsivos de la Vista Ejecutiva (banner + contenido) ────
+  document.body.classList.add('exec-mode');  // ── Estilos responsivos de la Vista Ejecutiva (banner + contenido) ────
   // El banner y el panel usaban tamaños fijos pensados para escritorio;
   // en celulares angostos (ej. 412px) el logo, el título y el sello
   // "Solo Lectura" se encimaban. Aquí se ajustan con @media queries.
@@ -20989,6 +20988,7 @@ function initExecutiveMode() {
     + '</div>'
     + '<div class="exec-banner-meta">'
     +   '<span class="exec-live-dot"></span><span id="exec-live-text">Conectado</span>'
+    +   ' <button id="exec-refresh-btn" onclick="execRefreshNow()" style="margin-left:8px;background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);color:#fff;font-size:10px;font-weight:700;padding:3px 10px;border-radius:12px;cursor:pointer">🔄 Actualizar</button>'
     +   '<div class="exec-time" id="exec-snapshot-time">—</div>'
     +   '<div class="exec-credit">Desarrollado por <strong>Franco Urcia Castillo</strong></div>'
     + '</div>';
@@ -21015,6 +21015,22 @@ function initExecutiveMode() {
     +   ' · Actualización: <span id="exec-footer-time">—</span>'
     + '</div>';
   document.body.appendChild(footer);
+  // Botón "🔄 Actualizar" del banner — fuerza el mismo refresco que el
+  // auto-refresh de 5 min, pero al instante. Útil justo después de
+  // guardar cambios en Coberturas desde OTRA pestaña/ventana: este panel
+  // standalone no se entera de esos cambios hasta su próximo refresco.
+  window.execRefreshNow = function() {
+    var btn = document.getElementById('exec-refresh-btn');
+    if (btn) { btn.disabled = true; btn.textContent = '⏳ Actualizando…'; }
+    if (typeof fetchData === 'function') {
+      fetchData(true).then(function(){
+        if (typeof renderVistaEjecutivaSimple === 'function') renderVistaEjecutivaSimple();
+      }).finally(function(){
+        var b = document.getElementById('exec-refresh-btn');
+        if (b) { b.disabled = false; b.innerHTML = '🔄 Actualizar'; }
+      });
+    }
+  };
   setInterval(function() {
     if (typeof fetchData === 'function') {
       fetchData(true).then(function(){
