@@ -20334,6 +20334,11 @@ function renderVistaEjecutivaSimple() {
     _invHistIdx = idx;
     return idx;
   }
+  function _diasEntreFechas(fechaA, fechaB) {
+    var a = new Date(fechaA + 'T00:00:00Z').getTime();
+    var b = new Date(fechaB + 'T00:00:00Z').getTime();
+    return Math.round((b - a) / 86400000);
+  }
   function _invArrastrado(planta, producto, fecha) {
     var idx = _getInvHistIdx();
     var arr = idx[planta + '|' + producto];
@@ -20343,7 +20348,22 @@ function renderVistaEjecutivaSimple() {
       var mid = (lo + hi) >> 1;
       if (arr[mid].fecha <= fecha) { best = mid; lo = mid + 1; } else hi = mid - 1;
     }
-    return best >= 0 ? arr[best] : null;
+    if (best < 0) return null;
+    var r = arr[best];
+    if (r.fecha === fecha) return r; // hay reporte real exacto para esta fecha, se usa tal cual
+    // ⚠️ Proyección por consumo: en vez de simplemente repetir el mismo
+    // número del último reporte real como si el tiempo no hubiera
+    // pasado, se le resta la demanda pronóstico diaria por cada día
+    // transcurrido desde ese reporte — una estimación realista de "lo
+    // que probablemente queda" mientras la planta no cierra su día. En
+    // cuanto la planta reporta de verdad, ese dato real reemplaza esta
+    // proyección automáticamente (deja de ser el "best" en el arreglo).
+    var pronVal = r.pron_mes || r.pron || 0;
+    if (pronVal <= 0) return r; // sin demanda pronóstico cargada, no se puede proyectar consumo — se mantiene el arrastre simple
+    var dias = _diasEntreFechas(r.fecha, fecha);
+    if (dias <= 0) return r;
+    var invProy = Math.max(0, (r.inv || 0) - dias * pronVal);
+    return Object.assign({}, r, { inv: invProy, _proyectadoConsumo: true, _proyectadoBaseFecha: r.fecha, _proyectadoDias: dias });
   }
   function sumFecha(fecha, field, planta, producto) {
     if (field === 'inv') {
@@ -20524,7 +20544,15 @@ function renderVistaEjecutivaSimple() {
     }
     return c > COB_SANO_MAX_EXEC ? 0 : c;
   }
-  function calcCob(r) { return window._execCobModo === 'pron' ? cobPron(r) : cobReal(r); }
+  function calcCob(r) {
+    // Si la fila es una PROYECCIÓN (la planta aún no cierra su día), el
+    // despacho real de "modo real" no existe para hoy — sería mezclar
+    // un inventario proyectado por pronóstico con un despacho de otro
+    // día. Se usa siempre pronóstico como base en ese caso, sin importar
+    // el modo elegido en pantalla.
+    if (r._proyectadoConsumo) return cobPron(r);
+    return window._execCobModo === 'pron' ? cobPron(r) : cobReal(r);
+  }
   var BUQUES_MAR_EXEC = ['UCAYALI','MOCHE','TROMPETEROS','URUBAMBA','PARIÑAS','HUMBOLDT','TARAPOTO','YURIMAGUAS'];
   function esMaritimoExec(nombreBuque) {
     if (!nombreBuque) return false;
@@ -20548,7 +20576,21 @@ function renderVistaEjecutivaSimple() {
     return { diasRepos: Math.round(volTotal / denom), volMB: volTotal, tipo: tipoUnico };
   }
   var datosCob = [];
-  var latestRows = (typeof byLatest === 'function') ? byLatest() : [];
+  // Antes usaba byLatest() (arrastre simple, sin restar consumo) — ahora
+  // se reconstruye con _invArrastrado por cada combo planta+producto
+  // conocido, para que "Cobertura por planta" use EXACTAMENTE la misma
+  // proyección por consumo que ya aplican los KPIs y las gráficas de
+  // arriba (una sola fuente de verdad, sin dos criterios distintos
+  // conviviendo en la misma pantalla).
+  var latestRows = [];
+  (function() {
+    var idx = _getInvHistIdx();
+    Object.keys(idx).forEach(function(key) {
+      var parts = key.split('|');
+      var r = _invArrastrado(parts[0], parts.slice(1).join('|'), fechaHoy);
+      if (r) latestRows.push(r);
+    });
+  })();
   if (pl === 'Nacional') {
     // Por planta: cobertura MÍNIMA entre sus productos (mismo criterio que
     // "Plantas por nivel de riesgo" en Resumen Nacional). Refinerías no
@@ -20580,7 +20622,7 @@ function renderVistaEjecutivaSimple() {
     datosCob = Object.keys(porPlantaFila).map(function(p) {
       var r = porPlantaFila[p];
       var rep = reposicionInfo(r);
-      return { label: p, dias: r._cobVal, invMB: r.inv||0, diasRepos: rep.diasRepos, volReposMB: rep.volMB, tipoRepos: rep.tipo, sinCob: r._cobVal <= 0 };
+      return { label: p, dias: r._cobVal, invMB: r.inv||0, diasRepos: rep.diasRepos, volReposMB: rep.volMB, tipoRepos: rep.tipo, sinCob: r._cobVal <= 0, proyectado: !!r._proyectadoConsumo };
     });
   } else if (!esRefineriaExec) {
     latestRows.filter(function(r){ return r.planta === pl; }).forEach(function(r) {
@@ -20588,7 +20630,7 @@ function renderVistaEjecutivaSimple() {
       var rep = reposicionInfo(r);
       // Mismo criterio: no se excluye un producto solo porque no se
       // pudo calcular su cobertura — se muestra igual, marcado aparte.
-      datosCob.push({ label: r.producto, dias: c, invMB: r.inv||0, diasRepos: rep.diasRepos, volReposMB: rep.volMB, tipoRepos: rep.tipo, sinCob: c <= 0 });
+      datosCob.push({ label: r.producto, dias: c, invMB: r.inv||0, diasRepos: rep.diasRepos, volReposMB: rep.volMB, tipoRepos: rep.tipo, sinCob: c <= 0, proyectado: !!r._proyectadoConsumo });
     });
   }
   datosCob.sort(function(a,b){
@@ -20645,7 +20687,7 @@ function renderVistaEjecutivaSimple() {
     return '<div style="display:flex;align-items:center;gap:10px;padding:7px 0">' +
       '<div class="exec-cob-label" style="width:120px;flex-shrink:0" title="' + d.label + '">' +
         '<div style="font-size:11.5px;font-weight:700;color:var(--txt);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + d.label + '</div>' +
-        '<div style="font-size:9.5px;color:var(--txt3);font-family:var(--mono);margin-top:1px">' + fmtMB(d.invMB) + '</div>' +
+        '<div style="font-size:9.5px;color:var(--txt3);font-family:var(--mono);margin-top:1px">' + fmtMB(d.invMB) + (d.proyectado ? ' <span style="color:#2563eb;font-style:italic;font-weight:700" title="Estimado: último inventario real menos consumo proyectado por demanda pronóstico — la planta aún no cierra el día">≈ proy.</span>' : '') + '</div>' +
       '</div>' +
       '<div style="flex:1;background:var(--bg3);border-radius:6px;height:22px;position:relative;overflow:hidden;display:flex">' +
         '<div style="height:100%;width:' + pctBase + '%;background:' + col + ';border-radius:' + (pctRepos>0?'6px 0 0 6px':'6px') + ';transition:width .4s"></div>' +
