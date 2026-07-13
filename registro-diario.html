@@ -960,6 +960,15 @@ var RD_UMBRAL_DESP_MB  = 100;    // MB/día — muy por encima de cualquier desp
 // gráficas) más una parte legible para las personas. El volumen se
 // calcula solo (existencia de hoy − existencia del último reporte), no
 // depende de que el operador lo escriba bien.
+// Descartar el aviso de reposición sin marcar ningún origen — para
+// plantas con ventas casi nulas donde la existencia puede variar
+// mínimamente de un día a otro sin que haya llegado producto realmente.
+// El aviso NUNCA bloqueaba el guardado, pero se agrega este botón para
+// que quede clarísimo y no genere ninguna duda al operador.
+function rdDescartarReposicion(prod) {
+  var panel = document.getElementById('repos-panel-' + prod.replace(/[^a-z0-9]/gi,'_'));
+  if (panel) panel.style.display = 'none';
+}
 function rdMarcarReposicion(prod, tipo, emoji) {
   var existEl = document.querySelector('.rd-existencia[data-prod="' + prod + '"]');
   var existencia = existEl ? rdParseNum(existEl) : 0;
@@ -1264,16 +1273,20 @@ function rdRenderProdRows(productos, valores, detalle, yaReportado) {
       // ── Detección inteligente de reposición ───────────────────────────
       // Se muestra automáticamente (vía rdRecalc) cuando la existencia
       // escrita es mayor a la del último reporte conocido — indica que
-      // llegó producto y conviene registrar por dónde.
+      // llegó producto y conviene registrar por dónde. NUNCA bloquea el
+      // guardado — es solo informativo, con opción clara de descartarlo
+      // si no aplica (ej. plantas con ventas casi nulas donde la
+      // existencia varía poco de un día a otro sin que haya reposición).
       +   (yaReportado ? '' :
            '<div class="repos-panel" id="repos-panel-' + p.replace(/[^a-z0-9]/gi,'_') + '" style="display:none;margin-top:10px;padding:10px 12px;background:#eef6ff;border:1px solid #bfdbfe;border-radius:8px">'
-           + '<div id="repos-msg-' + p.replace(/[^a-z0-9]/gi,'_') + '" style="font-size:11px;font-weight:700;color:#1e40af;margin-bottom:7px">📈 La existencia subió respecto al último reporte — ¿cómo llegó el producto?</div>'
+           + '<div id="repos-msg-' + p.replace(/[^a-z0-9]/gi,'_') + '" style="font-size:11px;font-weight:700;color:#1e40af;margin-bottom:7px">📈 La existencia subió respecto al último reporte — ¿cómo llegó el producto? (opcional, no es obligatorio para guardar)</div>'
            + '<div style="display:flex;gap:6px;flex-wrap:wrap">'
            +   '<button type="button" onclick="rdMarcarReposicion(\'' + p + '\',\'Cabotaje Mar\u00edtimo\',\'\u26f4\ufe0f\')" style="padding:6px 12px;border-radius:16px;border:1.5px solid #0284c7;background:#fff;color:#0284c7;font-size:11px;font-weight:700;cursor:pointer">\u26f4\ufe0f Cabotaje Mar\u00edtimo</button>'
            +   '<button type="button" onclick="rdMarcarReposicion(\'' + p + '\',\'Cisternas Terrestres\',\'\ud83d\ude9b\')" style="padding:6px 12px;border-radius:16px;border:1.5px solid #ca8a04;background:#fff;color:#ca8a04;font-size:11px;font-weight:700;cursor:pointer">\ud83d\ude9b Cisternas Terrestres</button>'
            +   (esRefineriaHermana
                 ? '<button type="button" onclick="rdMarcarReposicion(\'' + p + '\',\'V\u00eda Refiner\u00eda\',\'\ud83c\udfed\')" style="padding:6px 12px;border-radius:16px;border:1.5px solid #7c3aed;background:#fff;color:#7c3aed;font-size:11px;font-weight:700;cursor:pointer">\ud83c\udfed V\u00eda Refiner\u00eda</button>'
                 : '')
+           +   '<button type="button" onclick="rdDescartarReposicion(\'' + p + '\')" style="padding:6px 12px;border-radius:16px;border:1.5px solid #94a3b8;background:#fff;color:#64748b;font-size:11px;font-weight:700;cursor:pointer">\u2715 No aplica, cerrar aviso</button>'
            + '</div>'
            + '</div>')
       // ── Comentario por producto ──────────────────────────────────────────

@@ -321,6 +321,16 @@ var _mapLibsLoaded=false;
       .cob-toolbar,.restr-header,.filterbar{ flex-wrap:wrap !important; row-gap:6px; }
       .topbar{ padding:0 10px !important; gap:6px !important; }
     }
+    /* El banner de la Vista Ejecutiva (exec-banner) usa z-index:1000, el
+       mismo valor que Leaflet le pone por defecto a sus controles de
+       zoom (+/-). Al empatar, el control de zoom (agregado después al
+       DOM) terminaba ganando y se veía flotando encima del título al
+       hacer scroll. Se limita el z-index de los controles de Leaflet
+       para que siempre queden por debajo del banner. */
+    #exec-mapa-container .leaflet-top,
+    #exec-mapa-container .leaflet-bottom,
+    #exec-mapa-container .leaflet-control-container { z-index: 400 !important; }
+    #exec-mapa-container .leaflet-pane { z-index: 300 !important; }
   </style>
 </head>
 <body>
@@ -2530,6 +2540,60 @@ const CONFIG = {
 // función del dashboard pueda usarla sin depender de CONFIG del backend
 // (que vive solo en Code.gs, no en este archivo).
 const REFINERIAS = ['Refinería Talara', 'Refinería Conchán', 'Refinería Iquitos'];
+// Coordenadas de todas las instalaciones (18 plantas de ventas + 3
+// refinerías) — usadas por el mapa nacional de la Vista Ejecutiva.
+// Las refinerías se ubican con un pequeño desplazamiento respecto a su
+// planta hermana para que ambos puntos se distingan en el mapa.
+// Catálogo oficial de productos por instalación (espejo exacto del
+// backend PRODUCTOS_POR_PLANTA) — se usa en el Mapa Nacional para
+// mostrar TODOS los productos que maneja cada planta, no solo los que
+// tienen un reporte reciente (antes se omitían productos sin dato).
+const PRODUCTOS_POR_PLANTA_EXEC = {
+  'Talara':      ['Diesel', 'G. Regular', 'G. Premium', 'G. 84', 'TA1', 'GLP'],
+  'Piura':       ['Diesel', 'G. Regular', 'G. Premium'],
+  'Eten':        ['Diesel', 'G. Regular'],
+  'Salaverry':   ['Diesel', 'G. Regular', 'G. Premium'],
+  'Chimbote':    ['Diesel', 'G. Regular'],
+  'Supe':        ['Diesel', 'G. Regular', 'G. Premium'],
+  'Callao':      ['Diesel', 'G. Regular', 'G. Premium', 'TA1', 'GLP'],
+  'Conchán':     ['Diesel', 'G. Regular', 'G. Premium'],
+  'Pisco':       ['Diesel', 'G. Regular', 'G. Premium', 'TA1'],
+  'Mollendo':    ['Diesel', 'G. Regular', 'G. Premium'],
+  'Ilo':         ['Diesel', 'G. Premium'],
+  'Juliaca':     ['Diesel', 'G. Regular'],
+  'Cusco':       ['Diesel', 'G. Regular'],
+  'Iquitos':     ['Diesel', 'G. Regular', 'G. 84', 'TA1'],
+  'Pucallpa':    ['Diesel', 'G. Regular'],
+  'Tarapoto':    ['Diesel', 'G. Regular', 'G. Premium'],
+  'Yurimaguas':  ['Diesel', 'G. 84'],
+  'El Milagro':  ['Diesel', 'G. Regular'],
+  'Refinería Talara':   ['Diesel', 'G. Regular', 'G. Premium', 'G. 84', 'TA1', 'GLP', 'D2S50-H'],
+  'Refinería Conchán':  ['Diesel', 'G. Regular', 'G. Premium'],
+  'Refinería Iquitos':  ['Diesel', 'G. Regular', 'G. 84', 'TA1']
+};
+const PLANT_META_EXEC = {
+  'Talara':             {lat:-4.577,  lng:-81.272, tipo:'Terminal',  region:'Piura'},
+  'Refinería Talara':   {lat:-4.590,  lng:-81.258, tipo:'Refinería', region:'Piura'},
+  'Piura':              {lat:-5.194,  lng:-80.632, tipo:'Terminal',  region:'Piura'},
+  'Eten':               {lat:-6.921,  lng:-79.860, tipo:'Terminal',  region:'Lambayeque'},
+  'Salaverry':          {lat:-8.224,  lng:-78.977, tipo:'Terminal',  region:'La Libertad'},
+  'El Milagro':         {lat:-8.010,  lng:-78.070, tipo:'Terminal',  region:'La Libertad'},
+  'Chimbote':           {lat:-9.075,  lng:-78.593, tipo:'Terminal',  region:'Áncash'},
+  'Supe':               {lat:-10.797, lng:-77.705, tipo:'Terminal',  region:'Lima'},
+  'Callao':             {lat:-12.055, lng:-77.143, tipo:'Terminal',  region:'Callao'},
+  'Conchán':            {lat:-12.398, lng:-76.990, tipo:'Terminal',  region:'Lima'},
+  'Refinería Conchán':  {lat:-12.410, lng:-76.978, tipo:'Refinería', region:'Lima'},
+  'Pisco':              {lat:-13.707, lng:-76.198, tipo:'Terminal',  region:'Ica'},
+  'Mollendo':           {lat:-17.029, lng:-72.015, tipo:'Terminal',  region:'Arequipa'},
+  'Ilo':                {lat:-17.638, lng:-71.340, tipo:'Terminal',  region:'Moquegua'},
+  'Pucallpa':           {lat:-8.379,  lng:-74.571, tipo:'Terminal',  region:'Ucayali'},
+  'Iquitos':            {lat:-3.749,  lng:-73.253, tipo:'Terminal',  region:'Loreto'},
+  'Refinería Iquitos':  {lat:-3.762,  lng:-73.240, tipo:'Refinería', region:'Loreto'},
+  'Yurimaguas':         {lat:-5.901,  lng:-76.086, tipo:'Terminal',  region:'Loreto'},
+  'Juliaca':            {lat:-15.497, lng:-70.133, tipo:'Terminal',  region:'Puno'},
+  'Cusco':              {lat:-13.531, lng:-71.978, tipo:'Terminal',  region:'Cusco'},
+  'Tarapoto':           {lat:-6.485,  lng:-76.370, tipo:'Terminal',  region:'San Martín'},
+};
 // IMPORTANTE — solo aplica a Conchán e Iquitos: lo que reporta la
 // refinería YA INCLUYE el inventario que reporta su planta de ventas
 // (confirmado por Planificación de Suministro) — NO son cifras
@@ -17477,7 +17541,7 @@ function _buildInventoryReportHTML() {
   var PB={'Diesel':'#dbeafe','G. Regular':'#d1fae5','G. Premium':'#fee2e2','G. 84':'#e0e7ff','TA1':'#ede9fe','GLP':'#fef3c7'};
   var PLO=['Talara','Piura','Eten','Salaverry','Chimbote','Supe','Callao','Conch\u00e1n','Pisco','Mollendo','Ilo','Cusco','Juliaca','Pto. Maldonado','Iquitos','Pucallpa','Tarapoto','Yurimaguas','El Milagro'];
   var PReg={'Talara':'Costa Norte','Piura':'Costa Norte','Eten':'Costa Norte','Salaverry':'Costa Norte','Chimbote':'Costa Norte','Supe':'Costa Centro','Callao':'Costa Centro','Conch\u00e1n':'Costa Centro','Pisco':'Costa Centro','Mollendo':'Costa Sur','Ilo':'Costa Sur','Cusco':'Sierra Sur','Juliaca':'Sierra Sur','Pto. Maldonado':'Sierra Sur','Iquitos':'Selva','Pucallpa':'Selva','Tarapoto':'Selva','Yurimaguas':'Selva','El Milagro':'Selva'};
-  var PPr={'Talara':['Diesel','G. Regular','G. Premium','G. 84','TA1','GLP'],'Piura':['Diesel','G. Regular','G. Premium'],'Eten':['Diesel','G. Regular'],'Salaverry':['Diesel','G. Regular','G. Premium'],'Chimbote':['Diesel','G. Regular'],'Supe':['Diesel','G. Regular','G. Premium'],'Callao':['Diesel','G. Regular','G. Premium','TA1'],'Conch\u00e1n':['Diesel','G. Regular','G. Premium'],'Pisco':['Diesel','G. Regular','G. Premium'],'Mollendo':['Diesel','G. Regular','G. Premium'],'Ilo':['Diesel','G. Premium'],'Cusco':['Diesel','G. Regular'],'Juliaca':['Diesel','G. Regular'],'Pto. Maldonado':['Diesel','G. Regular','G. Premium'],'Iquitos':['Diesel','G. Regular','G. 84','TA1'],'Pucallpa':['Diesel','G. Regular'],'Tarapoto':['Diesel','G. Regular','G. Premium'],'Yurimaguas':['Diesel','G. Regular'],'El Milagro':['Diesel','G. Regular','G. 84']};
+  var PPr={'Talara':['Diesel','G. Regular','G. Premium','G. 84','TA1','GLP'],'Piura':['Diesel','G. Regular','G. Premium'],'Eten':['Diesel','G. Regular'],'Salaverry':['Diesel','G. Regular','G. Premium'],'Chimbote':['Diesel','G. Regular'],'Supe':['Diesel','G. Regular','G. Premium'],'Callao':['Diesel','G. Regular','G. Premium','TA1'],'Conch\u00e1n':['Diesel','G. Regular','G. Premium'],'Pisco':['Diesel','G. Regular','G. Premium'],'Mollendo':['Diesel','G. Regular','G. Premium'],'Ilo':['Diesel','G. Premium'],'Cusco':['Diesel','G. Regular'],'Juliaca':['Diesel','G. Regular'],'Pto. Maldonado':['Diesel','G. Regular','G. Premium'],'Iquitos':['Diesel','G. Regular','G. 84','TA1'],'Pucallpa':['Diesel','G. Regular'],'Tarapoto':['Diesel','G. Regular','G. Premium'],'Yurimaguas':['Diesel','G. Regular'],'El Milagro':['Diesel','G. Regular']};
   var RO=['Costa Norte','Costa Centro','Costa Sur','Sierra Sur','Selva'];
   var RC={'Costa Norte':'#0f4c81','Costa Centro':'#065f46','Costa Sur':'#7c3aed','Sierra Sur':'#9a3412','Selva':'#064e3b'};
   function gi(r){return typeof cobGetInv==='function'?cobGetInv(r):(r.inv||0);}
@@ -20341,8 +20405,8 @@ function renderVistaEjecutivaSimple() {
     '<div class="exec-sticky-hdr" style="position:sticky;top:0;z-index:50;background:var(--bg);margin:0 -36px 20px;padding:18px 36px 14px;border-bottom:1px solid var(--bdr)">' +
       '<div class="exec-title-main" style="margin-bottom:14px">Inventarios y Despachos' + (pl==='Nacional' ? ' ' : ' — ') + tituloScope + '</div>' +
       volverBtn +
-      '<div class="exec-periodo-row" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">' +
-        periodoBar + '<div class="exec-select-row" style="display:flex;gap:10px;flex-wrap:wrap">' + plantaSelector + productoSelector + '</div>' +
+      '<div class="exec-periodo-row" style="display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:12px">' +
+        '<div class="exec-select-row" style="display:flex;gap:10px;flex-wrap:wrap">' + plantaSelector + productoSelector + '</div>' +
       '</div>' +
     '</div>' +
     (esRefineriaExec ? '<div style="margin-bottom:16px;padding:10px 14px;background:#eef2f7;border:1px solid #cbd5e1;border-radius:10px;font-size:12px;color:#475569">🛢️ <b>' + pl + '</b> es una refinería — solo procesa y almacena producto, no vende. Por eso aquí solo se muestra su <b>inventario</b>, sin despacho.</div>' : '') +
@@ -20359,8 +20423,26 @@ function renderVistaEjecutivaSimple() {
         '<div style="margin-top:10px">' + deltaHTML(despAyer!==null ? despHoy-despAyer : null, false, despAyer) + '</div>' +
       '</div>') +
     '</div>' +
+    '<div style="background:var(--card);border:1px solid var(--bdr);border-radius:14px;padding:22px 24px;margin-bottom:24px">' +
+      '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:12px">' +
+        '<div>' +
+          '<div style="font-size:13px;font-weight:800;color:var(--txt)">🗺️ Mapa Nacional — Cobertura por Instalación</div>' +
+          '<div id="exec-mapa-fecha-titulo" style="font-size:11px;color:var(--txt3);margin-top:2px">Datos al cierre del ' + (window._execMapaFecha || fechaHoy).slice(8,10)+'.'+(window._execMapaFecha || fechaHoy).slice(5,7)+'.'+(window._execMapaFecha || fechaHoy).slice(0,4) + '</div>' +
+        '</div>' +
+        '<div style="display:flex;align-items:center;gap:8px">' +
+          '<label style="font-size:10.5px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.4px">📅 Ver fecha</label>' +
+          '<input type="date" id="exec-mapa-fecha-input" value="' + (window._execMapaFecha || fechaHoy) + '" min="' + ((DATES&&DATES[0])||'') + '" max="' + ((DATES&&DATES[DATES.length-1])||'') + '" onchange="window._execMapaSetFecha(this.value)" style="padding:6px 10px;border-radius:7px;border:1px solid var(--bdr);background:var(--card2);color:var(--txt);font-family:var(--mono);font-size:12px;font-weight:600">' +
+          '<div id="exec-mapa-kpis"></div>' +
+        '</div>' +
+      '</div>' +
+      '<div id="exec-mapa-container" style="height:460px;border-radius:10px;overflow:hidden;background:#eef2f7;position:relative;z-index:1;isolation:isolate"></div>' +
+      '<div style="font-size:10.5px;color:var(--txt3);margin-top:8px">📍 Toca cualquier instalación para ver existencia, despacho real, pronóstico y cobertura por producto</div>' +
+    '</div>' +
     '<div style="background:var(--card);border:1px solid var(--bdr);border-radius:14px;padding:22px 24px;margin-bottom:20px">' +
-      '<div style="font-size:13px;font-weight:800;color:var(--txt);margin-bottom:14px">Inventario ' + (pl==='Nacional'?'Nacional':'· '+pl) + (prod!=='Todos'?' · '+prod:'') + '</div>' +
+      '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:14px">' +
+        '<div style="font-size:13px;font-weight:800;color:var(--txt)">Inventario ' + (pl==='Nacional'?'Nacional':'· '+pl) + (prod!=='Todos'?' · '+prod:'') + '</div>' +
+        periodoBar +
+      '</div>' +
       '<div style="position:relative;height:220px"><canvas id="exec-chart-inv"></canvas></div>' +
     '</div>' +
     (esRefineriaExec ? '' :
@@ -20371,6 +20453,14 @@ function renderVistaEjecutivaSimple() {
     reposSectionHTML +
     cobSectionHTML +
     plantasGridHTML;
+
+  // Mapa Nacional — siempre visible; si hay una planta/refinería
+  // específica seleccionada, se centra ahí y abre su ficha automática.
+  if (document.getElementById('exec-mapa-container')) {
+    if (typeof _loadMapLibs === 'function') {
+      _loadMapLibs(function() { if (typeof renderExecMapa === 'function') renderExecMapa(pl); });
+    }
+  }
 
   if (typeof Chart === 'undefined') return;
   if (window._execChartInv) { window._execChartInv.destroy(); }
@@ -20461,6 +20551,297 @@ function renderVistaEjecutivaSimple() {
   }
 }
 
+
+// ═══════════════════════════════════════════════════════════════════════
+// MAPA NACIONAL — Vista Ejecutiva
+// Mapa interactivo de todas las instalaciones (18 plantas + 3
+// refinerías), coloreado por cobertura, con detalle de existencia,
+// despacho real, pronóstico y cobertura por producto al hacer clic.
+// ═══════════════════════════════════════════════════════════════════════
+let _execLeafletMap = null;
+// Mismo cálculo que usa la sección "Cobertura por planta" (reposicionInfo,
+// local a esa función) — versión global para que el Mapa Nacional también
+// pueda mostrar el cabotaje/reposición programado por producto.
+const _execBuquesMarNacional = ['UCAYALI','MOCHE','TROMPETEROS','URUBAMBA','PARIÑAS','HUMBOLDT','TARAPOTO','YURIMAGUAS'];
+function _execEsMaritimo(nombreBuque) {
+  if (!nombreBuque) return false;
+  var n = nombreBuque.toUpperCase();
+  return _execBuquesMarNacional.some(function(v){ return n.indexOf(v) >= 0; });
+}
+function _execReposicionInfo(r) {
+  var denom = (typeof pronSheet !== 'undefined' && pronSheet[r.planta+'|'+r.producto]) || r.pron_mes || r.pron || 0;
+  var vol1 = r.vol_rep || 0, vol2 = r.vol_rep_bt2 || 0;
+  var volTotal = vol1 + vol2;
+  if (volTotal <= 0) return { diasRepos: 0, volMB: 0, tipo: '', bt: '', bt2: '' };
+  var tipo1 = vol1 > 0 ? (_execEsMaritimo(r.bt) ? 'marítima' : 'terrestre') : '';
+  var tipo2 = vol2 > 0 ? (_execEsMaritimo(r.bt2) ? 'marítima' : 'terrestre') : '';
+  var tipos = [tipo1, tipo2].filter(Boolean);
+  var tipoUnico = tipos.length === 1 ? tipos[0] : (tipos.length > 1 ? 'mixta' : '');
+  var diasRepos = denom > 0 ? Math.round(volTotal / denom) : 0;
+  return { diasRepos: diasRepos, volMB: volTotal, tipo: tipoUnico, bt: r.bt||'', bt2: r.bt2||'' };
+}
+function _execMapaDatos(fecha) {
+  // Fecha EXACTA (mismo criterio que usan los gráficos de abajo, vía
+  // sumFecha/fechaHoy) — antes usaba byLatest() (el último dato de cada
+  // planta sin importar el día), lo que hacía que el mapa mostrara una
+  // mezcla de fechas distinta a lo que veían los gráficos.
+  var hoy = RAW.filter(function(r){ return r.fecha === fecha; });
+  var porInstalacion = {}; // planta o refinería -> {productos:[], minCob}
+  // Índice de datos reales por planta+producto, para completar el
+  // catálogo oficial (algunos productos pueden no tener reporte
+  // reciente y aun así deben verse en la ficha, en 0).
+  var indexDatos = {};
+  hoy.forEach(function(r) {
+    if (!PLANT_META_EXEC[r.planta]) return;
+    if (!invFilaValida(r)) return; // dato en barriles, no MB
+    if (typeof SKIP_COMBOS !== 'undefined' && SKIP_COMBOS.has((r.planta||'')+'|'+(r.producto||''))) return;
+    indexDatos[r.planta+'|'+r.producto] = r;
+  });
+  Object.keys(PLANT_META_EXEC).forEach(function(planta) {
+    var catalogo = PRODUCTOS_POR_PLANTA_EXEC[planta] || [];
+    var esRef = REFINERIAS.indexOf(planta) !== -1;
+    var info = { productos: [], minCob: 999 };
+    catalogo.forEach(function(prod) {
+      var r = indexDatos[planta+'|'+prod];
+      if (!r) { info.productos.push({ producto: prod, existencia: 0, despReal: 0, pron: 0, cob: 0, sinDato: true }); return; }
+      var despReal = r.vreal || r.dem || 0;
+      var pronVal = (typeof pronSheet !== 'undefined' && pronSheet[r.planta+'|'+r.producto]) || r.pron_mes || r.pron || 0;
+      var cobDias = 0;
+      if (!esRef && r.inv > 0) {
+        var denom = (r.vfact||0) > 0 ? r.vfact : (despReal > 0 ? despReal : pronVal);
+        if (denom > 0) cobDias = Math.round(r.inv / denom);
+        if (cobDias > 90) cobDias = 0; // outlier — mismo guard que el resto del sistema
+      }
+      var rep = _execReposicionInfo(r);
+      info.productos.push({ producto: prod, existencia: r.inv||0, despReal: despReal, pron: pronVal, cob: cobDias, repos: rep });
+      if (!esRef && cobDias > 0 && cobDias < info.minCob) info.minCob = cobDias;
+    });
+    porInstalacion[planta] = info;
+  });
+  return porInstalacion;
+}
+function _execCobColor(dias) {
+  if (!dias || dias >= 999) return '#94a3b8';
+  return dias <= CONFIG.COB_RED ? '#dc2626' : dias <= CONFIG.COB_AMB ? '#d97706' : '#16a34a';
+}
+// Complejos donde la refinería y la planta de ventas comparten la misma
+// ubicación física — un solo marcador en el mapa, con pestañas dentro
+// de la ficha para alternar entre ambas vistas (antes se ponían 2
+// puntos casi superpuestos, difícil de distinguir a nivel gerencial).
+const EXEC_MAPA_COMPLEJOS = {
+  'Talara':  'Refinería Talara',
+  'Conchán': 'Refinería Conchán',
+  'Iquitos': 'Refinería Iquitos'
+};
+function _execFichaTabla(planta, info, esRef) {
+  var filasHTML = '';
+  if (info && info.productos.length) {
+    var prods = info.productos.slice().sort(function(a,b){ return PROD_ORDER.indexOf(a.producto) - PROD_ORDER.indexOf(b.producto); });
+    filasHTML = prods.map(function(p) {
+      var cobTxt = esRef ? '—' : (p.cob > 0 ? p.cob + 'd' : '—');
+      var cobCol = esRef ? '#94a3b8' : _execCobColor(p.cob);
+      var faded = p.sinDato ? 'opacity:.45' : '';
+      return '<tr style="display:table-row;' + faded + '">' +
+        '<td style="display:table-cell;padding:4px 8px;font-weight:700;color:#0f1e3c">' + p.producto + '</td>' +
+        '<td style="display:table-cell;padding:4px 8px;text-align:right;font-family:ui-monospace,monospace">' + (p.sinDato?'—':p.existencia.toFixed(1)) + '</td>' +
+        '<td style="display:table-cell;padding:4px 8px;text-align:right;font-family:ui-monospace,monospace;color:#0891b2">' + (p.despReal>0?p.despReal.toFixed(2):'—') + '</td>' +
+        '<td style="display:table-cell;padding:4px 8px;text-align:right;font-family:ui-monospace,monospace;color:#7c3aed">' + (p.pron>0?p.pron.toFixed(2):'—') + '</td>' +
+        '<td style="display:table-cell;padding:4px 8px;text-align:center;font-weight:800;color:' + cobCol + '">' + cobTxt + '</td>' +
+        '</tr>';
+    }).join('');
+  } else {
+    filasHTML = '<tr><td colspan="5" style="padding:10px;text-align:center;color:#94a3b8;font-size:11px">Sin productos configurados</td></tr>';
+  }
+  var tablaHTML = '<table style="width:100%;border-collapse:collapse;font-size:10.5px;display:table">' +
+      '<thead style="display:table-header-group"><tr style="display:table-row;background:#f1f5f9">' +
+        '<th style="display:table-cell;padding:5px 8px;text-align:left;font-size:8.5px;text-transform:uppercase;color:#64748b">Producto</th>' +
+        '<th style="display:table-cell;padding:5px 8px;text-align:right;font-size:8.5px;text-transform:uppercase;color:#64748b">Exist.</th>' +
+        '<th style="display:table-cell;padding:5px 8px;text-align:right;font-size:8.5px;text-transform:uppercase;color:#64748b">D.Real</th>' +
+        '<th style="display:table-cell;padding:5px 8px;text-align:right;font-size:8.5px;text-transform:uppercase;color:#64748b">Pron.</th>' +
+        '<th style="display:table-cell;padding:5px 8px;text-align:center;font-size:8.5px;text-transform:uppercase;color:#64748b">Cob.</th>' +
+      '</tr></thead><tbody style="display:table-row-group">' + filasHTML + '</tbody>' +
+    '</table>';
+
+  // Cabotaje / reposición terrestre programada — debajo de la tabla,
+  // mismo criterio (vol_rep/vol_rep_bt2) que usa "Cobertura por planta".
+  var reposActivos = (info && info.productos || []).filter(function(p) { return p.repos && p.repos.volMB > 0; });
+  var reposHTML;
+  if (esRef) {
+    reposHTML = ''; // las refinerías no reciben cabotaje por BT (concepto no aplica)
+  } else if (reposActivos.length) {
+    var iconoTipo = { 'marítima': '⛴️', 'terrestre': '🚛', 'mixta': '🔀' };
+    var filasRepos = reposActivos.map(function(p) {
+      var rep = p.repos;
+      var icono = iconoTipo[rep.tipo] || '📦';
+      var btTxt = [rep.bt, rep.bt2].filter(Boolean).join(' + ');
+      return '<div style="display:flex;align-items:center;justify-content:space-between;padding:5px 0;border-bottom:1px solid #f1f5f9;font-size:10px">' +
+        '<div><span style="font-weight:700;color:#0f1e3c">' + p.producto + '</span>' +
+          (btTxt ? ' <span style="color:#94a3b8">· ' + btTxt + '</span>' : '') + '</div>' +
+        '<div style="display:flex;align-items:center;gap:6px;flex-shrink:0">' +
+          '<span style="color:#64748b">' + icono + ' ' + rep.tipo + '</span>' +
+          '<span style="font-family:ui-monospace,monospace;font-weight:800;color:#2563eb">' + rep.volMB.toFixed(1) + ' MB</span>' +
+          '<span style="font-family:ui-monospace,monospace;color:#94a3b8">(' + rep.diasRepos + 'd)</span>' +
+        '</div></div>';
+    }).join('');
+    reposHTML =
+      '<div style="padding:8px 8px 6px;background:#f8fafc;border-top:1px solid #e2e8f0">' +
+        '<div style="font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.4px;color:#64748b;margin-bottom:4px">🚢 Cabotaje / Reposición Programada</div>' +
+        filasRepos +
+      '</div>';
+  } else {
+    reposHTML = '<div style="padding:7px 8px;background:#f8fafc;border-top:1px solid #e2e8f0;font-size:10px;color:#94a3b8;text-align:center">Sin reposición programada</div>';
+  }
+
+  return tablaHTML + reposHTML;
+}
+window._execMapaSwitchTab = function(id, tab) {
+  var pTab = document.getElementById('exec-tab-planta-' + id);
+  var rTab = document.getElementById('exec-tab-ref-' + id);
+  var pBtn = document.getElementById('exec-btn-planta-' + id);
+  var rBtn = document.getElementById('exec-btn-ref-' + id);
+  if (!pTab || !rTab) return;
+  if (tab === 'planta') {
+    pTab.style.display = 'block'; rTab.style.display = 'none';
+    pBtn.style.cssText = pBtn.style.cssText.replace('opacity:.5','opacity:1'); pBtn.style.opacity = '1'; pBtn.style.borderBottom = '2px solid #0a3a5c';
+    rBtn.style.opacity = '.5'; rBtn.style.borderBottom = '2px solid transparent';
+  } else {
+    pTab.style.display = 'none'; rTab.style.display = 'block';
+    rBtn.style.opacity = '1'; rBtn.style.borderBottom = '2px solid #7c3aed';
+    pBtn.style.opacity = '.5'; pBtn.style.borderBottom = '2px solid transparent';
+  }
+};
+window._execMapaSetFecha = function(fecha) {
+  if (!fecha) return;
+  window._execMapaFecha = fecha;
+  if (typeof renderExecMapa === 'function') {
+    var pl = (typeof window._execPlanta !== 'undefined') ? window._execPlanta : 'Nacional';
+    renderExecMapa(pl);
+  }
+};
+function renderExecMapa(plantaSeleccionada) {
+  var el = document.getElementById('exec-mapa-container');
+  if (!el || typeof L === 'undefined') return;
+  if (_execLeafletMap) { try { _execLeafletMap.remove(); } catch(e) {} _execLeafletMap = null; }
+
+  var fechaMapa = window._execMapaFecha || (DATES && DATES.length ? DATES[DATES.length-1] : '');
+  window._execMapaFecha = fechaMapa;
+  var tituloFechaEl = document.getElementById('exec-mapa-fecha-titulo');
+  if (tituloFechaEl && fechaMapa) {
+    tituloFechaEl.textContent = 'Datos al cierre del ' + fechaMapa.slice(8,10)+'.'+fechaMapa.slice(5,7)+'.'+fechaMapa.slice(0,4);
+  }
+  var inputFechaEl = document.getElementById('exec-mapa-fecha-input');
+  if (inputFechaEl && !inputFechaEl.value) inputFechaEl.value = fechaMapa;
+
+  var datos = _execMapaDatos(fechaMapa);
+  var crit = 0, alerta = 0, normal = 0, sinDatos = 0;
+  Object.keys(PLANT_META_EXEC).forEach(function(p) {
+    var esRef = REFINERIAS.indexOf(p) !== -1;
+    if (esRef) return;
+    var d = datos[p];
+    var m = d ? d.minCob : 0;
+    if (!m || m >= 999) sinDatos++;
+    else if (m <= CONFIG.COB_RED) crit++;
+    else if (m <= CONFIG.COB_AMB) alerta++;
+    else normal++;
+  });
+
+  _execLeafletMap = L.map('exec-mapa-container', { zoomControl: true, attributionControl: false })
+    .setView([-9.2, -75.0], 5.2);
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+    maxZoom: 10, minZoom: 4
+  }).addTo(_execLeafletMap);
+
+  // Instalaciones a mapear como UN solo punto: las plantas de ventas
+  // (las refinerías de EXEC_MAPA_COMPLEJOS se fusionan en la misma
+  // ficha, no se dibujan aparte).
+  var refineriasFusionadas = Object.keys(EXEC_MAPA_COMPLEJOS).map(function(k){ return EXEC_MAPA_COMPLEJOS[k]; });
+  var markersPorNombre = {}; // planta o refinería -> {marker, idSafe, refHermana}
+  Object.keys(PLANT_META_EXEC).forEach(function(planta) {
+    if (refineriasFusionadas.indexOf(planta) !== -1) return; // se muestra dentro de la ficha de su planta hermana
+    var meta = PLANT_META_EXEC[planta];
+    var esRefSola = REFINERIAS.indexOf(planta) !== -1; // refinería sin planta hermana en el mapa (no debería darse hoy, pero por si acaso)
+    var d = datos[planta];
+    var refHermana = EXEC_MAPA_COMPLEJOS[planta]; // undefined si esta planta no tiene refinería hermana
+    var color = esRefSola ? '#7c3aed' : _execCobColor(d ? d.minCob : 0);
+    var radio = esRefSola ? 8 : 10;
+
+    var marker = L.circleMarker([meta.lat, meta.lng], {
+      radius: radio, fillColor: color, color: '#fff', weight: 2, fillOpacity: 0.92
+    }).addTo(_execLeafletMap);
+
+    var idSafe = planta.replace(/[^a-zA-Z0-9]/g, '_');
+    var popupHTML;
+    if (refHermana) {
+      // Complejo con planta + refinería en la misma ubicación: ficha con
+      // pestañas para alternar entre ambas — más claro a nivel gerencial
+      // que 2 puntos casi superpuestos en el mapa.
+      var dRef = datos[refHermana];
+      popupHTML =
+        '<div style="font-family:Inter,system-ui,sans-serif;min-width:300px">' +
+          '<div style="padding:10px 12px;background:#0a3a5c;border-radius:8px 8px 0 0">' +
+            '<div style="color:#fff;font-weight:800;font-size:13px">📍 ' + planta + '</div>' +
+            '<div style="color:rgba(255,255,255,.8);font-size:10px">' + meta.region + ' · Complejo industrial (planta + refinería)</div>' +
+          '</div>' +
+          '<div style="display:flex;border-bottom:1px solid #e2e8f0">' +
+            '<button id="exec-btn-planta-' + idSafe + '" onclick="_execMapaSwitchTab(\'' + idSafe + '\',\'planta\')" style="flex:1;padding:8px;border:none;background:none;cursor:pointer;font-size:11px;font-weight:800;color:#0a3a5c;border-bottom:2px solid #0a3a5c;opacity:1">🏭 Planta (ventas)</button>' +
+            '<button id="exec-btn-ref-' + idSafe + '" onclick="_execMapaSwitchTab(\'' + idSafe + '\',\'ref\')" style="flex:1;padding:8px;border:none;background:none;cursor:pointer;font-size:11px;font-weight:800;color:#7c3aed;border-bottom:2px solid transparent;opacity:.5">⚗️ Refinería</button>' +
+          '</div>' +
+          '<div id="exec-tab-planta-' + idSafe + '" style="display:block">' + _execFichaTabla(planta, d, false) + '</div>' +
+          '<div id="exec-tab-ref-' + idSafe + '" style="display:none">' + _execFichaTabla(refHermana, dRef, true) + '</div>' +
+        '</div>';
+    } else {
+      popupHTML =
+        '<div style="font-family:Inter,system-ui,sans-serif;min-width:290px">' +
+          '<div style="padding:10px 12px;background:' + (esRefSola?'#7c3aed':'#0a3a5c') + ';border-radius:8px 8px 0 0">' +
+            '<div style="color:#fff;font-weight:800;font-size:13px">' + (esRefSola?'⚗️ ':'📍 ') + planta + '</div>' +
+            '<div style="color:rgba(255,255,255,.8);font-size:10px">' + meta.region + ' · ' + meta.tipo + '</div>' +
+          '</div>' +
+          _execFichaTabla(planta, d, esRefSola) +
+        '</div>';
+    }
+
+    marker.bindPopup(popupHTML, { maxWidth: 330 });
+    marker.bindTooltip(planta + (refHermana ? ' + Refinería' : ''), { direction: 'top', offset: [0,-radio] });
+    // Selección bidireccional: elegir la planta en el mapa también
+    // actualiza el desplegable de arriba y refresca los gráficos de
+    // abajo — mismo efecto que elegirla desde el desplegable.
+    marker.on('click', function() {
+      if (window._execPlanta !== planta) {
+        window._execPlanta = planta;
+        if (typeof renderVistaEjecutivaSimple === 'function') renderVistaEjecutivaSimple();
+      }
+    });
+    markersPorNombre[planta] = { marker: marker, idSafe: idSafe, refHermana: refHermana };
+    if (refHermana) markersPorNombre[refHermana] = { marker: marker, idSafe: idSafe, refHermana: refHermana, esTabRef: true };
+  });
+
+  document.getElementById('exec-mapa-kpis').innerHTML =
+    '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
+      '<div style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--txt2)"><span style="width:9px;height:9px;border-radius:50%;background:#dc2626;display:inline-block"></span>Crítico (' + crit + ')</div>' +
+      '<div style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--txt2)"><span style="width:9px;height:9px;border-radius:50%;background:#d97706;display:inline-block"></span>Alerta (' + alerta + ')</div>' +
+      '<div style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--txt2)"><span style="width:9px;height:9px;border-radius:50%;background:#16a34a;display:inline-block"></span>Normal (' + normal + ')</div>' +
+      '<div style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--txt2)"><span style="width:9px;height:9px;border-radius:50%;background:#94a3b8;display:inline-block"></span>Sin datos (' + sinDatos + ')</div>' +
+      '<div style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--txt2)"><span style="width:9px;height:9px;border-radius:50%;background:#7c3aed;display:inline-block"></span>Refinería (⚗️ en pestaña)</div>' +
+    '</div>';
+
+  // Si hay una planta/refinería específica seleccionada en el filtro de
+  // arriba, centrar el mapa ahí y abrir su ficha automáticamente — sin
+  // esto, el mapa se quedaba en la vista nacional aunque ya se hubiera
+  // elegido una instalación puntual.
+  var infoSel = plantaSeleccionada && plantaSeleccionada !== 'Nacional' ? markersPorNombre[plantaSeleccionada] : null;
+  if (infoSel) {
+    var latlngSel = infoSel.marker.getLatLng();
+    _execLeafletMap.setView(latlngSel, 8);
+    setTimeout(function() {
+      infoSel.marker.openPopup();
+      if (infoSel.esTabRef && typeof _execMapaSwitchTab === 'function') {
+        _execMapaSwitchTab(infoSel.idSafe, 'ref');
+      }
+    }, 250);
+  }
+
+  setTimeout(function(){ if (_execLeafletMap) _execLeafletMap.invalidateSize(); }, 200);
+}
 
 function initExecutiveMode() {
   if (!EXECUTIVE_MODE) return;
