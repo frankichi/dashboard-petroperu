@@ -21072,6 +21072,24 @@ function initExecutiveMode() {
       console.log('[ExecMode] Auto-refresh ejecutado');
     }
   }, EXEC_AUTOREFRESH_MS);
+  // Refresco automático al volver a esta pestaña — cubre el caso típico
+  // de: guardar algo en Coberturas en OTRA pestaña, luego volver acá sin
+  // recordar presionar "Actualizar". Se limita a máximo 1 vez cada 20s
+  // para no disparar refrescos de más si el usuario cambia de pestaña
+  // repetidamente.
+  var _execLastVisRefresh = 0;
+  document.addEventListener('visibilitychange', function() {
+    if (document.visibilityState !== 'visible') return;
+    var now = Date.now();
+    if (now - _execLastVisRefresh < 20000) return;
+    _execLastVisRefresh = now;
+    if (typeof fetchData === 'function') {
+      console.log('[ExecMode] Refrescando por volver a la pestaña...');
+      fetchData(true).then(function(){
+        if (typeof renderVistaEjecutivaSimple === 'function') renderVistaEjecutivaSimple();
+      });
+    }
+  });
   function updateExecClock() {
     var now = new Date();
     var fmt = now.toLocaleString('es-PE', {
