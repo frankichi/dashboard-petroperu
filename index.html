@@ -17681,6 +17681,97 @@ function setInvReportDate(nuevaFecha) {
   renderInventoryReport();
 }
 window.setInvReportDate = setInvReportDate;
+
+// ── Exportar tabla del período (Vista Gerencial) ────────────────────────
+// Arma las filas planta+producto+fecha para el rango [Desde,Hasta]
+// elegido en la barra de exportación. Se define como función global
+// normal (no dentro del <script> embebido de _buildInventoryReportHTML,
+// que no se ejecuta al insertarse vía innerHTML) para que funcione de
+// forma confiable sin importar cómo se inyectó el HTML del reporte.
+function _invReportRangeRows() {
+  var desdeEl = document.getElementById('inv-export-desde');
+  var hastaEl = document.getElementById('inv-export-hasta');
+  var desde = (desdeEl && desdeEl.value) || currentDate;
+  var hasta = (hastaEl && hastaEl.value) || currentDate;
+  if (desde > hasta) { var tmp = desde; desde = hasta; hasta = tmp; }
+  var rows = (RAW || []).filter(function(r) {
+    if (!r.fecha || r.fecha < desde || r.fecha > hasta) return false;
+    if (typeof SKIP_COMBOS !== 'undefined' && SKIP_COMBOS.has((r.planta||'')+'|'+(r.producto||''))) return false;
+    return true;
+  }).map(function(r) {
+    return {
+      fecha: r.fecha, planta: r.planta, producto: r.producto,
+      existencia: parseFloat((r.inv||0).toFixed(2)),
+      despacho_real: parseFloat((r.vreal||r.dem||0).toFixed(2)),
+      pronostico_mbdc: parseFloat((r.pron||0).toFixed(2)),
+      cobertura_dias: r.cob || ''
+    };
+  }).sort(function(a,b) {
+    if (a.fecha !== b.fecha) return a.fecha < b.fecha ? -1 : 1;
+    if (a.planta !== b.planta) return a.planta < b.planta ? -1 : 1;
+    return a.producto < b.producto ? -1 : (a.producto > b.producto ? 1 : 0);
+  });
+  return { rows: rows, desde: desde, hasta: hasta };
+}
+function _invReportNombre(desde, hasta) {
+  var d1 = desde.split('-'), d2 = hasta.split('-');
+  var f1 = d1[2]+'.'+d1[1]+'.'+d1[0], f2 = d2[2]+'.'+d2[1]+'.'+d2[0];
+  var rango = desde === hasta ? ('al '+f1) : (f1+' al '+f2);
+  return 'Reporte Inventarios y Despachos Nacional '+rango;
+}
+function exportInvReportExcel() {
+  var r = _invReportRangeRows();
+  if (!r.rows.length) { alert('No hay datos en el período seleccionado.'); return; }
+  if (typeof XLSX === 'undefined') { alert('La librería de Excel todavía está cargando, intenta de nuevo en unos segundos.'); return; }
+  var header = ['Fecha','Planta','Producto','Existencia (MB)','Despacho Real (MB/d)','Pronóstico (MBDC)','Cobertura (días)'];
+  var aoa = [header].concat(r.rows.map(function(x) {
+    return [x.fecha, x.planta, x.producto, x.existencia, x.despacho_real, x.pronostico_mbdc, x.cobertura_dias];
+  }));
+  var ws = XLSX.utils.aoa_to_sheet(aoa);
+  ws['!cols'] = [{wch:11},{wch:20},{wch:14},{wch:15},{wch:18},{wch:16},{wch:14}];
+  var wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Reporte');
+  var nombre = _invReportNombre(r.desde, r.hasta).replace(/[^a-zA-Z0-9.]/g, '_');
+  XLSX.writeFile(wb, nombre + '.xlsx');
+}
+function exportInvReportPDF() {
+  var r = _invReportRangeRows();
+  if (!r.rows.length) { alert('No hay datos en el período seleccionado.'); return; }
+  var porFecha = {};
+  r.rows.forEach(function(x) { (porFecha[x.fecha] = porFecha[x.fecha] || []).push(x); });
+  var fechas = Object.keys(porFecha).sort();
+  var filasHTML = '';
+  fechas.forEach(function(f) {
+    filasHTML += '<tr style="background:#eef2f7"><td colspan="6" style="padding:7px 10px;font-weight:800;color:#0a3a5c;font-size:11px;border-top:2px solid #0a3a5c">\ud83d\udcc5 '+f+'</td></tr>';
+    porFecha[f].forEach(function(x) {
+      filasHTML += '<tr><td style="padding:5px 10px">'+x.planta+'</td><td style="padding:5px 10px">'+x.producto+'</td>'
+        + '<td style="padding:5px 10px;text-align:right">'+x.existencia.toFixed(2)+'</td>'
+        + '<td style="padding:5px 10px;text-align:right">'+x.despacho_real.toFixed(2)+'</td>'
+        + '<td style="padding:5px 10px;text-align:right">'+x.pronostico_mbdc.toFixed(2)+'</td>'
+        + '<td style="padding:5px 10px;text-align:right">'+(x.cobertura_dias || '\u2014')+'</td></tr>';
+    });
+  });
+  var overlay = document.createElement('div');
+  overlay.id = 'inv-export-pdf-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:#fff;z-index:999999;overflow:auto;padding:24px';
+  overlay.innerHTML =
+    '<style>@media print{.no-print{display:none!important}} table{border-collapse:collapse;width:100%;font-family:-apple-system,sans-serif;font-size:11px}</style>'
+    + '<div class="no-print" style="margin-bottom:14px;display:flex;gap:10px">'
+    +   '<button onclick="window.print()" style="background:#0a3a5c;color:#fff;border:none;padding:8px 18px;border-radius:6px;font-weight:700;cursor:pointer">\ud83d\udda8\ufe0f Imprimir / Guardar PDF</button>'
+    +   '<button onclick="document.getElementById(\'inv-export-pdf-overlay\').remove()" style="background:#e2e8f0;color:#0f1e3c;border:none;padding:8px 18px;border-radius:6px;font-weight:700;cursor:pointer">Cerrar</button>'
+    + '</div>'
+    + '<h2 style="color:#0a3a5c;margin-bottom:4px">Inventarios y Despachos \u2014 Nacional</h2>'
+    + '<div style="color:#64748b;font-size:12px;margin-bottom:16px">Per\u00edodo: '+r.desde+' al '+r.hasta+'</div>'
+    + '<table><thead><tr style="background:#0a3a5c;color:#fff"><th style="padding:6px 10px;text-align:left">Planta</th><th style="padding:6px 10px;text-align:left">Producto</th><th style="padding:6px 10px;text-align:right">Existencia (MB)</th><th style="padding:6px 10px;text-align:right">Desp. Real (MB/d)</th><th style="padding:6px 10px;text-align:right">Pron. (MBDC)</th><th style="padding:6px 10px;text-align:right">Cob. (d\u00edas)</th></tr></thead><tbody>'
+    + filasHTML + '</tbody></table>';
+  document.body.appendChild(overlay);
+  var _tituloOriginal = document.title;
+  document.title = _invReportNombre(r.desde, r.hasta);
+  var restaurar = function(){ document.title = _tituloOriginal; window.removeEventListener('afterprint', restaurar); };
+  window.addEventListener('afterprint', restaurar);
+}
+window.exportInvReportExcel = exportInvReportExcel;
+window.exportInvReportPDF = exportInvReportPDF;
 function _buildInventoryReportHTML() {
   var today=(typeof RAW!=='undefined'?RAW:[]).filter(function(r){return r.fecha===currentDate;});
   var PO=['Diesel','G. Regular','G. Premium','G. 84','TA1','GLP'];
@@ -17723,8 +17814,22 @@ function _buildInventoryReportHTML() {
   var minD=(DATES&&DATES.length)?DATES[0]:'',maxD=(DATES&&DATES.length)?DATES[DATES.length-1]:'';
   var datePicker=INVENTORY_REPORT_MODE?('<input type="date" id="inv-date-picker" value="'+(currentDate||'')+'" min="'+minD+'" max="'+maxD+'" onchange="setInvReportDate(this.value)" style="background:rgba(255,255,255,.15);color:#fff;border:1.5px solid rgba(255,255,255,.3);padding:8px 12px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;color-scheme:dark">'):'';
   var shareBtn=INVENTORY_REPORT_MODE?'<button onclick="copyPageLink()" style="background:rgba(255,255,255,.15);color:#fff;border:1.5px solid rgba(255,255,255,.3);padding:9px 18px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">\ud83d\udd17 Copiar link</button>':'';
+  var periodoBarHTML=INVENTORY_REPORT_MODE?(
+    '<div class="no-print" style="background:#eef2f7;border-bottom:1px solid #e5e7eb;padding:10px 32px">'
+    +'<div style="max-width:1200px;margin:0 auto;display:flex;align-items:center;gap:10px;flex-wrap:wrap">'
+    +'<span style="font-size:10.5px;font-weight:800;color:#475569;text-transform:uppercase;letter-spacing:.04em">\ud83d\udcc5 Exportar per\u00edodo:</span>'
+    +'<label style="font-size:11px;color:#64748b;font-weight:600">Desde</label>'
+    +'<input type="date" id="inv-export-desde" value="'+(currentDate||'')+'" min="'+minD+'" max="'+maxD+'" style="border:1px solid #cbd5e1;border-radius:6px;padding:5px 8px;font-size:11.5px;font-weight:600;color:#0f1e3c">'
+    +'<label style="font-size:11px;color:#64748b;font-weight:600">Hasta</label>'
+    +'<input type="date" id="inv-export-hasta" value="'+(currentDate||'')+'" min="'+minD+'" max="'+maxD+'" style="border:1px solid #cbd5e1;border-radius:6px;padding:5px 8px;font-size:11.5px;font-weight:600;color:#0f1e3c">'
+    +'<button onclick="exportInvReportExcel()" style="background:#1a7a44;color:#fff;border:none;padding:6px 14px;border-radius:6px;font-size:11.5px;font-weight:700;cursor:pointer">\ud83d\udcca Excel</button>'
+    +'<button onclick="exportInvReportPDF()" style="background:#0a3a5c;color:#fff;border:none;padding:6px 14px;border-radius:6px;font-size:11.5px;font-weight:700;cursor:pointer">\ud83d\udcc4 PDF</button>'
+    +'<span style="font-size:10px;color:#94a3b8">Por defecto: \u00faltimo d\u00eda con datos. Ampl\u00eda \"Hasta\" para exportar un rango.</span>'
+    +'</div></div>'
+  ):'';
   return '<style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#f1f5f9;min-height:100vh}@media print{.no-print{display:none!important}}</style>'
     +'<div style="background:linear-gradient(135deg,#0a3a5c 0%,#1e3a8a 60%,#0f4c81 100%);padding:28px 32px 24px;position:sticky;top:0;z-index:100"><div style="max-width:1200px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:16px"><div style="display:flex;align-items:center;gap:16px"><div style="background:rgba(255,255,255,.15);border-radius:14px;width:52px;height:52px;display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:900;color:#fff;border:1.5px solid rgba(255,255,255,.25)">PP</div><div><div style="color:#fff;font-size:22px;font-weight:800;letter-spacing:-.3px">Inventario PETROPER\u00da</div><div style="color:rgba(255,255,255,.7);font-size:12px;margin-top:3px;font-weight:500">'+fStr+' \u00b7 Planificaci\u00f3n de Suministro</div></div></div><div class="no-print" style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">'+datePicker+shareBtn+'<button onclick="copyWA()" style="background:rgba(255,255,255,.15);color:#fff;border:1.5px solid rgba(255,255,255,.3);padding:9px 18px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">\ud83d\udccb Copiar WhatsApp</button><button onclick="window.print()" style="background:rgba(255,255,255,.15);color:#fff;border:1.5px solid rgba(255,255,255,.3);padding:9px 18px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">\ud83d\udda8\ufe0f PDF</button></div></div></div>'
+    +periodoBarHTML
     +'<div style="background:#fff;border-bottom:1px solid #e5e7eb;padding:20px 32px"><div style="max-width:1200px;margin:0 auto;display:flex;gap:32px;flex-wrap:wrap;align-items:center"><div><div style="font-size:28px;font-weight:900;color:#0a3a5c;letter-spacing:-.5px">'+gT.toFixed(1)+'<span style="font-size:16px;font-weight:600;color:#6b7280;margin-left:4px">MB</span></div><div style="font-size:10px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:.08em;margin-top:2px">Total nacional</div></div><div style="width:1px;height:40px;background:#e5e7eb"></div>'+(vT>0?'<div><div style="font-size:28px;font-weight:900;color:#065f46;letter-spacing:-.5px">'+vT.toFixed(1)+'<span style="font-size:16px;font-weight:600;color:#6b7280;margin-left:4px">MBDC</span></div><div style="font-size:10px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:.08em;margin-top:2px">Venta factible diaria</div></div><div style="width:1px;height:40px;background:#e5e7eb"></div>':'')+(cP>0?'<div><div style="font-size:28px;font-weight:900;color:'+cc(cP)+';letter-spacing:-.5px">'+cP+'<span style="font-size:16px;font-weight:600;color:#6b7280;margin-left:4px">d\u00edas</span></div><div style="font-size:10px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:.08em;margin-top:2px">Cobertura promedio</div></div>':'')+'</div></div>'
     +'<div style="max-width:1200px;margin:0 auto;padding:28px 32px">'
     +'<div style="margin-bottom:32px"><div style="display:flex;align-items:center;gap:10px;margin-bottom:16px"><div style="width:4px;height:20px;background:#0a3a5c;border-radius:2px"></div><h2 style="font-size:15px;font-weight:800;color:#0a3a5c;text-transform:uppercase;letter-spacing:.06em">Por Producto</h2></div><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px">'+pcH+'</div></div>'
