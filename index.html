@@ -20090,7 +20090,7 @@ function renderVistaEjecutivaSimple() {
   if (!box) {
     box = document.createElement('div');
     box.id = 'exec-simple-view';
-    box.style.cssText = 'padding:0 36px 50px;overflow-y:auto;overflow-x:hidden;height:100%;box-sizing:border-box;max-width:1180px;margin:0 auto;position:relative';
+    box.style.cssText = 'padding:0 36px 50px;overflow-y:auto;overflow-x:hidden;height:100%;box-sizing:border-box;max-width:1600px;margin:0 auto;position:relative;width:100%';
     mc.appendChild(box);
   }
   box.style.display = 'block';
@@ -20561,18 +20561,20 @@ function renderVistaEjecutivaSimple() {
       '<div id="exec-mapa-container" style="height:460px;border-radius:10px;overflow:hidden;background:#eef2f7;position:relative;z-index:1;isolation:isolate;' + (window._execMapaOculto ? 'display:none' : '') + '"></div>' +
       '<div id="exec-mapa-hint" style="font-size:10.5px;color:var(--txt3);margin-top:8px;' + (window._execMapaOculto ? 'display:none' : '') + '">📍 Toca cualquier instalación para ver existencia, despacho real, pronóstico y cobertura por producto</div>' +
     '</div>' +
+    '<div class="exec-charts-row">' +
     '<div style="background:var(--card);border:1px solid var(--bdr);border-radius:14px;padding:22px 24px;margin-bottom:20px">' +
       '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:14px">' +
         '<div style="font-size:13px;font-weight:800;color:var(--txt)">Inventario ' + (pl==='Nacional'?'Nacional':'· '+pl) + (prod!=='Todos'?' · '+prod:'') + '</div>' +
         periodoBar +
       '</div>' +
-      '<div style="position:relative;height:220px"><canvas id="exec-chart-inv"></canvas></div>' +
+      '<div class="exec-chart-wrap" style="position:relative;height:220px"><canvas id="exec-chart-inv"></canvas></div>' +
     '</div>' +
     (esRefineriaExec ? '' :
     '<div style="background:var(--card);border:1px solid var(--bdr);border-radius:14px;padding:22px 24px;margin-bottom:24px">' +
       '<div style="font-size:13px;font-weight:800;color:var(--txt);margin-bottom:14px">Despachos Reportados (Registro Diario) ' + (pl==='Nacional'?'':'· '+pl) + (prod!=='Todos'?' · '+prod:'') + '</div>' +
-      '<div style="position:relative;height:220px"><canvas id="exec-chart-desp"></canvas></div>' +
+      '<div class="exec-chart-wrap" style="position:relative;height:220px"><canvas id="exec-chart-desp"></canvas></div>' +
     '</div>') +
+    '</div>' +
     reposSectionHTML +
     cobSectionHTML +
     plantasGridHTML;
@@ -21025,7 +21027,20 @@ function initExecutiveMode() {
   execStyle.textContent =
     '.exec-banner{flex-wrap:wrap;row-gap:8px}' +
     '.exec-title-main{font-size:22px;font-weight:800;color:var(--txt);line-height:1.25}' +
+    // ── Desktop ancho: aprovechar el espacio horizontal ────────────────
+    // Antes el panel estaba limitado a 1180px y las gráficas de
+    // Inventario/Despachos siempre se apilaban una debajo de otra,
+    // dejando mucho espacio vacío a los costados en monitores anchos.
+    '.exec-charts-row{display:block}' +
+    '@media (min-width:1200px){' +
+      '.exec-charts-row{display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:start}' +
+      '.exec-charts-row > div{margin-bottom:0!important}' +
+      '.exec-chart-wrap{height:280px!important}' +
+      '.exec-kpi-grid{gap:24px!important}' +
+      '#exec-mapa-container{height:520px!important}' +
+    '}' +
     '@media (max-width:640px){' +
+      '.exec-charts-row{display:block}' +
       '.exec-banner{padding:7px 10px;gap:6px}' +
       '.exec-banner-logo{width:28px;height:28px}' +
       '.exec-banner-title .exec-h1{font-size:10.5px;letter-spacing:.01em;margin:0}' +
