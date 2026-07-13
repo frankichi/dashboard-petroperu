@@ -20618,21 +20618,18 @@ function renderVistaEjecutivaSimple() {
     var vol1 = r.vol_rep || 0, vol2 = r.vol_rep_bt2 || 0;
     var volTotal = vol1 + vol2;
     if (volTotal <= 0 || denom <= 0) return { diasRepos: 0, volMB: 0, tipo: '' };
-    // ⚠️ CORREGIDO (v3 — sin excepción para "reporte de hoy"): la v2
-    // asumía que si r.fecha === fechaHoy (el operador reportó justo
-    // hoy), el BT/VOL_REP de esa fila era confiable sin más validación.
-    // Confirmado con el caso real de Supe que eso es falso: el operador
-    // reporta su existencia todos los días, pero las columnas
-    // BT/VOL_REP quedan copiadas de una plantilla/hoja que arrastra el
-    // mismo valor de hace más de un mes (un buque de junio ya
-    // descargado y consumido) día tras día, sin que nadie las limpie —
-    // así que ni siquiera el reporte de HOY garantiza que esas columnas
-    // específicas estén vigentes. Ahora se exige SIEMPRE (sin
-    // excepción) que exista un fecha_reposicion (ETA) válido y que no
-    // haya pasado ya, sin importar qué tan fresco sea el resto de la
-    // fila.
-    var etaInvalido = !r.fecha_reposicion || r.fecha_reposicion < fechaHoy;
-    if (etaInvalido) {
+    // ⚠️ CORREGIDO (v4 — fix de raíz, sin depender de fecha_reposicion):
+    // las versiones anteriores intentaban invalidar reposiciones viejas
+    // comparando fechas guardadas en la fila (fecha_reposicion) — pero
+    // esas columnas pueden quedar contaminadas de formas que ninguna
+    // validación de fecha detecta (caso real: Supe seguía mostrando un
+    // buque de junio hasta en su reporte de HOY). Ahora se usa
+    // `_btConfirmadoHoy`, una bandera calculada en el SERVIDOR en cada
+    // consulta, que cruza el BT de esta fila contra `cargas_naves`
+    // VIGENTE en este momento — es la única fuente de verdad confiable,
+    // porque no depende de qué tan "vieja" esté la fila ni de si
+    // alguien limpió o no sus columnas.
+    if (!r._btConfirmadoHoy) {
       return { diasRepos: 0, volMB: 0, tipo: '' };
     }
     var tipo1 = vol1 > 0 ? (esMaritimoExec(r.bt) ? 'mar\u00edtima' : 'terrestre') : '';
@@ -20820,7 +20817,7 @@ function renderVistaEjecutivaSimple() {
   }
   var cobSectionHTML = '<div style="background:var(--card);border:1px solid var(--bdr);border-radius:14px;padding:22px 24px;margin-bottom:20px">' +
       '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:10px">' +
-        '<div style="font-size:13px;font-weight:800;color:var(--txt)">📊 Cobertura ' + (pl==='Nacional'?'por planta':'por producto') + (prod!=='Todos'&&pl==='Nacional'?' · '+prod:'') + '</div>' +
+        '<div style="font-size:13px;font-weight:800;color:var(--txt)">📊 Cobertura ' + (pl==='Nacional'?'por planta':'por producto') + (prod!=='Todos'&&pl==='Nacional'?' · '+prod:'') + ' <span style="font-size:8.5px;color:#94a3b8;font-weight:600" title="Marca de versión — si esto no dice REPOS-FIX-V4, el navegador está sirviendo un archivo viejo">[REPOS-FIX-V4]</span></div>' +
         '<div class="exec-btn-grid" style="display:flex;gap:8px">' + sortBtn('desc','Mayor → Menor') + sortBtn('asc','Menor → Mayor') + '</div>' +
       '</div>' +
       '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap">' +
@@ -21189,15 +21186,11 @@ function _execReposicionInfo(r, fechaRef) {
   var vol1 = r.vol_rep || 0, vol2 = r.vol_rep_bt2 || 0;
   var volTotal = vol1 + vol2;
   if (volTotal <= 0) return { diasRepos: 0, volMB: 0, tipo: '', bt: '', bt2: '' };
-  // ⚠️ CORREGIDO (v3 — sin excepción para "reporte de hoy", igual que
-  // reposicionInfo() de más abajo): confirmado con Supe que ni siquiera
-  // el reporte del mismo día garantiza columnas BT/VOL_REP vigentes —
-  // el operador puede reportar existencia real hoy mientras esas
-  // columnas específicas siguen arrastrando un valor de hace más de un
-  // mes sin que nadie las limpie. Ahora se exige SIEMPRE un
-  // fecha_reposicion (ETA) válido y no vencido, sin excepción por
-  // fecha del reporte.
-  if (fechaRef && (!r.fecha_reposicion || r.fecha_reposicion < fechaRef)) {
+  // ⚠️ CORREGIDO (v4 — fix de raíz, mismo criterio que reposicionInfo()
+  // de más abajo): se usa _btConfirmadoHoy, calculada en el servidor
+  // cruzando esta fila contra cargas_naves VIGENTE en este momento — no
+  // depende de parsear fecha_reposicion, que puede venir contaminada.
+  if (!r._btConfirmadoHoy) {
     return { diasRepos: 0, volMB: 0, tipo: '', bt: '', bt2: '' };
   }
   var tipo1 = vol1 > 0 ? (_execEsMaritimo(r.bt) ? 'marítima' : 'terrestre') : '';
