@@ -7596,6 +7596,15 @@ function renderP2() {
             + (refAdj > 0 ? '<span style="font-size:8px;color:var(--acc2);font-weight:700" title="Planta ' + baseInv.toFixed(1) + ' + Ref. ' + refAdj.toFixed(1) + ' = ' + invMb.toFixed(1) + ' MB"> +' + refAdj.toFixed(1) + '</span>' : '')
           : '<span style="font-family:var(--mono);font-weight:700">' + baseInv.toFixed(2) + '</span>'
             + (refAdj > 0 ? '<span style="font-size:8px;color:var(--acc2);font-weight:700"> +' + refAdj.toFixed(1) + '</span>' : ''))
+        // ⚠️ Insignia de fecha real del dato — sin esto, un valor
+        // ARRASTRADO (última fecha con reporte real, r.fecha) se ve
+        // IDÉNTICO a un valor recién guardado para la fecha que se está
+        // viendo (currentDate), causando exactamente la confusión de
+        // "guardé pero no se refleja": el número no cambia visualmente
+        // aunque no exista ningún reporte real para el día seleccionado.
+        + (r.fecha && currentDate && r.fecha !== currentDate && !cobOverrides[key] && cobInvOverrides[key] === undefined
+            ? '<div style="font-size:8px;color:var(--ora);font-weight:700;white-space:nowrap" title="No hay reporte para ' + currentDate + ' — se muestra el último dato real, del ' + r.fecha + '">⚠ dato del ' + r.fecha + '</div>'
+            : (r.fecha === currentDate ? '<div style="font-size:8px;color:var(--grn);font-weight:700">✓ dato de hoy</div>' : ''))
         + '</td>'
         + '<td class="r">' + pronMbdc.toFixed(2) + '</td>'
         + '<td class="r" title="' + vrealSource + vrealSuffix + '" style="white-space:nowrap">'
