@@ -20738,47 +20738,6 @@ function renderVistaEjecutivaSimple() {
   var barMode = window._execPeriod === 'mensual';
   var ctxInv = document.getElementById('exec-chart-inv');
   if (ctxInv) {
-    // Etiquetas de dato — plugin liviano hecho a mano (sin librería
-    // externa, para no depender de otro CDN en una vista que se comparte
-    // públicamente). En la barra apilada de Inventario se muestra el
-    // TOTAL (suma de los segmentos) arriba de cada barra, no cada
-    // segmento por separado — con 2 segmentos apilados, poner una
-    // etiqueta a cada uno se ve saturado y el total es lo que de verdad
-    // le interesa a gerencia de un vistazo.
-    var execBarTotalLabelsPlugin = {
-      id: 'execBarTotalLabels',
-      afterDatasetsDraw: function(chart) {
-        var ctx = chart.ctx;
-        var meta0 = chart.getDatasetMeta(0);
-        if (!meta0 || !meta0.data) return;
-        ctx.save();
-        ctx.font = '700 10.5px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif';
-        ctx.fillStyle = cssVar('--txt') || '#0f1e3c';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'bottom';
-        meta0.data.forEach(function(bar, i) {
-          var total = 0, huboDato = false;
-          chart.data.datasets.forEach(function(ds, dIdx) {
-            var meta = chart.getDatasetMeta(dIdx);
-            if (meta.hidden) return;
-            var v = ds.data[i];
-            if (v != null) { total += v; huboDato = true; }
-          });
-          if (!huboDato) return;
-          var topBar = bar;
-          // Con stack, el punto más alto visible es el del último dataset
-          // no oculto que tenga dato en este índice.
-          for (var dIdx = chart.data.datasets.length - 1; dIdx >= 0; dIdx--) {
-            var meta = chart.getDatasetMeta(dIdx);
-            if (meta.hidden || chart.data.datasets[dIdx].data[i] == null) continue;
-            topBar = meta.data[i];
-            break;
-          }
-          ctx.fillText(fmtMB(total), topBar.x, topBar.y - 6);
-        });
-        ctx.restore();
-      }
-    };
     // Degradado azul corporativo — más impactante que un color plano para
     // una vista de nivel gerencial. Encima se apila (con otro color) el
     // volumen recibido por reposición ese día, leído de la etiqueta que
@@ -20826,10 +20785,8 @@ function renderVistaEjecutivaSimple() {
     window._execChartInv = new Chart(ctxInv, {
       type: 'bar',
       data: { labels: labels, datasets: invDatasets },
-      plugins: [execBarTotalLabelsPlugin],
       options: {
         responsive: true, maintainAspectRatio: false,
-        layout: { padding: { top: 18 } },
         plugins: {
           legend: { display: hayRepos, position: 'top', align: 'end', labels: { boxWidth: 14, font: { size: 10.5 } } },
           tooltip: {
@@ -20851,25 +20808,6 @@ function renderVistaEjecutivaSimple() {
     var gDesp = ctxDesp.getContext('2d').createLinearGradient(0, 0, 0, 220);
     gDesp.addColorStop(0, 'rgba(234,88,12,.35)');
     gDesp.addColorStop(1, 'rgba(234,88,12,0)');
-    var execLinePointLabelsPlugin = {
-      id: 'execLinePointLabels',
-      afterDatasetsDraw: function(chart) {
-        var ctx = chart.ctx;
-        ctx.save();
-        ctx.font = '700 10px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif';
-        ctx.fillStyle = '#ea580c';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'bottom';
-        var meta = chart.getDatasetMeta(0);
-        chart.data.datasets[0].data.forEach(function(v, i) {
-          if (v == null) return;
-          var pt = meta.data[i];
-          if (!pt) return;
-          ctx.fillText(fmtMB(v), pt.x, pt.y - 8);
-        });
-        ctx.restore();
-      }
-    };
     window._execChartDesp = new Chart(ctxDesp, {
       type: 'line',
       data: { labels: labels, datasets: [{
@@ -20879,10 +20817,8 @@ function renderVistaEjecutivaSimple() {
         pointBackgroundColor: '#ea580c', pointBorderColor: '#fff', pointBorderWidth: 2,
         tension: 0.25, fill: true, spanGaps: true
       }] },
-      plugins: [execLinePointLabelsPlugin],
       options: {
         responsive: true, maintainAspectRatio: false,
-        layout: { padding: { top: 18 } },
         plugins: {
           legend: { display: false },
           tooltip: {
