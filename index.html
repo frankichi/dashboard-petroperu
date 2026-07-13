@@ -20647,8 +20647,18 @@ function renderVistaEjecutivaSimple() {
   // las dos, la del producto elegido como representante. Esta función
   // suma la reposición de TODOS los productos de la planta, no solo el
   // representante, para que ningún volumen quede oculto.
-  function reposicionInfoPlanta(planta) {
-    var filas = latestRows.filter(function(r){ return r.planta === planta; });
+  function reposicionInfoPlanta(planta, productoFiltro) {
+    var filas = latestRows.filter(function(r){
+      if (r.planta !== planta) return false;
+      // ⚠️ CORREGIDO: cuando el usuario filtra por un producto específico
+      // en el selector ("Todos los productos" → ej. "G. Regular"), la
+      // reposición mostrada debe ser SOLO la de ese producto — antes se
+      // sumaban los 3 productos de la planta sin importar el filtro
+      // elegido, mostrando un total (y unos "días equivalentes")
+      // inflados que no correspondían a lo que el usuario pidió ver.
+      if (productoFiltro && productoFiltro !== 'Todos' && r.producto !== productoFiltro) return false;
+      return true;
+    });
     var volTotal = 0, diasTotal = 0, tipos = [], detalle = [];
     filas.forEach(function(r) {
       var info = reposicionInfo(r);
@@ -20706,7 +20716,7 @@ function renderVistaEjecutivaSimple() {
     });
     datosCob = Object.keys(porPlantaFila).map(function(p) {
       var r = porPlantaFila[p];
-      var rep = reposicionInfoPlanta(p);
+      var rep = reposicionInfoPlanta(p, prod);
       return { label: p, dias: r._cobVal, invMB: r.inv||0, diasRepos: rep.diasRepos, volReposMB: rep.volMB, tipoRepos: rep.tipo, reposDetalle: rep.detalle, sinCob: r._cobVal === null, proyectado: !!r._proyectadoConsumo };
     });
   } else if (!esRefineriaExec) {
@@ -20817,7 +20827,7 @@ function renderVistaEjecutivaSimple() {
   }
   var cobSectionHTML = '<div style="background:var(--card);border:1px solid var(--bdr);border-radius:14px;padding:22px 24px;margin-bottom:20px">' +
       '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:10px">' +
-        '<div style="font-size:13px;font-weight:800;color:var(--txt)">📊 Cobertura ' + (pl==='Nacional'?'por planta':'por producto') + (prod!=='Todos'&&pl==='Nacional'?' · '+prod:'') + ' <span style="font-size:8.5px;color:#94a3b8;font-weight:600" title="Marca de versión — si esto no dice REPOS-FIX-V4, el navegador está sirviendo un archivo viejo">[REPOS-FIX-V4]</span></div>' +
+        '<div style="font-size:13px;font-weight:800;color:var(--txt)">📊 Cobertura ' + (pl==='Nacional'?'por planta':'por producto') + (prod!=='Todos'&&pl==='Nacional'?' · '+prod:'') + ' <span style="font-size:8.5px;color:#94a3b8;font-weight:600" title="Marca de versión — si esto no dice REPOS-FIX-V5, el navegador está sirviendo un archivo viejo">[REPOS-FIX-V5]</span></div>' +
         '<div class="exec-btn-grid" style="display:flex;gap:8px">' + sortBtn('desc','Mayor → Menor') + sortBtn('asc','Menor → Mayor') + '</div>' +
       '</div>' +
       '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap">' +
