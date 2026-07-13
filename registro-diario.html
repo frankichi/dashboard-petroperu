@@ -1980,19 +1980,21 @@ function rdRenderHistoricoTable() {
         // reporte_estado) — se muestra solo en la primera fila de cada
         // grupo de fecha, igual que ya se hace con la columna Fecha, para
         // no repetirlo en cada producto.
-        // Comentario GENERAL de la planta (uno por fecha, viene de
-        // reporte_estado) — se muestra en TODAS las filas de esa fecha
-        // (antes solo en la primera, pero eso hacía que dependiera del
-        // orden de productos y a veces no se viera en la fila que se
-        // esperaba, ej. Diesel).
-        var general = (r.comentario || '').trim();
+        // Comentario general de la planta (col COMENTARIO de inventario) —
+        // OJO: esta columna tiene uso mixto históricamente, en muchas
+        // filas antiguas solo contiene un código de estatus corto (N,
+        // RS, RP — de un proceso más viejo, no un comentario real). Se
+        // filtra para no mostrar esos códigos como si fueran texto.
+        var STATUS_CODES = ['N', 'S', 'RS', 'RP', 'RSN', 'RPN'];
+        var generalRaw = (r.comentario || '').trim();
+        var general = (generalRaw && STATUS_CODES.indexOf(generalRaw.toUpperCase()) === -1) ? generalRaw : '';
         var generalHTML = general
           ? '<div style="margin-bottom:3px"><span style="font-weight:700;color:#7c3aed;font-size:9px;text-transform:uppercase;letter-spacing:.3px">🏭 General:</span> <span style="color:var(--txt2)">' + general.replace(/</g,'&lt;') + '</span></div>'
           : '';
         var comentario = (r.comentario_prod || '').trim();
         // Se muestra el texto completo, quitando el prefijo estructurado
         // "[REPOS|...]" si lo hay (esa parte ya se ve en la columna
-        // anterior) — aquí interesa el detalle libre que escribió la planta.
+        // anterior) — esto es el comentario propio del producto.
         var texto = comentario.replace(/^\[REPOS\|\w+\|[\d.]+\]\s*/, '');
         var productoHTML = texto
           ? '<div>' + (general ? '<span style="font-weight:700;color:#0891b2;font-size:9px;text-transform:uppercase;letter-spacing:.3px">🧪 ' + (r.producto||'') + ':</span> ' : '') + '<span style="color:var(--txt2)">' + texto.replace(/</g,'&lt;') + '</span></div>'
