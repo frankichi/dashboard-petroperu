@@ -3226,6 +3226,16 @@ function syncAllDateBars() {
   });
 }
 function rerenderActivePage() {
+  // Vista Ejecutiva (?view=executive) es un modo STANDALONE — no vive
+  // dentro del sistema de páginas .page normal del dashboard, así que
+  // nunca calzaba con ningún 'case' de abajo. Antes de este fix, cambiar
+  // la fecha ahí actualizaba el texto/label (eso lo hace syncAllDateBars,
+  // aparte) pero las cifras (KPIs, gráficas) se quedaban congeladas
+  // porque renderVistaEjecutivaSimple() nunca se volvía a llamar.
+  if (typeof EXECUTIVE_MODE !== 'undefined' && EXECUTIVE_MODE && typeof renderVistaEjecutivaSimple === 'function') {
+    renderVistaEjecutivaSimple();
+    return;
+  }
   const activePage = document.querySelector('.page.active');
   if (!activePage) return;
   switch(activePage.id) {
