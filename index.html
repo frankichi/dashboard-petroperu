@@ -20618,20 +20618,21 @@ function renderVistaEjecutivaSimple() {
     var vol1 = r.vol_rep || 0, vol2 = r.vol_rep_bt2 || 0;
     var volTotal = vol1 + vol2;
     if (volTotal <= 0 || denom <= 0) return { diasRepos: 0, volMB: 0, tipo: '' };
-    // ⚠️ CORREGIDO: cuando una planta no reporta hace varios días, se
-    // arrastra (con proyección) su ÚLTIMO reporte real — pero si ese
-    // reporte viejo ya tenía una reposición marcada, sus columnas
-    // BT/VOL_REP siguen "vivas" en la fila sin limpiarse, y volvían a
-    // mostrarse como si fuera una reposición NUEVA y pendiente. Ya se
-    // filtraba cuando el ETA (fecha_reposicion) ya había pasado — pero
-    // si el ETA está simplemente VACÍO (dato viejo sin fecha registrada,
-    // como pasó con Supe), ese filtro no lo atrapaba. Ahora, para
-    // cualquier fila que NO sea el reporte real de HOY, se exige un
-    // fecha_reposicion válido y no vencido — sin eso, no hay forma de
-    // confirmar que sigue siendo una reposición pendiente real, así que
-    // se descarta. Si es el reporte de hoy mismo (dato fresco del
-    // operador), se confía tal cual sin exigir ETA.
-    if (r.fecha !== fechaHoy && (!r.fecha_reposicion || r.fecha_reposicion < fechaHoy)) {
+    // ⚠️ CORREGIDO (v2 — guard absoluto, no depende de parsear bien
+    // fecha_reposicion): confirmado con datos reales de Supe — filas de
+    // hace más de un mes (un buque de junio, ya descargado y consumido
+    // hace tiempo) siguen "vivas" en columnas BT/VOL_REP de reportes
+    // posteriores, a veces CON fecha_reposicion vieja y a veces con esa
+    // columna simplemente vacía. En vez de confiar en parsear
+    // correctamente fecha_reposicion (que puede venir vacía, mal
+    // formada, o con formato inconsistente), se aplica un corte
+    // absoluto: si el reporte del que viene este dato (r.fecha) tiene
+    // más de 5 días de antigüedad respecto a la fecha que se está
+    // viendo, y no es un reporte de hoy, su BT/VOL_REP NUNCA se
+    // considera una reposición vigente — sin excepciones.
+    var esReporteViejo = r.fecha !== fechaHoy && _diasEntreFechas(r.fecha, fechaHoy) > 5;
+    var etaInvalido = !r.fecha_reposicion || r.fecha_reposicion < fechaHoy;
+    if (esReporteViejo || (r.fecha !== fechaHoy && etaInvalido)) {
       return { diasRepos: 0, volMB: 0, tipo: '' };
     }
     var tipo1 = vol1 > 0 ? (esMaritimoExec(r.bt) ? 'mar\u00edtima' : 'terrestre') : '';
@@ -21193,8 +21194,20 @@ function _execReposicionInfo(r, fechaRef) {
   // válido y no vencido — un ETA vacío es tan sospechoso como uno ya
   // pasado, ambos significan que no hay forma de confirmar que sigue
   // siendo una reposición pendiente real.
-  if (fechaRef && r.fecha !== fechaRef && (!r.fecha_reposicion || r.fecha_reposicion < fechaRef)) {
-    return { diasRepos: 0, volMB: 0, tipo: '', bt: '', bt2: '' };
+  //
+  // ⚠️ Guard absoluto adicional (v2, confirmado con datos reales de
+  // Supe): un reporte de hace más de 5 días, que no sea el de hoy,
+  // nunca puede aportar BT/VOL_REP como reposición vigente — sin
+  // importar si fecha_reposicion viene vacía o mal formada.
+  if (fechaRef && r.fecha !== fechaRef) {
+    var diasViejo = 0;
+    if (r.fecha) {
+      var pA = r.fecha.split('-').map(Number), pB = fechaRef.split('-').map(Number);
+      diasViejo = Math.round((Date.UTC(pB[0],pB[1]-1,pB[2]) - Date.UTC(pA[0],pA[1]-1,pA[2])) / 86400000);
+    }
+    if (diasViejo > 5 || !r.fecha_reposicion || r.fecha_reposicion < fechaRef) {
+      return { diasRepos: 0, volMB: 0, tipo: '', bt: '', bt2: '' };
+    }
   }
   var tipo1 = vol1 > 0 ? (_execEsMaritimo(r.bt) ? 'marítima' : 'terrestre') : '';
   var tipo2 = vol2 > 0 ? (_execEsMaritimo(r.bt2) ? 'marítima' : 'terrestre') : '';
