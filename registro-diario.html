@@ -842,9 +842,9 @@ function rdRenderTopbar() {
   if (RD.token) {
     var selectorAdmin = '';
     if (RD.rol === 'admin') {
-      var opciones = '<option value="">— elegir planta —</option>' +
+      var opciones = '<option value="" style="color:#0f1e3c;background:#fff">— elegir planta —</option>' +
         (RD.plantas || []).map(function(p) {
-          return '<option value="' + p + '"' + (p === RD.plantaAdminVista ? ' selected' : '') + '>' + plantaLabel(p) + '</option>';
+          return '<option value="' + p + '" style="color:#0f1e3c;background:#fff"' + (p === RD.plantaAdminVista ? ' selected' : '') + '>' + plantaLabel(p) + '</option>';
         }).join('');
       selectorAdmin = '<span style="font-size:11px" title="Modo soporte: ver el Registro Diario tal como lo ve esa planta">🛠️</span>'
         + '<select onchange="rdCambiarVistaPlantaAdmin(this.value)" '

@@ -20929,37 +20929,50 @@ function renderVistaEjecutivaSimple() {
     // suma de los días de cobertura de cada uno — no un solo producto
     // representando a todos. Refinerías no tienen despacho, así que no
     // tienen cobertura — se excluyen.
+    //
+    // ⚠️ CORREGIDO (bug real confirmado: Talara mostraba "0d" con 99+ MB
+    // de inventario combinado): el inventario de Refinería Talara se
+    // sumaba DESPUÉS de calcular los días de cobertura de cada
+    // producto — así que "días" seguía calculado con el inventario
+    // ORIGINAL de Talara sola (a veces muy bajo o 0 para un producto
+    // puntual), ignorando por completo el volumen ya sumado de la
+    // refinería. Ahora se arma primero un mapa de inventario COMBINADO
+    // por producto para Talara, y calcCob() se calcula sobre ESE valor
+    // ya combinado — así "días" sí refleja de verdad cuánto hay
+    // disponible entre planta + refinería.
+    var refTalaraInvPorProducto = {};
+    if (COMBO_PLANTAS['Talara']) {
+      var talaraProdsValidos0 = COMBO_PLANTAS['Talara'].productosRestrict;
+      latestRows.forEach(function(r) {
+        if (r.planta !== 'Refinería Talara') return;
+        if (talaraProdsValidos0.indexOf(r.producto) === -1) return;
+        refTalaraInvPorProducto[r.producto] = (refTalaraInvPorProducto[r.producto]||0) + (r.inv||0);
+      });
+    }
     var porPlantaFila = {};
     latestRows.forEach(function(r) {
       if (REFINERIAS.indexOf(r.planta) !== -1) return;
       if (typeof SKIP_COMBOS !== 'undefined' && SKIP_COMBOS.has((r.planta||'')+'|'+(r.producto||''))) return;
       if (prod !== 'Todos' && r.producto !== prod) return;
-      var c = calcCob(r);
+      // Si es Talara, calcular días con el inventario YA combinado
+      // (planta + refinería para este producto específico) — no con el
+      // valor original de la fila.
+      var rParaCob = r;
+      var invCombProd = r.inv || 0;
+      if (r.planta === 'Talara' && refTalaraInvPorProducto[r.producto] !== undefined) {
+        invCombProd = (r.inv||0) + refTalaraInvPorProducto[r.producto];
+        rParaCob = Object.assign({}, r, { inv: invCombProd });
+      }
+      var c = calcCob(rParaCob);
       if (!porPlantaFila[r.planta]) {
         porPlantaFila[r.planta] = { invSum: 0, pronSum: 0, diasSum: 0, tieneAlgunCob: false, proyectado: false, planta: r.planta, producto: r.producto };
       }
       var acc = porPlantaFila[r.planta];
-      acc.invSum += (r.inv || 0);
+      acc.invSum += invCombProd;
       acc.pronSum += (typeof pronSheet !== 'undefined' && pronSheet[r.planta+'|'+r.producto]) || r.pron_mes || r.pron || 0;
       if (c !== null) { acc.diasSum += c; acc.tieneAlgunCob = true; }
       if (r._proyectadoConsumo) acc.proyectado = true;
     });
-    // ⚠️ Particularidad por petición gerencial: sumar el inventario de
-    // Refinería Talara dentro de la fila "Talara" — aquí Talara SÍ tiene
-    // despacho propio (a diferencia de Conchán/Iquitos, donde la
-    // refinería YA incluye a la planta de venta), así que se suma
-    // aparte, solo para los productos que la planta de venta realmente
-    // comercializa (no D2S50-H, producto intermedio exclusivo de la
-    // refinería).
-    if (porPlantaFila['Talara']) {
-      var talaraProdsValidos = COMBO_PLANTAS['Talara'].productosRestrict;
-      latestRows.forEach(function(r) {
-        if (r.planta !== 'Refinería Talara') return;
-        if (talaraProdsValidos.indexOf(r.producto) === -1) return;
-        if (prod !== 'Todos' && r.producto !== prod) return;
-        porPlantaFila['Talara'].invSum += (r.inv || 0);
-      });
-    }
     datosCob = Object.keys(porPlantaFila).map(function(p) {
       var acc = porPlantaFila[p];
       var rep = reposicionInfoPlanta(p, prod);
