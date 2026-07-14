@@ -13149,8 +13149,8 @@ function renderPUpload() {
         + '<button class="upload-btn upload-btn-secondary" onclick="clearCargasNaves()">✕ Limpiar</button>'
         + '<span class="upload-status" id="cargas-naves-send-status"></span></div>'
     , cargFecha)
-    + _uplAccordion('acc-naves', '🚢', 'Posicionamiento de Naves (Texto)',
-        'Pega el texto del reporte diario — actualiza posición, timestamps y cierres de puerto',
+    + _uplAccordion('acc-naves', '🚢', 'Posicionamiento de Naves (Texto) [NAVES-TS-V2]',
+        'Pega el texto del reporte diario — captura ARRIBÓ/FONDEÓ, AMARRÓ, I.D., T.D., I.C., ZARPÓ y ETA con hora real',
         navesActionsVis==='flex' ? '✅ Datos cargados' : '',
         navesOpen,
         '<div class="upl-date-bar">'
@@ -14469,6 +14469,37 @@ function clearCargasNaves() {
   var act = document.getElementById('cargas-naves-actions'); if(act) act.style.display='none';
 }
 window.clearCargasNaves = clearCargasNaves;
+// Convierte el formato naviero de fecha-hora a una fecha-hora completa,
+// usando la fecha del reporte como referencia. Se ven DOS variantes en
+// estos reportes: "DD/HH:MM" (solo día del mes, ej. "13/20:06") y
+// "DD.MM/HH:MM" (día y mes explícitos, ej. "28.05/11:30" = 28 de mayo).
+// Si solo viene el día y es varios días MAYOR al día del reporte, se
+// asume que es del mes anterior (ej. reporte del 14-jul mencionando
+// "30/xx:xx" es del 30-jun, no de un julio que todavía no llega).
+function _posNavesParseDT(ddhhmm, fechaRef) {
+  if (!ddhhmm || !fechaRef) return '';
+  var parts = fechaRef.split('-');
+  var yyyy = parseInt(parts[0], 10), refMM = parseInt(parts[1], 10), refDD = parseInt(parts[2], 10);
+  // Variante con mes explícito: "DD.MM/HH:MM"
+  var mConMes = String(ddhhmm).match(/(\d{1,2})\.(\d{1,2})\s*\/\s*(\d{1,2}):(\d{2})/);
+  if (mConMes) {
+    var dd2 = parseInt(mConMes[1], 10), mm2 = parseInt(mConMes[2], 10);
+    var yyyy2 = yyyy;
+    if (mm2 > refMM + 1) yyyy2 = yyyy - 1; // ej. reporte de enero mencionando diciembre pasado
+    return yyyy2 + '-' + String(mm2).padStart(2,'0') + '-' + String(dd2).padStart(2,'0') + 'T' + String(mConMes[3]).padStart(2,'0') + ':' + mConMes[4];
+  }
+  // Variante simple: "DD/HH:MM" (mes = el del reporte, salvo que el día
+  // sugiera que es del mes anterior)
+  var m = String(ddhhmm).match(/(\d{1,2})\s*\/\s*(\d{1,2}):(\d{2})/);
+  if (!m) return '';
+  var dd = parseInt(m[1], 10), hh = m[2], mi = m[3];
+  var mm = refMM;
+  if (dd > refDD + 5) {
+    mm -= 1;
+    if (mm < 1) { mm = 12; yyyy -= 1; }
+  }
+  return yyyy + '-' + String(mm).padStart(2, '0') + '-' + String(dd).padStart(2, '0') + 'T' + String(hh).padStart(2,'0') + ':' + mi;
+}
 function parseNavesText() {
   var ta = document.getElementById('naves-text-input');
   if (!ta || !ta.value.trim()) { alert('Pega el texto del reporte de naves primero.'); return; }
@@ -14531,6 +14562,43 @@ function parseNavesText() {
       var rotacion = '';
       var rotM = chunk.match(/ROTACI[OÓ]N:\s*([^\n.]+)/i);
       if (rotM) rotacion = rotM[1].trim();
+      // ── Timestamps reales de Posicionamiento de Naves ────────────────
+      // Antes NO se capturaba ninguno de estos — el sistema solo sabía
+      // "dónde está navegando/descargando" en texto libre, nunca CUÁNDO
+      // pasó cada evento. T.D. (Término de Descarga) es el más crítico:
+      // en cuanto aparece, la descarga en ese puerto YA TERMINÓ DE
+      // VERDAD — sin eso, el dashboard dependía de que alguien
+      // actualizara el estado a mano en otro reporte, generando
+      // exactamente el desfase reportado (buque ya descargó y zarpó,
+      // pero el dashboard seguía mostrando la planta como pendiente).
+      var mArribo = chunk.match(/ARRIB[OÓ]\s+A\s+([A-ZÁÉÍÓÚÑ\s]+?):\s*(\d{1,2}(?:\.\d{1,2})?\/\d{1,2}:\d{2})\s*HRS/i);
+      var puertoUltimo = mArribo ? mArribo[1].trim() : '';
+      var fechaArribo  = mArribo ? _posNavesParseDT(mArribo[2], fecha) : '';
+      // FONDEÓ = ancló en la bahía (no necesariamente amarrado a un
+      // muelle todavía) — se usa como respaldo cuando no hay "ARRIBÓ A
+      // [puerto]:" explícito, tomando el puerto ya detectado por otro
+      // lado (ubicacion/rotación) si existe.
+      if (!fechaArribo) {
+        var mFondeo = chunk.match(/FONDE[OÓ]:?\s*(\d{1,2}(?:\.\d{1,2})?\/\d{1,2}:\d{2})\s*HRS/i);
+        if (mFondeo) fechaArribo = _posNavesParseDT(mFondeo[1], fecha);
+      }
+      var mAmarro = chunk.match(/AMARR[OÓ](?:\s+EN\s+[A-Z0-9\-]+)?:\s*(\d{1,2}(?:\.\d{1,2})?\/\d{1,2}:\d{2})\s*HRS/i);
+      var fechaAmarro = mAmarro ? _posNavesParseDT(mAmarro[1], fecha) : '';
+      var mID = chunk.match(/I\.D\.:\s*(\d{1,2}(?:\.\d{1,2})?\/\d{1,2}:\d{2})\s*HRS/i);
+      var fechaID = mID ? _posNavesParseDT(mID[1], fecha) : '';
+      var mTD = chunk.match(/T\.D\.:\s*(\d{1,2}(?:\.\d{1,2})?\/\d{1,2}:\d{2})\s*HRS/i);
+      var fechaTD = mTD ? _posNavesParseDT(mTD[1], fecha) : '';
+      var mIC = chunk.match(/I\.C\.:\s*(\d{1,2}(?:\.\d{1,2})?\/\d{1,2}:\d{2})\s*HRS/i);
+      var fechaIC = mIC ? _posNavesParseDT(mIC[1], fecha) : '';
+      var mETOp = chunk.match(/E\.?\s*T\.?\s*OPERACIONES:\s*(\d{1,2}(?:\.\d{1,2})?\/\d{1,2}:\d{2})\s*HRS/i);
+      var fechaETOp = mETOp ? _posNavesParseDT(mETOp[1], fecha) : '';
+      var mZarpo = chunk.match(/ZARP[OÓ]:\s*(\d{1,2}(?:\.\d{1,2})?\/\d{1,2}:\d{2})\s*HRS/i);
+      var fechaZarpe = mZarpo ? _posNavesParseDT(mZarpo[1], fecha) : '';
+      var mEta = chunk.match(/ETA\s+([A-ZÁÉÍÓÚÑ\s]+?):\s*(\d{1,2}(?:\.\d{1,2})?\/\d{1,2}:\d{2})\s*HRS/i);
+      var puertoEta = mEta ? mEta[1].trim() : '';
+      var fechaEta  = mEta ? _posNavesParseDT(mEta[2], fecha) : '';
+      var mAgencia = chunk.match(/\(([A-Z]{3,})\)/);
+      var agencia = mAgencia ? mAgencia[1] : '';
       var producto = '', volumen = 0;
       var impM = chunk.match(/(\d+)\s*MB\s*[+\-\/]*[^D]*DE\s+([A-Z\u00C0-\u00FFÑ\s]+?)(?:\s+PARA|\s+LAY)/i);
       if (impM) { volumen = parseInt(impM[1]); producto = impM[2].trim(); }
@@ -14543,7 +14611,16 @@ function parseNavesText() {
         producto: producto,
         volumen: volumen,
         destino: '', proveedor: '',
-        notas: chunk.substring(0, 250)
+        notas: chunk.substring(0, 250),
+        // Timestamps reales — ver comentario arriba.
+        agencia: agencia,
+        puerto_ultimo: puertoUltimo, fecha_arribo: fechaArribo,
+        fecha_amarro: fechaAmarro,
+        fecha_inicio_descarga: fechaID, fecha_termino_descarga: fechaTD,
+        fecha_inicio_carga: fechaIC, fecha_et_operaciones: fechaETOp,
+        fecha_zarpe: fechaZarpe,
+        puerto_eta: puertoEta, fecha_eta: fechaEta,
+        rotacion_raw: rotacion
       });
     });
     if (!naves.length) throw new Error('No se detectaron naves. Verifica que el texto contiene nombres como URUBAMBA, MOCHE, etc.');
@@ -14557,6 +14634,19 @@ function parseNavesText() {
     var prev = document.getElementById('naves-preview');
     if (prev) prev.innerHTML = uploadNavesPreviewHTML;
   }
+}
+function _navesTimestampsHTML(n) {
+  var chips = [];
+  if (n.fecha_arribo) chips.push('Arrib\u00f3 a ' + n.puerto_ultimo + ': ' + n.fecha_arribo.replace('T',' '));
+  if (n.fecha_amarro) chips.push('Amarr\u00f3: ' + n.fecha_amarro.replace('T',' '));
+  if (n.fecha_inicio_descarga) chips.push('I.D.: ' + n.fecha_inicio_descarga.replace('T',' '));
+  if (n.fecha_termino_descarga) chips.push('<b style="color:#16a34a">T.D. (descarga terminada): ' + n.fecha_termino_descarga.replace('T',' ') + '</b>');
+  if (n.fecha_inicio_carga) chips.push('I.C.: ' + n.fecha_inicio_carga.replace('T',' '));
+  if (n.fecha_et_operaciones) chips.push('E.T.Operaciones: ' + n.fecha_et_operaciones.replace('T',' '));
+  if (n.fecha_zarpe) chips.push('Zarp\u00f3: ' + n.fecha_zarpe.replace('T',' '));
+  if (n.puerto_eta && n.fecha_eta) chips.push('ETA ' + n.puerto_eta + ': ' + n.fecha_eta.replace('T',' '));
+  if (!chips.length) return '';
+  return '<div style="margin-top:5px;padding:6px 8px;background:var(--bg3);border-radius:6px;font-size:9px;line-height:1.6;color:var(--txt2)">' + chips.join('<br>') + '</div>';
 }
 function buildNavesPreview() {
   if (!uploadNavesData) return;
@@ -14579,6 +14669,7 @@ function buildNavesPreview() {
       + '<div class="upload-pdf-nave-detail">' + n.tipo + ' \u00B7 ' + (n.ubicacion || n.estado.substring(0,60)) + '</div>'
       + (n.producto ? '<div class="upload-pdf-nave-detail" style="color:var(--acc2)">' + n.producto + ' \u2014 ' + n.volumen + ' MB</div>' : '')
       + (n.rotacion ? '<div class="upload-pdf-nave-detail">\uD83D\uDDFA\uFE0F ' + n.rotacion + '</div>' : '')
+      + (n.puerto_ultimo ? _navesTimestampsHTML(n) : '')
       + '</div></div>';
   });
   if (cierres.length > 0) {
@@ -14721,6 +14812,35 @@ async function sendNavesToGS() {
       })
     });
     var cierresN = (uploadNavesData.cierresPuerto||[]).length;
+    // ── Además de lo que ya se enviaba, mandar los timestamps reales
+    // (ARRIBÓ/AMARRÓ/I.D./T.D./I.C./ZARPÓ/ETA) a la hoja nueva
+    // posicionamiento_naves — es lo que permite que el dashboard sepa
+    // en el momento que un buque YA terminó de descargar (T.D.), sin
+    // esperar a que alguien actualice el estado a mano en otro lado.
+    var posRecords = (uploadNavesData.naves || [])
+      .filter(function(n){ return n.puerto_ultimo; })
+      .map(function(n) {
+        return {
+          fecha_reporte: fechaFinal, buque: n.nombre, agencia: n.agencia || '',
+          estado_nav: n.ubicacion || '', puerto_ultimo: n.puerto_ultimo,
+          fecha_arribo: n.fecha_arribo || '', fecha_amarro: n.fecha_amarro || '',
+          fecha_inicio_descarga: n.fecha_inicio_descarga || '', fecha_termino_descarga: n.fecha_termino_descarga || '',
+          fecha_inicio_carga: n.fecha_inicio_carga || '', fecha_et_operaciones: n.fecha_et_operaciones || '',
+          fecha_zarpe: n.fecha_zarpe || '', rotacion_raw: n.rotacion_raw || '',
+          puerto_eta: n.puerto_eta || '', fecha_eta: n.fecha_eta || ''
+        };
+      });
+    if (posRecords.length) {
+      try {
+        await fetch(CONFIG.API_URL, {
+          method: 'POST', mode: 'no-cors',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ action: 'uploadPosicionamientoNaves', fecha_reporte: fechaFinal, records: posRecords })
+        });
+      } catch (ePos) {
+        console.error('[Upload Posicionamiento Naves]', ePos);
+      }
+    }
     if (status) { status.className = 'upload-status success';
       status.textContent = '✅ ' + uploadNavesData.naves.length + ' naves · ' + cierresN + ' cierres guardados (' + fechaFinal + ')'; }
     addUploadLog(true, 'Naves ' + fechaFinal + ': ' + uploadNavesData.naves.length + ' naves, ' + cierresN + ' cierres puerto');
