@@ -715,6 +715,12 @@ const RD = {
   nombre: localStorage.getItem('rd_nombre') || '',
   planta: localStorage.getItem('rd_planta') || '',
   email: localStorage.getItem('rd_email') || '',
+  rol: localStorage.getItem('rd_rol') || 'operador',
+  // Solo tiene efecto real si rol==='admin' — la planta que el admin
+  // eligió "ver como" para diagnosticar/corregir su Registro Diario tal
+  // como lo ve esa planta. Se manda en cada request (plantaAdmin) y el
+  // backend la valida estrictamente (rdCurrentUser) antes de honrarla.
+  plantaAdminVista: localStorage.getItem('rd_planta_admin_vista') || '',
   productos: [],
   plantas: [],
   productosPorPlanta: {},
@@ -764,6 +770,11 @@ function rdMsg(elId, text, ok) {
 function rdPost(action, payload) {
   payload = payload || {};
   payload.action = action;
+  // Modo soporte admin: adjuntar la planta que se está "viendo como",
+  // para que este guardado/consulta se comporte igual que si esa planta
+  // hubiera iniciado sesión. El backend solo lo honra si el token
+  // realmente pertenece a un admin — nunca confía en esto por sí solo.
+  if (RD.rol === 'admin' && RD.plantaAdminVista) payload.plantaAdmin = RD.plantaAdminVista;
   var ctrl = new AbortController();
   var tid  = setTimeout(function(){ ctrl.abort(); }, 30000);
   return fetch(API_URL, {
@@ -785,7 +796,9 @@ function rdGet(action, params) {
   // backend. El operador veía sus datos "como si no se hubiera
   // guardado" y volvía a presionar Guardar. cache:'no-store' + un
   // parámetro anti-caché (_t) fuerzan una petición de red real siempre.
-  var qs = new URLSearchParams(Object.assign({ action: action, _t: Date.now() }, params || {}));
+  var extra = { action: action, _t: Date.now() };
+  if (RD.rol === 'admin' && RD.plantaAdminVista) extra.plantaAdmin = RD.plantaAdminVista;
+  var qs = new URLSearchParams(Object.assign(extra, params || {}));
   var ctrl = new AbortController();
   var tid  = setTimeout(function(){ ctrl.abort(); }, 15000);
   return fetch(API_URL + '?' + qs.toString(), { method: 'GET', redirect: 'follow', cache: 'no-store', signal: ctrl.signal })
@@ -795,23 +808,51 @@ function rdGet(action, params) {
 
 function rdSaveSession(data) {
   RD.token = data.token; RD.nombre = data.nombre; RD.planta = data.planta; RD.email = data.email;
+  RD.rol = data.rol || 'operador';
   localStorage.setItem('rd_token', RD.token);
   localStorage.setItem('rd_nombre', RD.nombre);
   localStorage.setItem('rd_planta', RD.planta);
   localStorage.setItem('rd_email', RD.email);
+  localStorage.setItem('rd_rol', RD.rol);
 }
 function rdLogout() {
   localStorage.removeItem('rd_token'); localStorage.removeItem('rd_nombre');
   localStorage.removeItem('rd_planta'); localStorage.removeItem('rd_email');
+  localStorage.removeItem('rd_rol'); localStorage.removeItem('rd_planta_admin_vista');
   RD.token = null;
   rdRenderTopbar();
   rdShowView('login');
+}
+// Cambiar la planta que el admin está "viendo como" — recarga toda la
+// página para que absolutamente todo (Registro Diario, Histórico,
+// Pronóstico Aprobado) se reinicie limpio bajo la nueva planta, sin
+// tener que rastrear manualmente cada función que dependa de RD.planta.
+function rdCambiarVistaPlantaAdmin(planta) {
+  if (!planta) return;
+  localStorage.setItem('rd_planta_admin_vista', planta);
+  location.reload();
+}
+function rdSalirModoAdmin() {
+  localStorage.removeItem('rd_planta_admin_vista');
+  location.reload();
 }
 
 function rdRenderTopbar() {
   const el = document.getElementById('tbRight');
   if (RD.token) {
-    el.innerHTML = '<span class="tb-planta-badge">' + plantaLabel(RD.planta) + '</span>' +
+    var selectorAdmin = '';
+    if (RD.rol === 'admin') {
+      var opciones = '<option value="">— elegir planta —</option>' +
+        (RD.plantas || []).map(function(p) {
+          return '<option value="' + p + '"' + (p === RD.plantaAdminVista ? ' selected' : '') + '>' + plantaLabel(p) + '</option>';
+        }).join('');
+      selectorAdmin = '<select onchange="rdCambiarVistaPlantaAdmin(this.value)" '
+        + 'style="padding:5px 10px;border-radius:16px;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.3);color:#fff;font-size:10.5px;font-weight:700" '
+        + 'title="Modo soporte: ver el Registro Diario tal como lo ve esa planta">'
+        + '🛠️ ' + opciones + '</select>'
+        + (RD.plantaAdminVista ? '<button class="btn btn-ghost-dark" style="padding:5px 10px;font-size:10.5px" onclick="rdSalirModoAdmin()" title="Volver a tu propia vista de administrador">✕ Salir de vista</button>' : '');
+    }
+    el.innerHTML = selectorAdmin + '<span class="tb-planta-badge">' + plantaLabel(RD.planta) + (RD.rol==='admin' && RD.plantaAdminVista ? ' <span style="opacity:.75">(vista admin)</span>' : '') + '</span>' +
       '<span class="tb-user">👤 <b>' + RD.nombre + '</b></span>' +
       '<button class="btn btn-ghost-dark" onclick="rdLogout()">Salir</button>';
   } else {
@@ -825,7 +866,10 @@ document.getElementById('btnLogin').addEventListener('click', function () {
   const btn = this; btn.disabled = true; btn.textContent = 'Ingresando…';
   rdPost('rdLogin', { email: email, password: password }).then(res => {
     btn.disabled = false; btn.textContent = 'Ingresar';
-    if (res.success) { rdSaveSession(res); rdRenderTopbar(); rdEnterApp(); }
+    if (res.success) {
+      localStorage.removeItem('rd_planta_admin_vista'); RD.plantaAdminVista = '';
+      rdSaveSession(res); rdRenderTopbar(); rdEnterApp();
+    }
     else rdMsg('loginMsg', res.message || 'Error al iniciar sesión', false);
   }).catch(() => { btn.disabled = false; btn.textContent = 'Ingresar'; rdMsg('loginMsg', 'No se pudo conectar. Intenta de nuevo.', false); });
 });
@@ -2641,6 +2685,11 @@ function rdCheckPlantaHoy() {
     rdShowLoader(false);
     const params = new URLSearchParams(location.search);
     const view = params.get('view');
+    // Si es admin y ya había elegido "ver como" una planta en una sesión
+    // anterior, se refleja de inmediato en toda la interfaz (no solo en
+    // el selector del header) — coherente con lo que el backend va a
+    // usar en cada request desde este punto en adelante.
+    if (RD.rol === 'admin' && RD.plantaAdminVista) RD.planta = RD.plantaAdminVista;
     rdRenderTopbar();
     if (view === 'reset' && params.get('token')) { rdShowView('reset'); return; }
     if (RD.token) { rdEnterApp(); return; }
