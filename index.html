@@ -20340,13 +20340,16 @@ function renderVistaEjecutivaSimple() {
     '__COMBO_CONCHAN__': {
       label: 'Conchán + Ref. Conchán',
       plantasInv: ['Refinería Conchán'], // ya incluye a Conchán — no se suma aparte
-      productosRestrict: null,
+      // Solo los productos reales de Conchán/Refinería Conchán — evita
+      // que aparezcan restos de datos viejos (ej. "G. 84", "Diesel B5
+      // S-50", "Alcohol Carburante") que nunca se comercializan ahí.
+      productosRestrict: ['Diesel','G. Regular','G. Regular HS','G. Premium'],
       plantaDespacho: 'Conchán'
     },
     '__COMBO_IQUITOS__': {
       label: 'Iquitos + Ref. Iquitos',
       plantasInv: ['Refinería Iquitos'], // ya incluye a Iquitos — no se suma aparte
-      productosRestrict: null,
+      productosRestrict: ['Diesel','G. Regular','G. 84','TA1','PI6'],
       plantaDespacho: 'Iquitos'
     }
   };
@@ -20771,7 +20774,11 @@ function renderVistaEjecutivaSimple() {
   } else if (!esRefineriaExec) {
     var plantaCobertura = COMBO_PLANTAS[pl] ? COMBO_PLANTAS[pl].plantaDespacho : pl;
     var comboActivo = COMBO_PLANTAS[pl];
-    latestRows.filter(function(r){ return r.planta === plantaCobertura; }).forEach(function(r) {
+    latestRows.filter(function(r){
+      if (r.planta !== plantaCobertura) return false;
+      if (comboActivo && comboActivo.productosRestrict && comboActivo.productosRestrict.indexOf(r.producto) === -1) return false;
+      return true;
+    }).forEach(function(r) {
       var c = calcCob(r);
       var rep = reposicionInfo(r);
       // Mismo criterio: no se excluye un producto solo porque no se
