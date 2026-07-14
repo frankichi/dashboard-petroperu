@@ -20682,7 +20682,7 @@ function renderVistaEjecutivaSimple() {
     var tipo2 = vol2 > 0 ? (esMaritimoExec(r.bt2) ? 'mar\u00edtima' : 'terrestre') : '';
     var tipos = [tipo1, tipo2].filter(Boolean);
     var tipoUnico = tipos.length === 1 ? tipos[0] : (tipos.length > 1 ? 'mixta' : '');
-    return { diasRepos: Math.round(volTotal / denom), volMB: volTotal, tipo: tipoUnico };
+    return { diasRepos: Math.round(volTotal / denom), volMB: volTotal, tipo: tipoUnico, bt: r.bt || r.bt2 || '', fecha: r.fecha_reposicion || r.fecha_repos_bt2 || '' };
   }
   // ⚠️ CORREGIDO: la lista "Cobertura por planta" agrupa por planta
   // usando UN SOLO producto como representante (el de menor cobertura),
@@ -20705,17 +20705,19 @@ function renderVistaEjecutivaSimple() {
       if (productoFiltro && productoFiltro !== 'Todos' && r.producto !== productoFiltro) return false;
       return true;
     });
-    var volTotal = 0, diasTotal = 0, tipos = [], detalle = [];
+    var volTotal = 0, diasTotal = 0, tipos = [], detalle = [], btUnico = null, fechaUnico = null;
     filas.forEach(function(r) {
       var info = reposicionInfo(r);
       if (info.volMB <= 0) return;
       volTotal += info.volMB;
       diasTotal += info.diasRepos;
       if (info.tipo) tipos.push(info.tipo);
-      detalle.push(r.producto + ': ' + info.volMB.toFixed(1) + ' MB (' + (r.bt || r.bt2 || '') + ') \u2192 +' + info.diasRepos + 'd');
+      detalle.push(r.producto + ': ' + info.volMB.toFixed(1) + ' MB (' + (info.bt || '\u2014') + (info.fecha ? ', ETA ' + info.fecha : '') + ') \u2192 +' + info.diasRepos + 'd');
+      if (btUnico === null) { btUnico = info.bt; fechaUnico = info.fecha; }
+      else if (btUnico !== info.bt) { btUnico = ''; fechaUnico = ''; } // más de un buque distinto — no hay uno solo que mostrar
     });
     var tipoUnico = !tipos.length ? '' : (new Set(tipos).size > 1 ? 'mixta' : tipos[0]);
-    return { diasRepos: diasTotal, volMB: volTotal, tipo: tipoUnico, detalle: detalle };
+    return { diasRepos: diasTotal, volMB: volTotal, tipo: tipoUnico, detalle: detalle, bt: btUnico || '', fecha: fechaUnico || '' };
   }
   var datosCob = [];
   // Antes usaba byLatest() (arrastre simple, sin restar consumo) — ahora
@@ -20763,7 +20765,7 @@ function renderVistaEjecutivaSimple() {
     datosCob = Object.keys(porPlantaFila).map(function(p) {
       var r = porPlantaFila[p];
       var rep = reposicionInfoPlanta(p, prod);
-      return { label: p, dias: r._cobVal, invMB: r.inv||0, diasRepos: rep.diasRepos, volReposMB: rep.volMB, tipoRepos: rep.tipo, reposDetalle: rep.detalle, sinCob: r._cobVal === null, proyectado: !!r._proyectadoConsumo };
+      return { label: p, dias: r._cobVal, invMB: r.inv||0, diasRepos: rep.diasRepos, volReposMB: rep.volMB, tipoRepos: rep.tipo, reposDetalle: rep.detalle, reposBt: rep.bt, reposFecha: rep.fecha, sinCob: r._cobVal === null, proyectado: !!r._proyectadoConsumo };
     });
   } else if (!esRefineriaExec) {
     var plantaCobertura = COMBO_PLANTAS[pl] ? COMBO_PLANTAS[pl].plantaDespacho : pl;
@@ -20773,7 +20775,7 @@ function renderVistaEjecutivaSimple() {
       // Mismo criterio: no se excluye un producto solo porque no se
       // pudo calcular su cobertura — se muestra igual, marcado aparte.
       // 0 días (quiebre) SÍ se muestra como tal, no como "sin dato".
-      datosCob.push({ label: r.producto, dias: c, invMB: r.inv||0, diasRepos: rep.diasRepos, volReposMB: rep.volMB, tipoRepos: rep.tipo, sinCob: c === null, proyectado: !!r._proyectadoConsumo });
+      datosCob.push({ label: r.producto, dias: c, invMB: r.inv||0, diasRepos: rep.diasRepos, volReposMB: rep.volMB, tipoRepos: rep.tipo, reposBt: rep.bt, reposFecha: rep.fecha, sinCob: c === null, proyectado: !!r._proyectadoConsumo });
     });
   }
   datosCob.sort(function(a,b){
@@ -20827,7 +20829,9 @@ function renderVistaEjecutivaSimple() {
     var reposTitle = d.diasRepos > 0
       ? (d.reposDetalle && d.reposDetalle.length > 1
           ? 'Reposici\u00f3n total (' + d.reposDetalle.length + ' productos): ' + d.volReposMB.toFixed(1) + ' MB \u2192 +' + d.diasRepos + ' d\u00edas equivalentes\n' + d.reposDetalle.join('\n')
-          : 'Reposici\u00f3n ' + (d.tipoRepos||'') + ': ' + d.volReposMB.toFixed(1) + ' MB \u00f7 demanda pron\u00f3stico \u2192 +' + d.diasRepos + ' d\u00edas equivalentes')
+          : 'Reposici\u00f3n ' + (d.tipoRepos||'') + ': ' + d.volReposMB.toFixed(1) + ' MB \u00f7 demanda pron\u00f3stico \u2192 +' + d.diasRepos + ' d\u00edas equivalentes'
+            + (d.reposBt ? '\nBuque/Barcaza: ' + d.reposBt : '')
+            + (d.reposFecha ? '\nFecha de reposici\u00f3n (ETA): ' + d.reposFecha : ''))
       : '';
     return '<div style="display:flex;align-items:center;gap:10px;padding:7px 0">' +
       '<div class="exec-cob-label" style="width:120px;flex-shrink:0" title="' + d.label + '">' +
