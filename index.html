@@ -20954,51 +20954,41 @@ function renderVistaEjecutivaSimple() {
       if (REFINERIAS.indexOf(r.planta) !== -1) return;
       if (typeof SKIP_COMBOS !== 'undefined' && SKIP_COMBOS.has((r.planta||'')+'|'+(r.producto||''))) return;
       if (prod !== 'Todos' && r.producto !== prod) return;
-      // Si es Talara, calcular días con el inventario YA combinado
-      // (planta + refinería para este producto específico) — no con el
-      // valor original de la fila. Y, igual que en la vista combinada
-      // individual, se fuerza el cálculo contra demanda pronóstico (no
-      // despacho real) para Talara — el despacho real de un solo día
-      // puede tener anomalías que, con el inventario ya combinado,
-      // producen días sin sentido.
-      var rParaCob = r;
       var invCombProd = r.inv || 0;
       var esTalaraComb = r.planta === 'Talara' && refTalaraInvPorProducto[r.producto] !== undefined;
-      if (esTalaraComb) {
-        invCombProd = (r.inv||0) + refTalaraInvPorProducto[r.producto];
-        rParaCob = Object.assign({}, r, { inv: invCombProd });
-      }
-      var c = esTalaraComb ? (cobPron(rParaCob) != null ? cobPron(rParaCob) : cobFactible(rParaCob)) : calcCob(rParaCob);
+      if (esTalaraComb) invCombProd = (r.inv||0) + refTalaraInvPorProducto[r.producto];
+      var pronProd = (typeof pronSheet !== 'undefined' && pronSheet[r.planta+'|'+r.producto]) || r.pron_mes || r.pron || 0;
       if (!porPlantaFila[r.planta]) {
-        porPlantaFila[r.planta] = { invSum: 0, pronSum: 0, diasPonderadoSum: 0, pesoSum: 0, tieneAlgunCob: false, proyectado: false, planta: r.planta, producto: r.producto };
+        porPlantaFila[r.planta] = { invSum: 0, pronSum: 0, invSumCob: 0, pronSumCob: 0, proyectado: false, planta: r.planta, producto: r.producto };
       }
       var acc = porPlantaFila[r.planta];
+      // invSum/pronSum: totales COMPLETOS de la planta (incluyen TA1),
+      // se usan para lo que se muestra como inventario/pronóstico de la
+      // planta en general.
       acc.invSum += invCombProd;
-      acc.pronSum += (typeof pronSheet !== 'undefined' && pronSheet[r.planta+'|'+r.producto]) || r.pron_mes || r.pron || 0;
-      // ⚠️ Excepción explícita: TA1 en Talara no debe ponderar en el
-      // promedio de días de la planta — su demanda pronóstico da días
-      // exagerados (ej. 90d cuando el resto está en un dígito),
-      // arrastrando el promedio ponderado hacia arriba de forma
-      // engañosa. Su volumen ya se sumó arriba (invSum) — solo se
-      // excluye del cálculo de días.
+      acc.pronSum += pronProd;
+      // ⚠️ CORREGIDO — fórmula explícita solicitada: los "días de
+      // cobertura" a nivel Nacional ya NO son un promedio ponderado de
+      // los días de cada producto por separado. Ahora son directamente:
+      //   días = (suma de inventarios de los productos) ÷ (suma de su
+      //   demanda pronóstico aprobada)
+      // — una sola razón con los totales de la planta, no una mezcla de
+      // razones individuales. TA1 en Talara queda excluido de esta
+      // razón (ni en el numerador ni en el denominador) — su demanda
+      // pronóstico ahí no es confiable y distorsionaba el resultado;
+      // su volumen sigue sumando en invSum (el total general mostrado).
       var esTalaraTA1 = r.planta === 'Talara' && r.producto === 'TA1';
-      if (c !== null && !esTalaraTA1) {
-        // ⚠️ Ponderado por inventario (no promedio simple ni suma): un
-        // producto con mucho más volumen pesa más en el resultado total
-        // de la planta — sumar los días de cada producto sin ponderar
-        // daba un número que no representa nada real (ej. 21+4+3+1+0+0
-        // = 29 "días" no significa nada útil para Talara).
-        acc.diasPonderadoSum += c * invCombProd;
-        acc.pesoSum += invCombProd;
-        acc.tieneAlgunCob = true;
+      if (!esTalaraTA1) {
+        acc.invSumCob += invCombProd;
+        acc.pronSumCob += pronProd;
       }
       if (r._proyectadoConsumo) acc.proyectado = true;
     });
     datosCob = Object.keys(porPlantaFila).map(function(p) {
       var acc = porPlantaFila[p];
       var rep = reposicionInfoPlanta(p, prod);
-      var diasPonderado = (acc.tieneAlgunCob && acc.pesoSum > 0) ? Math.round(acc.diasPonderadoSum / acc.pesoSum) : (acc.tieneAlgunCob ? 0 : null);
-      return { label: p, dias: diasPonderado, invMB: acc.invSum, pronMB: acc.pronSum, diasRepos: rep.diasRepos, volReposMB: rep.volMB, tipoRepos: rep.tipo, reposDetalle: rep.detalle, reposBt: rep.bt, reposFecha: rep.fecha, reposEstado: rep.estado, sinCob: !acc.tieneAlgunCob, proyectado: acc.proyectado };
+      var diasDirecto = acc.pronSumCob > 0 ? Math.floor(acc.invSumCob / acc.pronSumCob) : null;
+      return { label: p, dias: diasDirecto, invMB: acc.invSum, pronMB: acc.pronSum, diasRepos: rep.diasRepos, volReposMB: rep.volMB, tipoRepos: rep.tipo, reposDetalle: rep.detalle, reposBt: rep.bt, reposFecha: rep.fecha, reposEstado: rep.estado, sinCob: diasDirecto === null, proyectado: acc.proyectado };
     });
   } else if (!esRefineriaExec) {
     var plantaCobertura = COMBO_PLANTAS[pl] ? COMBO_PLANTAS[pl].plantaDespacho : pl;
@@ -21053,17 +21043,17 @@ function renderVistaEjecutivaSimple() {
       // V.Factible simplemente no aporta nada útil y solo genera ruido
       // visual ("sin datos válidos"). Se omite del todo en vez de
       // mostrarlo como placeholder.
-      // ⚠️ Excepción explícita: TA1 en Talara NO debe aparecer en esta
-      // lista ni contar para ningún cálculo de cobertura — su demanda
-      // pronóstico para Talara no es confiable (da días exagerados, ej.
-      // 90d en el registro de referencia del usuario, cuando el resto
-      // de productos está en un dígito), distorsionando el promedio
-      // ponderado de toda la planta. Su volumen sigue contando en
-      // cualquier suma general de inventario (KPI, gráfico de barras),
-      // solo se excluye de "Cobertura por producto".
-      if (plantaCobertura === 'Talara' && r.producto === 'TA1') return;
-      if (c === null) return;
-      datosCob.push({ label: r.producto, dias: c, invMB: invCombinado, pronMB: pronVal2, diasRepos: rep.diasRepos, volReposMB: rep.volMB, tipoRepos: rep.tipo, reposBt: rep.bt, reposFecha: rep.fecha, reposEstado: rep.estado, sinCob: c === null, proyectado: !!r._proyectadoConsumo });
+      // ⚠️ Excepción explícita: TA1 en Talara SÍ debe seguir apareciendo
+      // en esta lista con su volumen (barra visible), pero SIN un
+      // cálculo de "días" — su demanda pronóstico para Talara no es
+      // confiable (da días exagerados, ej. 90d en el registro de
+      // referencia del usuario, cuando el resto de productos está en un
+      // dígito), y eso distorsionaba el promedio ponderado de toda la
+      // planta. Se muestra como "sin cobertura calculable" (barra
+      // neutra, sin días), no se elimina del todo.
+      var esTalaraTA1Vista = plantaCobertura === 'Talara' && r.producto === 'TA1';
+      if (c === null && !esTalaraTA1Vista) return;
+      datosCob.push({ label: r.producto, dias: esTalaraTA1Vista ? null : c, invMB: invCombinado, pronMB: pronVal2, diasRepos: rep.diasRepos, volReposMB: rep.volMB, tipoRepos: rep.tipo, reposBt: rep.bt, reposFecha: rep.fecha, reposEstado: rep.estado, sinCob: esTalaraTA1Vista ? true : (c === null), proyectado: !!r._proyectadoConsumo });
     });
   }
   datosCob.sort(function(a,b){
@@ -21098,13 +21088,17 @@ function renderVistaEjecutivaSimple() {
       // en el último reporte) — se muestra igual, no se esconde, para
       // que quede claro que la planta SÍ tiene inventario reportado,
       // solo que aún no cierra el día / falta ese dato puntual.
+      var esExclusionTA1 = d.label === 'TA1' && pl === 'Talara';
+      var motivoSinCob = esExclusionTA1
+        ? 'volumen registrado, sin cálculo de cobertura para TA1 en Talara (demanda pronóstico no confiable para este producto)'
+        : 'sin despacho real, pronóstico ni V.Factible válidos para calcular cobertura';
       return '<div style="display:flex;align-items:center;gap:10px;padding:7px 0;opacity:.7">' +
         '<div class="exec-cob-label" style="width:120px;flex-shrink:0" title="' + d.label + '">' +
           '<div style="font-size:11.5px;font-weight:700;color:var(--txt);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + d.label + '</div>' +
           '<div style="font-size:9.5px;color:var(--txt3);font-family:var(--mono);margin-top:1px">' + fmtMB(d.invMB) + '</div>' +
         '</div>' +
-        '<div style="flex:1;background:var(--bg3);border-radius:6px;height:22px;position:relative;overflow:hidden;display:flex;align-items:center;padding-left:10px" title="Inventario reportado, pero sin despacho real, pron\u00f3stico ni V.Factible v\u00e1lidos para calcular d\u00edas de cobertura — revisar en Coberturas si falta cargar alguno de estos datos">' +
-          '<span style="font-size:10px;color:var(--txt3);font-style:italic">sin despacho real, pron\u00f3stico ni V.Factible v\u00e1lidos para calcular cobertura</span>' +
+        '<div style="flex:1;background:var(--bg3);border-radius:6px;height:22px;position:relative;overflow:hidden;display:flex;align-items:center;padding-left:10px" title="' + motivoSinCob + '">' +
+          '<span style="font-size:10px;color:var(--txt3);font-style:italic">' + motivoSinCob + '</span>' +
         '</div>' +
         '<div style="width:70px;flex-shrink:0;text-align:right">' +
           '<div style="font-family:var(--mono);font-weight:700;font-size:12px;color:var(--txt3)">\u2014</div>' +
