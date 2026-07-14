@@ -20770,6 +20770,7 @@ function renderVistaEjecutivaSimple() {
     });
   } else if (!esRefineriaExec) {
     var plantaCobertura = COMBO_PLANTAS[pl] ? COMBO_PLANTAS[pl].plantaDespacho : pl;
+    var comboActivo = COMBO_PLANTAS[pl];
     latestRows.filter(function(r){ return r.planta === plantaCobertura; }).forEach(function(r) {
       var c = calcCob(r);
       var rep = reposicionInfo(r);
@@ -20777,7 +20778,20 @@ function renderVistaEjecutivaSimple() {
       // pudo calcular su cobertura — se muestra igual, marcado aparte.
       // 0 días (quiebre) SÍ se muestra como tal, no como "sin dato".
       var pronVal2 = (typeof pronSheet !== 'undefined' && pronSheet[r.planta+'|'+r.producto]) || r.pron_mes || r.pron || 0;
-      datosCob.push({ label: r.producto, dias: c, invMB: r.inv||0, pronMB: pronVal2, diasRepos: rep.diasRepos, volReposMB: rep.volMB, tipoRepos: rep.tipo, reposBt: rep.bt, reposFecha: rep.fecha, sinCob: c === null, proyectado: !!r._proyectadoConsumo });
+      // ⚠️ Vista combinada (ej. "Talara + Refinería Talara"): el
+      // inventario mostrado debe sumar TODAS las plantas del combo para
+      // este producto (Talara + su refinería), no solo la planta de
+      // venta — la cobertura y el despacho sí siguen calculándose con
+      // la planta de venta sola (la refinería no despacha).
+      var invCombinado = r.inv || 0;
+      if (comboActivo) {
+        invCombinado = 0;
+        comboActivo.plantasInv.forEach(function(pl3) {
+          var r3 = _invArrastrado(pl3, r.producto, fechaHoy);
+          if (r3) invCombinado += (r3.inv || 0);
+        });
+      }
+      datosCob.push({ label: r.producto, dias: c, invMB: invCombinado, pronMB: pronVal2, diasRepos: rep.diasRepos, volReposMB: rep.volMB, tipoRepos: rep.tipo, reposBt: rep.bt, reposFecha: rep.fecha, sinCob: c === null, proyectado: !!r._proyectadoConsumo });
     });
   }
   datosCob.sort(function(a,b){
