@@ -20939,17 +20939,31 @@ function renderVistaEjecutivaSimple() {
   } else if (!esRefineriaExec) {
     var plantaCobertura = COMBO_PLANTAS[pl] ? COMBO_PLANTAS[pl].plantaDespacho : pl;
     var comboActivo = COMBO_PLANTAS[pl];
+    // ⚠️ CORREGIDO: esta lista mostraba CUALQUIER producto que tuviera
+    // alguna fila para la planta, sin filtrar contra su catálogo real —
+    // así aparecían cosas como TA1 en Pisco, o G.84/Alcohol Carburante
+    // en Conchán, que nunca son productos reales de esas plantas (datos
+    // residuales de alguna importación vieja). Ahora se filtra siempre
+    // contra PRODUCTOS_POR_PLANTA_EXEC (el catálogo confirmado por
+    // planta), no solo en las vistas combinadas.
+    var catalogoPlanta = comboActivo && comboActivo.productosRestrict
+      ? comboActivo.productosRestrict
+      : PRODUCTOS_POR_PLANTA_EXEC[plantaCobertura];
     latestRows.filter(function(r){
       if (r.planta !== plantaCobertura) return false;
-      if (comboActivo && comboActivo.productosRestrict && comboActivo.productosRestrict.indexOf(r.producto) === -1) return false;
+      if (catalogoPlanta && catalogoPlanta.indexOf(r.producto) === -1) return false;
       return true;
     }).forEach(function(r) {
       var c = calcCob(r);
       var rep = reposicionInfo(r);
-      // Mismo criterio: no se excluye un producto solo porque no se
-      // pudo calcular su cobertura — se muestra igual, marcado aparte.
-      // 0 días (quiebre) SÍ se muestra como tal, no como "sin dato".
       var pronVal2 = (typeof pronSheet !== 'undefined' && pronSheet[r.planta+'|'+r.producto]) || r.pron_mes || r.pron || 0;
+      // ⚠️ A diferencia de la vista "Nacional" (donde sí interesa saber
+      // qué planta le falta cerrar el día), aquí — mirando una sola
+      // planta — un producto sin despacho real, pronóstico NI
+      // V.Factible simplemente no aporta nada útil y solo genera ruido
+      // visual ("sin datos válidos"). Se omite del todo en vez de
+      // mostrarlo como placeholder.
+      if (c === null) return;
       // ⚠️ Vista combinada (ej. "Talara + Refinería Talara"): el
       // inventario mostrado debe sumar TODAS las plantas del combo para
       // este producto (Talara + su refinería), no solo la planta de
