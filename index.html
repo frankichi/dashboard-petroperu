@@ -20765,7 +20765,8 @@ function renderVistaEjecutivaSimple() {
     datosCob = Object.keys(porPlantaFila).map(function(p) {
       var r = porPlantaFila[p];
       var rep = reposicionInfoPlanta(p, prod);
-      return { label: p, dias: r._cobVal, invMB: r.inv||0, diasRepos: rep.diasRepos, volReposMB: rep.volMB, tipoRepos: rep.tipo, reposDetalle: rep.detalle, reposBt: rep.bt, reposFecha: rep.fecha, sinCob: r._cobVal === null, proyectado: !!r._proyectadoConsumo };
+      var pronVal = (typeof pronSheet !== 'undefined' && pronSheet[r.planta+'|'+r.producto]) || r.pron_mes || r.pron || 0;
+      return { label: p, dias: r._cobVal, invMB: r.inv||0, pronMB: pronVal, diasRepos: rep.diasRepos, volReposMB: rep.volMB, tipoRepos: rep.tipo, reposDetalle: rep.detalle, reposBt: rep.bt, reposFecha: rep.fecha, sinCob: r._cobVal === null, proyectado: !!r._proyectadoConsumo };
     });
   } else if (!esRefineriaExec) {
     var plantaCobertura = COMBO_PLANTAS[pl] ? COMBO_PLANTAS[pl].plantaDespacho : pl;
@@ -20775,7 +20776,8 @@ function renderVistaEjecutivaSimple() {
       // Mismo criterio: no se excluye un producto solo porque no se
       // pudo calcular su cobertura — se muestra igual, marcado aparte.
       // 0 días (quiebre) SÍ se muestra como tal, no como "sin dato".
-      datosCob.push({ label: r.producto, dias: c, invMB: r.inv||0, diasRepos: rep.diasRepos, volReposMB: rep.volMB, tipoRepos: rep.tipo, reposBt: rep.bt, reposFecha: rep.fecha, sinCob: c === null, proyectado: !!r._proyectadoConsumo });
+      var pronVal2 = (typeof pronSheet !== 'undefined' && pronSheet[r.planta+'|'+r.producto]) || r.pron_mes || r.pron || 0;
+      datosCob.push({ label: r.producto, dias: c, invMB: r.inv||0, pronMB: pronVal2, diasRepos: rep.diasRepos, volReposMB: rep.volMB, tipoRepos: rep.tipo, reposBt: rep.bt, reposFecha: rep.fecha, sinCob: c === null, proyectado: !!r._proyectadoConsumo });
     });
   }
   datosCob.sort(function(a,b){
@@ -20826,25 +20828,32 @@ function renderVistaEjecutivaSimple() {
     var col = cobColor(d.dias);
     var pctBase = Math.max(3, Math.round((d.dias / maxDiasCob) * 100));
     var pctRepos = d.diasRepos > 0 ? Math.max(3, Math.round((d.diasRepos / maxDiasCob) * 100)) : 0;
-    var reposTitle = d.diasRepos > 0
+    // Popup con volumen + buque + ETA + demanda pronóstico del producto
+    // (o de la planta si es "Todos") — reemplaza el tooltip nativo, que
+    // dejó de mostrarse de forma confiable para el usuario.
+    var reposHTML = d.diasRepos > 0
       ? (d.reposDetalle && d.reposDetalle.length > 1
-          ? 'Reposici\u00f3n total (' + d.reposDetalle.length + ' productos): ' + d.volReposMB.toFixed(1) + ' MB \u2192 +' + d.diasRepos + ' d\u00edas equivalentes\n' + d.reposDetalle.join('\n')
-          : 'Reposici\u00f3n ' + (d.tipoRepos||'') + ': ' + d.volReposMB.toFixed(1) + ' MB \u00f7 demanda pron\u00f3stico \u2192 +' + d.diasRepos + ' d\u00edas equivalentes'
-            + (d.reposBt ? '\nBuque/Barcaza: ' + d.reposBt : '')
-            + (d.reposFecha ? '\nFecha de reposici\u00f3n (ETA): ' + d.reposFecha : ''))
+          ? '<b>Reposici\u00f3n total (' + d.reposDetalle.length + ' productos)</b><br>' + d.volReposMB.toFixed(1) + ' MB \u2192 +' + d.diasRepos + ' d\u00edas equivalentes<br>' + d.reposDetalle.join('<br>')
+          : '<b>Reposici\u00f3n ' + (d.tipoRepos||'') + '</b><br>Volumen: ' + d.volReposMB.toFixed(1) + ' MB'
+            + (d.reposBt ? '<br>Buque/Barcaza: ' + d.reposBt : '')
+            + (d.reposFecha ? '<br>Fecha de reposici\u00f3n (ETA): ' + d.reposFecha : '')
+            + '<br>D\u00edas equivalentes: +' + d.diasRepos + 'd')
       : '';
+    var pronHTML = '<div style="margin-top:6px;padding-top:6px;border-top:1px solid rgba(255,255,255,.2);color:#93c5fd">Demanda pron\u00f3stico' + (prod!=='Todos'?(' ('+prod+')'):'') + ': ' + (d.pronMB||0).toFixed(2) + ' MB/d\u00eda</div>';
+    var tipEncoded = encodeURIComponent(reposHTML + pronHTML).replace(/'/g, '%27');
+    var tipHandlers = 'onmouseenter="_execShowTip(event,\'' + tipEncoded + '\')" onmousemove="_execPosTip(event)" onmouseleave="_execHideTip()"';
     return '<div style="display:flex;align-items:center;gap:10px;padding:7px 0">' +
       '<div class="exec-cob-label" style="width:120px;flex-shrink:0" title="' + d.label + '">' +
         '<div style="font-size:11.5px;font-weight:700;color:var(--txt);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + d.label + '</div>' +
         '<div style="font-size:9.5px;color:var(--txt3);font-family:var(--mono);margin-top:1px">' + fmtMB(d.invMB) + (d.proyectado ? ' <span style="color:#2563eb;font-style:italic;font-weight:700" title="Estimado: último inventario real menos consumo proyectado por demanda pronóstico — la planta aún no cierra el día">≈ proy.</span>' : '') + '</div>' +
       '</div>' +
-      '<div style="flex:1;background:var(--bg3);border-radius:6px;height:22px;position:relative;overflow:hidden;display:flex">' +
+      '<div ' + tipHandlers + ' style="flex:1;background:var(--bg3);border-radius:6px;height:22px;position:relative;overflow:hidden;display:flex;cursor:help">' +
         '<div style="height:100%;width:' + pctBase + '%;background:' + col + ';border-radius:' + (pctRepos>0?'6px 0 0 6px':'6px') + ';transition:width .4s"></div>' +
-        (pctRepos > 0 ? '<div title="' + reposTitle + '" style="height:100%;width:' + pctRepos + '%;background:repeating-linear-gradient(45deg,#2563eb,#2563eb 5px,#3b82f6 5px,#3b82f6 10px);border-radius:0 6px 6px 0;transition:width .4s;cursor:help"></div>' : '') +
+        (pctRepos > 0 ? '<div style="height:100%;width:' + pctRepos + '%;background:repeating-linear-gradient(45deg,#2563eb,#2563eb 5px,#3b82f6 5px,#3b82f6 10px);border-radius:0 6px 6px 0;transition:width .4s"></div>' : '') +
       '</div>' +
       '<div style="width:70px;flex-shrink:0;text-align:right">' +
         '<div style="font-family:var(--mono);font-weight:800;font-size:13px;color:' + col + '">' + d.dias + 'd</div>' +
-        (d.diasRepos > 0 ? '<div style="font-family:var(--mono);font-size:9px;color:#2563eb;font-weight:700" title="' + reposTitle + '">+' + d.diasRepos + 'd \uD83D\uDEA2</div>' : '') +
+        (d.diasRepos > 0 ? '<div ' + tipHandlers + ' style="font-family:var(--mono);font-size:9px;color:#2563eb;font-weight:700;cursor:help">+' + d.diasRepos + 'd \uD83D\uDEA2</div>' : '') +
       '</div>' +
     '</div>';
   }).join('');
@@ -21438,6 +21447,46 @@ function toggleExecMapa() {
   }
 }
 window.toggleExecMapa = toggleExecMapa;
+
+// ── Popup flotante genérico para Vista Ejecutiva ───────────────────────
+// Reemplaza el tooltip nativo del navegador (title="...") — su
+// comportamiento es inconsistente entre navegadores/SO (demora variable,
+// a veces no aparece, sin estilo propio). Este popup se controla por
+// completo desde JS: aparece al instante al pasar el mouse, sigue el
+// cursor, y se puede dar el formato/contenido que haga falta (volumen,
+// buque, ETA, demanda pronóstico, etc.) sin las limitaciones de un
+// tooltip nativo.
+function _execShowTip(evt, encoded) {
+  var tip = document.getElementById('exec-tip-float');
+  if (!tip) {
+    tip = document.createElement('div');
+    tip.id = 'exec-tip-float';
+    tip.style.cssText = 'position:fixed;z-index:99999;background:#0f1e3c;color:#fff;padding:10px 13px;border-radius:9px;font-size:11.5px;line-height:1.65;box-shadow:0 10px 30px rgba(0,0,0,.35);pointer-events:none;max-width:290px;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif';
+    document.body.appendChild(tip);
+  }
+  tip.innerHTML = decodeURIComponent(encoded);
+  tip.style.display = 'block';
+  _execPosTip(evt);
+}
+function _execPosTip(evt) {
+  var tip = document.getElementById('exec-tip-float');
+  if (!tip || tip.style.display === 'none') return;
+  var pad = 14;
+  var x = evt.clientX + pad, y = evt.clientY + pad;
+  var vw = window.innerWidth, vh = window.innerHeight;
+  var rect = tip.getBoundingClientRect();
+  if (x + rect.width > vw - 10) x = evt.clientX - rect.width - pad;
+  if (y + rect.height > vh - 10) y = evt.clientY - rect.height - pad;
+  tip.style.left = Math.max(6, x) + 'px';
+  tip.style.top = Math.max(6, y) + 'px';
+}
+function _execHideTip() {
+  var tip = document.getElementById('exec-tip-float');
+  if (tip) tip.style.display = 'none';
+}
+window._execShowTip = _execShowTip;
+window._execPosTip = _execPosTip;
+window._execHideTip = _execHideTip;
 function renderExecMapa(plantaSeleccionada) {
   var el = document.getElementById('exec-mapa-container');
   if (!el || typeof L === 'undefined') return;
