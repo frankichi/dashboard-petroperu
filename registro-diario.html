@@ -1062,13 +1062,55 @@ function rdDescartarReposicion(prod) {
   var panel = document.getElementById('repos-panel-' + prod.replace(/[^a-z0-9]/gi,'_'));
   if (panel) panel.style.display = 'none';
 }
+// ⚠️ CORREGIDO: antes el volumen de la reposición se CALCULABA solo
+// (existencia de hoy − existencia del último reporte) — ese cálculo es
+// incorrecto en cuanto hubo despacho durante el día (que es lo normal):
+// el delta de inventario mezcla "lo que entró" con "lo que salió", así
+// que nunca refleja el volumen real recibido. Ahora se le pide al
+// operador el volumen REAL (el que sabe por la guía de remisión o el
+// manifiesto de descarga) — nunca se sugiere ni se precarga un número
+// calculado, para no sesgar la respuesta ni quitarle tiempo a nadie
+// corrigiendo un valor mal calculado.
 function rdMarcarReposicion(prod, tipo, emoji) {
-  var existEl = document.querySelector('.rd-existencia[data-prod="' + prod + '"]');
-  var existencia = existEl ? rdParseNum(existEl) : 0;
-  var ref = (RD.detalle && RD.detalle[prod]) || {};
-  var ucInv = (ref.ultimo_calculo && ref.ultimo_calculo.inv) || 0;
-  var volumen = Math.max(0, Math.round((existencia - ucInv) * 1000) / 1000);
   var tipoCodigo = (tipo === 'Cabotaje Marítimo' || tipo === 'Cabotaje Fluvial') ? 'MARITIMO' : tipo === 'Cisternas Terrestres' ? 'TERRESTRE' : 'REFINERIA';
+  var pid = prod.replace(/[^a-z0-9]/gi,'_');
+  var panel = document.getElementById('repos-panel-' + pid);
+  if (!panel) return;
+  var botonesDiv = panel.querySelector('.repos-botones');
+  if (botonesDiv) botonesDiv.style.display = 'none';
+  var existente = panel.querySelector('.repos-vol-input-wrap');
+  if (existente) existente.remove();
+  var wrap = document.createElement('div');
+  wrap.className = 'repos-vol-input-wrap';
+  wrap.style.cssText = 'display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:2px';
+  wrap.innerHTML =
+      '<span style="font-size:11px;font-weight:700;color:#1e40af">' + emoji + ' ¿Cuántos MB recibiste por ' + tipo + '?</span>'
+    + '<input type="number" step="0.001" min="0" placeholder="MB recibidos" id="repos-vol-' + pid + '" '
+    +   'onkeydown="if(event.key===\'Enter\')rdConfirmarVolumenReposicion(\'' + prod + '\',\'' + tipo.replace(/'/g,"\\'") + '\',\'' + tipoCodigo + '\',\'' + emoji + '\')" '
+    +   'style="width:120px;padding:5px 8px;border:1.5px solid #93c5fd;border-radius:6px;font-size:12px;font-weight:700">'
+    + '<button type="button" onclick="rdConfirmarVolumenReposicion(\'' + prod + '\',\'' + tipo.replace(/'/g,"\\'") + '\',\'' + tipoCodigo + '\',\'' + emoji + '\')" style="padding:6px 12px;border-radius:16px;border:none;background:#1e40af;color:#fff;font-size:11px;font-weight:700;cursor:pointer">Confirmar</button>'
+    + '<button type="button" onclick="rdCancelarVolumenReposicion(\'' + prod + '\')" style="padding:6px 12px;border-radius:16px;border:1.5px solid #94a3b8;background:#fff;color:#64748b;font-size:11px;font-weight:700;cursor:pointer">Cancelar</button>';
+  panel.appendChild(wrap);
+  var inp = document.getElementById('repos-vol-' + pid);
+  if (inp) inp.focus();
+}
+function rdCancelarVolumenReposicion(prod) {
+  var pid = prod.replace(/[^a-z0-9]/gi,'_');
+  var panel = document.getElementById('repos-panel-' + pid);
+  if (!panel) return;
+  var wrap = panel.querySelector('.repos-vol-input-wrap');
+  if (wrap) wrap.remove();
+  var botonesDiv = panel.querySelector('.repos-botones');
+  if (botonesDiv) botonesDiv.style.display = '';
+}
+function rdConfirmarVolumenReposicion(prod, tipo, tipoCodigo, emoji) {
+  var pid = prod.replace(/[^a-z0-9]/gi,'_');
+  var inp = document.getElementById('repos-vol-' + pid);
+  var volumen = inp ? rdParseNum(inp) : 0;
+  if (!volumen || volumen <= 0) {
+    if (inp) { inp.style.borderColor = '#dc2626'; inp.focus(); }
+    return;
+  }
   var ta = document.querySelector('.rd-coment-prod[data-prod="' + prod + '"]');
   if (ta) {
     // Prefijo estructurado (lo lee el dashboard) + texto legible para
@@ -1078,7 +1120,7 @@ function rdMarcarReposicion(prod, tipo, emoji) {
     ta.focus();
     ta.setSelectionRange(ta.value.length, ta.value.length);
   }
-  var panel = document.getElementById('repos-panel-' + prod.replace(/[^a-z0-9]/gi,'_'));
+  var panel = document.getElementById('repos-panel-' + pid);
   if (panel) panel.style.display = 'none';
 }
 function rdCheckUnidadSospechosa(prod, tipo) {
@@ -1379,7 +1421,7 @@ function rdRenderProdRows(productos, valores, detalle, yaReportado) {
       +   (yaReportado ? '' :
            '<div class="repos-panel" id="repos-panel-' + p.replace(/[^a-z0-9]/gi,'_') + '" style="display:none;margin-top:10px;padding:10px 12px;background:#eef6ff;border:1px solid #bfdbfe;border-radius:8px">'
            + '<div id="repos-msg-' + p.replace(/[^a-z0-9]/gi,'_') + '" style="font-size:11px;font-weight:700;color:#1e40af;margin-bottom:7px">📈 La existencia subió respecto al último reporte — ¿cómo llegó el producto? <b>(obligatorio para poder guardar)</b></div>'
-           + '<div style="display:flex;gap:6px;flex-wrap:wrap">'
+           + '<div class="repos-botones" style="display:flex;gap:6px;flex-wrap:wrap">'
            +   (esIquitosRD
                 ? '<button type="button" onclick="rdMarcarReposicion(\'' + p + '\',\'Cabotaje Fluvial\',\'\ud83d\udef6\')" style="padding:6px 12px;border-radius:16px;border:1.5px solid #0284c7;background:#fff;color:#0284c7;font-size:11px;font-weight:700;cursor:pointer">\ud83d\udef6 Cabotaje Fluvial (Barcaza)</button>'
                 : '<button type="button" onclick="rdMarcarReposicion(\'' + p + '\',\'Cabotaje Mar\u00edtimo\',\'\u26f4\ufe0f\')" style="padding:6px 12px;border-radius:16px;border:1.5px solid #0284c7;background:#fff;color:#0284c7;font-size:11px;font-weight:700;cursor:pointer">\u26f4\ufe0f Cabotaje Mar\u00edtimo</button>')
