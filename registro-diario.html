@@ -846,10 +846,11 @@ function rdRenderTopbar() {
         (RD.plantas || []).map(function(p) {
           return '<option value="' + p + '"' + (p === RD.plantaAdminVista ? ' selected' : '') + '>' + plantaLabel(p) + '</option>';
         }).join('');
-      selectorAdmin = '<select onchange="rdCambiarVistaPlantaAdmin(this.value)" '
+      selectorAdmin = '<span style="font-size:11px" title="Modo soporte: ver el Registro Diario tal como lo ve esa planta">🛠️</span>'
+        + '<select onchange="rdCambiarVistaPlantaAdmin(this.value)" '
         + 'style="padding:5px 10px;border-radius:16px;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.3);color:#fff;font-size:10.5px;font-weight:700" '
         + 'title="Modo soporte: ver el Registro Diario tal como lo ve esa planta">'
-        + '🛠️ ' + opciones + '</select>'
+        + opciones + '</select>'
         + (RD.plantaAdminVista ? '<button class="btn btn-ghost-dark" style="padding:5px 10px;font-size:10.5px" onclick="rdSalirModoAdmin()" title="Volver a tu propia vista de administrador">✕ Salir de vista</button>' : '');
     }
     el.innerHTML = selectorAdmin + '<span class="tb-planta-badge">' + plantaLabel(RD.planta) + (RD.rol==='admin' && RD.plantaAdminVista ? ' <span style="opacity:.75">(vista admin)</span>' : '') + '</span>' +

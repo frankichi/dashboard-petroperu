@@ -20499,7 +20499,16 @@ function renderVistaEjecutivaSimple() {
   // esos casos la "vista combinada" simplemente muestra el total que ya
   // trae la refinería, sin sumar nada extra.
   var COMBO_PLANTAS = {
-    '__COMBO_TALARA__': {
+    // ⚠️ Particularidad por petición gerencial: Talara SIEMPRE debe
+    // mostrar el inventario combinado con su refinería — no como una
+    // opción aparte en el desplegable, sino automáticamente cada vez
+    // que se selecciona "Talara" en cualquier gráfica del Panel de
+    // Suministro. Por eso esta entrada usa la clave 'Talara' (el nombre
+    // real de la planta) en vez de una clave especial de combo — así
+    // toda la lógica ya existente (filaAplica, sumFecha, Cobertura por
+    // planta/producto, títulos) la aplica sin que el usuario tenga que
+    // elegir nada extra.
+    'Talara': {
       label: 'Talara + Refinería Talara',
       plantasInv: ['Talara', 'Refinería Talara'],
       // Solo los productos que la planta de VENTA Talara reporta — no
@@ -20935,6 +20944,22 @@ function renderVistaEjecutivaSimple() {
       if (c !== null) { acc.diasSum += c; acc.tieneAlgunCob = true; }
       if (r._proyectadoConsumo) acc.proyectado = true;
     });
+    // ⚠️ Particularidad por petición gerencial: sumar el inventario de
+    // Refinería Talara dentro de la fila "Talara" — aquí Talara SÍ tiene
+    // despacho propio (a diferencia de Conchán/Iquitos, donde la
+    // refinería YA incluye a la planta de venta), así que se suma
+    // aparte, solo para los productos que la planta de venta realmente
+    // comercializa (no D2S50-H, producto intermedio exclusivo de la
+    // refinería).
+    if (porPlantaFila['Talara']) {
+      var talaraProdsValidos = COMBO_PLANTAS['Talara'].productosRestrict;
+      latestRows.forEach(function(r) {
+        if (r.planta !== 'Refinería Talara') return;
+        if (talaraProdsValidos.indexOf(r.producto) === -1) return;
+        if (prod !== 'Todos' && r.producto !== prod) return;
+        porPlantaFila['Talara'].invSum += (r.inv || 0);
+      });
+    }
     datosCob = Object.keys(porPlantaFila).map(function(p) {
       var acc = porPlantaFila[p];
       var rep = reposicionInfoPlanta(p, prod);
@@ -21166,7 +21191,10 @@ function renderVistaEjecutivaSimple() {
     + 'style="padding:7px 14px;border-radius:8px;border:1.5px solid var(--bdr);background:var(--card);color:var(--txt);font-size:12.5px;font-weight:700;cursor:pointer;font-family:inherit">'
     + '<option value="Nacional"' + (pl==='Nacional'?' selected':'') + '>🌎 Vista Nacional</option>'
     + '<optgroup label="Vistas combinadas planta + refinería">'
-    +   Object.keys(COMBO_PLANTAS).map(function(k){ return '<option value="'+k+'"'+(pl===k?' selected':'')+'>🔗 '+COMBO_PLANTAS[k].label+'</option>'; }).join('')
+    // "Talara" ya no aparece aquí como opción aparte — ahora es
+    // comportamiento automático de la entrada normal "Talara" más abajo
+    // (petición gerencial: siempre combinada, sin tener que elegirla).
+    +   Object.keys(COMBO_PLANTAS).filter(function(k){ return k !== 'Talara'; }).map(function(k){ return '<option value="'+k+'"'+(pl===k?' selected':'')+'>🔗 '+COMBO_PLANTAS[k].label+'</option>'; }).join('')
     + '</optgroup>'
     + plantasDisp.map(function(p){ return '<option value="'+p+'"'+(pl===p?' selected':'')+'>'+(REFINERIAS.indexOf(p)!==-1?'🛢️':'🏭')+' '+p+'</option>'; }).join('')
     + '</select>';
