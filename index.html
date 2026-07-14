@@ -20318,8 +20318,49 @@ function renderVistaEjecutivaSimple() {
     var mm = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
     return d.slice(8,10) + '-' + mm[parseInt(d.slice(5,7),10)-1];
   }
+  // ── Vistas combinadas planta+refinería ────────────────────────────────
+  // Talara y su refinería reportan existencia de forma INDEPENDIENTE
+  // (son dos inventarios físicos distintos) — para esta sí tiene sentido
+  // sumarlas. Conchán e Iquitos, en cambio, ya están documentados en
+  // PLANTAS_DUPLICADAS_EN_REFINERIA: la existencia de la planta de venta
+  // YA está incluida dentro de lo que reporta su refinería hermana (no
+  // son dos inventarios separados) — sumarlas duplicaría, así que para
+  // esos casos la "vista combinada" simplemente muestra el total que ya
+  // trae la refinería, sin sumar nada extra.
+  var COMBO_PLANTAS = {
+    '__COMBO_TALARA__': {
+      label: 'Talara + Refinería Talara',
+      plantasInv: ['Talara', 'Refinería Talara'],
+      // Solo los productos que la planta de VENTA Talara reporta — no
+      // D2S50-H (producto intermedio exclusivo de la refinería, aún no
+      // es Diesel final).
+      productosRestrict: ['Diesel','G. Regular','G. Premium','G. 84','TA1','GLP'],
+      plantaDespacho: 'Talara'
+    },
+    '__COMBO_CONCHAN__': {
+      label: 'Conchán + Ref. Conchán',
+      plantasInv: ['Refinería Conchán'], // ya incluye a Conchán — no se suma aparte
+      productosRestrict: null,
+      plantaDespacho: 'Conchán'
+    },
+    '__COMBO_IQUITOS__': {
+      label: 'Iquitos + Ref. Iquitos',
+      plantasInv: ['Refinería Iquitos'], // ya incluye a Iquitos — no se suma aparte
+      productosRestrict: null,
+      plantaDespacho: 'Iquitos'
+    }
+  };
+  function _plLabel(p) { return COMBO_PLANTAS[p] ? COMBO_PLANTAS[p].label : p; }
   function filaAplica(r, planta, producto) {
-    if (planta && planta !== 'Nacional' && r.planta !== planta) return false;
+    var combo = COMBO_PLANTAS[planta];
+    if (combo) {
+      // Para despacho/pronóstico/V.Factible (flujos), una vista
+      // combinada usa la planta de VENTA — la refinería no despacha, así
+      // que ese dato solo existe en la planta de venta.
+      if (r.planta !== combo.plantaDespacho) return false;
+    } else if (planta && planta !== 'Nacional' && r.planta !== planta) {
+      return false;
+    }
     if (producto && producto !== 'Todos' && r.producto !== producto) return false;
     if (typeof SKIP_COMBOS !== 'undefined' && SKIP_COMBOS.has((r.planta||'')+'|'+(r.producto||''))) return false;
     return true;
@@ -20383,12 +20424,17 @@ function renderVistaEjecutivaSimple() {
       // esta fecha. Sin esto, un solo día sin reportar hacía que el
       // total nacional (o el de esa planta) cayera a cero de golpe en
       // las gráficas, como si el combustible hubiera desaparecido.
-      var plantasIter = (!planta || planta === 'Nacional') ? PLANTAS_18_OFICIALES.concat(REFINERIAS) : [planta];
+      var combo = COMBO_PLANTAS[planta];
+      var plantasIter = combo ? combo.plantasInv
+        : (!planta || planta === 'Nacional') ? PLANTAS_18_OFICIALES.concat(REFINERIAS) : [planta];
       var productosIter = (producto && producto !== 'Todos') ? [producto]
         : (typeof PRODUCTO_ORDEN !== 'undefined' ? PRODUCTO_ORDEN : ['Diesel','D2S50-H','G. Regular','G. Premium','G. 84','TA1','GLP','G. Regular HS','PI6']);
+      if (combo && combo.productosRestrict) {
+        productosIter = productosIter.filter(function(pr){ return combo.productosRestrict.indexOf(pr) !== -1; });
+      }
       var s = 0;
       plantasIter.forEach(function(pl2) {
-        if ((!planta || planta === 'Nacional') && PLANTAS_DUPLICADAS_EN_REFINERIA.indexOf(pl2) !== -1) return;
+        if (!combo && (!planta || planta === 'Nacional') && PLANTAS_DUPLICADAS_EN_REFINERIA.indexOf(pl2) !== -1) return;
         productosIter.forEach(function(pr2) {
           if (typeof SKIP_COMBOS !== 'undefined' && SKIP_COMBOS.has(pl2 + '|' + pr2)) return;
           var r = _invArrastrado(pl2, pr2, fecha);
@@ -20520,7 +20566,7 @@ function renderVistaEjecutivaSimple() {
       return tot > 0 ? parseFloat(tot.toFixed(2)) : null;
     });
     pronSerie = datesN.map(function(d){
-      var v = pronParaFechaExec(d, pl, prod);
+      var v = pronParaFechaExec(d, (COMBO_PLANTAS[pl] ? COMBO_PLANTAS[pl].plantaDespacho : pl), prod);
       return v > 0 ? parseFloat(v.toFixed(2)) : null;
     });
     _pTendEnsurePronMesesExec([...new Set(datesN.map(function(d){return d.slice(0,7);}))]);
@@ -20720,7 +20766,8 @@ function renderVistaEjecutivaSimple() {
       return { label: p, dias: r._cobVal, invMB: r.inv||0, diasRepos: rep.diasRepos, volReposMB: rep.volMB, tipoRepos: rep.tipo, reposDetalle: rep.detalle, sinCob: r._cobVal === null, proyectado: !!r._proyectadoConsumo };
     });
   } else if (!esRefineriaExec) {
-    latestRows.filter(function(r){ return r.planta === pl; }).forEach(function(r) {
+    var plantaCobertura = COMBO_PLANTAS[pl] ? COMBO_PLANTAS[pl].plantaDespacho : pl;
+    latestRows.filter(function(r){ return r.planta === plantaCobertura; }).forEach(function(r) {
       var c = calcCob(r);
       var rep = reposicionInfo(r);
       // Mismo criterio: no se excluye un producto solo porque no se
@@ -20889,6 +20936,9 @@ function renderVistaEjecutivaSimple() {
   var plantaSelector = '<select id="exec-planta-select" onchange="window._execPlanta=this.value;renderVistaEjecutivaSimple();" '
     + 'style="padding:7px 14px;border-radius:8px;border:1.5px solid var(--bdr);background:var(--card);color:var(--txt);font-size:12.5px;font-weight:700;cursor:pointer;font-family:inherit">'
     + '<option value="Nacional"' + (pl==='Nacional'?' selected':'') + '>🌎 Vista Nacional</option>'
+    + '<optgroup label="Vistas combinadas planta + refinería">'
+    +   Object.keys(COMBO_PLANTAS).map(function(k){ return '<option value="'+k+'"'+(pl===k?' selected':'')+'>🔗 '+COMBO_PLANTAS[k].label+'</option>'; }).join('')
+    + '</optgroup>'
     + plantasDisp.map(function(p){ return '<option value="'+p+'"'+(pl===p?' selected':'')+'>'+(REFINERIAS.indexOf(p)!==-1?'🛢️':'🏭')+' '+p+'</option>'; }).join('')
     + '</select>';
 
@@ -20897,9 +20947,12 @@ function renderVistaEjecutivaSimple() {
   // que ESA planta/terminal realmente atiende (con datos en el Sheets) —
   // no todos los productos a nivel nacional. Con "Nacional" se ven todos.
   var productosDisp = PRODUCTO_ORDEN.filter(function(pr){
+    var combo = COMBO_PLANTAS[pl];
+    if (combo && combo.productosRestrict && combo.productosRestrict.indexOf(pr) === -1) return false;
     var tieneDatos = RAW.some(function(r){
       if (r.producto !== pr) return false;
-      if (pl !== 'Nacional' && r.planta !== pl) return false;
+      if (combo) { if (combo.plantasInv.indexOf(r.planta) === -1) return false; }
+      else if (pl !== 'Nacional' && r.planta !== pl) return false;
       if (typeof SKIP_COMBOS !== 'undefined' && SKIP_COMBOS.has((r.planta||'')+'|'+pr)) return false;
       return true;
     });
@@ -20908,7 +20961,7 @@ function renderVistaEjecutivaSimple() {
     // Iquitos|TA1) deben verse igual que en Coberturas, aunque todavía
     // no tengan ningún dato reportado — son productos estratégicos que
     // siempre se deben poder controlar, no solo cuando ya hay inventario.
-    if (typeof MANDATORY_COMBOS !== 'undefined' && pl !== 'Nacional') {
+    if (typeof MANDATORY_COMBOS !== 'undefined' && pl !== 'Nacional' && !combo) {
       return MANDATORY_COMBOS.some(function(m){ return m.planta === pl && m.producto === pr; });
     }
     return false;
@@ -20925,7 +20978,7 @@ function renderVistaEjecutivaSimple() {
     + productosDisp.map(function(p){ return '<option value="'+p+'"'+(prod===p?' selected':'')+'>'+p+'</option>'; }).join('')
     + '</select>';
 
-  var tituloScope = (pl === 'Nacional' ? 'a nivel nacional' : pl) + (prod !== 'Todos' ? ' · ' + prod : '');
+  var tituloScope = (pl === 'Nacional' ? 'a nivel nacional' : (COMBO_PLANTAS[pl] ? COMBO_PLANTAS[pl].label : pl)) + (prod !== 'Todos' ? ' · ' + prod : '');
   var volverBtn = pl !== 'Nacional'
     ? '<button onclick="window._execPlanta=\'Nacional\';renderVistaEjecutivaSimple();" style="padding:6px 14px;border-radius:8px;border:1.5px solid var(--bdr);background:var(--card2);color:var(--txt2);font-size:11.5px;font-weight:700;cursor:pointer;margin-bottom:12px;display:inline-flex;align-items:center;gap:6px">← Volver a Vista Nacional</button>'
     : '';
@@ -21011,7 +21064,7 @@ function renderVistaEjecutivaSimple() {
     (esRefineriaExec ? '<div style="margin-bottom:16px;padding:10px 14px;background:#eef2f7;border:1px solid #cbd5e1;border-radius:10px;font-size:12px;color:#475569">🛢️ <b>' + pl + '</b> es una refinería — solo procesa y almacena producto, no vende. Por eso aquí solo se muestra su <b>inventario</b>, sin despacho.</div>' : '') +
     '<div class="exec-kpi-grid" style="display:grid;grid-template-columns:' + (esRefineriaExec ? '1fr' : '1fr 1fr') + ';gap:20px;margin-bottom:28px">' +
       '<div style="background:var(--card);border:1px solid var(--bdr);border-radius:14px;padding:24px 26px">' +
-        '<div style="font-size:11px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">📦 Inventario ' + (pl==='Nacional'?'Nacional':'· '+pl) + (prod!=='Todos'?' · '+prod:'') + '</div>' +
+        '<div style="font-size:11px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">📦 Inventario ' + (pl==='Nacional'?'Nacional':'· '+_plLabel(pl)) + (prod!=='Todos'?' · '+prod:'') + '</div>' +
         '<div class="exec-kpi-val" style="font-size:38px;font-weight:800;color:var(--txt);font-family:var(--mono);line-height:1">' + fmtMB(invHoy) + '</div>' +
         '<div style="margin-top:10px">' + deltaHTML(deltaInv, true, invAyer) + '</div>' +
         (invHoyTieneProyeccion ? '<div style="margin-top:8px;font-size:10.5px;color:#2563eb;font-weight:700;display:flex;align-items:center;gap:5px">🚢 Incluye reposición proyectada (buque ya descargó, planta aún no reporta cierre)</div>' : '') +
@@ -21043,14 +21096,14 @@ function renderVistaEjecutivaSimple() {
     '<div class="exec-charts-row">' +
     '<div style="background:var(--card);border:1px solid var(--bdr);border-radius:14px;padding:22px 24px;margin-bottom:20px">' +
       '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:14px">' +
-        '<div style="font-size:13px;font-weight:800;color:var(--txt)">Inventario ' + (pl==='Nacional'?'Nacional':'· '+pl) + (prod!=='Todos'?' · '+prod:'') + '</div>' +
+        '<div style="font-size:13px;font-weight:800;color:var(--txt)">Inventario ' + (pl==='Nacional'?'Nacional':'· '+_plLabel(pl)) + (prod!=='Todos'?' · '+prod:'') + '</div>' +
         periodoBar +
       '</div>' +
       '<div class="exec-chart-wrap" style="position:relative;height:220px"><canvas id="exec-chart-inv"></canvas></div>' +
     '</div>' +
     (esRefineriaExec ? '' :
     '<div style="background:var(--card);border:1px solid var(--bdr);border-radius:14px;padding:22px 24px;margin-bottom:24px">' +
-      '<div style="font-size:13px;font-weight:800;color:var(--txt);margin-bottom:14px">Despachos Reportados (Registro Diario) ' + (pl==='Nacional'?'':'· '+pl) + (prod!=='Todos'?' · '+prod:'') + '</div>' +
+      '<div style="font-size:13px;font-weight:800;color:var(--txt);margin-bottom:14px">Despachos Reportados (Registro Diario) ' + (pl==='Nacional'?'':'· '+_plLabel(pl)) + (prod!=='Todos'?' · '+prod:'') + '</div>' +
       '<div class="exec-chart-wrap" style="position:relative;height:220px"><canvas id="exec-chart-desp"></canvas></div>' +
     '</div>') +
     '</div>' +
