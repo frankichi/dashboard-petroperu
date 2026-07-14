@@ -3109,6 +3109,21 @@ function prodSortKey(p) { var i = PROD_ORDER.indexOf(p); return i >= 0 ? i : 99;
 let RAW = [];
 let DATES = [];
 let currentDate = null;
+// ⚠️ Helper a prueba de fallos: construir `new Date(currentDate +
+// 'T12:00:00')` directamente, sin validar, causaba un crash NO
+// capturado ("Invalid time value" en .toISOString()) en cuanto
+// currentDate quedaba vacío o mal formado por cualquier motivo — y como
+// esto pasaba A MITAD de renderP2() (Coberturas), la función se cortaba
+// ahí mismo, dejando el resto del dashboard sin terminar de dibujarse
+// ("todo roto"). Este helper NUNCA produce una fecha inválida: si
+// currentDate no tiene el formato exacto YYYY-MM-DD, usa la fecha real
+// de hoy como respaldo en vez de reventar.
+function _fechaCurrenteSegura() {
+  if (currentDate && /^\d{4}-\d{2}-\d{2}$/.test(currentDate)) {
+    return new Date(currentDate + 'T12:00:00');
+  }
+  return new Date();
+}
 window._fechaActual = null; // alias para renderPResumen
 let pronSheet = {};  // planta|producto → MBDC from pronostico sheet
 function setGsStatus(state, text) {
@@ -3185,8 +3200,8 @@ function buildDateBar(containerId) {
   const nextDisabled = curIdx >= DATES.length - 1 ? 'disabled' : '';
   const minDate = DATES[0];
   const maxDate = DATES[DATES.length - 1];
-  const curLabel = currentDate
-    ? new Date(currentDate + 'T12:00:00').toLocaleDateString('es-PE', {weekday:'short', day:'2-digit', month:'short', year:'numeric'})
+  const curLabel = (currentDate && /^\d{4}-\d{2}-\d{2}$/.test(currentDate))
+    ? _fechaCurrenteSegura().toLocaleDateString('es-PE', {weekday:'short', day:'2-digit', month:'short', year:'numeric'})
     : '—';
   return `
     <div class="date-bar" id="${containerId}">
@@ -3218,8 +3233,8 @@ function syncAllDateBars() {
     if (btns[1]) btns[1].disabled = curIdx >= DATES.length - 1;
     const badge = bar.querySelector('.date-badge');
     if (badge) {
-      const curLabel = currentDate
-        ? new Date(currentDate + 'T12:00:00').toLocaleDateString('es-PE', {weekday:'short', day:'2-digit', month:'short', year:'numeric'})
+      const curLabel = (currentDate && /^\d{4}-\d{2}-\d{2}$/.test(currentDate))
+        ? _fechaCurrenteSegura().toLocaleDateString('es-PE', {weekday:'short', day:'2-digit', month:'short', year:'numeric'})
         : '—';
       badge.textContent = '📊 ' + curLabel;
     }
@@ -3433,7 +3448,15 @@ async function fetchData(forceRefresh) {
       if (r.planta && _PLANTA_ALIAS[r.planta]) r.planta = _PLANTA_ALIAS[r.planta];
     });
     RAW = data;
-    DATES = [...new Set(RAW.map(r => r.fecha))].filter(Boolean).sort();
+    // ⚠️ Validación estricta de formato (YYYY-MM-DD exacto) — defensa
+    // adicional en el frontend: si por cualquier motivo una fila trae
+    // `fecha` con hora pegada (ej. "2026-07-13T20:36") u otro formato
+    // no esperado, NUNCA debe contaminar el selector de fecha del
+    // dashboard entero (causaba "Invalid Date" y en cascada "NaNd" en
+    // Cobertura por planta, porque toda proyección de consumo depende
+    // de poder restar fechas válidas). Se descarta silenciosamente
+    // cualquier valor que no calce con el patrón exacto.
+    DATES = [...new Set(RAW.map(r => r.fecha))].filter(function(f){ return /^\d{4}-\d{2}-\d{2}$/.test(f); }).sort();
     if (!currentDate || !DATES.includes(currentDate)) {
       currentDate = DATES[DATES.length - 1] || '';
       window._fechaActual = currentDate;
@@ -3449,7 +3472,7 @@ async function fetchData(forceRefresh) {
         + '<div style="font-size:13px;color:var(--txt2);max-width:400px;margin:0 auto">Ve a <b>Carga Datos</b> y sube el <b>E&D</b> y la <b>Cobertura-An\u00e1lisis</b></div></div>';
       return;
     }
-    const lastLabel = new Date(currentDate + 'T12:00:00').toLocaleDateString('es-PE', {day:'2-digit', month:'short', year:'numeric'});
+    const lastLabel = _fechaCurrenteSegura().toLocaleDateString('es-PE', {day:'2-digit', month:'short', year:'numeric'});
     setGsStatus('connected', `Google Sheets · ${lastLabel}`);
     if (typeof _authRenderTopbarUser === 'function') _authRenderTopbarUser();
     setTimeout(updateEventTicker, 300);
@@ -5085,7 +5108,7 @@ function renderP1() {
   const PLANTAS_CISTERNA = new Set([
     'Juliaca','Cusco','Pucallpa','Tarapoto','Yurimaguas','El Milagro','Iquitos'
   ]);
-  var _prevD = new Date(currentDate + 'T12:00:00');
+  var _prevD = _fechaCurrenteSegura();
   _prevD.setDate(_prevD.getDate() - 1);
   var _prevDateStr = _prevD.toISOString().slice(0, 10);
   var _hasVentasData = Object.keys(ventasDiariasMap).length > 0;
@@ -7490,7 +7513,26 @@ function renderPCapRef() {
           '</tr></thead><tbody>' + rowsHTML + '</tbody></table></div>');
 }
 
+// Red de seguridad: si algo inesperado revienta dentro de Coberturas
+// (como el crash real de "Invalid time value" que reportó el usuario),
+// esto evita que el error se propague y deje el resto del dashboard sin
+// terminar de dibujarse. Se muestra un aviso claro en la tabla en vez de
+// una pantalla rota, y el error queda igual en la consola para poder
+// diagnosticarlo.
 function renderP2() {
+  try {
+    _renderP2Body();
+  } catch (errP2) {
+    console.error('[renderP2] Error al dibujar Coberturas:', errP2);
+    var contEl = document.getElementById('p2-content');
+    if (contEl) {
+      contEl.innerHTML = '<div style="padding:40px 24px;text-align:center;color:var(--red);font-size:13px">'
+        + '⚠️ Ocurrió un error al mostrar Coberturas: ' + (errP2 && errP2.message ? errP2.message : errP2)
+        + '<br><span style="font-size:11px;color:var(--txt3);display:block;margin-top:8px">Intenta recargar la página. Si persiste, avisa a Planificación de Suministro.</span></div>';
+    }
+  }
+}
+function _renderP2Body() {
   var today = byDateLatestPerPlant(currentDate || (DATES.length ? DATES[DATES.length-1] : ''));
   // Refinerías: mostrar siempre sus productos en la tabla (aunque aún no
   // hayan reportado inventario vía Registro Diario), como "casillas"
@@ -7566,7 +7608,7 @@ function renderP2() {
       var sid = cobSafeId(r.planta, r.producto);
       var key = r.planta + '|' + r.producto;
       var pronMbdc = cobGetPron(r);
-      var prevDate2 = new Date(currentDate + 'T12:00:00');
+      var prevDate2 = _fechaCurrenteSegura();
       prevDate2.setDate(prevDate2.getDate() - 1);
       var prevDateStr  = prevDate2.toISOString().slice(0, 10);
       var hasVentas    = Object.keys(ventasDiariasMap).length > 0;
@@ -10061,7 +10103,7 @@ window._cisApplyFilters = _cisApplyFilters;
 window._cisResetFilters = _cisResetFilters;
 function renderPB() {
   const today = byLatest();
-  const todayDate = new Date(currentDate + 'T12:00:00');
+  const todayDate = _fechaCurrenteSegura();
   const DAY_MS = 86400000;
   const startDate = new Date(todayDate - 7 * DAY_MS);
   const totalDays = 28;
@@ -12555,7 +12597,7 @@ function renderPE() {
   const totalCap  = simShips.reduce((a, s) => a + s.volTotal, 0);
   const totalUsed = simShips.reduce((a, s) => a + s.stops.reduce((b, st) => b + st.vol, 0), 0);
   const utilPct   = totalCap > 0 ? (totalUsed / totalCap * 100).toFixed(0) : 0;
-  const today3 = currentDate ? new Date(currentDate + 'T12:00:00') : new Date();
+  const today3 = _fechaCurrenteSegura();
   const DAYS   = 30;
   let miniGantt = '';
   simShips.forEach(function(s, i) {
@@ -15632,7 +15674,7 @@ function renderWhatIfChart(planta, producto) {
   var baseRate = pronVal > 0 ? pronVal : (r.dem_prom || 0);
   var btAddedBase = false, btAddedSim = false;
   for (var d = 0; d <= days; d++) {
-    var dt = new Date(currentDate + 'T12:00:00');
+    var dt = _fechaCurrenteSegura();
     dt.setDate(dt.getDate() + d);
     labels.push(dt.getDate() + '/' + (dt.getMonth() + 1));
     baseLine.push(Math.max(0, Math.round(curBase * 100) / 100));
@@ -20510,8 +20552,10 @@ function renderVistaEjecutivaSimple() {
     return idx;
   }
   function _diasEntreFechas(fechaA, fechaB) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(fechaA) || !/^\d{4}-\d{2}-\d{2}$/.test(fechaB)) return 0;
     var a = new Date(fechaA + 'T00:00:00Z').getTime();
     var b = new Date(fechaB + 'T00:00:00Z').getTime();
+    if (isNaN(a) || isNaN(b)) return 0;
     return Math.round((b - a) / 86400000);
   }
   function _invArrastrado(planta, producto, fecha) {
