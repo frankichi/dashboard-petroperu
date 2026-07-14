@@ -418,6 +418,7 @@ body.rd-print-mode #rdPrintReport{
     <div class="rd-filter-bar">
       <label>Periodo</label>
       <select class="rd-select" id="histPeriodo" onchange="rdLoadHistorico()">
+        <option value="7">Últimos 7 días</option>
         <option value="15">Últimos 15 días</option>
         <option value="30" selected>Últimos 30 días</option>
         <option value="60">Últimos 60 días</option>
@@ -550,20 +551,18 @@ function rdDiaSemana(fechaStr) {
 }
 var RD_DIAS_SEMANA = ['domingo','lunes','martes','miércoles','jueves','viernes','sábado'];
 // ⚠️ NO se asume que domingo es día no-operativo — algunas plantas SÍ
-// atienden y reportan domingo. Por eso el selector siempre ofrece los 7
-// días como opciones reales (no se salta ninguno).
+// atienden y reportan domingo. Por eso, cuando corresponde, el selector
+// ofrece domingo como opción real (no se salta).
 //
-// La ventana de días ofrecidos ahora cubre los ÚLTIMOS 7 DÍAS
-// (incluyendo hoy) — antes era intencionalmente muy corta (hoy+ayer, o
-// hasta 3 el lunes) para no tentar a reportar fechas viejas por error.
-// Se amplía a una semana completa para que el operador pueda ponerse al
-// día él mismo si por algún motivo se le pasó reportar algún día
-// reciente (ej. el caso real de Tarapoto, que quedó con días sin
-// reportar y tuvo que corregirse manualmente desde el backend) — sin
-// depender de que alguien de Planificación de Suministro tenga que
-// intervenir la base de datos directamente.
+// La ventana de días ofrecidos es INTENCIONALMENTE corta: normalmente
+// solo hoy + ayer. La ÚNICA excepción es el LUNES, que se abre a 3 días
+// (hoy=lunes, domingo, sábado) para cubrir el fin de semana — sábado y
+// domingo no tienen "día siguiente hábil" normal donde reportarlos, a
+// diferencia de martes-viernes que sí tuvieron su oportunidad el día
+// hábil inmediato anterior durante la semana. NO se retrocede más allá
+// de esto a propósito — no es un selector de fecha libre.
 function rdNumDiasSelector() {
-  return 7;
+  return (rdDiaSemana(rdHoyLima()) === 1) ? 3 : 2; // 1 = lunes
 }
 // Lista de los últimos N días (incluyendo hoy) para el selector de
 // fecha del formulario — cada uno con su nombre de día de la semana.
