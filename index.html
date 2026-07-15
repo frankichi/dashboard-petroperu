@@ -20782,7 +20782,7 @@ function renderVistaEjecutivaSimple() {
   // "Pronóstico": inventario reportado ÷ demanda pronóstico (hoja
   // 'pronostico' del Sheets) — la misma proyección que usa Planificación.
   if (window._execCobSort === undefined) window._execCobSort = 'desc'; // 'desc' = mayor a menor (default)
-  if (window._execCobModo === undefined) window._execCobModo = 'real'; // 'real' | 'pron'
+  if (window._execCobModo === undefined) window._execCobModo = 'pron'; // 'real' | 'pron' — pronóstico por defecto
   var COB_SANO_MAX_EXEC = 90; // más de 90 días es señal de un despacho/pronóstico
                                // casi cero (dato sospechoso) — se excluye del
                                // gráfico en vez de mostrar un número sin sentido.
