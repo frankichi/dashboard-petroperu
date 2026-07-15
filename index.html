@@ -21232,7 +21232,7 @@ function renderVistaEjecutivaSimple() {
         '</div></div>';
     }).join('');
     reposSectionHTML = '<div style="background:var(--card);border:1px solid var(--bdr);border-radius:14px;padding:22px 24px;margin-bottom:20px">' +
-        '<div style="font-size:13px;font-weight:800;color:var(--txt);margin-bottom:4px">🚢 Reposiciones recibidas hoy</div>' +
+        '<div style="font-size:13px;font-weight:800;color:var(--txt);margin-bottom:4px">🚢 Reposiciones recibidas</div>' +
         '<div style="font-size:11px;color:var(--txt3);margin-bottom:10px">Marcadas por las plantas en Registro Diario al reportar existencia</div>' +
         '<div>' + reposItemsHTML + '</div>' +
       '</div>';
@@ -21440,7 +21440,7 @@ function renderVistaEjecutivaSimple() {
       '</div>' +
       (esRefineriaExec ? '' :
       '<div style="background:var(--card);border:1px solid var(--bdr);border-radius:14px;padding:24px 26px">' +
-        '<div style="font-size:11px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">🚚 Despacho Reportado Hoy' + (prod!=='Todos'?' · '+prod:'') + '</div>' +
+        '<div style="font-size:11px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">🚚 Despacho Reportado' + (prod!=='Todos'?' · '+prod:'') + '</div>' +
         '<div class="exec-kpi-val" style="font-size:38px;font-weight:800;color:var(--txt);font-family:var(--mono);line-height:1">' + fmtMB(despHoy) + '</div>' +
         '<div style="margin-top:10px">' + deltaHTML(despAyer!==null ? despHoy-despAyer : null, false, despAyer) + '</div>' +
       '</div>') +
