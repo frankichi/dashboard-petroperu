@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2064%2064%22%3E%0A%3Cdefs%3E%0A%3ClinearGradient%20id%3D%22g%22%20x1%3D%220%22%20y1%3D%220%22%20x2%3D%221%22%20y2%3D%221%22%3E%0A%3Cstop%20offset%3D%220%25%22%20stop-color%3D%22%230071A4%22/%3E%0A%3Cstop%20offset%3D%22100%25%22%20stop-color%3D%22%230a3a5c%22/%3E%0A%3C/linearGradient%3E%0A%3C/defs%3E%0A%3Crect%20width%3D%2264%22%20height%3D%2264%22%20rx%3D%2214%22%20fill%3D%22url%28%23g%29%22/%3E%0A%3Cpath%20d%3D%22M32%2012%20C23%2025%2018%2034%2018%2041%20a14%2014%200%200%200%2028%200%20c0-7-5-16-14-29z%22%20fill%3D%22%23ffffff%22/%3E%0A%3Ccircle%20cx%3D%2232%22%20cy%3D%2243%22%20r%3D%224.2%22%20fill%3D%22%23DC271C%22/%3E%0A%3C/svg%3E">
 <title>PETROPERÚ — Dashboard de Inventarios y Coberturas</title>
 <!-- Script de detección temprana: corre ANTES del resto del HTML -->
 <script>
@@ -14688,6 +14689,7 @@ function parseNavesText() {
 }
 function _navesTimestampsHTML(n) {
   var chips = [];
+  if (n.rotacion_raw) chips.push('<b>Rotaci\u00f3n:</b> ' + n.rotacion_raw);
   if (n.fecha_arribo) chips.push('Arrib\u00f3 a ' + n.puerto_ultimo + ': ' + n.fecha_arribo.replace('T',' '));
   if (n.fecha_amarro) chips.push('Amarr\u00f3: ' + n.fecha_amarro.replace('T',' '));
   if (n.fecha_inicio_descarga) chips.push('I.D.: ' + n.fecha_inicio_descarga.replace('T',' '));
@@ -14720,7 +14722,7 @@ function buildNavesPreview() {
       + '<div class="upload-pdf-nave-detail">' + n.tipo + ' \u00B7 ' + (n.ubicacion || n.estado.substring(0,60)) + '</div>'
       + (n.producto ? '<div class="upload-pdf-nave-detail" style="color:var(--acc2)">' + n.producto + ' \u2014 ' + n.volumen + ' MB</div>' : '')
       + (n.rotacion ? '<div class="upload-pdf-nave-detail">\uD83D\uDDFA\uFE0F ' + n.rotacion + '</div>' : '')
-      + (n.puerto_ultimo ? _navesTimestampsHTML(n) : '')
+      + ((n.puerto_ultimo || n.rotacion_raw || n.fecha_termino_descarga) ? _navesTimestampsHTML(n) : '')
       + '</div></div>';
   });
   if (cierres.length > 0) {
@@ -14869,7 +14871,19 @@ async function sendNavesToGS() {
     // en el momento que un buque YA terminó de descargar (T.D.), sin
     // esperar a que alguien actualice el estado a mano en otro lado.
     var posRecords = (uploadNavesData.naves || [])
-      .filter(function(n){ return n.puerto_ultimo; })
+      // ⚠️ CORREGIDO: antes solo se enviaban buques con `puerto_ultimo`
+      // detectado (requiere que el texto tenga literalmente "ARRIBÓ A
+      // X:") — un buque que solo está "NAVEGANDO A X" (aún no llegó a
+      // ningún puerto en ESTE reporte) nunca cumplía esa condición, así
+      // que sus datos (rotación, T.D. de una escala previa, etc.) JAMÁS
+      // llegaban a la hoja `posicionamiento_naves` — se quedaban solo
+      // en `mov_naves` (el módulo viejo). Caso real confirmado:
+      // URUBAMBA "navegando a Bayóvar" nunca se registró en
+      // posicionamiento_naves, así que la corrección de prioridad de
+      // ruta no tenía ningún dato con el cual actuar. Ahora se envía si
+      // hay CUALQUIER dato útil (puerto de arribo, rotación, o T.D.),
+      // no solo cuando hay un arribo detectado.
+      .filter(function(n){ return n.puerto_ultimo || n.rotacion_raw || n.fecha_termino_descarga; })
       .map(function(n) {
         return {
           fecha_reporte: fechaFinal, buque: n.nombre, agencia: n.agencia || '',
@@ -20958,6 +20972,18 @@ function renderVistaEjecutivaSimple() {
       var esTalaraComb = r.planta === 'Talara' && refTalaraInvPorProducto[r.producto] !== undefined;
       if (esTalaraComb) invCombProd = (r.inv||0) + refTalaraInvPorProducto[r.producto];
       var pronProd = (typeof pronSheet !== 'undefined' && pronSheet[r.planta+'|'+r.producto]) || r.pron_mes || r.pron || 0;
+      // ⚠️ CORREGIDO: el botón "Calcular con: Despacho real / Pronóstico"
+      // no tenía ningún efecto en esta vista — el cálculo estaba fijo
+      // en pronóstico sin importar el modo activo. Ahora la razón usa
+      // el denominador correcto según el modo: demanda pronóstico si
+      // está en modo "Pronóstico", o despacho real (vreal/dem) si está
+      // en modo "Despacho real" — igual que en el resto del sistema
+      // (calcCob/cobReal/cobPron). Para Talara específicamente se sigue
+      // forzando pronóstico (pedido explícito, el despacho real de un
+      // solo día puede tener anomalías una vez el inventario está
+      // combinado con la refinería).
+      var despachoRealProd = r.vreal || r.dem || 0;
+      var denomProd = (esTalaraComb || window._execCobModo !== 'real') ? pronProd : despachoRealProd;
       if (!porPlantaFila[r.planta]) {
         porPlantaFila[r.planta] = { invSum: 0, pronSum: 0, invSumCob: 0, pronSumCob: 0, proyectado: false, planta: r.planta, producto: r.producto };
       }
@@ -20971,7 +20997,7 @@ function renderVistaEjecutivaSimple() {
       // cobertura" a nivel Nacional ya NO son un promedio ponderado de
       // los días de cada producto por separado. Ahora son directamente:
       //   días = (suma de inventarios de los productos) ÷ (suma de su
-      //   demanda pronóstico aprobada)
+      //   demanda — pronóstico o despacho real, según el modo activo)
       // — una sola razón con los totales de la planta, no una mezcla de
       // razones individuales. TA1 en Talara queda excluido de esta
       // razón (ni en el numerador ni en el denominador) — su demanda
@@ -20980,7 +21006,7 @@ function renderVistaEjecutivaSimple() {
       var esTalaraTA1 = r.planta === 'Talara' && r.producto === 'TA1';
       if (!esTalaraTA1) {
         acc.invSumCob += invCombProd;
-        acc.pronSumCob += pronProd;
+        acc.pronSumCob += denomProd;
       }
       if (r._proyectadoConsumo) acc.proyectado = true;
     });
