@@ -20964,6 +20964,7 @@ function renderVistaEjecutivaSimple() {
       });
     }
     var porPlantaFila = {};
+    var talaraProductosVistos = {};
     latestRows.forEach(function(r) {
       if (REFINERIAS.indexOf(r.planta) !== -1) return;
       if (typeof SKIP_COMBOS !== 'undefined' && SKIP_COMBOS.has((r.planta||'')+'|'+(r.producto||''))) return;
@@ -21008,8 +21009,30 @@ function renderVistaEjecutivaSimple() {
         acc.invSumCob += invCombProd;
         acc.pronSumCob += denomProd;
       }
+      if (esTalaraComb) talaraProductosVistos[r.producto] = true;
       if (r._proyectadoConsumo) acc.proyectado = true;
     });
+    // ⚠️ Respaldo: si Talara (planta de venta) nunca tuvo un reporte
+    // propio de algún producto del combo (ej. TA1, si nunca se reportó
+    // vía Registro Diario), el bucle principal nunca visita ese
+    // producto para Talara — así que el volumen de la refinería se
+    // perdía por completo, aunque sí existiera ahí. Ahora se agrega
+    // directamente si quedó sin "engancharse" a ninguna fila de Talara.
+    // Nunca participa del cálculo de días (mismo criterio que TA1 en
+    // general) — es inventario que se muestra, no una fila con despacho
+    // propio calculable.
+    if (COMBO_PLANTAS['Talara']) {
+      if (!porPlantaFila['Talara'] && Object.keys(refTalaraInvPorProducto).length) {
+        porPlantaFila['Talara'] = { invSum: 0, pronSum: 0, invSumCob: 0, pronSumCob: 0, proyectado: false, planta: 'Talara', producto: '' };
+      }
+      if (porPlantaFila['Talara']) {
+        Object.keys(refTalaraInvPorProducto).forEach(function(prodRef) {
+          if (prod !== 'Todos' && prodRef !== prod) return;
+          if (talaraProductosVistos[prodRef]) return; // ya se sumó arriba, no duplicar
+          porPlantaFila['Talara'].invSum += refTalaraInvPorProducto[prodRef];
+        });
+      }
+    }
     datosCob = Object.keys(porPlantaFila).map(function(p) {
       var acc = porPlantaFila[p];
       var rep = reposicionInfoPlanta(p, prod);
