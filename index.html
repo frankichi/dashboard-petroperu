@@ -3468,7 +3468,18 @@ async function fetchData(forceRefresh) {
     // cualquier valor que no calce con el patrón exacto.
     DATES = [...new Set(RAW.map(r => r.fecha))].filter(function(f){ return /^\d{4}-\d{2}-\d{2}$/.test(f); }).sort();
     if (!currentDate || !DATES.includes(currentDate)) {
-      currentDate = DATES[DATES.length - 1] || '';
+      // ⚠️ Por defecto, el selector debe mostrar el último día con
+      // CIERRE REAL (al menos una planta reportó de verdad ese día),
+      // no simplemente la fecha más reciente que aparezca en los
+      // datos — que puede ser "hoy" solo porque un buque confirmó T.D.
+      // y el sistema proyectó la existencia, sin que ninguna planta
+      // haya cerrado su reporte formal todavía. Mostrar "hoy" como si
+      // ya estuviera cerrado, cuando en realidad es una proyección,
+      // puede confundir. El usuario sigue pudiendo navegar manualmente
+      // a hoy con el selector si quiere ver la proyección.
+      var fechasConCierreReal = [...new Set(RAW.filter(function(r){ return !r._proyectadoConsumo && !r._proyectado; }).map(function(r){ return r.fecha; }))]
+        .filter(function(f){ return /^\d{4}-\d{2}-\d{2}$/.test(f); }).sort();
+      currentDate = (fechasConCierreReal.length ? fechasConCierreReal[fechasConCierreReal.length - 1] : DATES[DATES.length - 1]) || '';
       window._fechaActual = currentDate;
     }
     _splashDone();
