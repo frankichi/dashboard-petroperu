@@ -20502,7 +20502,7 @@ function renderVistaEjecutivaSimple() {
 
   if (window._execPeriod === undefined) window._execPeriod = 15;   // 15 | 30 | 60 | 'mensual'
   if (window._execPlanta === undefined) window._execPlanta = 'Nacional';
-  if (window._execProducto === undefined) window._execProducto = 'Todos';
+  if (window._execProducto === undefined || window._execProducto === 'Todos') window._execProducto = 'Diesel';
   // El mapa arranca OCULTO por defecto — solo se muestra cuando el
   // usuario presiona "Mostrar mapa" (toggleExecMapa). Una vez que decide
   // mostrarlo u ocultarlo, esa elección se respeta en refrescos
@@ -21335,14 +21335,13 @@ function renderVistaEjecutivaSimple() {
     return false;
   });
   // Si el producto elegido ya no aplica a la planta seleccionada (ej. se
-  // cambió de planta y esa no maneja G.84), volver a "Todos" para no
-  // quedar en un filtro vacío/inconsistente.
-  if (prod !== 'Todos' && productosDisp.indexOf(prod) === -1) {
-    window._execProducto = prod = 'Todos';
+  // cambió de planta y esa no maneja G.84), pasar al primer producto
+  // real disponible para esa planta — ya no existe la opción "Todos".
+  if (productosDisp.indexOf(prod) === -1 && productosDisp.length) {
+    window._execProducto = prod = productosDisp[0];
   }
   var productoSelector = '<select id="exec-producto-select" onchange="window._execProducto=this.value;renderVistaEjecutivaSimple();" '
     + 'style="padding:7px 14px;border-radius:8px;border:1.5px solid var(--bdr);background:var(--card);color:var(--txt);font-size:12.5px;font-weight:700;cursor:pointer;font-family:inherit">'
-    + '<option value="Todos"' + (prod==='Todos'?' selected':'') + '>⛽ Todos los productos</option>'
     + productosDisp.map(function(p){ return '<option value="'+p+'"'+(prod===p?' selected':'')+'>'+p+'</option>'; }).join('')
     + '</select>';
 
@@ -21425,7 +21424,7 @@ function renderVistaEjecutivaSimple() {
       '<div class="exec-title-main" style="margin-bottom:14px">Inventarios y Despachos' + (pl==='Nacional' ? ' ' : ' — ') + tituloScope + '</div>' +
       volverBtn +
       '<div style="position:relative;z-index:500;margin-bottom:12px">' + buildDateBar('dateBarExec') + '</div>' +
-      '<div class="exec-periodo-row" style="display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:12px">' +
+      '<div class="exec-periodo-row" style="display:flex;align-items:center;justify-content:flex-start;flex-wrap:wrap;gap:12px">' +
         '<div class="exec-select-row" style="display:flex;gap:10px;flex-wrap:wrap">' + plantaSelector + productoSelector + '</div>' +
       '</div>' +
     '</div>' +
