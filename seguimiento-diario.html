@@ -31,6 +31,7 @@
   .btn:hover{border-color:var(--navy);color:var(--navy)}
   .btn.primary{background:var(--navy);border-color:var(--navy);color:#fff}
   .btn.primary:hover{background:var(--navy2);opacity:.92}
+  .ord-btn.active{background:var(--navy);border-color:var(--navy);color:#fff}
   .btn:disabled{opacity:.5;cursor:not-allowed}
   .kpi-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:20px}
   .kpi{background:var(--card);border:1px solid var(--bdr);border-radius:12px;padding:18px 20px}
@@ -104,6 +105,13 @@
     <button class="btn" onclick="irHoy()">Hoy</button>
     <button class="btn" onclick="irFecha(1)">Día siguiente →</button>
     <button class="btn primary" id="btnActualizar" onclick="cargar()" style="margin-left:auto">↻ Actualizar</button>
+  </div>
+
+  <div class="toolbar" id="ordenToolbar">
+    <label>Mostrar</label>
+    <button class="btn ord-btn" data-filtro="todas" onclick="setFiltroEstado('todas')">Todas</button>
+    <button class="btn ord-btn" data-filtro="pendientes" onclick="setFiltroEstado('pendientes')">⏳ Pendientes</button>
+    <button class="btn ord-btn" data-filtro="completadas" onclick="setFiltroEstado('completadas')">✓ Completadas</button>
   </div>
 
   <div id="kpiZone"></div>
@@ -182,10 +190,33 @@ function mostrarError() {
     '<div class="empty" style="color:var(--red)">⚠ No se pudo conectar con el Sheets. Verifica tu conexión e inténtalo de nuevo.</div>';
 }
 
+var _segFiltroEstado = 'todas'; // 'todas' | 'pendientes' | 'completadas'
+
+function setFiltroEstado(modo) {
+  _segFiltroEstado = modo;
+  document.querySelectorAll('.ord-btn').forEach(function(b){
+    b.classList.toggle('active', b.dataset.filtro === modo);
+  });
+  if (window._ultimoTracking) pintar(window._ultimoTracking, window._ultimaFechaPintada);
+}
+
+// Filtra por estado (Pendientes / Completadas / Todas) SIN tocar el
+// orden — las plantas ya vienen en el orden del sistema (RD_PLANTAS) y
+// eso se respeta tal cual, solo se muestran u ocultan según el filtro.
+function filtrarPorEstado(lista) {
+  if (_segFiltroEstado === 'todas') return lista;
+  return lista.filter(function(t) {
+    var done = t.estado === 'Reportado' || t.estado === 'Validado';
+    return _segFiltroEstado === 'completadas' ? done : !done;
+  });
+}
+
 function pintar(tracking, fecha) {
+  window._ultimoTracking = tracking;
+  window._ultimaFechaPintada = fecha;
   var esHoy = fecha === hoyLima();
-  var equipo = tracking.filter(function(t){ return !esRefineria(t.planta); });
-  var refinerias = tracking.filter(function(t){ return esRefineria(t.planta); });
+  var equipo = filtrarPorEstado(tracking.filter(function(t){ return !esRefineria(t.planta); }));
+  var refinerias = filtrarPorEstado(tracking.filter(function(t){ return esRefineria(t.planta); }));
 
   var reportaron = tracking.filter(function(t){ return t.estado==='Reportado' || t.estado==='Validado'; });
   var pendientes = tracking.filter(function(t){ return !(t.estado==='Reportado' || t.estado==='Validado'); });
@@ -230,7 +261,8 @@ function pintar(tracking, fecha) {
   document.getElementById('cuerpoZone').innerHTML =
     (equipo.length ? renderGrupo('Plantas y Terminales', equipo) : '') +
     (refinerias.length ? renderGrupo('Refinerías', refinerias) : '') +
-    (!tracking.length ? '<div class="empty">Sin datos para esta fecha.</div>' : '');
+    (!tracking.length ? '<div class="empty">Sin datos para esta fecha.</div>'
+      : (!equipo.length && !refinerias.length ? '<div class="empty">Ninguna instalación coincide con el filtro "' + (_segFiltroEstado === 'pendientes' ? 'Pendientes' : 'Completadas') + '".</div>' : ''));
 }
 
 function fetchUltimoReporte(planta) {
@@ -251,6 +283,7 @@ function renderLastSeen(info) {
     (info.nombre ? ' por ' + info.nombre : '') + (horaTxt ? ' a las ' + horaTxt : '') + '</div>';
 }
 
+document.querySelector('.ord-btn[data-filtro="todas"]').classList.add('active');
 cargar();
 setInterval(cargar, AUTO_REFRESH_MS);
 </script>
