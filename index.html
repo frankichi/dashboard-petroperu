@@ -21357,7 +21357,7 @@ function renderVistaEjecutivaSimple() {
   function periodoBtn(val, label) {
     var active = window._execPeriod === val;
     var valLiteral = (typeof val === 'string') ? ("'" + val + "'") : val;
-    return '<button onclick="window._execPeriod=' + valLiteral + ';renderVistaEjecutivaSimple();" '
+    return '<button class="exec-periodo-btn" onclick="window._execPeriod=' + valLiteral + ';renderVistaEjecutivaSimple();" '
       + 'style="padding:6px 14px;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer;border:none;white-space:nowrap;'
       + (active ? 'background:#0a3a5c;color:#fff;box-shadow:0 1px 3px rgba(10,58,92,.35)' : 'background:transparent;color:var(--txt2)')
       + '">' + label + '</button>';
@@ -21369,12 +21369,15 @@ function renderVistaEjecutivaSimple() {
   // cambiar a vista de un mes calendario completo. Antes los 4 botones
   // estaban sueltos en fila con el mismo estilo, sin distinguir que
   // "Mensual" es un modo distinto (con su propio selector de mes) y no
-  // una cuarta opción de rango de días.
-  var periodoBar = '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">'
+  // una cuarta opción de rango de días. En celular ambos grupos se
+  // compactan (ver CSS) para caber en la MISMA fila en vez de que
+  // "Vista mensual" caiga solo a una segunda línea con espacio vacío
+  // a los costados.
+  var periodoBar = '<div class="exec-periodo-bar" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">'
     + '<div style="display:flex;gap:2px;padding:3px;background:var(--card2);border:1px solid var(--bdr);border-radius:10px">'
     +   periodoBtn(7, '7 días') + periodoBtn(15, '15 días') + periodoBtn(30, '30 días')
     + '</div>'
-    + '<button onclick="window._execPeriod=\'mensual\';renderVistaEjecutivaSimple();" '
+    + '<button class="exec-mensual-btn" onclick="window._execPeriod=\'mensual\';renderVistaEjecutivaSimple();" '
     +   'style="padding:9px 16px;border-radius:10px;font-size:12px;font-weight:700;cursor:pointer;border:1.5px solid '
     +   (window._execPeriod==='mensual' ? '#0a3a5c;background:#0a3a5c;color:#fff' : 'var(--bdr);background:var(--card);color:var(--txt2)')
     +   '">📅 Vista mensual</button>'
@@ -21527,12 +21530,19 @@ function renderVistaEjecutivaSimple() {
 
   box.innerHTML =
     '<div class="exec-sticky-hdr" style="position:sticky;top:0;z-index:50;background:var(--bg);margin:0 -36px 20px;padding:18px 36px 14px;border-bottom:1px solid var(--bdr)">' +
-      '<div class="exec-title-main" style="margin-bottom:14px">Inventarios y Despachos' + (pl==='Nacional' ? ' ' : ' — ') + tituloScope + '</div>' +
-      volverBtn +
-      '<div style="position:relative;z-index:500;margin-bottom:12px">' + buildDateBar('dateBarExec') + '</div>' +
-      '<div class="exec-periodo-row" style="display:flex;align-items:center;justify-content:flex-start;flex-wrap:wrap;gap:12px">' +
+      // ── Título + selectores Planta/Producto en la MISMA fila ──────────
+      // Antes el título iba solo (dejando todo el ancho a la derecha
+      // vacío en desktop) y los selectores vivían en una fila aparte
+      // debajo de la barra de fecha — dos filas usando mal el espacio
+      // horizontal disponible. Ahora comparten fila; en pantallas
+      // angostas el flex-wrap los baja automáticamente debajo del
+      // título sin romper nada.
+      '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px 16px;margin-bottom:14px">' +
+        '<div class="exec-title-main" style="margin:0">Inventarios y Despachos' + (pl==='Nacional' ? ' ' : ' — ') + tituloScope + '</div>' +
         '<div class="exec-select-row" style="display:flex;gap:10px;flex-wrap:wrap">' + plantaSelector + productoSelector + '</div>' +
       '</div>' +
+      volverBtn +
+      '<div style="position:relative;z-index:500;margin-bottom:12px">' + buildDateBar('dateBarExec') + '</div>' +
       // ── KPIs de Inventario/Despacho — antes vivían debajo del header y
       // desaparecían al hacer scroll; ahora quedan DENTRO del bloque
       // sticky (visibles todo el tiempo), en versión compacta para no
@@ -22140,13 +22150,25 @@ function initExecutiveMode() {
       // "…" (el texto completo sigue disponible en pantalla completa).
       '.exec-kpi-detail{display:none!important}' +
       '.exec-kpi-note{max-width:100%}' +
+      // La fecha "mié, 15 jul. 2026" y el contador "32 fechas
+      // disponibles" son redundantes en celular — el input de fecha ya
+      // muestra el día seleccionado, y el contador no aporta nada
+      // accionable ahí. Solo se ocultan en esta vista móvil ejecutiva;
+      // en desktop y en el resto del dashboard se mantienen.
+      '.date-badge{display:none!important}' +
+      '.date-count{display:none!important}' +
+      // Barra de período (7/15/30 + Vista mensual) compactada para que
+      // quepan en UNA sola fila en vez de que "Vista mensual" caiga
+      // suelto a una segunda línea dejando espacio vacío a los lados.
+      '.exec-periodo-bar{gap:6px!important}' +
+      '.exec-periodo-btn{padding:5px 9px!important;font-size:10.5px!important}' +
+      '.exec-mensual-btn{padding:7px 10px!important;font-size:10.5px!important;white-space:nowrap}' +
       // Botones de periodo/orden/modo y selectores: grillas compactas de 2
       // columnas en vez de apilarse uno debajo del otro (antes ocupaban
       // media pantalla en celular).
       '.exec-btn-grid{display:grid!important;grid-template-columns:1fr 1fr!important;gap:5px!important;width:100%}' +
       '.exec-btn-grid button{width:100%;padding:6px 4px!important;font-size:10px!important;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}' +
-      '.exec-periodo-row{flex-direction:column;align-items:stretch!important;gap:6px!important}' +
-      '.exec-select-row{display:grid!important;grid-template-columns:1fr 1fr!important;gap:6px!important}' +
+      '.exec-select-row{display:grid!important;grid-template-columns:1fr 1fr!important;gap:6px!important;width:100%}' +
       '.exec-select-row select{width:100%;padding:6px 8px!important;font-size:10.5px!important}' +
       '.exec-cob-label{width:64px!important;font-size:9.5px!important}' +
     '}' +
