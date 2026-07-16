@@ -1498,7 +1498,7 @@ function rdRefreshMiReporte() {
     if (!res.success) { if (/sesión/i.test(res.message || '')) rdLogout(); else rdToast(res.message, 'error'); return; }
     RD.productos = res.productos;
     document.getElementById('appSub').textContent = plantaLabel(res.planta) + ' · ' + res.fecha;
-    var yaReportado = !!(res.estado && res.estado.estado === 'Reportado');
+    var yaReportado = !!(res.estado && String(res.estado.estado || '').trim().toLowerCase() === 'reportado');
     RD.yaReportado = yaReportado;
     rdRenderProdRows(res.productos, res.valores, res.detalle, yaReportado);
     // Si ya reportado, rellenar comentarios por producto
