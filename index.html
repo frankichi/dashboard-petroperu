@@ -21586,7 +21586,7 @@ function renderVistaEjecutivaSimple() {
       '</div>' +
     '</div>' +
     (esRefineriaExec ? '<div style="margin-bottom:16px;padding:10px 14px;background:#eef2f7;border:1px solid #cbd5e1;border-radius:10px;font-size:12px;color:#475569">🛢️ <b>' + pl + '</b> es una refinería — solo procesa y almacena producto, no vende. Por eso aquí solo se muestra su <b>inventario</b>, sin despacho.</div>' : '') +
-    '<div style="background:var(--card);border:1px solid var(--bdr);border-radius:14px;padding:22px 24px;margin-bottom:24px">' +
+    '<div class="exec-mapa-card" style="background:var(--card);border:1px solid var(--bdr);border-radius:14px;padding:22px 24px;margin-bottom:24px">' +
       '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:12px">' +
         '<div>' +
           '<div style="font-size:13px;font-weight:800;color:var(--txt)">🗺️ Mapa Nacional — Cobertura por Instalación</div>' +
@@ -22175,6 +22175,12 @@ function initExecutiveMode() {
       // escaso, este botón queda redundante y se oculta (en desktop se
       // mantiene, ahí sí ayuda como atajo rápido).
       '.exec-volver-btn{display:none!important}' +
+      // El Mapa Nacional (leaflet + leyenda lateral) está pensado para
+      // pantallas anchas — en celular la leyenda se desordena y el
+      // mapa queda muy chico para ser útil. Se oculta la tarjeta
+      // completa solo en esta vista móvil; en desktop se mantiene tal
+      // cual.
+      '.exec-mapa-card{display:none!important}' +
       // Barra de período (7/15/30 + Vista mensual) compactada para que
       // quepan en UNA sola fila en vez de que "Vista mensual" caiga
       // suelto a una segunda línea dejando espacio vacío a los lados.
