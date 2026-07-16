@@ -21334,8 +21334,8 @@ function renderVistaEjecutivaSimple() {
     // "vs 14 jul") y se aclara "(ayer)" al lado solo quiere decir que es
     // el día calendario anterior al que se está mostrando.
     var fechaLbl = _fechaCortaKpi(fechaAyerRef);
-    var vsTxt = fechaLbl ? ('vs ' + fechaLbl + ' <span style="opacity:.7">(ayer)</span>') : 'vs ayer';
-    var ayerTxt = (valorAyer !== undefined && valorAyer !== null) ? ' <span style="color:#94a3b8;font-size:11.5px">· ' + fmtMB(valorAyer) + '</span>' : '';
+    var vsTxt = fechaLbl ? ('vs ' + fechaLbl + ' <span class="exec-kpi-detail" style="opacity:.7">(ayer)</span>') : 'vs ayer';
+    var ayerTxt = (valorAyer !== undefined && valorAyer !== null) ? ' <span class="exec-kpi-detail" style="color:#94a3b8;font-size:11.5px">· ' + fmtMB(valorAyer) + '</span>' : '';
     return '<span style="color:'+col+';font-weight:800;font-size:14px">'+signo+' '+fmtMB(Math.abs(delta))+'</span> <span style="color:#94a3b8;font-size:12px">'+vsTxt+'</span>' + ayerTxt;
   }
 
@@ -21536,23 +21536,28 @@ function renderVistaEjecutivaSimple() {
       // ── KPIs de Inventario/Despacho — antes vivían debajo del header y
       // desaparecían al hacer scroll; ahora quedan DENTRO del bloque
       // sticky (visibles todo el tiempo), en versión compacta para no
-      // ocupar demasiado espacio fijo en pantalla.
+      // ocupar demasiado espacio fijo en pantalla. En celular además se
+      // oculta el detalle "· Planta · Producto" del label (redundante:
+      // ya está en el título grande de arriba) y las notas de
+      // proyección se truncan a una sola línea — antes, aunque el
+      // número era chico, el título envolvía 2 líneas y la nota 3,
+      // sumando bastante alto fijo en pantalla.
       '<div class="exec-kpi-grid" style="display:grid;grid-template-columns:' + (esRefineriaExec ? '1fr' : '1fr 1fr') + ';gap:12px;margin-top:14px">' +
-        '<div style="background:var(--card);border:1px solid var(--bdr);border-radius:10px;padding:10px 14px">' +
-          '<div style="font-size:9.5px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px">📦 Inventario ' + (pl==='Nacional'?'Nacional':'· '+_plLabel(pl)) + (prod!=='Todos'?' · '+prod:'') + '</div>' +
+        '<div style="background:var(--card);border:1px solid var(--bdr);border-radius:10px;padding:10px 14px;min-width:0">' +
+          '<div style="font-size:9.5px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">📦 Inventario<span class="exec-kpi-detail">' + (pl==='Nacional'?' Nacional':' · '+_plLabel(pl)) + (prod!=='Todos'?' · '+prod:'') + '</span></div>' +
           '<div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap">' +
             '<div class="exec-kpi-val" style="font-size:22px;font-weight:800;color:var(--txt);font-family:var(--mono);line-height:1">' + fmtMB(invHoy) + '</div>' +
-            '<div style="font-size:11.5px">' + deltaHTML(deltaInv, true, invAyer, fechaAyer) + '</div>' +
+            '<div style="font-size:11.5px;min-width:0">' + deltaHTML(deltaInv, true, invAyer, fechaAyer) + '</div>' +
           '</div>' +
-          (invHoyTieneProyeccion ? '<div style="margin-top:5px;font-size:9.5px;color:#2563eb;font-weight:700">🚢 Incluye reposición proyectada (buque ya descargó, planta aún no reporta cierre)</div>' : '') +
-          (invHoyTieneProyeccionConsumo ? '<div style="margin-top:3px;font-size:9.5px;color:#2563eb;font-weight:700">≈ Incluye inventario proyectado por consumo (plantas que aún no cierran hoy)</div>' : '') +
+          (invHoyTieneProyeccion ? '<div class="exec-kpi-note" style="margin-top:5px;font-size:9.5px;color:#2563eb;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">🚢 Incluye reposición proyectada (buque ya descargó, planta aún no reporta cierre)</div>' : '') +
+          (invHoyTieneProyeccionConsumo ? '<div class="exec-kpi-note" style="margin-top:3px;font-size:9.5px;color:#2563eb;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">≈ Incluye inventario proyectado por consumo (plantas que aún no cierran hoy)</div>' : '') +
         '</div>' +
         (esRefineriaExec ? '' :
-        '<div style="background:var(--card);border:1px solid var(--bdr);border-radius:10px;padding:10px 14px">' +
-          '<div style="font-size:9.5px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px">🚚 Despacho Reportado' + (prod!=='Todos'?' · '+prod:'') + '</div>' +
+        '<div style="background:var(--card);border:1px solid var(--bdr);border-radius:10px;padding:10px 14px;min-width:0">' +
+          '<div style="font-size:9.5px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">🚚 Despacho<span class="exec-kpi-detail"> Reportado' + (prod!=='Todos'?' · '+prod:'') + '</span></div>' +
           '<div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap">' +
             '<div class="exec-kpi-val" style="font-size:22px;font-weight:800;color:var(--txt);font-family:var(--mono);line-height:1">' + fmtMB(despHoy) + '</div>' +
-            '<div style="font-size:11.5px">' + deltaHTML(despAyer!==null ? despHoy-despAyer : null, false, despAyer, fechaAyer) + '</div>' +
+            '<div style="font-size:11.5px;min-width:0">' + deltaHTML(despAyer!==null ? despHoy-despAyer : null, false, despAyer, fechaAyer) + '</div>' +
           '</div>' +
         '</div>') +
       '</div>' +
@@ -22128,6 +22133,13 @@ function initExecutiveMode() {
       '.exec-kpi-grid{gap:6px!important;margin-top:10px!important}' +
       '.exec-kpi-grid > div{padding:7px 9px!important}' +
       '.exec-kpi-val{font-size:16px!important}' +
+      // El detalle "· Planta · Producto" y "(ayer) · valor absoluto" ya
+      // están implícitos en el título grande de arriba — en celular se
+      // ocultan para que cada tarjeta quede en 2-3 líneas cortas en vez
+      // de 5-6. Las notas de proyección se truncan a una sola línea con
+      // "…" (el texto completo sigue disponible en pantalla completa).
+      '.exec-kpi-detail{display:none!important}' +
+      '.exec-kpi-note{max-width:100%}' +
       // Botones de periodo/orden/modo y selectores: grillas compactas de 2
       // columnas en vez de apilarse uno debajo del otro (antes ocupaban
       // media pantalla en celular).
