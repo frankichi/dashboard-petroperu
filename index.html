@@ -21234,6 +21234,17 @@ function renderVistaEjecutivaSimple() {
     // reposición aparte.
     var reposEsPendiente = d.diasRepos > 0 && d.reposEstado !== 'COMPLETADO';
     var pctRepos = reposEsPendiente ? Math.max(3, Math.round((d.diasRepos / maxDiasCob) * 100)) : 0;
+    // ⚠️ Separación visual cuando el buque AÚN está lejos: antes la
+    // franja de reposición se pintaba pegada a la barra de inventario
+    // en TODOS los casos, sin importar si el ETA era mañana o en 5-6
+    // días — eso se malinterpretaba como "ya casi llega / ya cuenta",
+    // cuando en realidad todavía puede cambiar. Con más de 1 día de
+    // anticipación se dibuja con un pequeño espacio y algo más tenue
+    // (no oculta, solo se nota que es un valor a futuro); en cuanto el
+    // ETA es hoy/mañana, o el estado pasa a COMPLETADO (ya descargó),
+    // se junta con normalidad — igual que antes.
+    var diasHastaETA = (d.reposFecha && /^\d{4}-\d{2}-\d{2}/.test(d.reposFecha)) ? _diasEntreFechas(fechaHoy, d.reposFecha.slice(0,10)) : null;
+    var reposLejana = reposEsPendiente && diasHastaETA !== null && diasHastaETA > 1;
     // Popup con volumen + buque + ETA + demanda pronóstico del producto
     // (o de la planta si es "Todos") — reemplaza el tooltip nativo, que
     // dejó de mostrarse de forma confiable para el usuario.
@@ -21243,7 +21254,8 @@ function renderVistaEjecutivaSimple() {
           : '<b>Reposici\u00f3n ' + (d.tipoRepos||'') + (d.reposEstado === 'COMPLETADO' ? ' \u2705 ya descarg\u00f3, ya en inventario' : '') + '</b><br>Volumen: ' + d.volReposMB.toFixed(1) + ' MB'
             + (d.reposBt ? '<br>Buque/Barcaza: ' + d.reposBt : '')
             + (d.reposFecha ? ('<br>' + (d.reposEstado === 'COMPLETADO' ? 'Descarg\u00f3 el: ' : 'Fecha de reposici\u00f3n (ETA): ') + d.reposFecha) : '')
-            + (reposEsPendiente ? '<br>D\u00edas equivalentes: +' + d.diasRepos + 'd' : ''))
+            + (reposEsPendiente ? '<br>D\u00edas equivalentes: +' + d.diasRepos + 'd' : '')
+            + (reposLejana ? '<br><span style="color:#93c5fd">\u26a0\ufe0f A\u00fan a ' + diasHastaETA + ' d\u00edas \u2014 no confirmado, no cuenta como inventario todav\u00eda</span>' : ''))
       : '';
     var pronHTML = '<div style="margin-top:6px;padding-top:6px;border-top:1px solid rgba(255,255,255,.2);color:#93c5fd">Demanda pron\u00f3stico' + (prod!=='Todos'?(' ('+prod+')'):'') + ': ' + (d.pronMB||0).toFixed(2) + ' MB/d\u00eda</div>';
     var tipEncoded = encodeURIComponent(reposHTML + pronHTML).replace(/'/g, '%27');
@@ -21257,12 +21269,13 @@ function renderVistaEjecutivaSimple() {
         '<div style="font-size:9.5px;color:var(--txt3);font-family:var(--mono);margin-top:1px">' + fmtMB(d.invMB) + (d.proyectado ? ' <span style="color:#2563eb;font-style:italic;font-weight:700" title="Estimado: último inventario real menos consumo proyectado por demanda pronóstico — la planta aún no cierra el día">≈ proy.</span>' : '') + '</div>' +
       '</div>' +
       '<div ' + tipHandlers + ' style="flex:1;background:var(--bg3);border-radius:6px;height:22px;position:relative;overflow:hidden;display:flex;cursor:help">' +
-        '<div style="height:100%;width:' + pctBase + '%;background:' + col + ';border-radius:' + (pctRepos>0?'6px 0 0 6px':'6px') + ';transition:width .4s"></div>' +
-        (pctRepos > 0 ? '<div style="height:100%;width:' + pctRepos + '%;background:repeating-linear-gradient(45deg,#2563eb,#2563eb 5px,#3b82f6 5px,#3b82f6 10px);border-radius:0 6px 6px 0;transition:width .4s"></div>' : '') +
+        '<div style="height:100%;width:' + pctBase + '%;background:' + col + ';border-radius:' + (pctRepos>0 ? (reposLejana?'6px':'6px 0 0 6px') : '6px') + ';transition:width .4s"></div>' +
+        (pctRepos > 0 && reposLejana ? '<div style="width:5px;flex-shrink:0"></div>' : '') +
+        (pctRepos > 0 ? '<div style="height:100%;width:' + pctRepos + '%;background:repeating-linear-gradient(45deg,#2563eb,#2563eb 5px,#3b82f6 5px,#3b82f6 10px);border-radius:' + (reposLejana?'6px':'0 6px 6px 0') + ';transition:width .4s' + (reposLejana?';opacity:.7':'') + '"></div>' : '') +
       '</div>' +
       '<div style="width:70px;flex-shrink:0;text-align:right">' +
         '<div style="font-family:var(--mono);font-weight:800;font-size:13px;color:' + col + '">' + d.dias + 'd</div>' +
-        (reposEsPendiente ? '<div ' + tipHandlers + ' style="font-family:var(--mono);font-size:9px;color:#2563eb;font-weight:700;cursor:help">+' + d.diasRepos + 'd \uD83D\uDEA2</div>' : confirmadaBadge) +
+        (reposEsPendiente ? '<div ' + tipHandlers + ' style="font-family:var(--mono);font-size:9px;color:#2563eb;font-weight:700;cursor:help' + (reposLejana?';opacity:.65':'') + '">+' + d.diasRepos + 'd \uD83D\uDEA2</div>' : confirmadaBadge) +
       '</div>' +
     '</div>';
   }).join('');
