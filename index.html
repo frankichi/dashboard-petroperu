@@ -21456,7 +21456,7 @@ function renderVistaEjecutivaSimple() {
 
   var tituloScope = (pl === 'Nacional' ? 'a nivel nacional' : (COMBO_PLANTAS[pl] ? COMBO_PLANTAS[pl].label : pl)) + (prod !== 'Todos' ? ' · ' + prod : '');
   var volverBtn = pl !== 'Nacional'
-    ? '<button onclick="window._execPlanta=\'Nacional\';renderVistaEjecutivaSimple();" style="padding:6px 14px;border-radius:8px;border:1.5px solid var(--bdr);background:var(--card2);color:var(--txt2);font-size:11.5px;font-weight:700;cursor:pointer;margin-bottom:12px;display:inline-flex;align-items:center;gap:6px">← Volver a Vista Nacional</button>'
+    ? '<button class="exec-volver-btn" onclick="window._execPlanta=\'Nacional\';renderVistaEjecutivaSimple();" style="padding:6px 14px;border-radius:8px;border:1.5px solid var(--bdr);background:var(--card2);color:var(--txt2);font-size:11.5px;font-weight:700;cursor:pointer;margin-bottom:12px;display:inline-flex;align-items:center;gap:6px">← Volver a Vista Nacional</button>'
     : '';
 
   // ── Tarjetas rápidas de plantas (solo en vista Nacional) ─────────────
@@ -22157,6 +22157,11 @@ function initExecutiveMode() {
       // en desktop y en el resto del dashboard se mantienen.
       '.date-badge{display:none!important}' +
       '.date-count{display:none!important}' +
+      // El selector de planta ya incluye "🌎 Vista Nacional" como
+      // primera opción — en celular, donde el espacio vertical es más
+      // escaso, este botón queda redundante y se oculta (en desktop se
+      // mantiene, ahí sí ayuda como atajo rápido).
+      '.exec-volver-btn{display:none!important}' +
       // Barra de período (7/15/30 + Vista mensual) compactada para que
       // quepan en UNA sola fila en vez de que "Vista mensual" caiga
       // suelto a una segunda línea dejando espacio vacío a los lados.
