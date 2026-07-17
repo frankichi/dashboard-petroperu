@@ -6917,7 +6917,7 @@ function renderVistaEjecutivaSimple() {
     var fechaLbl = _fechaCortaKpi(fechaAyerRef);
     var vsTxt = fechaLbl ? ('vs ' + fechaLbl + ' <span class="exec-kpi-detail" style="opacity:.7">(ayer)</span>') : 'vs ayer';
     var ayerTxt = (valorAyer !== undefined && valorAyer !== null) ? ' <span class="exec-kpi-detail" style="color:#94a3b8;font-size:11.5px">· ' + fmtMB(valorAyer) + '</span>' : '';
-    return '<span style="color:'+col+';font-weight:800;font-size:14px">'+signo+' '+fmtMB(Math.abs(delta))+'</span> <span style="color:#94a3b8;font-size:12px">'+vsTxt+'</span>' + ayerTxt;
+    return '<span style="color:'+col+';font-weight:800;font-size:14px">'+signo+' '+fmtMB(Math.abs(delta))+'</span> <span class="exec-kpi-detail" style="color:#94a3b8;font-size:12px">'+vsTxt+'</span>' + ayerTxt;
   }
 
   // ── Lista de plantas para el selector de detalle ─────────────────────
@@ -8245,6 +8245,7 @@ function initExecutiveMode() {
       // en celular para no comerse media pantalla de forma permanente.
       '.exec-kpi-grid{gap:5px!important;margin-top:10px!important}' +
       '.exec-kpi-grid > div{padding:6px 7px!important;min-width:0}' +
+      '.exec-kpi-grid > div > div:first-child{font-size:7.5px!important;letter-spacing:.02em!important}' +
       '.exec-kpi-val{font-size:14.5px!important}' +
       // El detalle "· Planta · Producto" y "(ayer) · valor absoluto" ya
       // están implícitos en el título grande de arriba — en celular se
