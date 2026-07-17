@@ -22110,7 +22110,7 @@ function renderVistaEjecutivaSimple() {
     : null;
   var periodoLabelTxt = window._execPeriod === 'mensual'
     ? (window._execMesSel ? mesesNombreCorto[parseInt(window._execMesSel.slice(5,7),10)-1] + ' ' + window._execMesSel.slice(0,4) : 'el mes')
-    : (window._execPeriod + 'd');
+    : (window._execPeriod + ' días');
 
   box.innerHTML =
     '<div class="exec-sticky-hdr" style="position:sticky;top:0;z-index:50;background:var(--bg);margin:0 -36px 20px;padding:18px 36px 14px;border-bottom:1px solid var(--bdr)">' +
@@ -22136,7 +22136,7 @@ function renderVistaEjecutivaSimple() {
       // proyección se truncan a una sola línea — antes, aunque el
       // número era chico, el título envolvía 2 líneas y la nota 3,
       // sumando bastante alto fijo en pantalla.
-      '<div class="exec-kpi-grid" style="display:grid;grid-template-columns:' + (esRefineriaExec ? '1fr' : '1fr 1fr') + ';gap:12px;margin-top:14px">' +
+      '<div class="exec-kpi-grid" style="display:grid;grid-template-columns:' + (esRefineriaExec ? '1fr' : (despPromedioPeriodo === null ? '1fr 1fr' : '1fr 1fr 1fr')) + ';gap:12px;margin-top:14px">' +
         '<div style="background:var(--card);border:1px solid var(--bdr);border-radius:10px;padding:10px 14px;min-width:0">' +
           '<div style="font-size:9.5px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">📦 Inventario<span class="exec-kpi-detail">' + (pl==='Nacional'?' Nacional':' · '+_plLabel(pl)) + (prod!=='Todos'?' · '+prod:'') + '</span></div>' +
           '<div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap">' +
@@ -22153,7 +22153,14 @@ function renderVistaEjecutivaSimple() {
             '<div class="exec-kpi-val" style="font-size:22px;font-weight:800;color:var(--txt);font-family:var(--mono);line-height:1">' + fmtMB(despHoy) + '</div>' +
             '<div style="font-size:11.5px;min-width:0">' + deltaHTML(despAyer!==null ? despHoy-despAyer : null, false, despAyer, fechaAyer) + '</div>' +
           '</div>' +
-          (despPromedioPeriodo !== null ? '<div class="exec-kpi-note" style="margin-top:5px;font-size:9.5px;color:var(--txt3);font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">⌀ Promedio ' + periodoLabelTxt + ': ' + fmtMB(despPromedioPeriodo) + '/d</div>' : '') +
+        '</div>') +
+        (esRefineriaExec || despPromedioPeriodo === null ? '' :
+        '<div style="background:var(--card);border:1px solid var(--bdr);border-radius:10px;padding:10px 14px;min-width:0">' +
+          '<div style="font-size:9.5px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">⌀ Promedio Despacho<span class="exec-kpi-detail"> · ' + periodoLabelTxt + (prod!=='Todos'?' · '+prod:'') + '</span></div>' +
+          '<div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap">' +
+            '<div class="exec-kpi-val" style="font-size:22px;font-weight:800;color:var(--txt);font-family:var(--mono);line-height:1">' + fmtMB(despPromedioPeriodo) + '<span style="font-size:13px;font-weight:700">/d</span></div>' +
+          '</div>' +
+          '<div class="exec-kpi-note" style="margin-top:3px;font-size:9.5px;color:var(--txt3);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">De ' + periodoLabelTxt + '</div>' +
         '</div>') +
       '</div>' +
     '</div>' +
@@ -22843,9 +22850,13 @@ function initExecutiveMode() {
       // Los KPI viven DENTRO del header sticky (visible todo el tiempo
       // al hacer scroll) — se mantienen lado a lado y compactos incluso
       // en celular para no comerse media pantalla de forma permanente.
-      '.exec-kpi-grid{gap:6px!important;margin-top:10px!important}' +
-      '.exec-kpi-grid > div{padding:7px 9px!important}' +
-      '.exec-kpi-val{font-size:16px!important}' +
+      // Ahora pueden ser hasta 3 tarjetas juntas (Inventario, Despacho,
+      // Promedio) — se comprime un poco más el padding/tipografía para
+      // que las 3 quepan en una sola fila sin desbordar en pantallas
+      // angostas.
+      '.exec-kpi-grid{gap:5px!important;margin-top:10px!important}' +
+      '.exec-kpi-grid > div{padding:6px 7px!important;min-width:0}' +
+      '.exec-kpi-val{font-size:14.5px!important}' +
       // El detalle "· Planta · Producto" y "(ayer) · valor absoluto" ya
       // están implícitos en el título grande de arriba — en celular se
       // ocultan para que cada tarjeta quede en 2-3 líneas cortas en vez
