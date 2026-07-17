@@ -233,8 +233,21 @@ function pintar(tracking, fecha) {
     var cards = lista.map(function(t){
       var done = t.estado === 'Reportado' || t.estado === 'Validado';
       var horaTxt = '';
+      var fechaHoraTxt = '';
       if (done && t.hora) {
-        try { horaTxt = new Date(t.hora).toLocaleTimeString('es-PE', {hour:'2-digit', minute:'2-digit'}); } catch(e) {}
+        try {
+          var _dHora = new Date(t.hora);
+          horaTxt = _dHora.toLocaleTimeString('es-PE', {hour:'2-digit', minute:'2-digit'});
+          // ⚠️ Antes solo se mostraba la hora ("a las 14:32"), sin la
+          // fecha — con la marca de tiempo real del reporte (`t.hora`),
+          // que puede no coincidir con la fecha que se está viendo (ej.
+          // un reporte enviado tarde, ya pasada la medianoche), esa hora
+          // sola podía confundir. Se arma la fecha a partir del mismo
+          // ISO de t.hora (en vez de asumir que es la misma que `fecha`)
+          // para reflejar el momento real de envío.
+          var _isoLocal = _dHora.getFullYear() + '-' + String(_dHora.getMonth()+1).padStart(2,'0') + '-' + String(_dHora.getDate()).padStart(2,'0');
+          fechaHoraTxt = fmtFechaLarga(_isoLocal) + ' · ' + horaTxt;
+        } catch(e) {}
       }
       var lastSeenHtml = '';
       if (!done) {
@@ -251,7 +264,7 @@ function pintar(tracking, fecha) {
           '<span class="badge ' + (done?'done':'pend') + '">' + (done ? '✓ Reportado' : '⏳ Pendiente') + '</span>' +
           (done
             ? '<div class="card-user"><span class="who">' + (t.usuario || 'Sin nombre') + '</span></div>' +
-              (horaTxt ? '<div class="card-time">a las ' + horaTxt + '</div>' : '')
+              (fechaHoraTxt ? '<div class="card-time">' + fechaHoraTxt + '</div>' : '')
             : lastSeenHtml) +
         '</div>';
     }).join('');
