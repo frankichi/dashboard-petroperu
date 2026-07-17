@@ -20922,7 +20922,17 @@ function renderVistaEjecutivaSimple() {
     if (mSel) _pTendEnsurePronMesesExec([mSel]);
   } else {
     var n = window._execPeriod;
-    var datesN = (DATES || []).slice(-n);
+    // ⚠️ CORREGIDO — bug real confirmado: antes `(DATES||[]).slice(-n)`
+    // siempre tomaba los últimos N días de TODO el sistema, sin
+    // importar qué fecha eligiera el usuario en el selector "FECHA" —
+    // cambiar la fecha solo afectaba los KPI de arriba, pero la
+    // gráfica de abajo seguía mostrando siempre el mismo rango fijo
+    // (ej. 10-jul al 16-jul aunque se eligiera 10-jul como "hoy").
+    // Ahora el rango termina EN la fecha elegida (idxHoy) — si eliges
+    // 10-jul con "7 días", la gráfica muestra del 4-jul al 10-jul,
+    // como si esa fecha elegida fuera "hoy".
+    var idxFin = idxHoy >= 0 ? idxHoy : ((DATES||[]).length - 1);
+    var datesN = (DATES || []).slice(Math.max(0, idxFin - n + 1), idxFin + 1);
     labels = datesN.map(mesCorto);
     invSerie = datesN.map(function(d){ var v=sumFecha(d,'inv',pl,prod); return v>0?parseFloat(v.toFixed(1)):null; });
     despSerie = datesN.map(function(d){
