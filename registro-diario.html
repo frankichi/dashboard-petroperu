@@ -939,7 +939,7 @@ function fmtFecha(f) {
 // "[REPOS|MARITIMO|12.45] texto libre...". Misma lógica que usa el
 // dashboard principal para mostrarla en gráficas — se comparte el
 // formato para que ambos lados siempre lean lo mismo.
-var REPOS_TIPO_LABEL_RD = { MARITIMO: '⛴️ Cabotaje Marítimo', TERRESTRE: '🚛 Cisternas Terrestres', REFINERIA: '🏭 Vía Refinería' };
+var REPOS_TIPO_LABEL_RD = { MARITIMO: '⛴️ Cabotaje Marítimo', TERRESTRE: '🚛 Cisternas', REFINERIA: '🏭 Vía Refinería' };
 function parseReposicionTag(comentario) {
   if (!comentario) return null;
   var m = /^\[REPOS\|(\w+)\|([\d.]+)\]/.exec(comentario);
@@ -1117,7 +1117,7 @@ function rdDescartarReposicion(prod) {
 // calculado, para no sesgar la respuesta ni quitarle tiempo a nadie
 // corrigiendo un valor mal calculado.
 function rdMarcarReposicion(prod, tipo, emoji) {
-  var tipoCodigo = (tipo === 'Cabotaje Marítimo' || tipo === 'Cabotaje Fluvial') ? 'MARITIMO' : tipo === 'Cisternas Terrestres' ? 'TERRESTRE' : 'REFINERIA';
+  var tipoCodigo = (tipo === 'Cabotaje Marítimo' || tipo === 'Cabotaje Fluvial') ? 'MARITIMO' : tipo === 'Cisternas' ? 'TERRESTRE' : 'REFINERIA';
   var pid = prod.replace(/[^a-z0-9]/gi,'_');
   var panel = document.getElementById('repos-panel-' + pid);
   if (!panel) return;
@@ -1470,7 +1470,7 @@ function rdRenderProdRows(productos, valores, detalle, yaReportado) {
            +   (esIquitosRD
                 ? '<button type="button" onclick="rdMarcarReposicion(\'' + p + '\',\'Cabotaje Fluvial\',\'\ud83d\udef6\')" style="padding:6px 12px;border-radius:16px;border:1.5px solid #0284c7;background:#fff;color:#0284c7;font-size:11px;font-weight:700;cursor:pointer">\ud83d\udef6 Cabotaje Fluvial (Barcaza)</button>'
                 : '<button type="button" onclick="rdMarcarReposicion(\'' + p + '\',\'Cabotaje Mar\u00edtimo\',\'\u26f4\ufe0f\')" style="padding:6px 12px;border-radius:16px;border:1.5px solid #0284c7;background:#fff;color:#0284c7;font-size:11px;font-weight:700;cursor:pointer">\u26f4\ufe0f Cabotaje Mar\u00edtimo</button>')
-           +   '<button type="button" onclick="rdMarcarReposicion(\'' + p + '\',\'Cisternas Terrestres\',\'\ud83d\ude9b\')" style="padding:6px 12px;border-radius:16px;border:1.5px solid #ca8a04;background:#fff;color:#ca8a04;font-size:11px;font-weight:700;cursor:pointer">\ud83d\ude9b Cisternas Terrestres</button>'
+           +   '<button type="button" onclick="rdMarcarReposicion(\'' + p + '\',\'Cisternas\',\'\ud83d\ude9b\')" style="padding:6px 12px;border-radius:16px;border:1.5px solid #ca8a04;background:#fff;color:#ca8a04;font-size:11px;font-weight:700;cursor:pointer">\ud83d\ude9b Cisternas</button>'
            +   (esRefineriaHermana
                 ? '<button type="button" onclick="rdMarcarReposicion(\'' + p + '\',\'Reposici\u00f3n de Refiner\u00eda\',\'\ud83c\udfed\')" style="padding:6px 12px;border-radius:16px;border:1.5px solid #7c3aed;background:#fff;color:#7c3aed;font-size:11px;font-weight:700;cursor:pointer">\ud83c\udfed Reposici\u00f3n de Refiner\u00eda</button>'
                 : '')

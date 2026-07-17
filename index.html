@@ -2646,7 +2646,7 @@ function invFilaValida(r) {
 // cuando un operador marca una reposición recibida (botón "¿Cómo llegó el
 // producto?"): "[REPOS|MARITIMO|12.45] texto libre..." — así el dashboard
 // puede mostrarla en gráficas/listas, no solo como texto suelto.
-const REPOS_TIPO_LABEL = { MARITIMO: '⛴️ Cabotaje Marítimo', TERRESTRE: '🚛 Cisternas Terrestres', REFINERIA: '🏭 Vía Refinería' };
+const REPOS_TIPO_LABEL = { MARITIMO: '⛴️ Cabotaje Marítimo', TERRESTRE: '🚛 Cisternas', REFINERIA: '🏭 Vía Refinería' };
 function parseReposicionTag(comentario) {
   if (!comentario) return null;
   var m = /^\[REPOS\|(\w+)\|([\d.]+)\]/.exec(comentario);
@@ -17961,7 +17961,22 @@ document.addEventListener('DOMContentLoaded', () => {
   // Si no hay sesión, _authInit pone _authPending=true y fetchData retorna.
   _authInit();
   // No cargar el dashboard completo en vistas standalone
-  if (!PUERTOS_VIEW_MODE && !RIOS_VIEW_MODE && !PLAN_DIST_VIEW_MODE) fetchData(true);
+  // ⚠️ CORREGIDO — bug real de rendimiento confirmado: esta llamada
+  // SIEMPRE forzaba `forceRefresh=true`, que en el backend (Code.gs)
+  // se traduce en `nocache=` — es decir, cada vez que se abría la app
+  // (incluyendo el ícono instalado en el celular) se saltaba por
+  // completo el caché del servidor (10 min, ver CONFIG.CACHE_TTL en
+  // Code.gs) y se forzaba un recálculo completo desde Google Sheets, el
+  // paso más lento de todo el arranque — eso era gran parte de la
+  // sensación de "splash lento". Los datos de este dashboard cambian
+  // como mucho una vez al día, así que 10 minutos de caché no afectan
+  // la precisión, pero sí aceleran mucho el primer render. Ahora Vista
+  // Ejecutiva (el acceso directo del celular) SÍ puede usar el caché al
+  // abrir — el botón "🔄 Actualizar" sigue forzando datos 100% frescos
+  // cuando el usuario lo pide explícitamente. El resto del dashboard
+  // (uso administrativo, donde la frescura importa más) sigue forzando
+  // refresco como antes.
+  if (!PUERTOS_VIEW_MODE && !RIOS_VIEW_MODE && !PLAN_DIST_VIEW_MODE) fetchData(!EXECUTIVE_MODE);
 });
 function initInventoryReportMode() {
   if (!INVENTORY_REPORT_MODE) return;
@@ -22214,7 +22229,7 @@ function renderVistaEjecutivaSimple() {
           }
         },
         scales: {
-          y: { ticks: { callback: function(v){ return v.toLocaleString('es-PE'); } }, grid: { color: 'rgba(148,163,184,.15)' } },
+          y: { min: 0, ticks: { callback: function(v){ return v.toLocaleString('es-PE'); } }, grid: { color: 'rgba(148,163,184,.15)' } },
           x: { grid: { display: false }, ticks: { maxRotation: 0, autoSkipPadding: 8, font: { size: 10.5 } } }
         }
       }
@@ -22800,9 +22815,11 @@ function initExecutiveMode() {
     +   '<p class="exec-h2">Planificación de Suministro · Inventarios &amp; Coberturas a nivel nacional</p>'
     + '</div>'
     + '<div class="exec-banner-meta">'
-    +   '<span class="exec-live-dot"></span><span id="exec-live-text">Conectado</span>'
-    +   ' <button id="exec-install-btn" onclick="execInstallApp()" style="display:' + (_execInstallBtnVisibleInicial() ? 'inline-flex' : 'none') + ';align-items:center;gap:4px;margin-left:8px;background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);color:#fff;font-size:10px;font-weight:700;padding:3px 10px;border-radius:12px;cursor:pointer">📲 Instalar</button>'
-    +   ' <button id="exec-refresh-btn" onclick="execRefreshNow()" style="margin-left:8px;background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);color:#fff;font-size:10px;font-weight:700;padding:3px 10px;border-radius:12px;cursor:pointer">🔄 Actualizar</button>'
+    +   '<div style="display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:6px;white-space:normal">'
+    +     '<span style="display:inline-flex;align-items:center;white-space:nowrap"><span class="exec-live-dot"></span><span id="exec-live-text">Conectado</span></span>'
+    +     '<button id="exec-install-btn" onclick="execInstallApp()" style="display:' + (_execInstallBtnVisibleInicial() ? 'inline-flex' : 'none') + ';align-items:center;gap:4px;background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);color:#fff;font-size:10px;font-weight:700;padding:3px 10px;border-radius:12px;cursor:pointer;white-space:nowrap">📲 Instalar</button>'
+    +     '<button id="exec-refresh-btn" onclick="execRefreshNow()" style="background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);color:#fff;font-size:10px;font-weight:700;padding:3px 10px;border-radius:12px;cursor:pointer;white-space:nowrap">🔄 Actualizar</button>'
+    +   '</div>'
     +   '<div class="exec-time" id="exec-snapshot-time">—</div>'
     +   '<div class="exec-credit">Desarrollado por <strong>Franco Urcia Castillo</strong></div>'
     + '</div>';
