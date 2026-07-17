@@ -18051,17 +18051,21 @@ function exportInvReportPDF() {
   overlay.id = 'inv-export-pdf-overlay';
   // Misma corrección que el PDF de Vista Ejecutiva: position:fixed con
   // overflow:auto corta la impresión a 1 sola página — se vuelve
-  // estático y sin recorte SOLO al imprimir.
+  // estático y sin recorte SOLO al imprimir. Y se oculta el resto de
+  // la página (el dashboard de fondo) para que no se imprima antes del
+  // reporte como una página 1 sobrante.
+  document.body.classList.add('inv-pdf-print-mode');
   overlay.style.cssText = 'position:fixed;inset:0;background:#fff;z-index:999999;overflow:auto;padding:24px';
   overlay.innerHTML =
     '<style>@media print{'
     +   '.no-print{display:none!important}'
+    +   'body.inv-pdf-print-mode > *:not(#inv-export-pdf-overlay){display:none!important}'
     +   '#inv-export-pdf-overlay{position:static!important;inset:auto!important;overflow:visible!important;height:auto!important;max-height:none!important}'
     +   'html,body{height:auto!important;overflow:visible!important}'
     + '} table{border-collapse:collapse;width:100%;font-family:-apple-system,sans-serif;font-size:11px}</style>'
     + '<div class="no-print" style="margin-bottom:14px;display:flex;gap:10px">'
     +   '<button onclick="window.print()" style="background:#0a3a5c;color:#fff;border:none;padding:8px 18px;border-radius:6px;font-weight:700;cursor:pointer">\ud83d\udda8\ufe0f Imprimir / Guardar PDF</button>'
-    +   '<button onclick="document.getElementById(\'inv-export-pdf-overlay\').remove()" style="background:#e2e8f0;color:#0f1e3c;border:none;padding:8px 18px;border-radius:6px;font-weight:700;cursor:pointer">Cerrar</button>'
+    +   '<button onclick="document.getElementById(\'inv-export-pdf-overlay\').remove();document.body.classList.remove(\'inv-pdf-print-mode\')" style="background:#e2e8f0;color:#0f1e3c;border:none;padding:8px 18px;border-radius:6px;font-weight:700;cursor:pointer">Cerrar</button>'
     + '</div>'
     + '<h2 style="color:#0a3a5c;margin-bottom:4px">Inventarios y Despachos \u2014 Nacional</h2>'
     + '<div style="color:#64748b;font-size:12px;margin-bottom:16px">Per\u00edodo: '+r.desde+' al '+r.hasta+'</div>'
@@ -21819,21 +21823,28 @@ function renderVistaEjecutivaSimple() {
 
     var overlay = document.createElement('div');
     overlay.id = 'exec-export-pdf-overlay';
-    // ⚠️ CORREGIDO — bug real confirmado: "Guardar PDF" solo generaba 1
-    // página aunque el reporte tuviera mucho más contenido. La causa:
-    // este contenedor usa `position:fixed` con scroll interno
-    // (`overflow:auto`) para poder verse en pantalla como una superposición
-    // — pero un elemento `position:fixed` NO participa del flujo normal
-    // del documento, así que al imprimir el navegador solo captura lo
-    // que cabe en la altura de una pantalla/página, cortando el resto.
-    // La regla @media print de abajo lo vuelve `position:static` (fluye
-    // como contenido normal) y `overflow:visible` (sin recorte) SOLO al
-    // imprimir — en pantalla se sigue viendo exactamente igual que antes.
+    // ⚠️ CORREGIDO (2ª parte) — bug real confirmado: al arreglar la
+    // paginación (volver el overlay `position:static` solo al
+    // imprimir), apareció un problema NUEVO — el navegador empezó a
+    // imprimir TODO el dashboard de fondo primero (Panel de Suministro
+    // completo, con banner, mapa, gráficas…) y RECIÉN DESPUÉS el
+    // reporte, como página 2 en adelante. La razón: el dashboard de
+    // fondo nunca dejó de estar en el documento — antes `position:fixed`
+    // lo tapaba visualmente pero el navegador de todas formas lo
+    // encontraba al imprimir; ahora, al quitar esa posición fija para
+    // que el overlay fluyera bien, el resto de la página quedó
+    // "visible" para la impresión también. Se agrega la clase
+    // `exec-pdf-print-mode` al <body> mientras el overlay está abierto,
+    // y una regla @media print que oculta TODO lo que no sea el overlay
+    // — así solo se imprime el reporte, empezando limpio desde la
+    // página 1.
+    document.body.classList.add('exec-pdf-print-mode');
     overlay.style.cssText = 'position:fixed;inset:0;background:#fff;z-index:999999;overflow:auto';
     overlay.innerHTML =
       '<style>@media print{'
       +   '.no-print{display:none!important}'
       +   '@page{margin:14mm}'
+      +   'body.exec-pdf-print-mode > *:not(#exec-export-pdf-overlay){display:none!important}'
       +   '#exec-export-pdf-overlay{position:static!important;inset:auto!important;overflow:visible!important;height:auto!important;max-height:none!important}'
       +   'html,body{height:auto!important;overflow:visible!important}'
       + '}'
@@ -21841,7 +21852,7 @@ function renderVistaEjecutivaSimple() {
       + 'table{border-collapse:collapse;width:100%;font-family:-apple-system,"Segoe UI",sans-serif;font-size:11px}</style>'
       + '<div class="no-print" style="padding:16px 24px;background:#f1f5f9;display:flex;gap:10px;border-bottom:1px solid #e2e8f0">'
       +   '<button onclick="window.print()" style="background:#0a3a5c;color:#fff;border:none;padding:9px 20px;border-radius:6px;font-weight:700;cursor:pointer">🖨️ Imprimir / Guardar PDF</button>'
-      +   '<button onclick="document.getElementById(\'exec-export-pdf-overlay\').remove()" style="background:#e2e8f0;color:#0f1e3c;border:none;padding:9px 20px;border-radius:6px;font-weight:700;cursor:pointer">Cerrar</button>'
+      +   '<button onclick="document.getElementById(\'exec-export-pdf-overlay\').remove();document.body.classList.remove(\'exec-pdf-print-mode\')" style="background:#e2e8f0;color:#0f1e3c;border:none;padding:9px 20px;border-radius:6px;font-weight:700;cursor:pointer">Cerrar</button>'
       + '</div>'
       + '<div style="max-width:1000px;margin:0 auto;padding:28px 32px;font-family:-apple-system,\'Segoe UI\',sans-serif">'
       +   '<div style="display:flex;align-items:center;gap:16px;background:linear-gradient(90deg,#0a3a5c,#1e3a8a);color:#fff;padding:20px 26px;border-radius:10px;margin-bottom:6px;border-bottom:4px solid #c2410c">'
