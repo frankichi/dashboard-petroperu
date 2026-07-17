@@ -22779,7 +22779,18 @@ function initExecutiveMode() {
     '@media (min-width:1200px){' +
       '.exec-charts-row{display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:stretch}' +
       '.exec-charts-row > div{margin-bottom:0!important;display:flex;flex-direction:column}' +
-      '.exec-chart-wrap{height:300px!important}' +
+      // ⚠️ CORREGIDO — bug real confirmado: con align-items:stretch,
+      // ambas tarjetas (Inventario/Despachos) se estiran a la MISMA
+      // altura entre sí — pero el gráfico en sí tenía una altura FIJA
+      // (height:300px), no se expandía. Cuando la tarjeta de Inventario
+      // crecía más que la de Despachos (ej. al activar "Vista mensual",
+      // que agrega una fila extra del selector de mes), la tarjeta de
+      // Despachos se estiraba igual por fuera, pero su gráfica se
+      // quedaba con el mismo alto de siempre, dejando un hueco vacío
+      // abajo. Ahora min-height fija un piso razonable, y flex:1 hace
+      // que la gráfica SIEMPRE llene el espacio disponible de su
+      // tarjeta, sin importar si la tarjeta vecina es más alta.
+      '.exec-chart-wrap{min-height:300px;flex:1}' +
       '.exec-kpi-grid{gap:16px!important}' +
       '#exec-mapa-container{height:520px!important}' +
     '}' +
