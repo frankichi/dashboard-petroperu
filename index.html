@@ -3118,6 +3118,10 @@ function getVenta7dAvg(baseDate, dashPlanta, dashProducto, nDays) {
 function prodSortKey(p) { var i = PROD_ORDER.indexOf(p); return i >= 0 ? i : 99; }
 let RAW = [];
 let DATES = [];
+// Logo Petroperú (para el header del PDF de Vista Ejecutiva) — imagen
+// provista por el usuario, incrustada en base64 para que el PDF no
+// dependa de ninguna carga de red externa al generarse.
+var EXEC_LOGO_PETRO_B64 = 'data:image/jpeg;base64,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';
 let currentDate = null;
 // ⚠️ Helper a prueba de fallos: construir `new Date(currentDate +
 // 'T12:00:00')` directamente, sin validar, causaba un crash NO
@@ -20699,6 +20703,32 @@ function renderVistaEjecutivaSimple() {
     return s;
   }
 
+  // ⚠️ CORREGIDO — la fecha por defecto de Vista Ejecutiva venía de
+  // `currentDate`, que a nivel de TODO el dashboard se marca como "el
+  // último día con cierre real" con un criterio demasiado laxo: basta
+  // con que UNA sola planta (aunque sea chica) tenga un reporte real
+  // ese día para que se considere "cerrado" — un caso real confirmado:
+  // 17-jul con solo 1 planta reportando ~1 MB hacía que Panel de
+  // Suministro abriera en 17-jul mostrando "Despacho 1 MB" y el resto
+  // en inventario proyectado, dando la impresión de que el día ya había
+  // cerrado cuando casi ninguna planta había reportado todavía.
+  // Aquí, SOLO en la primera carga de esta vista (no en cada re-render,
+  // para no pisar la navegación manual del selector de fecha), se
+  // verifica que la fecha tenga un mínimo razonable de plantas con
+  // cierre real; si no, retrocede día por día hasta encontrar una que
+  // sí lo tenga.
+  if (!window._execFechaInicializada) {
+    window._execFechaInicializada = true;
+    var MIN_PLANTAS_CIERRE = 5;
+    for (var _fi = (DATES||[]).length - 1; _fi >= 0; _fi--) {
+      var _fCand = DATES[_fi];
+      var _plantasConReporte = {};
+      RAW.forEach(function(r) {
+        if (r.fecha === _fCand && !r._proyectadoConsumo && !r._proyectado) _plantasConReporte[r.planta] = true;
+      });
+      if (Object.keys(_plantasConReporte).length >= MIN_PLANTAS_CIERRE) { currentDate = _fCand; break; }
+    }
+  }
   var fechaHoy  = currentDate || (DATES && DATES.length ? DATES[DATES.length-1] : '');
   var idxHoy    = (DATES||[]).indexOf(fechaHoy);
   var fechaAyer = idxHoy > 0 ? DATES[idxHoy-1] : '';
@@ -20928,9 +20958,32 @@ function renderVistaEjecutivaSimple() {
     // reposición es un volumen futuro que se compara contra la demanda
     // proyectada, no contra lo que se despachó ayer.
     var denom = (typeof pronSheet !== 'undefined' && pronSheet[r.planta+'|'+r.producto]) || r.pron_mes || r.pron || 0;
-    var vol1 = r.vol_rep || 0, vol2 = r.vol_rep_bt2 || 0;
-    var volTotal = vol1 + vol2;
-    if (volTotal <= 0 || denom <= 0) return { diasRepos: 0, volMB: 0, tipo: '' };
+    // ⚠️ AMPLIADO: `bt_lista` (nuevo, desde Code.gs) trae TODOS los
+    // buques que reponen esta planta+producto — antes el sistema solo
+    // podía distinguir hasta 2 (bt/bt2), y si un tercer buque coincidía
+    // en la misma planta+producto simplemente no había forma de
+    // representarlo por separado. Caso real confirmado: Conchán
+    // recibiendo Diesel de UCAYALI Y de MOCHE al mismo tiempo — antes
+    // solo se veía uno de los dos en el popup. Se prioriza `bt_lista`
+    // cuando está disponible; si no (datos más viejos, sin este campo
+    // todavía), se cae al mecanismo anterior de bt/bt2 para no romper
+    // nada.
+    var naves = [];
+    if (r.bt_lista) {
+      try {
+        var lista = JSON.parse(r.bt_lista);
+        if (Array.isArray(lista)) {
+          naves = lista.map(function(e){ return { buque: e.buque, vol: e.vol || 0, fecha: e.fecha_hasta || '', estado: e.estado || '' }; });
+        }
+      } catch(eParseBt) { /* bt_lista corrupto — se ignora, cae al mecanismo anterior */ }
+    }
+    if (!naves.length) {
+      var vol1 = r.vol_rep || 0, vol2 = r.vol_rep_bt2 || 0;
+      if (vol1 > 0) naves.push({ buque: r.bt || '', vol: vol1, fecha: r.fecha_reposicion || '', estado: r.bt_estado || '' });
+      if (vol2 > 0) naves.push({ buque: r.bt2 || '', vol: vol2, fecha: r.fecha_repos_bt2 || '', estado: r.bt2_estado || '' });
+    }
+    var volTotal = naves.reduce(function(s, n){ return s + (n.vol || 0); }, 0);
+    if (volTotal <= 0 || denom <= 0) return { diasRepos: 0, volMB: 0, tipo: '', naves: [] };
     // ⚠️ CORREGIDO (v4 — fix de raíz, sin depender de fecha_reposicion):
     // las versiones anteriores intentaban invalidar reposiciones viejas
     // comparando fechas guardadas en la fila (fecha_reposicion) — pero
@@ -20943,13 +20996,16 @@ function renderVistaEjecutivaSimple() {
     // porque no depende de qué tan "vieja" esté la fila ni de si
     // alguien limpió o no sus columnas.
     if (!r._btConfirmadoHoy) {
-      return { diasRepos: 0, volMB: 0, tipo: '' };
+      return { diasRepos: 0, volMB: 0, tipo: '', naves: [] };
     }
-    var tipo1 = vol1 > 0 ? (esMaritimoExec(r.bt) ? 'mar\u00edtima' : 'terrestre') : '';
-    var tipo2 = vol2 > 0 ? (esMaritimoExec(r.bt2) ? 'mar\u00edtima' : 'terrestre') : '';
-    var tipos = [tipo1, tipo2].filter(Boolean);
-    var tipoUnico = tipos.length === 1 ? tipos[0] : (tipos.length > 1 ? 'mixta' : '');
-    return { diasRepos: Math.round(volTotal / denom), volMB: volTotal, tipo: tipoUnico, bt: r.bt || r.bt2 || '', fecha: r.fecha_reposicion || r.fecha_repos_bt2 || '', estado: r.bt_estado || '' };
+    var tipos = naves.map(function(n){ return esMaritimoExec(n.buque) ? 'mar\u00edtima' : 'terrestre'; });
+    var tipoUnico = new Set(tipos).size === 1 ? tipos[0] : (tipos.length > 1 ? 'mixta' : '');
+    // bt/fecha/estado "principales" = el primero de la lista (ya viene
+    // ordenado desde el backend: COMPLETADO primero, luego ETA más
+    // próxima) — se mantienen para no romper código que todavía lee
+    // estos campos sueltos; `naves` es la fuente completa.
+    var principal = naves[0] || {};
+    return { diasRepos: Math.round(volTotal / denom), volMB: volTotal, tipo: tipoUnico, bt: principal.buque || '', fecha: principal.fecha || '', estado: principal.estado || '', naves: naves };
   }
   // ⚠️ CORREGIDO: la lista "Cobertura por planta" agrupa por planta
   // usando UN SOLO producto como representante (el de menor cobertura),
@@ -20972,7 +21028,7 @@ function renderVistaEjecutivaSimple() {
       if (productoFiltro && productoFiltro !== 'Todos' && r.producto !== productoFiltro) return false;
       return true;
     });
-    var volTotal = 0, diasTotal = 0, tipos = [], detalle = [], btUnico = null, fechaUnico = null, estadoUnico = null;
+    var volTotal = 0, diasTotal = 0, tipos = [], detalle = [], btUnico = null, fechaUnico = null, estadoUnico = null, navesTotal = [];
     filas.forEach(function(r) {
       var info = reposicionInfo(r);
       if (info.volMB <= 0) return;
@@ -20983,9 +21039,12 @@ function renderVistaEjecutivaSimple() {
       detalle.push(r.producto + ': ' + info.volMB.toFixed(1) + ' MB (' + (info.bt || '\u2014') + etiquetaFecha + ') \u2192 +' + info.diasRepos + 'd');
       if (btUnico === null) { btUnico = info.bt; fechaUnico = info.fecha; estadoUnico = info.estado; }
       else if (btUnico !== info.bt) { btUnico = ''; fechaUnico = ''; estadoUnico = ''; } // más de un buque distinto — no hay uno solo que mostrar
+      // Cada nave se etiqueta con su producto, para distinguirlas cuando
+      // se ven varios productos a la vez (ej. "Todos") en el popup.
+      (info.naves || []).forEach(function(n) { navesTotal.push(Object.assign({ producto: r.producto }, n)); });
     });
     var tipoUnico = !tipos.length ? '' : (new Set(tipos).size > 1 ? 'mixta' : tipos[0]);
-    return { diasRepos: diasTotal, volMB: volTotal, tipo: tipoUnico, detalle: detalle, bt: btUnico || '', fecha: fechaUnico || '', estado: estadoUnico || '' };
+    return { diasRepos: diasTotal, volMB: volTotal, tipo: tipoUnico, detalle: detalle, bt: btUnico || '', fecha: fechaUnico || '', estado: estadoUnico || '', naves: navesTotal };
   }
   var datosCob = [];
   // Antes usaba byLatest() (arrastre simple, sin restar consumo) — ahora
@@ -21105,7 +21164,7 @@ function renderVistaEjecutivaSimple() {
       var acc = porPlantaFila[p];
       var rep = reposicionInfoPlanta(p, prod);
       var diasDirecto = acc.pronSumCob > 0 ? Math.floor(acc.invSumCob / acc.pronSumCob) : null;
-      return { label: p, dias: diasDirecto, invMB: acc.invSum, pronMB: acc.pronSum, diasRepos: rep.diasRepos, volReposMB: rep.volMB, tipoRepos: rep.tipo, reposDetalle: rep.detalle, reposBt: rep.bt, reposFecha: rep.fecha, reposEstado: rep.estado, sinCob: diasDirecto === null, proyectado: acc.proyectado };
+      return { label: p, dias: diasDirecto, invMB: acc.invSum, pronMB: acc.pronSum, diasRepos: rep.diasRepos, volReposMB: rep.volMB, tipoRepos: rep.tipo, reposDetalle: rep.detalle, reposBt: rep.bt, reposFecha: rep.fecha, reposEstado: rep.estado, reposNaves: rep.naves, sinCob: diasDirecto === null, proyectado: acc.proyectado };
     });
   } else if (!esRefineriaExec) {
     var plantaCobertura = COMBO_PLANTAS[pl] ? COMBO_PLANTAS[pl].plantaDespacho : pl;
@@ -21170,7 +21229,7 @@ function renderVistaEjecutivaSimple() {
       // neutra, sin días), no se elimina del todo.
       var esTalaraTA1Vista = plantaCobertura === 'Talara' && r.producto === 'TA1';
       if (c === null && !esTalaraTA1Vista) return;
-      datosCob.push({ label: r.producto, dias: esTalaraTA1Vista ? null : c, invMB: invCombinado, pronMB: pronVal2, diasRepos: rep.diasRepos, volReposMB: rep.volMB, tipoRepos: rep.tipo, reposBt: rep.bt, reposFecha: rep.fecha, reposEstado: rep.estado, sinCob: esTalaraTA1Vista ? true : (c === null), proyectado: !!r._proyectadoConsumo });
+      datosCob.push({ label: r.producto, dias: esTalaraTA1Vista ? null : c, invMB: invCombinado, pronMB: pronVal2, diasRepos: rep.diasRepos, volReposMB: rep.volMB, tipoRepos: rep.tipo, reposBt: rep.bt, reposFecha: rep.fecha, reposEstado: rep.estado, reposNaves: rep.naves, sinCob: esTalaraTA1Vista ? true : (c === null), proyectado: !!r._proyectadoConsumo });
     });
   }
   datosCob.sort(function(a,b){
@@ -21248,12 +21307,27 @@ function renderVistaEjecutivaSimple() {
     // Popup con volumen + buque + ETA + demanda pronóstico del producto
     // (o de la planta si es "Todos") — reemplaza el tooltip nativo, que
     // dejó de mostrarse de forma confiable para el usuario.
+    // ⚠️ AMPLIADO: cuando hay más de un buque reponiendo la misma
+    // planta+producto (ej. Conchán recibiendo de UCAYALI y de MOCHE a
+    // la vez), se listan TODOS por separado con su propio volumen y
+    // ETA — antes el popup solo tenía espacio para mostrar un buque
+    // "principal" y los demás quedaban invisibles.
+    var navesHTML = '';
+    if (d.reposNaves && d.reposNaves.length > 1) {
+      navesHTML = d.reposNaves.map(function(n) {
+        var etiquetaFecha = n.fecha ? ((n.estado === 'COMPLETADO' ? 'ya descarg\u00f3 ' : 'ETA ') + n.fecha) : '';
+        var prodTxt = n.producto ? (n.producto + ' \u2014 ') : '';
+        return '<div style="margin-top:3px">\uD83D\uDEA2 <b>' + (n.buque||'\u2014') + '</b> \u00b7 ' + prodTxt + n.vol.toFixed(1) + ' MB' + (etiquetaFecha ? ' \u00b7 ' + etiquetaFecha : '') + '</div>';
+      }).join('');
+    }
     var reposHTML = d.diasRepos > 0
       ? (d.reposDetalle && d.reposDetalle.length > 1
           ? '<b>Reposici\u00f3n total (' + d.reposDetalle.length + ' productos)</b><br>' + d.volReposMB.toFixed(1) + ' MB \u2192 +' + d.diasRepos + ' d\u00edas equivalentes<br>' + d.reposDetalle.join('<br>')
-          : '<b>Reposici\u00f3n ' + (d.tipoRepos||'') + (d.reposEstado === 'COMPLETADO' ? ' \u2705 ya descarg\u00f3, ya en inventario' : '') + '</b><br>Volumen: ' + d.volReposMB.toFixed(1) + ' MB'
-            + (d.reposBt ? '<br>Buque/Barcaza: ' + d.reposBt : '')
-            + (d.reposFecha ? ('<br>' + (d.reposEstado === 'COMPLETADO' ? 'Descarg\u00f3 el: ' : 'Fecha de reposici\u00f3n (ETA): ') + d.reposFecha) : '')
+          : '<b>Reposici\u00f3n ' + (d.tipoRepos||'') + (d.reposEstado === 'COMPLETADO' ? ' \u2705 ya descarg\u00f3, ya en inventario' : '') + '</b><br>Volumen total: ' + d.volReposMB.toFixed(1) + ' MB'
+            + (navesHTML
+                ? navesHTML
+                : ((d.reposBt ? '<br>Buque/Barcaza: ' + d.reposBt : '')
+                  + (d.reposFecha ? ('<br>' + (d.reposEstado === 'COMPLETADO' ? 'Descarg\u00f3 el: ' : 'Fecha de reposici\u00f3n (ETA): ') + d.reposFecha) : '')))
             + (reposEsPendiente ? '<br>D\u00edas equivalentes: +' + d.diasRepos + 'd' : '')
             + (reposLejana ? '<br><span style="color:#93c5fd">\u26a0\ufe0f A\u00fan a ' + diasHastaETA + ' d\u00edas \u2014 no confirmado, no cuenta como inventario todav\u00eda</span>' : ''))
       : '';
@@ -21419,6 +21493,367 @@ function renderVistaEjecutivaSimple() {
           : '<span style="font-size:11.5px;color:var(--txt3)">Sin meses con datos para este filtro todavía.</span>')
       + '</div>';
   }
+
+  // ── Exportar Reporte (Excel / PDF) — botón "📊 Reporte del período" ──
+  // Genera el reporte EXACTAMENTE sobre el mismo rango de fechas que el
+  // usuario tiene elegido en el selector de período (7/15/30 días o el
+  // mes específico de "Vista mensual"), y sobre la misma planta/producto
+  // que está viendo — así el reporte siempre corresponde 1:1 con lo que
+  // hay en pantalla, sin tener que volver a elegir nada.
+  function _execReporteFechas() {
+    if (window._execPeriod === 'mensual') {
+      if (!window._execMesSel) return [];
+      var yMes = parseInt(window._execMesSel.slice(0,4), 10), mMes = parseInt(window._execMesSel.slice(5,7), 10);
+      var ultimoDia = new Date(yMes, mMes, 0).getDate();
+      var out = [];
+      for (var dd = 1; dd <= ultimoDia; dd++) out.push(window._execMesSel + '-' + String(dd).padStart(2,'0'));
+      return out;
+    }
+    return (DATES || []).slice(-(window._execPeriod || 15));
+  }
+  function _execReporteFilas() {
+    var fechas = _execReporteFechas();
+    var plantaParaPron = COMBO_PLANTAS[pl] ? COMBO_PLANTAS[pl].plantaDespacho : pl;
+    return fechas.map(function(d) {
+      var inv = sumFecha(d, 'inv', pl, prod);
+      var desp = RAW.filter(function(r){ return r.fecha===d && filaAplica(r, pl, prod); })
+                    .reduce(function(s,r){ return s+despRow(r); }, 0);
+      var pronVal = pronParaFechaExec(d, plantaParaPron, prod);
+      var cobDias = (pronVal > 0 && inv > 0) ? Math.floor(inv / pronVal) : null;
+      var comentarios = [];
+      RAW.forEach(function(r) {
+        if (r.fecha !== d || !filaAplica(r, pl, prod)) return;
+        if (r.comentario_prod) comentarios.push(r.comentario_prod);
+      });
+      return { fecha: d, inv: inv, desp: desp, pron: pronVal, cob: cobDias, comentario: comentarios.join(' · ') };
+    });
+  }
+  function _execReporteScopeLabel() {
+    return (pl === 'Nacional' ? 'Nacional' : _plLabel(pl)) + (prod !== 'Todos' ? ' · ' + prod : '');
+  }
+  // ── Detalle Nacional (todas las plantas, todos los productos) ────────
+  // A diferencia de _execReporteFilas() (que respeta el filtro de
+  // planta/producto que el usuario tiene elegido en pantalla), esta
+  // función SIEMPRE recorre el universo completo — necesario porque el
+  // reporte gerencial debe reflejar el detalle de todas las
+  // instalaciones, no solo la que se esté viendo en ese momento.
+  function _execReporteFilasNacional(fechasOverride) {
+    var fechas = fechasOverride || _execReporteFechas();
+    if (!fechas.length) return [];
+    var fechaSet = {};
+    fechas.forEach(function(f){ fechaSet[f] = true; });
+    // Universo de planta+producto: todas las combinaciones con al menos
+    // un registro real dentro del rango — se deriva directamente de los
+    // datos (no de una lista fija a mano) para no desactualizarse nunca,
+    // y respeta las mismas exclusiones de combos que ya usa el resto del
+    // sistema (plantas duplicadas de refinería, combos inválidos, etc.).
+    var combosMap = {};
+    RAW.forEach(function(r) {
+      if (!r.fecha || !fechaSet[r.fecha]) return;
+      if (typeof SKIP_COMBOS !== 'undefined' && SKIP_COMBOS.has((r.planta||'')+'|'+(r.producto||''))) return;
+      if (typeof PLANTAS_DUPLICADAS_EN_REFINERIA !== 'undefined' && PLANTAS_DUPLICADAS_EN_REFINERIA.indexOf(r.planta) !== -1) return;
+      combosMap[r.planta + '|' + r.producto] = { planta: r.planta, producto: r.producto };
+    });
+    var combos = Object.keys(combosMap).map(function(k){ return combosMap[k]; }).sort(function(a, b) {
+      if (a.planta !== b.planta) return a.planta < b.planta ? -1 : 1;
+      return a.producto < b.producto ? -1 : (a.producto > b.producto ? 1 : 0);
+    });
+    var filas = [];
+    fechas.forEach(function(d) {
+      combos.forEach(function(cp) {
+        var inv = sumFecha(d, 'inv', cp.planta, cp.producto);
+        if (inv <= 0) return; // sin dato real ese día para esa planta+producto — no se inventa una fila
+        var desp = RAW.filter(function(r){ return r.fecha===d && filaAplica(r, cp.planta, cp.producto); })
+                      .reduce(function(s,r){ return s+despRow(r); }, 0);
+        var pronVal = pronParaFechaExec(d, cp.planta, cp.producto);
+        var cobDias = (pronVal > 0 && inv > 0) ? Math.floor(inv / pronVal) : null;
+        var comentarios = [];
+        RAW.forEach(function(r) {
+          if (r.fecha !== d || !filaAplica(r, cp.planta, cp.producto)) return;
+          if (r.comentario_prod) comentarios.push(r.comentario_prod);
+        });
+        filas.push({ fecha: d, planta: cp.planta, producto: cp.producto, inv: inv, desp: desp, pron: pronVal, cob: cobDias, comentario: comentarios.join(' · ') });
+      });
+    });
+    return filas;
+  }
+
+  // ── Resumen Nacional por Producto (formato "Terminal x Producto") ────
+  // A diferencia de las otras dos tablas (que recorren el rango de
+  // fechas elegido), esta es una FOTO del cierre más reciente real de
+  // cada planta — "los datos al cierre de la fecha que cerraron", no
+  // necesariamente todas la misma fecha (una planta puede tener su
+  // último cierre real ayer, otra hace 2 días si no reportó a tiempo).
+  // Por eso usa byDateLatestPerPlant (mismo mecanismo de arrastre que ya
+  // usa el resto del sistema para "hoy"), NO el rango de _execReporteFechas.
+  function _diasAFecha(fechaBase, dias) {
+    if (!fechaBase || dias === null || dias === undefined) return '';
+    var d = new Date(fechaBase + 'T12:00:00');
+    d.setDate(d.getDate() + dias);
+    return String(d.getDate()).padStart(2,'0') + '/' + String(d.getMonth()+1).padStart(2,'0') + '/' + d.getFullYear();
+  }
+  function _execResumenNacionalPorProducto() {
+    // ⚠️ Usa `fechaHoy` (la fecha que el usuario tiene elegida en el
+    // selector de fecha de Vista Ejecutiva), NO `currentDate` a secas —
+    // currentDate es una variable global compartida con otras vistas del
+    // dashboard y podía no coincidir con "el día elegido (cerrado)" que
+    // el usuario está viendo en este momento en Panel de Suministro.
+    var today = byDateLatestPerPlant(fechaHoy);
+    var PO = ['Diesel','G. Regular','G. Premium','G. 84','TA1','GLP'];
+    var PL = {'Diesel':'Diésel','G. Regular':'Gasolina Regular','G. Premium':'Gasolina Premium','G. 84':'G. 84','TA1':'Turbo A-1','GLP':'GLP'};
+    var PLO = ['Talara','Piura','Eten','Salaverry','Chimbote','Supe','Callao','Conchán','Pisco','Mollendo','Ilo','Cusco','Juliaca','Iquitos','Pucallpa','Tarapoto','Yurimaguas','El Milagro'];
+    var recMap = {};
+    today.forEach(function(r) {
+      if (!invFilaValida(r)) return;
+      recMap[(r.planta||'') + '|' + (r.producto||'')] = r;
+    });
+    var productos = [];
+    PO.forEach(function(p) {
+      var filasProd = [];
+      PLO.forEach(function(planta) {
+        var r = recMap[planta + '|' + p];
+        if (!r) return;
+        var inv = cobGetInv(r);
+        if (inv <= 0.01) return;
+        var cobDias = cobSystemDays(r);
+        filasProd.push({
+          terminal: planta,
+          inv: inv,
+          // "Despacho Reportado" = el despacho REAL que la planta reportó
+          // ese cierre (no un valor calculado/factible por el sistema).
+          despReportado: r.vreal || r.dem || 0,
+          pron: cobGetPron(r),
+          cob: cobDias,
+          fechaCob: cobDias !== null && cobDias !== undefined ? _diasAFecha(r.fecha, cobDias) : '—'
+        });
+      });
+      if (filasProd.length) productos.push({ producto: p, label: PL[p] || p, filas: filasProd });
+    });
+    return productos;
+  }
+
+  window._execExportExcel = async function() {
+    // ⚠️ CAMBIADO A ExcelJS — SheetJS (usado en el resto del dashboard)
+    // no soporta escribir imágenes ni estilos de celda reales en el
+    // .xlsx (solo la versión de pago lo permite). ExcelJS sí lo hace,
+    // así que este reporte en particular usa esa librería para poder
+    // llevar el logo de Petroperú y un diseño con color real —
+    // "carácter gerencial" de verdad, no solo texto plano.
+    if (typeof ExcelJS === 'undefined') { alert('La librería de Excel todavía está cargando, intenta de nuevo en unos segundos.'); return; }
+    var filasNac = _execReporteFilasNacional([fechaHoy]);
+    if (!filasNac.length) { alert('No hay datos de inventario para el día ' + fechaHoy + '.'); return; }
+
+    var AZUL = 'FF0A3A5C', AZUL2 = 'FF1E3A8A', NARANJA = 'FFC2410C', ROJO_CRIT = 'FFFCA5A5', GRIS_ALT = 'FFF8FAFC';
+    var wb = new ExcelJS.Workbook();
+    wb.creator = 'Petroperú S.A. — Planificación de Suministro';
+    wb.created = new Date();
+    var ws = wb.addWorksheet('Detalle Nacional', { views: [{ state: 'frozen', ySplit: 8 }] });
+    ws.columns = [
+      { width: 22 }, { width: 16 }, { width: 16 }, { width: 16 }, { width: 18 }, { width: 16 }, { width: 44 }
+    ];
+
+    // ── Logo + encabezado (filas 1-3, con la imagen a la izquierda) ──
+    try {
+      var imgId = wb.addImage({ base64: EXEC_LOGO_PETRO_B64, extension: 'jpeg' });
+      ws.addImage(imgId, { tl: { col: 0.15, row: 0.15 }, ext: { width: 54, height: 54 } });
+    } catch (eImg) { /* si el logo falla, el resto del reporte se genera igual */ }
+    ws.mergeCells('B1:G1');
+    ws.getCell('B1').value = 'PETRÓLEOS DEL PERÚ S.A. — PETROPERÚ';
+    ws.getCell('B1').font = { bold: true, size: 14, color: { argb: AZUL } };
+    ws.mergeCells('B2:G2');
+    ws.getCell('B2').value = 'Planificación de Suministro · Detalle Nacional de Inventarios y Despachos';
+    ws.getCell('B2').font = { size: 11, color: { argb: 'FF475569' } };
+    ws.mergeCells('B3:G3');
+    ws.getCell('B3').value = 'Al cierre del ' + fechaHoy.slice(8,10) + '.' + fechaHoy.slice(5,7) + '.' + fechaHoy.slice(0,4) + '   ·   Generado: ' + new Date().toLocaleString('es-PE');
+    ws.getCell('B3').font = { size: 10, italic: true, color: { argb: 'FF64748B' } };
+    for (var rr = 1; rr <= 3; rr++) ws.getRow(rr).height = 20;
+
+    // ── Franja de acento naranja (fila 4) — mismo detalle de marca que
+    // usa el resto del dashboard (borde inferior naranja del banner).
+    ws.mergeCells('A4:G4');
+    ws.getCell('A4').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: NARANJA } };
+    ws.getRow(4).height = 4;
+
+    // ── Cabecera de la tabla (fila 6, con una fila 5 en blanco de aire) ──
+    var headerRowIdx = 6;
+    var headerRow = ws.getRow(headerRowIdx);
+    ['Planta', 'Producto', 'Inventario (MB)', 'Despacho (MB/d)', 'Pronóstico (MBDC)', 'Cobertura (días)', 'Comentarios'].forEach(function(t, i) {
+      var cell = headerRow.getCell(i + 1);
+      cell.value = t;
+      cell.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: AZUL2 } };
+      cell.alignment = { vertical: 'middle', horizontal: i >= 2 && i <= 5 ? 'right' : 'left' };
+      cell.border = { bottom: { style: 'thin', color: { argb: 'FFFFFFFF' } } };
+    });
+    headerRow.height = 20;
+
+    // ── Filas de datos, con fila alternada y resaltado rojo en cobertura
+    // crítica — MISMO criterio que Vista Ejecutiva (cobColor()): ≤7 días.
+    filasNac.forEach(function(f, i) {
+      var row = ws.getRow(headerRowIdx + 1 + i);
+      var critico = f.cob !== null && f.cob !== undefined && f.cob <= 7;
+      var vals = [f.planta, f.producto, parseFloat(f.inv.toFixed(2)), f.desp > 0 ? parseFloat(f.desp.toFixed(2)) : null, f.pron > 0 ? parseFloat(f.pron.toFixed(2)) : null, f.cob !== null ? f.cob : null, f.comentario || ''];
+      vals.forEach(function(v, ci) {
+        var cell = row.getCell(ci + 1);
+        cell.value = v;
+        cell.alignment = { horizontal: ci >= 2 && ci <= 5 ? 'right' : 'left', vertical: 'middle' };
+        cell.border = { bottom: { style: 'hair', color: { argb: 'FFE2E8F0' } } };
+        if (!critico) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: i % 2 ? GRIS_ALT : 'FFFFFFFF' } };
+      });
+      if (critico) {
+        row.eachCell(function(cell) { cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: ROJO_CRIT } }; });
+        row.getCell(6).font = { bold: true };
+      }
+    });
+
+    ws.autoFilter = { from: { row: headerRowIdx, column: 1 }, to: { row: headerRowIdx, column: 7 } };
+
+    var buffer = await wb.xlsx.writeBuffer();
+    var blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    var url = URL.createObjectURL(blob);
+    var nombre = ('Reporte_Suministro_Nacional_' + fechaHoy).replace(/[^a-zA-Z0-9._-]/g, '_');
+    var a = document.createElement('a');
+    a.href = url; a.download = nombre + '.xlsx';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+  window._execExportPDF = function() {
+    // ⚠️ SIMPLIFICADO — antes el reporte cubría todo el rango de fechas
+    // del selector de período (7/15/30 días o el mes completo), lo cual
+    // mezclaba días proyectados/no cerrados con días reales y hacía el
+    // documento muy largo. Ahora el reporte es SIEMPRE una foto del
+    // "día elegido" (fechaHoy — por defecto el último día con cierre
+    // real, ver corrección de fecha por defecto) — la información de
+    // los demás días no se incluye.
+    var filasNacPdf = _execReporteFilasNacional([fechaHoy]);
+    if (!filasNacPdf.length) { alert('No hay datos de inventario para el día ' + fechaHoy + '.'); return; }
+
+    // ── Resumen Nacional por Producto — tabla principal, formato
+    // "Terminal x Producto" (Inventario, Despacho Reportado, Pronóstico,
+    // Cobertura, Fecha Cobertura), una tabla por producto, con la fila
+    // resaltada en rojo cuando la cobertura es crítica (≤5 días).
+    var resumenProductos = _execResumenNacionalPorProducto();
+    var resumenNacionalHTML = '';
+    if (resumenProductos.length) {
+      var tablasProductoHTML = resumenProductos.map(function(pd) {
+        var filasPdHTML = pd.filas.map(function(f) {
+          var critico = f.cob !== null && f.cob !== undefined && f.cob <= 7;
+          var bg = critico ? '#fca5a5' : '#fff';
+          return '<tr style="background:' + bg + '">'
+            + '<td style="padding:6px 10px;font-weight:700;color:#0a3a5c;border-bottom:1px solid #e2e8f0">' + f.terminal + '</td>'
+            + '<td style="padding:6px 10px;text-align:right;border-bottom:1px solid #e2e8f0">' + f.inv.toFixed(1) + '</td>'
+            + '<td style="padding:6px 10px;text-align:right;border-bottom:1px solid #e2e8f0">' + f.despReportado.toFixed(2) + '</td>'
+            + '<td style="padding:6px 10px;text-align:right;border-bottom:1px solid #e2e8f0">' + f.pron.toFixed(2) + '</td>'
+            + '<td style="padding:6px 10px;text-align:right;font-weight:800;border-bottom:1px solid #e2e8f0">' + (f.cob || 0) + '</td>'
+            + '<td style="padding:6px 10px;text-align:center;border-bottom:1px solid #e2e8f0">' + f.fechaCob + '</td>'
+            + '</tr>';
+        }).join('');
+        return '<div style="page-break-inside:avoid;margin-bottom:20px">'
+          + '<div style="background:#0a3a5c;color:#fff;text-align:center;padding:8px;font-weight:800;font-size:13px;letter-spacing:.04em;border-radius:6px 6px 0 0">' + pd.label.toUpperCase() + '</div>'
+          + '<table><thead><tr style="background:#3b5f8a;color:#fff">'
+          +   '<th style="padding:7px 10px;text-align:left">Terminal</th>'
+          +   '<th style="padding:7px 10px;text-align:right">Inv. Disponible<br>(MB)</th>'
+          +   '<th style="padding:7px 10px;text-align:right">Despacho<br>Reportado</th>'
+          +   '<th style="padding:7px 10px;text-align:right">Pronóstico<br>(MBDC)</th>'
+          +   '<th style="padding:7px 10px;text-align:right">Cobertura<br>(días)</th>'
+          +   '<th style="padding:7px 10px;text-align:center">Fecha<br>Cobertura</th>'
+          + '</tr></thead><tbody>' + filasPdHTML + '</tbody></table>'
+          + '</div>';
+      }).join('');
+      resumenNacionalHTML =
+        '<div style="margin:22px 0 14px">'
+        +   '<div style="font-size:15px;font-weight:800;color:#0a3a5c;margin-bottom:2px">🌎 Resumen Nacional por Producto</div>'
+        +   '<div style="font-size:10.5px;color:#64748b;margin-bottom:12px">Cierre más reciente reportado por cada planta (fechas de cierre pueden variar entre plantas) · <span style="background:#fca5a5;padding:1px 8px;border-radius:3px;font-weight:700">Cobertura Crítico ≤ 7 días</span> (mismo criterio que Panel de Suministro)</div>'
+        + '</div>'
+        + tablasProductoHTML;
+    }
+
+    // ── Detalle Nacional por Planta y Producto — SOLO el día elegido,
+    // agrupado por planta (con su subtotal), sin la vuelta de fecha en
+    // fecha del anexo anterior.
+    var porPlantaNac = {};
+    filasNacPdf.forEach(function(f) { (porPlantaNac[f.planta] = porPlantaNac[f.planta] || []).push(f); });
+    var plantasNac = Object.keys(porPlantaNac).sort();
+    var filasDetalleHTML = plantasNac.map(function(plNombre) {
+      var prods = porPlantaNac[plNombre];
+      var totalPlanta = prods.reduce(function(s,f){ return s+f.inv; }, 0);
+      var filasProdHTML = prods.map(function(f, i) {
+        var cobColor = f.cob === null ? '#64748b' : (f.cob <= 7 ? '#dc2626' : (f.cob <= 14 ? '#e8a000' : '#16a34a'));
+        return '<tr style="background:' + (i % 2 ? '#f8fafc' : '#fff') + '">'
+          + '<td style="padding:5px 10px 5px 26px;color:#334155">' + f.producto + '</td>'
+          + '<td style="padding:5px 10px;text-align:right">' + f.inv.toFixed(1) + '</td>'
+          + '<td style="padding:5px 10px;text-align:right">' + (f.desp > 0 ? f.desp.toFixed(1) : '—') + '</td>'
+          + '<td style="padding:5px 10px;text-align:right">' + (f.pron > 0 ? f.pron.toFixed(2) : '—') + '</td>'
+          + '<td style="padding:5px 10px;text-align:right;font-weight:700;color:' + cobColor + '">' + (f.cob !== null ? f.cob + 'd' : '—') + '</td>'
+          + '<td style="padding:5px 10px;color:#64748b;font-size:9.5px">' + (f.comentario || '—') + '</td>'
+          + '</tr>';
+      }).join('');
+      return '<tr><td colspan="6" style="padding:6px 10px;font-weight:800;color:#0a3a5c;background:#eef2f7;font-size:10.5px">🏭 ' + plNombre + ' <span style="font-weight:600;color:#64748b">— ' + totalPlanta.toFixed(1) + ' MB total</span></td></tr>' + filasProdHTML;
+    }).join('');
+    var detalleNacionalHTML =
+      '<div style="page-break-before:always;padding-top:6px">'
+      +   '<div style="font-size:15px;font-weight:800;color:#0a3a5c;margin-bottom:4px">📋 Detalle Nacional por Planta y Producto</div>'
+      +   '<div style="font-size:11px;color:#64748b;margin-bottom:10px">Cierre del ' + fechaHoy + '</div>'
+      +   '<table><thead><tr style="background:#c7d2e0;color:#0a3a5c">'
+      +     '<th style="padding:5px 10px 5px 26px;text-align:left;font-size:9.5px">Producto</th>'
+      +     '<th style="padding:5px 10px;text-align:right;font-size:9.5px">Inventario (MB)</th>'
+      +     '<th style="padding:5px 10px;text-align:right;font-size:9.5px">Despacho (MB/d)</th>'
+      +     '<th style="padding:5px 10px;text-align:right;font-size:9.5px">Pronóstico (MBDC)</th>'
+      +     '<th style="padding:5px 10px;text-align:right;font-size:9.5px">Cobertura</th>'
+      +     '<th style="padding:5px 10px;text-align:left;font-size:9.5px">Comentarios</th>'
+      +   '</tr></thead><tbody>' + filasDetalleHTML + '</tbody></table>'
+      + '</div>';
+
+    var invTotalDia = filasNacPdf.reduce(function(s,f){ return s+f.inv; }, 0);
+    var conDespDia = filasNacPdf.filter(function(f){ return f.desp > 0; });
+    var despTotalDia = conDespDia.reduce(function(s,f){ return s+f.desp; }, 0);
+    var cobsDia = filasNacPdf.filter(function(f){ return f.cob !== null; }).map(function(f){ return f.cob; });
+    var cobPromDia = cobsDia.length ? Math.round(cobsDia.reduce(function(s,c){ return s+c; }, 0) / cobsDia.length) : null;
+
+    var overlay = document.createElement('div');
+    overlay.id = 'exec-export-pdf-overlay';
+    overlay.style.cssText = 'position:fixed;inset:0;background:#fff;z-index:999999;overflow:auto';
+    overlay.innerHTML =
+      '<style>@media print{.no-print{display:none!important}@page{margin:14mm}}'
+      + 'body{-webkit-print-color-adjust:exact;print-color-adjust:exact}'
+      + 'table{border-collapse:collapse;width:100%;font-family:-apple-system,"Segoe UI",sans-serif;font-size:11px}</style>'
+      + '<div class="no-print" style="padding:16px 24px;background:#f1f5f9;display:flex;gap:10px;border-bottom:1px solid #e2e8f0">'
+      +   '<button onclick="window.print()" style="background:#0a3a5c;color:#fff;border:none;padding:9px 20px;border-radius:6px;font-weight:700;cursor:pointer">🖨️ Imprimir / Guardar PDF</button>'
+      +   '<button onclick="document.getElementById(\'exec-export-pdf-overlay\').remove()" style="background:#e2e8f0;color:#0f1e3c;border:none;padding:9px 20px;border-radius:6px;font-weight:700;cursor:pointer">Cerrar</button>'
+      + '</div>'
+      + '<div style="max-width:1000px;margin:0 auto;padding:28px 32px;font-family:-apple-system,\'Segoe UI\',sans-serif">'
+      +   '<div style="display:flex;align-items:center;gap:16px;background:linear-gradient(90deg,#0a3a5c,#1e3a8a);color:#fff;padding:20px 26px;border-radius:10px;margin-bottom:6px;border-bottom:4px solid #c2410c">'
+      +     '<div style="width:56px;height:56px;background:#fff;border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0;padding:5px;box-shadow:0 1px 4px rgba(0,0,0,.2)"><img src="' + EXEC_LOGO_PETRO_B64 + '" alt="Petroper\u00fa" style="width:100%;height:100%;object-fit:contain;display:block"></div>'
+      +     '<div style="flex:1">'
+      +       '<div style="font-size:18px;font-weight:800;letter-spacing:.02em">Reporte de Inventarios y Despachos</div>'
+      +       '<div style="font-size:12px;opacity:.85;margin-top:2px">Planificación de Suministro · Petroperú S.A.</div>'
+      +     '</div>'
+      +     '<div style="text-align:right;font-size:11px;opacity:.9">Generado: ' + new Date().toLocaleString('es-PE') + '</div>'
+      +   '</div>'
+      +   '<div style="display:flex;justify-content:space-between;align-items:baseline;margin:16px 2px 16px;flex-wrap:wrap;gap:6px">'
+      +     '<div style="font-size:15px;font-weight:800;color:#0a3a5c">Al cierre del ' + fechaHoy.slice(8,10) + '.' + fechaHoy.slice(5,7) + '.' + fechaHoy.slice(0,4) + '</div>'
+      +     '<div style="font-size:11.5px;color:#64748b">Última fecha de cierre con datos reportados</div>'
+      +   '</div>'
+      +   '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:22px">'
+      +     '<div style="background:#f0f4fb;border:1px solid #dbe4f3;border-radius:10px;padding:14px 16px">'
+      +       '<div style="font-size:9.5px;font-weight:700;color:#5a6e88;text-transform:uppercase;letter-spacing:.05em">Inventario Nacional</div>'
+      +       '<div style="font-size:22px;font-weight:800;color:#0a3a5c;font-family:ui-monospace,monospace;margin-top:4px">' + invTotalDia.toFixed(1) + ' MB</div>'
+      +     '</div>'
+      +     '<div style="background:#f0f4fb;border:1px solid #dbe4f3;border-radius:10px;padding:14px 16px">'
+      +       '<div style="font-size:9.5px;font-weight:700;color:#5a6e88;text-transform:uppercase;letter-spacing:.05em">Despacho Nacional</div>'
+      +       '<div style="font-size:22px;font-weight:800;color:#0a3a5c;font-family:ui-monospace,monospace;margin-top:4px">' + (despTotalDia > 0 ? despTotalDia.toFixed(1) + ' MB' : '—') + '</div>'
+      +     '</div>'
+      +     '<div style="background:#f0f4fb;border:1px solid #dbe4f3;border-radius:10px;padding:14px 16px">'
+      +       '<div style="font-size:9.5px;font-weight:700;color:#5a6e88;text-transform:uppercase;letter-spacing:.05em">Cobertura promedio</div>'
+      +       '<div style="font-size:22px;font-weight:800;color:#0a3a5c;font-family:ui-monospace,monospace;margin-top:4px">' + (cobPromDia !== null ? cobPromDia + ' días' : '—') + '</div>'
+      +     '</div>'
+      +   '</div>'
+      +   resumenNacionalHTML
+      +   detalleNacionalHTML
+      +   '<div style="margin-top:24px;padding-top:14px;border-top:1px solid #e2e8f0;font-size:9.5px;color:#94a3b8;text-align:center">Documento de uso interno · Petroperú S.A. · Planificación de Suministro</div>'
+      + '</div>';
+    document.body.appendChild(overlay);
+  };
 
   var plantaSelector = '<select id="exec-planta-select" onchange="window._execPlanta=this.value;renderVistaEjecutivaSimple();" '
     + 'style="padding:7px 14px;border-radius:8px;border:1.5px solid var(--bdr);background:var(--card);color:var(--txt);font-size:12.5px;font-weight:700;cursor:pointer;font-family:inherit">'
@@ -21609,6 +22044,11 @@ function renderVistaEjecutivaSimple() {
         periodoBar +
       '</div>' +
       mesesSelectorBar +
+      '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:10px">' +
+        '<span style="font-size:10px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.4px">📊 Reporte del período:</span>' +
+        '<button onclick="window._execExportExcel()" style="padding:6px 14px;border-radius:7px;font-size:11.5px;font-weight:700;cursor:pointer;border:1.5px solid #1a7a44;background:#f0faf3;color:#1a7a44">📗 Excel</button>' +
+        '<button onclick="window._execExportPDF()" style="padding:6px 14px;border-radius:7px;font-size:11.5px;font-weight:700;cursor:pointer;border:1.5px solid #b91c1c;background:#fef2f2;color:#b91c1c">📕 PDF</button>' +
+      '</div>' +
       '<div class="exec-chart-wrap" style="position:relative;height:220px"><canvas id="exec-chart-inv"></canvas></div>' +
     '</div>' +
     (esRefineriaExec ? '' :
@@ -22140,16 +22580,23 @@ function initExecutiveMode() {
     '@media (max-width:640px){' +
       '.exec-charts-row{display:block}' +
       '.exec-chart-wrap{height:220px!important}' +
-      '.exec-banner{padding:7px 10px;gap:6px}' +
-      '.exec-banner-logo{width:28px;height:28px}' +
-      '.exec-banner-title .exec-h1{font-size:10.5px;letter-spacing:.01em;margin:0}' +
-      '.exec-banner-title .exec-h2{display:none}' +
+      '.exec-banner{padding:6px 10px;gap:6px}' +
+      '.exec-banner-logo{width:24px;height:24px}' +
+      '.exec-banner-title .exec-h1{font-size:10px;letter-spacing:.01em;margin:0}' +
+      // Antes el subtítulo del banner se ocultaba del todo en celular —
+      // pero "Inventarios y Despachos a nivel nacional · Diesel" (el
+      // título dentro del panel) repite casi la misma idea, ocupando una
+      // fila entera aparte. Ahora se muestra el subtítulo del banner
+      // (un poco más grande que antes, para que se lea bien) y el
+      // título del panel se reduce — entre los dos se gana una fila
+      // completa de espacio vertical en celular.
+      '.exec-banner-title .exec-h2{display:block;font-size:9px;line-height:1.25;margin-top:1px}' +
       '.exec-banner-meta{font-size:8px;text-align:right;margin-left:auto}' +
       '.exec-banner-meta .exec-time{font-size:8.5px}' +
       '.exec-banner-meta .exec-credit{display:block!important;font-size:7px;opacity:.75;margin-top:3px;padding-top:3px}' +
       '#exec-simple-view{padding-left:10px!important;padding-right:10px!important}' +
       '.exec-sticky-hdr{margin-left:-10px!important;margin-right:-10px!important;padding:10px 10px 8px!important}' +
-      '.exec-title-main{font-size:14px!important;margin-bottom:8px!important}' +
+      '.exec-title-main{font-size:12px!important;margin-bottom:6px!important;font-weight:700!important}' +
       // Los KPI viven DENTRO del header sticky (visible todo el tiempo
       // al hacer scroll) — se mantienen lado a lado y compactos incluso
       // en celular para no comerse media pantalla de forma permanente.
@@ -23451,6 +23898,30 @@ function getCapacidad(planta, producto) {
   if (typeof XLSX === 'undefined') tryLoad(0);
 })();
 </script>
+<script>
+// ── Async ExcelJS loader (non-blocking) ──
+// A diferencia de SheetJS (usado para el resto de exportaciones del
+// dashboard), ExcelJS SÍ soporta escribir imágenes embebidas y estilos
+// reales de celda (colores de fondo, bordes) en el .xlsx — se usa
+// específicamente para el reporte de Vista Ejecutiva, que necesita el
+// logo de Petroperú y un diseño "gerencial" con color real.
+(function(){
+  var urls = [
+    'https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js',
+    'https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js'
+  ];
+  function tryLoad(i) {
+    if (i >= urls.length) { console.warn('[ExcelJS] All CDNs failed'); return; }
+    var s = document.createElement('script');
+    s.src = urls[i];
+    s.onload = function() { console.log('[ExcelJS] Loaded from', urls[i]); };
+    s.onerror = function() { console.warn('[ExcelJS] Failed:', urls[i]); tryLoad(i+1); };
+    document.head.appendChild(s);
+  }
+  if (typeof ExcelJS === 'undefined') tryLoad(0);
+})();
+</script>
+
 </div><!-- /#main-content -->
 </div><!-- /#app-layout -->
 
