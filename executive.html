@@ -3408,21 +3408,38 @@ async function fetchData(forceRefresh) {
     }
   }
 
+  async function _fetchConReintentos(url, opts, maxIntentos) {
+    var intentos = maxIntentos || 3;
+    var ultimoError;
+    for (var i = 0; i < intentos; i++) {
+      try {
+        return await fetch(url, opts);
+      } catch (e) {
+        ultimoError = e;
+        if (i === intentos - 1) throw e;
+        console.warn('[API] Fallo de red (intento ' + (i+1) + '/' + intentos + '), reintentando…', e && e.message);
+        if (_sm) _sm.textContent = 'Reintentando conexión (' + (i+1) + '/' + intentos + ')…';
+        await new Promise(function(r){ setTimeout(r, 600 * (i + 1)); });
+      }
+    }
+    throw ultimoError;
+  }
+
   try {
     var url = CONFIG.API_URL + '?action=getAll';
     if (forceRefresh) url += '&nocache=' + Date.now();
     var pronUrl = CONFIG.API_URL + '?action=getPronostico';
     var fetchOpts = { method: 'GET', redirect: 'follow' };
-    var mainPromise = fetch(url, fetchOpts);
-    var pronPromise = fetch(pronUrl, fetchOpts);
+    var mainPromise = _fetchConReintentos(url, fetchOpts, 3);
+    var pronPromise = _fetchConReintentos(pronUrl, fetchOpts, 3);
     var response = await mainPromise;
     // GAS a veces retorna 404 en el primer intento por redirección — reintentar
     if (response.status === 404) {
       console.warn('[API] 404 en primer intento — reintentando en 1.2s...');
       if (_sm) _sm.textContent = 'Reconectando con GAS...';
       await new Promise(function(r){ setTimeout(r, 1200); });
-      mainPromise = fetch(url + (forceRefresh ? '' : '&_r=1'), fetchOpts);
-      pronPromise = fetch(pronUrl + '&_r=1', fetchOpts);
+      mainPromise = _fetchConReintentos(url + (forceRefresh ? '' : '&_r=1'), fetchOpts, 3);
+      pronPromise = _fetchConReintentos(pronUrl + '&_r=1', fetchOpts, 3);
       response = await mainPromise;
     }
     if (!response.ok) throw new Error('HTTP ' + response.status + ' — verifica que el GAS est\u00e9 publicado como \u201cAnyone\u201d');
@@ -3716,7 +3733,9 @@ async function fetchData(forceRefresh) {
           ? '• Ve a <b>Apps Script</b> → Implementar → Nueva implementación<br>'
           + '• Tipo: <b>Aplicación web</b> → Acceso: <b>Cualquier usuario</b><br>'
           + '• Copia la nueva URL al CONFIG del index.html'
-          : (error.message || 'Sin conexión con Google Sheets'))
+          : ((error.message && error.message.indexOf('fetch') >= 0)
+              ? 'No se pudo conectar a internet después de varios intentos. Revisa tu conexión (wifi/datos móviles) y vuelve a intentar.'
+              : (error.message || 'Sin conexión con Google Sheets')))
         + '</div>'
         + '<button class="btn-retry" onclick="location.reload()" style="margin-top:12px">↻ Reintentar</button>'
         + '</div>';
