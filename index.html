@@ -2548,6 +2548,48 @@ const CONFIG = {
   COB_AMB: 15, // < 15 días (es decir 8–14) = Alerta
   COB_YEL: 15  // igual a COB_AMB — colapsa el 4to nivel intermedio que existía antes
 };
+// ⚠️ SEGURIDAD — auditoría confirmó que ninguna de las decenas de
+// funciones de guardado del dashboard principal (handleAddRecord,
+// updateField, batchUpsert, savePronostico, updateFieldFull, etc. en
+// Code.gs) verificaba ningún token — cualquiera con la URL del Apps
+// Script (visible en el código fuente de cualquier navegador) podía
+// mandar un POST directo y modificar/borrar datos en Sheets, sin pasar
+// por el login del dashboard en absoluto.
+//
+// En vez de editar una por una las docenas de funciones que hacen
+// fetch(CONFIG.API_URL, {method:'POST', body: JSON.stringify({...})})
+// repartidas por todo el archivo (riesgo alto de romper alguna por
+// error de tipeo), se intercepta `fetch` UNA SOLA VEZ acá — cualquier
+// POST hacia el backend del dashboard, sin importar desde qué función
+// se dispare, recibe automáticamente el token de la sesión ya
+// autenticada (`window._dashSession.token`, el mismo que ya se genera
+// al hacer login) agregado a su body JSON. Las peticiones GET (que sí
+// arman su URL como CONFIG.API_URL + '?action=...' en ~24 lugares del
+// código) NO se tocan — cero riesgo de romperlas.
+// El backend (Code.gs) exige y valida este token con firma HMAC para
+// las acciones de escritura del dashboard principal.
+(function() {
+  var _origFetch = window.fetch.bind(window);
+  window.fetch = function(url, options) {
+    try {
+      if (typeof url === 'string' && url.indexOf(CONFIG.API_URL) === 0
+          && options && options.method === 'POST' && typeof options.body === 'string') {
+        var tok = (window._dashSession && window._dashSession.token) ? window._dashSession.token : '';
+        if (tok) {
+          var parsed = JSON.parse(options.body);
+          if (!parsed.token) {
+            parsed.token = tok;
+            options = Object.assign({}, options, { body: JSON.stringify(parsed) });
+          }
+        }
+      }
+    } catch (eFetchGuard) {
+      // Si algo falla acá (body no es JSON, etc.), se manda la petición
+      // TAL CUAL — nunca se bloquea una función existente por este guard.
+    }
+    return _origFetch(url, options);
+  };
+})();
 // Lista canónica de las 18 instalaciones oficiales (sin "Pto. Maldonado",
 // excluida en todo el sistema). Constante global para que cualquier
 // función del dashboard pueda usarla sin depender de CONFIG del backend
