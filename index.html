@@ -22594,6 +22594,77 @@ function renderExecMapa(plantaSeleccionada) {
   setTimeout(function(){ if (_execLeafletMap) _execLeafletMap.invalidateSize(); }, 200);
 }
 
+// ── Instalar como app (acceso directo en el celular) ──────────────────
+// Android/Chrome (y navegadores basados en Chromium: Brave, Samsung
+// Internet, Edge) disparan el evento `beforeinstallprompt` cuando la
+// página tiene un manifest válido — se captura acá para poder
+// mostrarlo bajo demanda con un botón propio en vez de esperar a que
+// el usuario encuentre la opción escondida en el menú del navegador.
+// iOS Safari NO dispara este evento (Apple no lo permite) — para ese
+// caso se muestran instrucciones paso a paso en vez de un botón mágico,
+// porque no existe forma de automatizarlo ahí.
+window._execInstallPromptEvent = null;
+window.addEventListener('beforeinstallprompt', function(e) {
+  e.preventDefault();
+  window._execInstallPromptEvent = e;
+  var btn = document.getElementById('exec-install-btn');
+  if (btn) btn.style.display = 'inline-flex';
+});
+window.addEventListener('appinstalled', function() {
+  window._execInstallPromptEvent = null;
+  var btn = document.getElementById('exec-install-btn');
+  if (btn) btn.style.display = 'none';
+});
+function _execEsIOS() {
+  return /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+}
+function _execYaInstalada() {
+  return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+}
+// El botón arranca visible de entrada en iOS (ahí nunca llega el evento
+// beforeinstallprompt, así que hay que ofrecer las instrucciones desde
+// el principio); en el resto de navegadores arranca oculto hasta que
+// el evento confirme que SÍ se puede instalar — así nunca se muestra un
+// botón que no vaya a funcionar.
+function _execInstallBtnVisibleInicial() {
+  if (_execYaInstalada()) return false;
+  return _execEsIOS();
+}
+function execInstallApp() {
+  if (window._execInstallPromptEvent) {
+    window._execInstallPromptEvent.prompt();
+    window._execInstallPromptEvent.userChoice.then(function() {
+      window._execInstallPromptEvent = null;
+      var btn = document.getElementById('exec-install-btn');
+      if (btn) btn.style.display = 'none';
+    });
+    return;
+  }
+  _execMostrarInstruccionesInstalacion();
+}
+function _execMostrarInstruccionesInstalacion() {
+  var esIOS = _execEsIOS();
+  var overlay = document.createElement('div');
+  overlay.id = 'exec-install-instrucciones';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(10,20,35,.6);z-index:999999;display:flex;align-items:center;justify-content:center;padding:20px';
+  overlay.innerHTML =
+    '<div style="background:#fff;border-radius:14px;max-width:360px;width:100%;padding:24px;box-shadow:0 20px 60px rgba(0,0,0,.35)">'
+    + '<div style="font-size:15px;font-weight:800;color:#0a3a5c;margin-bottom:14px">📲 Instalar Panel de Suministro</div>'
+    + (esIOS
+        ? '<div style="font-size:13px;color:#334155;line-height:1.7">'
+          + '1. Toca el ícono <b>Compartir</b> ⬆️ en la barra de Safari<br>'
+          + '2. Desliza y toca <b>"Agregar a pantalla de inicio"</b><br>'
+          + '3. Toca <b>Agregar</b>'
+          + '</div>'
+          + '<div style="font-size:11px;color:#94a3b8;margin-top:12px">Tiene que ser desde Safari — en Chrome de iPhone esta opción no está disponible.</div>'
+        : '<div style="font-size:13px;color:#334155;line-height:1.7">'
+          + 'Busca el menú de tu navegador (⋮ o ≡, normalmente arriba o abajo a la derecha) y toca <b>"Agregar a pantalla de inicio"</b> o <b>"Instalar app"</b>.'
+          + '</div>')
+    + '<button onclick="document.getElementById(\'exec-install-instrucciones\').remove()" style="margin-top:18px;width:100%;background:#0a3a5c;color:#fff;border:none;padding:10px;border-radius:8px;font-weight:700;cursor:pointer">Entendido</button>'
+    + '</div>';
+  document.body.appendChild(overlay);
+}
+
 function initExecutiveMode() {
   if (!EXECUTIVE_MODE) return;
   document.body.classList.add('exec-mode');  // ── Estilos responsivos de la Vista Ejecutiva (banner + contenido) ────
@@ -22706,6 +22777,7 @@ function initExecutiveMode() {
     + '</div>'
     + '<div class="exec-banner-meta">'
     +   '<span class="exec-live-dot"></span><span id="exec-live-text">Conectado</span>'
+    +   ' <button id="exec-install-btn" onclick="execInstallApp()" style="display:' + (_execInstallBtnVisibleInicial() ? 'inline-flex' : 'none') + ';align-items:center;gap:4px;margin-left:8px;background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);color:#fff;font-size:10px;font-weight:700;padding:3px 10px;border-radius:12px;cursor:pointer">📲 Instalar</button>'
     +   ' <button id="exec-refresh-btn" onclick="execRefreshNow()" style="margin-left:8px;background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);color:#fff;font-size:10px;font-weight:700;padding:3px 10px;border-radius:12px;cursor:pointer">🔄 Actualizar</button>'
     +   '<div class="exec-time" id="exec-snapshot-time">—</div>'
     +   '<div class="exec-credit">Desarrollado por <strong>Franco Urcia Castillo</strong></div>'
