@@ -21998,8 +21998,24 @@ function renderVistaEjecutivaSimple() {
   if (pl === 'Nacional') {
     var cards = plantasDisp.map(function(p) {
       var invP = sumFecha(fechaHoy, 'inv', p, prod);
-      if (invP <= 0) return '';
       var esRef = REFINERIAS.indexOf(p) !== -1;
+      // ⚠️ CORREGIDO — bug real confirmado: "Refinería Conchán" (y
+      // potencialmente cualquier otra planta) desaparecía POR COMPLETO
+      // de esta grilla cuando su inventario del producto/fecha elegidos
+      // era 0 o no tenía dato — sin ningún aviso, dando la impresión
+      // de que la planta ni existía. Ahora SIEMPRE se muestra una
+      // tarjeta para cada planta/refinería conocida; si no hay
+      // inventario >0 para el producto actual, se marca explícitamente
+      // como "Sin dato / 0 MB" en vez de ocultarse — así se distingue
+      // entre "la planta no maneja este producto hoy" (visible, claro)
+      // y "algo falló y no aparece" (que era la confusión real).
+      if (invP <= 0) {
+        return '<div style="text-align:left;padding:12px 14px;border-radius:10px;border:1px dashed var(--bdr);background:var(--card2);opacity:.7">'
+          + '<div style="font-size:11.5px;font-weight:800;color:var(--txt3);margin-bottom:3px">' + (esRef?'🛢️':'🏭') + ' ' + p + '</div>'
+          + '<div style="font-size:15px;font-weight:800;font-family:var(--mono);color:var(--txt3)">0 MB</div>'
+          + '<div style="margin-top:3px"><span style="font-size:8.5px;font-weight:800;color:var(--txt3)" title="Sin inventario reportado para ' + prod + ' en esta fecha">— sin dato</span></div>'
+          + '</div>';
+      }
       var estado = _estadoPlantaHoy(p);
       var estadoBadge = estado === 'cerrado'
         ? '<span style="font-size:8.5px;font-weight:800;color:var(--grn);display:inline-flex;align-items:center;gap:3px" title="Al menos un producto tiene reporte real de hoy">✓ cerrado</span>'
