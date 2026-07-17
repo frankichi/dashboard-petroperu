@@ -18049,9 +18049,16 @@ function exportInvReportPDF() {
   });
   var overlay = document.createElement('div');
   overlay.id = 'inv-export-pdf-overlay';
+  // Misma corrección que el PDF de Vista Ejecutiva: position:fixed con
+  // overflow:auto corta la impresión a 1 sola página — se vuelve
+  // estático y sin recorte SOLO al imprimir.
   overlay.style.cssText = 'position:fixed;inset:0;background:#fff;z-index:999999;overflow:auto;padding:24px';
   overlay.innerHTML =
-    '<style>@media print{.no-print{display:none!important}} table{border-collapse:collapse;width:100%;font-family:-apple-system,sans-serif;font-size:11px}</style>'
+    '<style>@media print{'
+    +   '.no-print{display:none!important}'
+    +   '#inv-export-pdf-overlay{position:static!important;inset:auto!important;overflow:visible!important;height:auto!important;max-height:none!important}'
+    +   'html,body{height:auto!important;overflow:visible!important}'
+    + '} table{border-collapse:collapse;width:100%;font-family:-apple-system,sans-serif;font-size:11px}</style>'
     + '<div class="no-print" style="margin-bottom:14px;display:flex;gap:10px">'
     +   '<button onclick="window.print()" style="background:#0a3a5c;color:#fff;border:none;padding:8px 18px;border-radius:6px;font-weight:700;cursor:pointer">\ud83d\udda8\ufe0f Imprimir / Guardar PDF</button>'
     +   '<button onclick="document.getElementById(\'inv-export-pdf-overlay\').remove()" style="background:#e2e8f0;color:#0f1e3c;border:none;padding:8px 18px;border-radius:6px;font-weight:700;cursor:pointer">Cerrar</button>'
@@ -21812,9 +21819,24 @@ function renderVistaEjecutivaSimple() {
 
     var overlay = document.createElement('div');
     overlay.id = 'exec-export-pdf-overlay';
+    // ⚠️ CORREGIDO — bug real confirmado: "Guardar PDF" solo generaba 1
+    // página aunque el reporte tuviera mucho más contenido. La causa:
+    // este contenedor usa `position:fixed` con scroll interno
+    // (`overflow:auto`) para poder verse en pantalla como una superposición
+    // — pero un elemento `position:fixed` NO participa del flujo normal
+    // del documento, así que al imprimir el navegador solo captura lo
+    // que cabe en la altura de una pantalla/página, cortando el resto.
+    // La regla @media print de abajo lo vuelve `position:static` (fluye
+    // como contenido normal) y `overflow:visible` (sin recorte) SOLO al
+    // imprimir — en pantalla se sigue viendo exactamente igual que antes.
     overlay.style.cssText = 'position:fixed;inset:0;background:#fff;z-index:999999;overflow:auto';
     overlay.innerHTML =
-      '<style>@media print{.no-print{display:none!important}@page{margin:14mm}}'
+      '<style>@media print{'
+      +   '.no-print{display:none!important}'
+      +   '@page{margin:14mm}'
+      +   '#exec-export-pdf-overlay{position:static!important;inset:auto!important;overflow:visible!important;height:auto!important;max-height:none!important}'
+      +   'html,body{height:auto!important;overflow:visible!important}'
+      + '}'
       + 'body{-webkit-print-color-adjust:exact;print-color-adjust:exact}'
       + 'table{border-collapse:collapse;width:100%;font-family:-apple-system,"Segoe UI",sans-serif;font-size:11px}</style>'
       + '<div class="no-print" style="padding:16px 24px;background:#f1f5f9;display:flex;gap:10px;border-bottom:1px solid #e2e8f0">'
