@@ -21450,9 +21450,21 @@ function renderVistaEjecutivaSimple() {
             + (reposEsPendiente ? '<br>D\u00edas equivalentes: +' + d.diasRepos + 'd' : '')
             + (reposLejana ? '<br><span style="color:#93c5fd">\u26a0\ufe0f A\u00fan a ' + diasHastaETA + ' d\u00edas \u2014 no confirmado, no cuenta como inventario todav\u00eda</span>' : ''))
       : '';
-    var pronHTML = '<div style="margin-top:6px;padding-top:6px;border-top:1px solid rgba(255,255,255,.2);color:#93c5fd">Demanda pron\u00f3stico' + (prod!=='Todos'?(' ('+prod+')'):'') + ': ' + (d.pronMB||0).toFixed(2) + ' MB/d\u00eda</div>';
-    var tipEncoded = encodeURIComponent(reposHTML + pronHTML).replace(/'/g, '%27');
-    var tipHandlers = 'onmouseenter="_execShowTip(event,\'' + tipEncoded + '\')" onmousemove="_execPosTip(event)" onmouseleave="_execHideTip()"';
+    var pronHTML = '<div style="color:#93c5fd">Demanda pron\u00f3stico' + (prod!=='Todos'?(' ('+prod+')'):'') + ': ' + (d.pronMB||0).toFixed(2) + ' MB/d\u00eda</div>';
+    // ⚠️ CORREGIDO — bug real confirmado: antes AMBOS segmentos de la
+    // barra (el sólido de inventario Y el rayado de reposición/cabotaje)
+    // compartían el mismo popup combinado (reposición + pronóstico) —
+    // pasar el mouse por CUALQUIER parte de la barra mostraba lo mismo,
+    // incluso sobre el inventario en tierra donde no aplica la
+    // reposición. Ahora cada segmento tiene su PROPIO popup: el sólido
+    // (inventario) solo muestra el pronóstico; el rayado (cabotaje)
+    // solo muestra la info de la reposición — son divs hermanos, no
+    // anidados, así que no hay ambigüedad de qué popup corresponde a
+    // cuál al pasar el mouse.
+    var tipEncodedPron = encodeURIComponent(pronHTML).replace(/'/g, '%27');
+    var tipHandlersPron = 'onmouseenter="_execShowTip(event,\'' + tipEncodedPron + '\')" onmousemove="_execPosTip(event)" onmouseleave="_execHideTip()"';
+    var tipEncoded = encodeURIComponent(reposHTML).replace(/'/g, '%27');
+    var tipHandlers = reposHTML ? ('onmouseenter="_execShowTip(event,\'' + tipEncoded + '\')" onmousemove="_execPosTip(event)" onmouseleave="_execHideTip()"') : '';
     var confirmadaBadge = (d.diasRepos > 0 && !reposEsPendiente)
       ? '<div style="font-size:8.5px;color:var(--verde,#16a34a);font-weight:700" title="Descarga confirmada — ya sumada al inventario">\u2705 recibido</div>'
       : '';
@@ -21461,10 +21473,10 @@ function renderVistaEjecutivaSimple() {
         '<div style="font-size:11.5px;font-weight:700;color:var(--txt);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + d.label + '</div>' +
         '<div style="font-size:9.5px;color:var(--txt3);font-family:var(--mono);margin-top:1px">' + fmtMB(d.invMB) + (d.proyectado ? ' <span style="color:#2563eb;font-style:italic;font-weight:700" title="Estimado: último inventario real menos consumo proyectado por demanda pronóstico — la planta aún no cierra el día">≈ proy.</span>' : '') + '</div>' +
       '</div>' +
-      '<div ' + tipHandlers + ' style="flex:1;background:var(--bg3);border-radius:6px;height:22px;position:relative;overflow:hidden;display:flex;cursor:help">' +
-        '<div style="height:100%;width:' + pctBase + '%;background:' + col + ';border-radius:' + (pctRepos>0 ? (reposLejana?'6px':'6px 0 0 6px') : '6px') + ';transition:width .4s"></div>' +
+      '<div style="flex:1;background:var(--bg3);border-radius:6px;height:22px;position:relative;overflow:hidden;display:flex">' +
+        '<div ' + tipHandlersPron + ' style="height:100%;width:' + pctBase + '%;background:' + col + ';border-radius:' + (pctRepos>0 ? (reposLejana?'6px':'6px 0 0 6px') : '6px') + ';transition:width .4s;cursor:help"></div>' +
         (pctRepos > 0 && reposLejana ? '<div style="width:5px;flex-shrink:0"></div>' : '') +
-        (pctRepos > 0 ? '<div style="height:100%;width:' + pctRepos + '%;background:repeating-linear-gradient(45deg,#2563eb,#2563eb 5px,#3b82f6 5px,#3b82f6 10px);border-radius:' + (reposLejana?'6px':'0 6px 6px 0') + ';transition:width .4s' + (reposLejana?';opacity:.7':'') + '"></div>' : '') +
+        (pctRepos > 0 ? '<div ' + tipHandlers + ' style="height:100%;width:' + pctRepos + '%;background:repeating-linear-gradient(45deg,#2563eb,#2563eb 5px,#3b82f6 5px,#3b82f6 10px);border-radius:' + (reposLejana?'6px':'0 6px 6px 0') + ';transition:width .4s;cursor:help' + (reposLejana?';opacity:.7':'') + '"></div>' : '') +
       '</div>' +
       '<div style="width:70px;flex-shrink:0;text-align:right">' +
         '<div style="font-family:var(--mono);font-weight:800;font-size:13px;color:' + col + '">' + d.dias + 'd</div>' +
