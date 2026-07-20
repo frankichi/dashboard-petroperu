@@ -140,6 +140,23 @@ function fmtFechaLarga(iso) {
   var p = iso.split('-');
   return p[2] + ' ' + meses[parseInt(p[1],10)-1] + '. ' + p[0];
 }
+// ── Domingo/feriado en rojo — misma lista que registro-diario.html
+// (fechas fijas; feriados móviles como Semana Santa no incluidos).
+// Uso puramente visual, para reconocer de un vistazo qué días eran
+// domingo/feriado — no cambia ningún comportamiento del seguimiento.
+var SEG_FERIADOS_PERU = {
+  '01-01': 'Año Nuevo', '05-01': 'Día del Trabajo', '06-29': 'San Pedro y San Pablo',
+  '07-23': 'Día de la Fuerza Aérea', '07-28': 'Fiestas Patrias', '07-29': 'Fiestas Patrias',
+  '08-06': 'Batalla de Junín', '08-30': 'Santa Rosa de Lima', '10-08': 'Combate de Angamos',
+  '11-01': 'Todos los Santos', '12-08': 'Inmaculada Concepción', '12-09': 'Batalla de Ayacucho',
+  '12-25': 'Navidad'
+};
+function segDiaSemana(fechaStr) {
+  var p = fechaStr.split('-').map(Number);
+  return new Date(Date.UTC(p[0], p[1]-1, p[2])).getUTCDay();
+}
+function segEsFeriado(fechaStr) { return SEG_FERIADOS_PERU[fechaStr.slice(5,10)] || null; }
+function segEsDomingoOFeriado(fechaStr) { return segDiaSemana(fechaStr) === 0 || !!segEsFeriado(fechaStr); }
 function plantaLabel(p) {
   return (p||'').replace('Refineria', 'Refinería').replace('Conchan', 'Conchán');
 }
@@ -243,7 +260,7 @@ function pintar(tracking, fecha) {
       '<div class="kpi ok" style="opacity:.85"><div class="kpi-label">🛢️ Refinerías — Registradas</div><div class="kpi-val">' + reportaronRef.length + '</div><div class="kpi-sub">de ' + todasRefinerias.length + ' — carga manual en el panel</div></div>' +
       '<div class="kpi" style="opacity:.85;background:var(--bg)"><div class="kpi-label">🛢️ Refinerías — Sin cargar</div><div class="kpi-val">' + pendientesRef.length + '</div><div class="kpi-sub">no cuentan como "pendiente" del equipo</div></div>' +
     '</div>' : '') +
-    '<div style="font-size:11.5px;color:var(--txt2);margin-bottom:4px;margin-top:8px">📅 Mostrando el seguimiento del <b>' + fmtFechaLarga(fecha) + '</b>' + (esHoy ? ' (hoy)' : '') + '</div>';
+    '<div style="font-size:11.5px;color:var(--txt2);margin-bottom:4px;margin-top:8px">📅 Mostrando el seguimiento del <b' + (segEsDomingoOFeriado(fecha) ? ' style="color:#c8102e"' : '') + '>' + fmtFechaLarga(fecha) + (segEsFeriado(fecha) ? ' 🔴 (' + segEsFeriado(fecha) + ')' : (segDiaSemana(fecha)===0 ? ' 🔴 (domingo)' : '')) + '</b>' + (esHoy ? ' (hoy)' : '') + '</div>';
 
   function renderGrupo(titulo, lista) {
     if (!lista.length) return '';

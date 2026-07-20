@@ -22355,7 +22355,7 @@ function renderVistaEjecutivaSimple() {
         },
         scales: {
           y: { stacked: true, ticks: { callback: function(v){ return v.toLocaleString('es-PE'); } }, grid: { color: 'rgba(148,163,184,.15)' } },
-          x: { stacked: true, grid: { display: false }, ticks: { maxRotation: 0, autoSkipPadding: 8, font: { size: 10.5 } } }
+          x: { stacked: true, grid: { display: false }, ticks: { maxRotation: 0, autoSkipPadding: 8, font: { size: 10.5 }, color: function(ctx){ return _execEsDomingoOFeriado(datesN[ctx.index]) ? '#c8102e' : '#94a3b8'; } } }
         }
       }
     });
@@ -22387,7 +22387,7 @@ function renderVistaEjecutivaSimple() {
         },
         scales: {
           y: { min: 0, ticks: { callback: function(v){ return v.toLocaleString('es-PE'); } }, grid: { color: 'rgba(148,163,184,.15)' } },
-          x: { grid: { display: false }, ticks: { maxRotation: 0, autoSkipPadding: 8, font: { size: 10.5 } } }
+          x: { grid: { display: false }, ticks: { maxRotation: 0, autoSkipPadding: 8, font: { size: 10.5 }, color: function(ctx){ return _execEsDomingoOFeriado(datesN[ctx.index]) ? '#c8102e' : '#94a3b8'; } } }
         }
       }
     });
@@ -22811,6 +22811,24 @@ setTimeout(function() {
   var btn = document.getElementById('exec-install-btn');
   if (btn && btn.style.display === 'none') btn.style.display = 'inline-flex';
 }, 4000);
+// ── Domingo/feriado en rojo en los ejes de las gráficas — mismo
+// criterio que registro-diario.html y seguimiento-diario.html (fechas
+// fijas; feriados móviles como Semana Santa no incluidos). Uso
+// puramente visual, para reconocer de un vistazo qué días eran
+// domingo/feriado en la gráfica de 7/15/30 días.
+var _EXEC_FERIADOS_PERU = {
+  '01-01': 'Año Nuevo', '05-01': 'Día del Trabajo', '06-29': 'San Pedro y San Pablo',
+  '07-23': 'Día de la Fuerza Aérea', '07-28': 'Fiestas Patrias', '07-29': 'Fiestas Patrias',
+  '08-06': 'Batalla de Junín', '08-30': 'Santa Rosa de Lima', '10-08': 'Combate de Angamos',
+  '11-01': 'Todos los Santos', '12-08': 'Inmaculada Concepción', '12-09': 'Batalla de Ayacucho',
+  '12-25': 'Navidad'
+};
+function _execEsDomingoOFeriado(fechaStr) {
+  if (!fechaStr) return false;
+  var p = fechaStr.split('-').map(Number);
+  var diaSemana = new Date(Date.UTC(p[0], p[1]-1, p[2])).getUTCDay();
+  return diaSemana === 0 || !!_EXEC_FERIADOS_PERU[fechaStr.slice(5,10)];
+}
 function _execEsIOS() {
   return /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
 }
