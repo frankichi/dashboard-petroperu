@@ -414,6 +414,11 @@ body.rd-print-mode #rdPrintReport{
     <div id="fechaReporteBanner"></div>
     <div class="status-pill" id="statusPill"></div>
 
+    <div class="card" style="overflow:visible">
+      <div class="card-hd"><span class="ico">🗓️</span><span class="ttl">Calendario de reportes</span></div>
+      <div class="card-bd" id="rdCalendario"></div>
+    </div>
+
     <div class="card">
       <div class="card-hd"><span class="ico">🛢️</span><span class="ttl">Existencias por producto</span></div>
       <div class="card-bd" id="prodRows"></div>
@@ -468,7 +473,7 @@ body.rd-print-mode #rdPrintReport{
     </div>
 
     <!-- Charts row -->
-    <div style="display:grid;grid-template-columns:1fr 1fr 1.1fr;gap:12px;margin-bottom:14px" id="histChartsRow">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px" id="histChartsRow">
       <div class="chart-card">
         <div class="chart-card-title">📈 Existencias por producto</div>
         <div style="position:relative;height:200px"><canvas id="histChartExist"></canvas></div>
@@ -479,14 +484,9 @@ body.rd-print-mode #rdPrintReport{
         <div style="position:relative;height:200px"><canvas id="histChartDemanda"></canvas></div>
         <div class="chart-empty" id="histChartDemandaEmpty" style="display:none">Sin datos de demanda</div>
       </div>
-      <div class="chart-card" style="position:relative;overflow:visible">
-        <div class="chart-card-title">🗓️ Calendario de reportes</div>
-        <div id="rdCalendario"></div>
-      </div>
     </div>
     <style>
     @media(max-width:640px){#histChartsRow{grid-template-columns:1fr}}
-    @media(min-width:641px) and (max-width:1099px){#histChartsRow{grid-template-columns:1fr 1fr}#rdCalendario{grid-column:1/-1}}
     </style>
 
     <div style="display:flex;align-items:center;justify-content:flex-end;gap:8px;margin-bottom:10px;flex-wrap:wrap">
@@ -1639,6 +1639,17 @@ function rdRefreshMiReporte() {
         if (shell2) { var firstCard2 = shell2.querySelector('.card'); if (firstCard2) shell2.insertBefore(avEl, firstCard2); }
       }
     }
+    // ⚠️ Calendario de reportes — ahora vive en ESTE tab (Registro
+    // Diario), no en Histórico. Antes sus datos (_histData) solo se
+    // cargaban al abrir el tab Histórico — acá se disparan apenas se
+    // confirma la planta, para que el calendario ya tenga datos sin
+    // que el usuario tenga que ir a otro lado. Protegido con una
+    // bandera para no repetir la carga cada vez que el formulario se
+    // refresca (ej. después de guardar un reporte).
+    if (!window._rdCalDisparado) {
+      window._rdCalDisparado = true;
+      rdLoadHistorico();
+    }
   }).catch(() => { rdShowLoader(false); rdToast('No se pudo cargar tu reporte', 'error'); });
 }
 
@@ -2235,10 +2246,16 @@ function rdCalMostrarTip(ev, iso) {
   var feriadoNom = rdEsFeriado(iso);
   var html = '<div class="rdcal-tt-fecha">📅 ' + fechaTxt + (feriadoNom ? ' 🔴 ' + feriadoNom : '') + '</div>';
   if (d) {
+    // La hora llega del backend como texto ISO (reporte_estado.HORA) —
+    // se formatea a hora local legible, no se muestra el ISO crudo.
+    var horaTxt = '';
+    if (d.hora) {
+      try { horaTxt = new Date(d.hora).toLocaleTimeString('es-PE', {hour:'2-digit', minute:'2-digit'}); }
+      catch(e) { horaTxt = ''; }
+    }
+    if (d.usuario) html += '<div>👤 <b>' + d.usuario + '</b>' + (horaTxt ? ' · ' + horaTxt : '') + '</div>';
     html += '<div><b>Existencia total:</b> ' + rdFmt(d.existenciaTotal) + ' MB</div>';
     if (d.productos.length) html += '<div><b>Productos:</b> ' + [...new Set(d.productos)].join(', ') + '</div>';
-    if (d.usuario) html += '<div><b>Registró:</b> ' + d.usuario + '</div>';
-    if (d.hora) html += '<div><b>Hora:</b> ' + d.hora + '</div>';
     if (d.comentario) html += '<div style="margin-top:4px;opacity:.85">💬 ' + d.comentario.replace(/</g,'&lt;') + '</div>';
   } else {
     html += '<div style="color:#fca5a5">⚠️ Sin reporte registrado este día</div>';
