@@ -218,15 +218,32 @@ function pintar(tracking, fecha) {
   var equipo = filtrarPorEstado(tracking.filter(function(t){ return !esRefineria(t.planta); }));
   var refinerias = filtrarPorEstado(tracking.filter(function(t){ return esRefineria(t.planta); }));
 
-  var reportaron = tracking.filter(function(t){ return t.estado==='Reportado' || t.estado==='Validado'; });
-  var pendientes = tracking.filter(function(t){ return !(t.estado==='Reportado' || t.estado==='Validado'); });
+  // ⚠️ CORREGIDO — el resumen de arriba (Reportaron/Pendientes) mezclaba
+  // plantas y refinerías en un solo número. Las refinerías NO se
+  // reportan por este flujo (Registro Diario) — se digitan manualmente
+  // en el panel central (index/Coberturas) — así que contarlas como
+  // "pendientes" acá es engañoso: nunca van a completar por esta vía,
+  // e inflan artificialmente el número de pendientes del equipo real de
+  // plantas/terminales. Ahora el resumen muestra dos bloques separados,
+  // igual que ya se hacía más abajo con las tarjetas.
+  var todasPlantas = tracking.filter(function(t){ return !esRefineria(t.planta); });
+  var todasRefinerias = tracking.filter(function(t){ return esRefineria(t.planta); });
+  var reportaronPlantas = todasPlantas.filter(function(t){ return t.estado==='Reportado' || t.estado==='Validado'; });
+  var pendientesPlantas = todasPlantas.filter(function(t){ return !(t.estado==='Reportado' || t.estado==='Validado'); });
+  var reportaronRef = todasRefinerias.filter(function(t){ return t.estado==='Reportado' || t.estado==='Validado'; });
+  var pendientesRef = todasRefinerias.filter(function(t){ return !(t.estado==='Reportado' || t.estado==='Validado'); });
 
   document.getElementById('kpiZone').innerHTML =
     '<div class="kpi-row">' +
-      '<div class="kpi ok"><div class="kpi-label">Reportaron</div><div class="kpi-val">' + reportaron.length + '</div><div class="kpi-sub">de ' + tracking.length + ' instalaciones</div></div>' +
-      '<div class="kpi warn"><div class="kpi-label">Pendientes</div><div class="kpi-val">' + pendientes.length + '</div><div class="kpi-sub">' + (esHoy ? 'aún no reportan hoy' : 'no reportaron ese día') + '</div></div>' +
+      '<div class="kpi ok"><div class="kpi-label">Plantas — Reportaron</div><div class="kpi-val">' + reportaronPlantas.length + '</div><div class="kpi-sub">de ' + todasPlantas.length + ' plantas/terminales</div></div>' +
+      '<div class="kpi warn"><div class="kpi-label">Plantas — Pendientes</div><div class="kpi-val">' + pendientesPlantas.length + '</div><div class="kpi-sub">' + (esHoy ? 'aún no reportan hoy' : 'no reportaron ese día') + '</div></div>' +
     '</div>' +
-    '<div style="font-size:11.5px;color:var(--txt2);margin-bottom:4px">📅 Mostrando el seguimiento del <b>' + fmtFechaLarga(fecha) + '</b>' + (esHoy ? ' (hoy)' : '') + '</div>';
+    (todasRefinerias.length ?
+    '<div class="kpi-row" style="margin-top:6px">' +
+      '<div class="kpi ok" style="opacity:.85"><div class="kpi-label">🛢️ Refinerías — Registradas</div><div class="kpi-val">' + reportaronRef.length + '</div><div class="kpi-sub">de ' + todasRefinerias.length + ' — carga manual en el panel</div></div>' +
+      '<div class="kpi" style="opacity:.85;background:var(--bg)"><div class="kpi-label">🛢️ Refinerías — Sin cargar</div><div class="kpi-val">' + pendientesRef.length + '</div><div class="kpi-sub">no cuentan como "pendiente" del equipo</div></div>' +
+    '</div>' : '') +
+    '<div style="font-size:11.5px;color:var(--txt2);margin-bottom:4px;margin-top:8px">📅 Mostrando el seguimiento del <b>' + fmtFechaLarga(fecha) + '</b>' + (esHoy ? ' (hoy)' : '') + '</div>';
 
   function renderGrupo(titulo, lista) {
     if (!lista.length) return '';
