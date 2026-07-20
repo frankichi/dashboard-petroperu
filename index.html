@@ -22792,6 +22792,18 @@ function renderExecMapa(plantaSeleccionada) {
 window._execInstallPromptEvent = null;
 window.addEventListener('beforeinstallprompt', function(e) {
   e.preventDefault();
+  // ⚠️ CORREGIDO — bug real y crítico confirmado: este evento puede
+  // volver a disparar el navegador en cada carga de página, AUNQUE la
+  // app ya esté instalada (el "deduplicado" interno de Chrome/Android
+  // no es 100% confiable, sobre todo si ya hay más de una instalación
+  // previa confundiendo su propio conteo — exactamente lo que le pasó
+  // al usuario: cada vez que actualizaba la página, este handler
+  // volvía a mostrar el botón sin importar el localStorage guardado en
+  // _execYaInstalada(), y al tocarlo se creaba OTRO acceso directo
+  // duplicado. Ahora se revisa PRIMERO si ya está instalada — si es
+  // así, ni se guarda el evento ni se muestra el botón, sin importar
+  // qué diga el navegador.
+  if (_execYaInstalada()) return;
   window._execInstallPromptEvent = e;
   var btn = document.getElementById('exec-install-btn');
   if (btn) btn.style.display = 'inline-flex';
