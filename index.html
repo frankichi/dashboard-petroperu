@@ -21521,7 +21521,7 @@ function renderVistaEjecutivaSimple() {
         '<span style="font-size:10.5px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.04em">Calcular con:</span>' +
         '<div class="exec-btn-grid" style="display:flex;gap:8px">' + modoBtn('real','📋 Despacho real') + modoBtn('pron','🎯 Pronóstico') + '</div>' +
       '</div>' +
-      '<div style="font-size:11px;color:var(--txt3);margin-bottom:14px">Datos al cierre del <b style="color:var(--txt2)">' + fechaHoy.slice(8,10)+'.'+fechaHoy.slice(5,7)+'.'+fechaHoy.slice(0,4) + '</b></div>' +
+      '<div style="font-size:11px;color:var(--txt3);margin-bottom:14px">Datos al cierre del <b style="color:var(--txt2)">' + _execNombreDia(fechaHoy) + ' ' + fechaHoy.slice(8,10)+'.'+fechaHoy.slice(5,7)+'.'+fechaHoy.slice(0,4) + '</b></div>' +
       (datosCob.length
         ? '<div>' + cobRowsHTML + '</div>' +
           '<div style="display:flex;gap:16px;margin-top:14px;padding-top:12px;border-top:1px solid var(--bdr);font-size:10.5px;color:var(--txt3)">' +
@@ -22152,16 +22152,22 @@ function renderVistaEjecutivaSimple() {
         + '<div style="font-size:9.5px;color:var(--txt3);margin-top:2px">' + (esRef?'Solo inventario →':'Ver detalle →') + '</div>'
         + '</button>';
     }).join('');
-    // Resumen: cuántas plantas faltan por cerrar hoy — responde
-    // directamente "qué planta falta ahí" de un vistazo, sin tener que
-    // revisar tarjeta por tarjeta.
+    // Resumen: cuántas plantas faltan por cerrar en la fecha
+    // seleccionada — responde directamente "qué planta falta ahí" de
+    // un vistazo, sin tener que revisar tarjeta por tarjeta.
     var plantasConDato = plantasDisp.filter(function(p){ return sumFecha(fechaHoy,'inv',p,prod) > 0; });
     var estadosPlantas = plantasConDato.map(function(p){ return _estadoPlantaHoy(p); });
     var nCerradas = estadosPlantas.filter(function(e){ return e==='cerrado'; }).length;
     var nProyectadas = estadosPlantas.filter(function(e){ return e==='proyectado'; }).length;
     var nSinProy = estadosPlantas.filter(function(e){ return e==='arrastre' || e==='sindato'; }).length;
+    // ⚠️ CORREGIDO — decía "cerraron hoy" siempre, aunque el usuario
+    // estuviera viendo una fecha distinta a la de hoy en el selector
+    // de FECHA — ahora muestra la fecha real seleccionada, en formato
+    // largo y legible.
+    var _EXEC_MESES_LARGO = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+    var fechaLargaResumen = parseInt(fechaHoy.slice(8,10),10) + ' de ' + _EXEC_MESES_LARGO[parseInt(fechaHoy.slice(5,7),10)-1] + ' del ' + fechaHoy.slice(0,4);
     var resumenCierreHTML = '<div style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:12px;font-size:11px;font-weight:700">'
-      + '<span style="color:var(--grn)">✓ ' + nCerradas + ' cerraron hoy</span>'
+      + '<span style="color:var(--grn)">✓ ' + nCerradas + ' cerraron el ' + fechaLargaResumen + '</span>'
       + (nProyectadas > 0 ? '<span style="color:#2563eb">≈ ' + nProyectadas + ' proyectadas (a\u00fan no cierran)</span>' : '')
       + (nSinProy > 0 ? '<span style="color:var(--ora)">\u26a0 ' + nSinProy + ' sin cierre ni proyecci\u00f3n</span>' : '')
       + '</div>';
@@ -22207,7 +22213,7 @@ function renderVistaEjecutivaSimple() {
           // SUMINISTRO" en la cabecera — informa igual, sin costar
           // espacio extra.
           '<div class="exec-aviso-cierre" style="font-size:11px;color:var(--txt3);font-weight:700;margin-top:2px">' +
-            '📅 Datos al cierre del <span style="font-family:var(--mono);color:var(--txt2)">' + fechaHoy.slice(8,10) + '.' + fechaHoy.slice(5,7) + '.' + fechaHoy.slice(0,4) + '</span>' +
+            '📅 Datos al cierre del <span style="font-family:var(--mono);color:var(--txt2)">' + _execNombreDia(fechaHoy) + ' ' + fechaHoy.slice(8,10) + '.' + fechaHoy.slice(5,7) + '.' + fechaHoy.slice(0,4) + '</span>' +
           '</div>' +
         '</div>' +
         '<div class="exec-select-row" style="display:flex;gap:10px;flex-wrap:wrap">' + plantaSelector + productoSelector + '</div>' +
@@ -22265,7 +22271,7 @@ function renderVistaEjecutivaSimple() {
       '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:12px">' +
         '<div>' +
           '<div style="font-size:13px;font-weight:800;color:var(--txt)">🗺️ Mapa Nacional — Cobertura por Instalación</div>' +
-          '<div id="exec-mapa-fecha-titulo" style="font-size:11px;color:var(--txt3);margin-top:2px">Datos al cierre del ' + (window._execMapaFecha || fechaHoy).slice(8,10)+'.'+(window._execMapaFecha || fechaHoy).slice(5,7)+'.'+(window._execMapaFecha || fechaHoy).slice(0,4) + '</div>' +
+          '<div id="exec-mapa-fecha-titulo" style="font-size:11px;color:var(--txt3);margin-top:2px">Datos al cierre del ' + _execNombreDia(window._execMapaFecha || fechaHoy) + ' ' + (window._execMapaFecha || fechaHoy).slice(8,10)+'.'+(window._execMapaFecha || fechaHoy).slice(5,7)+'.'+(window._execMapaFecha || fechaHoy).slice(0,4) + '</div>' +
         '</div>' +
         '<div style="display:flex;align-items:center;gap:8px">' +
           '<label style="font-size:10.5px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.4px">📅 Ver fecha</label>' +
@@ -22373,7 +22379,10 @@ function renderVistaEjecutivaSimple() {
           legend: { display: hayRepos, position: 'top', align: 'end', labels: { boxWidth: 14, font: { size: 10.5 } } },
           tooltip: {
             backgroundColor: '#0a3a5c', padding: 10, cornerRadius: 8, titleFont: {weight:'700'},
-            callbacks: { label: function(c){ return (c.dataset.label||'') + ': ' + fmtMB(c.parsed.y); } }
+            callbacks: {
+              title: function(ctx){ var f = datesN[ctx[0].dataIndex]; return f ? (_execNombreDiaCorto(f) + '. ' + mesCorto(f)) : ''; },
+              label: function(c){ return (c.dataset.label||'') + ': ' + fmtMB(c.parsed.y); }
+            }
           }
         },
         scales: {
@@ -22405,7 +22414,10 @@ function renderVistaEjecutivaSimple() {
           legend: { display: false },
           tooltip: {
             backgroundColor: '#ea580c', padding: 10, cornerRadius: 8, titleFont: {weight:'700'},
-            callbacks: { label: function(c){ return fmtMB(c.parsed.y); } }
+            callbacks: {
+              title: function(ctx){ var f = datesN[ctx[0].dataIndex]; return f ? (_execNombreDiaCorto(f) + '. ' + mesCorto(f)) : ''; },
+              label: function(c){ return fmtMB(c.parsed.y); }
+            }
           }
         },
         scales: {
@@ -22673,7 +22685,7 @@ function renderExecMapa(plantaSeleccionada) {
   window._execMapaFecha = fechaMapa;
   var tituloFechaEl = document.getElementById('exec-mapa-fecha-titulo');
   if (tituloFechaEl && fechaMapa) {
-    tituloFechaEl.textContent = 'Datos al cierre del ' + fechaMapa.slice(8,10)+'.'+fechaMapa.slice(5,7)+'.'+fechaMapa.slice(0,4);
+    tituloFechaEl.textContent = 'Datos al cierre del ' + _execNombreDia(fechaMapa) + ' ' + fechaMapa.slice(8,10)+'.'+fechaMapa.slice(5,7)+'.'+fechaMapa.slice(0,4);
   }
   var inputFechaEl = document.getElementById('exec-mapa-fecha-input');
   if (inputFechaEl && !inputFechaEl.value) inputFechaEl.value = fechaMapa;
@@ -22930,6 +22942,20 @@ function _execEsDomingoOFeriado(fechaStr) {
   var p = fechaStr.split('-').map(Number);
   var diaSemana = new Date(Date.UTC(p[0], p[1]-1, p[2])).getUTCDay();
   return diaSemana === 0 || !!_execEsFeriado(fechaStr);
+}
+var _EXEC_DIAS_SEMANA = ['domingo','lunes','martes','miércoles','jueves','viernes','sábado'];
+var _EXEC_DIAS_SEMANA_CORTO = ['dom','lun','mar','mié','jue','vie','sáb'];
+function _execNombreDia(fechaStr) {
+  if (!fechaStr) return '';
+  var p = fechaStr.split('-').map(Number);
+  var diaSemana = new Date(Date.UTC(p[0], p[1]-1, p[2])).getUTCDay();
+  return _EXEC_DIAS_SEMANA[diaSemana];
+}
+function _execNombreDiaCorto(fechaStr) {
+  if (!fechaStr) return '';
+  var p = fechaStr.split('-').map(Number);
+  var diaSemana = new Date(Date.UTC(p[0], p[1]-1, p[2])).getUTCDay();
+  return _EXEC_DIAS_SEMANA_CORTO[diaSemana];
 }
 function _execEsIOS() {
   return /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
