@@ -279,6 +279,42 @@ body.rd-print-mode #rdPrintReport{
   body.rd-print-mode *{ -webkit-print-color-adjust:exact; print-color-adjust:exact; }
   @page{ margin:14mm 12mm; }
 }
+/* ── Calendario de reportes (Histórico) ──────────────────────────── */
+.rdcal { width:100%; }
+.rdcal-hdr { display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; }
+.rdcal-hdr .rdcal-nav { background:none; border:none; font-size:16px; cursor:pointer; color:var(--txt2); padding:2px 8px; border-radius:6px; }
+.rdcal-hdr .rdcal-nav:hover { background:var(--bg); }
+.rdcal-hdr .rdcal-mes { font-size:12.5px; font-weight:800; color:var(--txt); text-transform:uppercase; letter-spacing:.04em; }
+.rdcal-grid { display:grid; grid-template-columns:repeat(7,1fr); gap:3px; }
+.rdcal-dow { font-size:9px; font-weight:800; text-align:center; color:var(--txt3); text-transform:uppercase; padding-bottom:3px; }
+.rdcal-dow.finde { color:#c8102e; }
+.rdcal-day {
+  position:relative; aspect-ratio:1; display:flex; align-items:center; justify-content:center;
+  font-size:11px; font-weight:700; border-radius:7px; cursor:default; color:var(--txt2);
+  background:var(--bg); transition:transform .1s;
+}
+.rdcal-day.otro-mes { opacity:.32; }
+.rdcal-day.finde:not(.tiene-dato) { color:#c8102e; }
+.rdcal-day.tiene-dato { background:#dcfce7; color:#166534; cursor:pointer; }
+.rdcal-day.tiene-dato:hover { transform:scale(1.12); z-index:5; box-shadow:0 2px 8px rgba(0,0,0,.15); }
+.rdcal-day.sin-dato:not(.otro-mes):not(.futuro) { background:#fee2e2; color:#991b1b; cursor:pointer; }
+.rdcal-day.sin-dato:not(.otro-mes):not(.futuro):hover { transform:scale(1.12); z-index:5; box-shadow:0 2px 8px rgba(0,0,0,.15); }
+.rdcal-day.futuro { color:var(--txt3); }
+.rdcal-day.hoy { box-shadow:0 0 0 2px #dc2626 inset; font-weight:900; }
+.rdcal-day .rdcal-dot { position:absolute; bottom:2px; width:3px; height:3px; border-radius:50%; background:currentColor; }
+.rdcal-leyenda { display:flex; gap:10px; flex-wrap:wrap; margin-top:8px; font-size:9px; color:var(--txt3); }
+.rdcal-leyenda span { display:flex; align-items:center; gap:3px; }
+.rdcal-leyenda i { width:8px; height:8px; border-radius:2px; display:inline-block; }
+.rdcal-tooltip {
+  position:fixed; z-index:99999; background:#0f1e3c; color:#fff; border-radius:10px; padding:10px 13px;
+  font-size:11px; line-height:1.6; box-shadow:0 10px 30px rgba(0,0,0,.3); max-width:230px; pointer-events:none;
+}
+.rdcal-tooltip b { color:#93c5fd; }
+.rdcal-tooltip .rdcal-tt-fecha { font-weight:800; font-size:11.5px; margin-bottom:4px; color:#fff; }
+@media(max-width:640px){
+  .rdcal-day{ font-size:10px; }
+  .rdcal-tooltip{ max-width:200px; font-size:10.5px; }
+}
 </style>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
 </head>
@@ -419,9 +455,9 @@ body.rd-print-mode #rdPrintReport{
     <div class="rd-filter-bar">
       <label>Periodo</label>
       <select class="rd-select" id="histPeriodo" onchange="rdLoadHistorico()">
-        <option value="7">Últimos 7 días</option>
+        <option value="7" selected>Últimos 7 días</option>
         <option value="15">Últimos 15 días</option>
-        <option value="30" selected>Últimos 30 días</option>
+        <option value="30">Últimos 30 días</option>
         <option value="60">Últimos 60 días</option>
         <option value="90">Últimos 90 días</option>
       </select>
@@ -432,7 +468,7 @@ body.rd-print-mode #rdPrintReport{
     </div>
 
     <!-- Charts row -->
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px" id="histChartsRow">
+    <div style="display:grid;grid-template-columns:1fr 1fr 1.1fr;gap:12px;margin-bottom:14px" id="histChartsRow">
       <div class="chart-card">
         <div class="chart-card-title">📈 Existencias por producto</div>
         <div style="position:relative;height:200px"><canvas id="histChartExist"></canvas></div>
@@ -443,9 +479,14 @@ body.rd-print-mode #rdPrintReport{
         <div style="position:relative;height:200px"><canvas id="histChartDemanda"></canvas></div>
         <div class="chart-empty" id="histChartDemandaEmpty" style="display:none">Sin datos de demanda</div>
       </div>
+      <div class="chart-card" style="position:relative;overflow:visible">
+        <div class="chart-card-title">🗓️ Calendario de reportes</div>
+        <div id="rdCalendario"></div>
+      </div>
     </div>
     <style>
     @media(max-width:640px){#histChartsRow{grid-template-columns:1fr}}
+    @media(min-width:641px) and (max-width:1099px){#histChartsRow{grid-template-columns:1fr 1fr}#rdCalendario{grid-column:1/-1}}
     </style>
 
     <div style="display:flex;align-items:center;justify-content:flex-end;gap:8px;margin-bottom:10px;flex-wrap:wrap">
@@ -551,6 +592,27 @@ function rdDiaSemana(fechaStr) {
   return new Date(Date.UTC(p[0], p[1] - 1, p[2])).getUTCDay();
 }
 var RD_DIAS_SEMANA = ['domingo','lunes','martes','miércoles','jueves','viernes','sábado'];
+// ── Feriados nacionales de Perú (fechas FIJAS por año — feriados
+// móviles como Jueves/Viernes Santo, que dependen del cálculo de
+// Semana Santa, no están incluidos acá; se pueden agregar a mano si
+// hace falta). Uso PURAMENTE VISUAL — para que el usuario reconozca de
+// un vistazo qué días eran domingo/feriado al revisar el histórico, NO
+// para bloquear ni saltar ningún día (algunas plantas sí reportan
+// domingos y feriados).
+var RD_FERIADOS_PERU = {
+  '01-01': 'Año Nuevo', '05-01': 'Día del Trabajo', '06-29': 'San Pedro y San Pablo',
+  '07-23': 'Día de la Fuerza Aérea', '07-28': 'Fiestas Patrias', '07-29': 'Fiestas Patrias',
+  '08-06': 'Batalla de Junín', '08-30': 'Santa Rosa de Lima', '10-08': 'Combate de Angamos',
+  '11-01': 'Todos los Santos', '12-08': 'Inmaculada Concepción', '12-09': 'Batalla de Ayacucho',
+  '12-25': 'Navidad'
+};
+function rdEsFeriado(fechaStr) {
+  var mmdd = fechaStr.slice(5, 10);
+  return RD_FERIADOS_PERU[mmdd] || null;
+}
+function rdEsDomingoOFeriado(fechaStr) {
+  return rdDiaSemana(fechaStr) === 0 || !!rdEsFeriado(fechaStr);
+}
 // ⚠️ NO se asume que domingo es día no-operativo — algunas plantas SÍ
 // atienden y reportan domingo. Por eso, cuando corresponde, el selector
 // ofrece domingo como opción real (no se salta).
@@ -671,8 +733,15 @@ function rdRenderFechaBanner() {
   var opciones = rdOpcionesFechaReporte(rdNumDiasSelector());
   var selectHTML = '<select class="fecha-banner-select" onchange="rdCambiarFechaReporte(this.value)">' +
     opciones.map(function(o) {
-      var etiqueta = o.esHoy ? ('Hoy · ' + fmtFecha(o.fecha) + ' (' + o.dia + ')')
-                              : (fmtFecha(o.fecha) + ' (' + o.dia + ')');
+      // ⚠️ Los <option> nativos no soportan colorear el texto de forma
+      // confiable en todos los navegadores (y casi nunca en celular,
+      // donde el picker es del sistema operativo, no del navegador) —
+      // por eso se marca domingo/feriado con un punto rojo como prefijo
+      // en vez de CSS, que sí se ve garantizado en cualquier lado.
+      var marcaFeriado = rdEsDomingoOFeriado(o.fecha) ? '🔴 ' : '';
+      var nombreFeriado = rdEsFeriado(o.fecha);
+      var etiqueta = marcaFeriado + (o.esHoy ? ('Hoy · ' + fmtFecha(o.fecha) + ' (' + o.dia + (nombreFeriado ? ' — ' + nombreFeriado : '') + ')')
+                              : (fmtFecha(o.fecha) + ' (' + o.dia + (nombreFeriado ? ' — ' + nombreFeriado : '') + ')'));
       return '<option value="' + o.fecha + '"' + (o.fecha === fechaSel ? ' selected' : '') + '>' + etiqueta + '</option>';
     }).join('') +
     '</select>';
@@ -1780,7 +1849,7 @@ window._histLoaded = false;
 
 function rdLoadHistorico() {
   if (!RD.token || !RD.planta) return;
-  var dias = document.getElementById('histPeriodo') ? parseInt(document.getElementById('histPeriodo').value) : 30;
+  var dias = document.getElementById('histPeriodo') ? parseInt(document.getElementById('histPeriodo').value) : 7;
   var sub = document.getElementById('histSub');
   if (sub) sub.textContent = 'Planta: ' + plantaLabel(RD.planta) + ' \u00b7 \u00daltimos ' + dias + ' d\u00edas';
   var content = document.getElementById('histContent');
@@ -1897,6 +1966,7 @@ function rdLoadHistorico() {
           prods.map(function(p){ return '<option value="' + p + '">' + p + '</option>'; }).join('');
       }
       rdRenderHistoricoTable();
+      rdRenderCalendario();
     })
     .catch(function(e) {
       console.error('[HIST]', e);
@@ -2056,6 +2126,152 @@ function rdRenderCabCell(viajes) {
 }
 
 
+// ════════════════════════════════════════════════════════════════════
+// CALENDARIO DE REPORTES — vista mensual con los días coloreados según
+// si hubo reporte o no, círculo en el día de hoy, y un popup al pasar
+// el mouse (o tocar, en celular) con el detalle del cierre de ese día.
+// ════════════════════════════════════════════════════════════════════
+var _rdCalFecha = new Date(); // mes que se está mostrando (día 1 de ese mes)
+_rdCalFecha.setDate(1);
+
+function rdCalCambiarMes(delta) {
+  _rdCalFecha.setMonth(_rdCalFecha.getMonth() + delta);
+  rdRenderCalendario();
+}
+
+// Agrupa _histData por fecha — total de existencia, lista de productos
+// reportados, comentario de planta, y (si el backend ya los trae en el
+// histórico) usuario/hora del reporte. Si esos dos últimos campos no
+// vienen todavía en la respuesta de rdGetHistoricoInventario, el popup
+// simplemente los omite en vez de mostrar algo incorrecto.
+function rdCalAgruparPorDia() {
+  var porDia = {};
+  (_histData || []).forEach(function(r) {
+    if (!r.fecha) return;
+    if (!porDia[r.fecha]) porDia[r.fecha] = { existenciaTotal: 0, productos: [], comentario: '', usuario: '', hora: '' };
+    var d = porDia[r.fecha];
+    d.existenciaTotal += parseFloat(r.existencia || r.inv_mb || r.inventario || 0) || 0;
+    if (r.producto) d.productos.push(r.producto);
+    if (r.comentario_planta && !d.comentario) d.comentario = r.comentario_planta;
+    // Campos opcionales — se muestran si el backend los trae, si no se omiten
+    if (r.usuario && !d.usuario) d.usuario = r.usuario;
+    if (r.hora && !d.hora) d.hora = r.hora;
+  });
+  return porDia;
+}
+
+function rdRenderCalendario() {
+  var cont = document.getElementById('rdCalendario');
+  if (!cont) return;
+  var porDia = rdCalAgruparPorDia();
+  var hoy = rdHoyLima();
+  // Rango realmente cargado por el período elegido arriba (7/15/30/60/90
+  // días) — fuera de este rango no sabemos si hubo reporte o no, así
+  // que esos días se muestran neutros ("no cargado"), NUNCA en rojo
+  // como si fueran "sin dato" — sería engañoso.
+  var dias = document.getElementById('histPeriodo') ? parseInt(document.getElementById('histPeriodo').value) : 7;
+  var fechaCorte = new Date(hoy + 'T12:00:00');
+  fechaCorte.setDate(fechaCorte.getDate() - dias + 1);
+  var minCargado = fechaCorte.toISOString().slice(0, 10);
+
+  var anio = _rdCalFecha.getFullYear(), mes = _rdCalFecha.getMonth();
+  var primerDiaMes = new Date(anio, mes, 1);
+  var ultimoDiaMes = new Date(anio, mes + 1, 0);
+  // Lunes=0 ... Domingo=6 (para que la grilla empiece en lunes, como el
+  // calendario nativo que compartiste)
+  var offsetInicio = (primerDiaMes.getDay() + 6) % 7;
+  var totalCeldas = Math.ceil((offsetInicio + ultimoDiaMes.getDate()) / 7) * 7;
+
+  var MESES = ['ENERO','FEBRERO','MARZO','ABRIL','MAYO','JUNIO','JULIO','AGOSTO','SEPTIEMBRE','OCTUBRE','NOVIEMBRE','DICIEMBRE'];
+  var DOW = ['LUN','MAR','MIÉ','JUE','VIE','SÁB','DOM'];
+
+  var celdas = '';
+  for (var i = 0; i < totalCeldas; i++) {
+    var diaNum = i - offsetInicio + 1;
+    var fechaCelda = new Date(anio, mes, diaNum);
+    var iso = fechaCelda.getFullYear() + '-' + String(fechaCelda.getMonth()+1).padStart(2,'0') + '-' + String(fechaCelda.getDate()).padStart(2,'0');
+    var otroMes = diaNum < 1 || diaNum > ultimoDiaMes.getDate();
+    var esHoy = iso === hoy;
+    var esFuturo = iso > hoy;
+    var finde = rdEsDomingoOFeriado(iso);
+    var tieneDato = !!porDia[iso];
+    var cargado = iso >= minCargado && iso <= hoy;
+    var clases = ['rdcal-day'];
+    if (otroMes) clases.push('otro-mes');
+    if (esHoy) clases.push('hoy');
+    if (esFuturo) clases.push('futuro');
+    if (finde) clases.push('finde');
+    if (tieneDato) clases.push('tiene-dato');
+    else if (cargado && !otroMes && !esFuturo) clases.push('sin-dato');
+    var attrs = (!otroMes && (tieneDato || (cargado && !esFuturo)))
+      ? ' onmouseenter="rdCalMostrarTip(event,\'' + iso + '\')" onmousemove="rdCalMoverTip(event)" onmouseleave="rdCalOcultarTip()" onclick="rdCalMostrarTip(event,\'' + iso + '\')"'
+      : '';
+    celdas += '<div class="' + clases.join(' ') + '"' + attrs + '>' + fechaCelda.getDate() + '</div>';
+  }
+
+  cont.innerHTML =
+    '<div class="rdcal">' +
+      '<div class="rdcal-hdr">' +
+        '<button class="rdcal-nav" onclick="rdCalCambiarMes(-1)">‹</button>' +
+        '<span class="rdcal-mes">' + MESES[mes] + ' ' + anio + '</span>' +
+        '<button class="rdcal-nav" onclick="rdCalCambiarMes(1)">›</button>' +
+      '</div>' +
+      '<div class="rdcal-grid">' +
+        DOW.map(function(d,i){ return '<div class="rdcal-dow' + (i>=5?' finde':'') + '">' + d + '</div>'; }).join('') +
+        celdas +
+      '</div>' +
+      '<div class="rdcal-leyenda">' +
+        '<span><i style="background:#dcfce7"></i>Reportado</span>' +
+        '<span><i style="background:#fee2e2"></i>Sin reportar</span>' +
+        '<span><i style="background:var(--bg);box-shadow:0 0 0 2px #dc2626 inset"></i>Hoy</span>' +
+      '</div>' +
+    '</div>';
+}
+
+function rdCalMostrarTip(ev, iso) {
+  var porDia = rdCalAgruparPorDia();
+  var d = porDia[iso];
+  var fechaTxt = fmtFecha(iso) + ' (' + RD_DIAS_SEMANA[rdDiaSemana(iso)] + ')';
+  var feriadoNom = rdEsFeriado(iso);
+  var html = '<div class="rdcal-tt-fecha">📅 ' + fechaTxt + (feriadoNom ? ' 🔴 ' + feriadoNom : '') + '</div>';
+  if (d) {
+    html += '<div><b>Existencia total:</b> ' + rdFmt(d.existenciaTotal) + ' MB</div>';
+    if (d.productos.length) html += '<div><b>Productos:</b> ' + [...new Set(d.productos)].join(', ') + '</div>';
+    if (d.usuario) html += '<div><b>Registró:</b> ' + d.usuario + '</div>';
+    if (d.hora) html += '<div><b>Hora:</b> ' + d.hora + '</div>';
+    if (d.comentario) html += '<div style="margin-top:4px;opacity:.85">💬 ' + d.comentario.replace(/</g,'&lt;') + '</div>';
+  } else {
+    html += '<div style="color:#fca5a5">⚠️ Sin reporte registrado este día</div>';
+  }
+  var tip = document.getElementById('rdcalTooltip');
+  if (!tip) {
+    tip = document.createElement('div');
+    tip.id = 'rdcalTooltip';
+    tip.className = 'rdcal-tooltip';
+    document.body.appendChild(tip);
+  }
+  tip.innerHTML = html;
+  tip.style.display = 'block';
+  rdCalMoverTip(ev);
+}
+function rdCalMoverTip(ev) {
+  var tip = document.getElementById('rdcalTooltip');
+  if (!tip) return;
+  var x = ev.clientX + 14, y = ev.clientY + 14;
+  var maxX = window.innerWidth - tip.offsetWidth - 10;
+  var maxY = window.innerHeight - tip.offsetHeight - 10;
+  tip.style.left = Math.min(x, maxX) + 'px';
+  tip.style.top = Math.min(y, maxY) + 'px';
+}
+function rdCalOcultarTip() {
+  var tip = document.getElementById('rdcalTooltip');
+  if (tip) tip.style.display = 'none';
+}
+// En celular no hay "hover" — un toque fuera del calendario cierra el popup
+document.addEventListener('click', function(ev) {
+  if (!ev.target.closest('.rdcal-day') && !ev.target.closest('#rdcalTooltip')) rdCalOcultarTip();
+});
+
 function rdRenderHistoricoTable() {
   var filtProd = document.getElementById('histProd') ? document.getElementById('histProd').value : '';
   var oficProd = (RD.productos || []);
@@ -2208,7 +2424,7 @@ function rdRenderHistoricoTable() {
       if (!general) return;
       _generalYaImpreso = true;
       html += '<tr class="hist-row-general">'
-        + '<td class="hist-date">' + fmtFecha(fecha) + '</td>'
+        + '<td class="hist-date"' + (rdEsDomingoOFeriado(fecha) ? ' style="color:#c8102e;font-weight:800"' : '') + '>' + fmtFecha(fecha) + (rdEsFeriado(fecha) ? ' 🔴' : '') + '</td>'
         + '<td colspan="8" style="font-size:10px;background:#f5f3ff;border-left:3px solid #7c3aed">'
         + '<span style="font-weight:700;color:#7c3aed;font-size:9px;text-transform:uppercase;letter-spacing:.3px">🏭 General de planta:</span> '
         + '<span style="color:var(--txt2)">' + general.replace(/</g,'&lt;') + '</span></td>'
@@ -2239,7 +2455,7 @@ function rdRenderHistoricoTable() {
       var cobColor = !isNaN(cobNum) ? (cobNum <= 7 ? '#c8102e' : cobNum <= 14 ? '#a86a00' : '#1a7a44') : 'inherit';
       var cobStr = !isNaN(cobNum) ? Math.round(cobNum) + 'd' : String(cob);
       html += '<tr>'
-        + '<td class="hist-date">' + (i === 0 && !_generalYaImpreso ? fmtFecha(fecha) : '') + '</td>'
+        + '<td class="hist-date"' + (i === 0 && !_generalYaImpreso && rdEsDomingoOFeriado(fecha) ? ' style="color:#c8102e;font-weight:800"' : '') + '>' + (i === 0 && !_generalYaImpreso ? fmtFecha(fecha) + (rdEsFeriado(fecha) ? ' 🔴' : '') : '') + '</td>'
         + '<td style="font-weight:700;color:var(--navy)">' + (r.producto || '—') + '</td>'
         + '<td class="hist-num">' + rdFmt(exist) + '</td>'
         + '<td class="hist-num" style="color:#0891b2;font-weight:700">' + (r.vreal>0 ? rdFmt(r.vreal) : '—') + '</td>'
