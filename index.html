@@ -22256,7 +22256,7 @@ function renderVistaEjecutivaSimple() {
       (invHoyTieneProyeccion || invHoyTieneProyeccionConsumo || (despPromedioPeriodo !== null && !esRefineriaExec) ?
       '<div class="exec-kpi-notas" style="margin-top:6px;display:flex;flex-direction:column;gap:2px">' +
         (invHoyTieneProyeccion ? '<div style="font-size:9.5px;color:#2563eb;font-weight:700">🚢 Incluye reposición proyectada (buque ya descargó, planta aún no reporta cierre)</div>' : '') +
-        (invHoyTieneProyeccionConsumo ? '<div style="font-size:9.5px;color:#2563eb;font-weight:700">≈ Incluye inventario proyectado por consumo (plantas que aún no cierran hoy)</div>' : '') +
+        (invHoyTieneProyeccionConsumo ? '<div style="font-size:9.5px;color:#2563eb;font-weight:700">≈ Incluye inventario proyectado por consumo (plantas que aún no cierran inventario)</div>' : '') +
         (despPromedioPeriodo !== null && !esRefineriaExec ? '<div style="font-size:9.5px;color:var(--txt3);font-weight:600">⌀ Promedio de despacho calculado sobre ' + periodoLabelTxt + '</div>' : '') +
       '</div>' : '') +
     '</div>' +
@@ -22809,10 +22809,23 @@ window.addEventListener('beforeinstallprompt', function(e) {
   // al usuario: cada vez que actualizaba la página, este handler
   // volvía a mostrar el botón sin importar el localStorage guardado en
   // _execYaInstalada(), y al tocarlo se creaba OTRO acceso directo
-  // duplicado. Ahora se revisa PRIMERO si ya está instalada — si es
-  // así, ni se guarda el evento ni se muestra el botón, sin importar
-  // qué diga el navegador.
-  if (_execYaInstalada()) return;
+  // duplicado.
+  //
+  // ⚠️ CORREGIDO (segunda vuelta) — el fix anterior se pasó de listo:
+  // usaba _execYaInstalada() acá, que incluye el localStorage
+  // PERMANENTE — pero ese localStorage nunca se borra solo, así que si
+  // el usuario desinstalaba el acceso directo, el botón NUNCA volvía a
+  // aparecer (localStorage seguía diciendo "instalado" para siempre).
+  // El evento beforeinstallprompt en sí mismo YA es la señal correcta
+  // y en vivo: el navegador solo lo dispara cuando SABE que la app no
+  // está instalada ahora mismo — es más confiable que nuestro propio
+  // localStorage, que puede quedar desactualizado. Ahora solo se
+  // revisa si ESTA pestaña ya está corriendo en modo standalone
+  // (imposible que eso pase a la vez que este evento se dispara, pero
+  // se deja como salvaguarda), confiando en el navegador para todo lo
+  // demás — así si el usuario desinstala, el botón vuelve a aparecer
+  // solo, sin quedar atascado por un localStorage viejo.
+  if (window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true) return;
   window._execInstallPromptEvent = e;
   var btn = document.getElementById('exec-install-btn');
   if (btn) btn.style.display = 'inline-flex';
