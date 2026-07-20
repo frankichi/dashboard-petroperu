@@ -70,8 +70,19 @@ self.addEventListener('fetch', function(event) {
     // RED PRIMERO — nunca sirvas una copia vieja del HTML si hay
     // internet disponible. El caché es solo un respaldo para cuando
     // no hay conexión.
+    //
+    // ⚠️ CORREGIDO (segunda vuelta) — "red primero" no bastaba por sí
+    // solo: fetch() por defecto SIGUE respetando la caché HTTP normal
+    // del navegador (la que depende de los encabezados Cache-Control
+    // que envía el servidor) — si Vercel sirve el HTML con encabezados
+    // de caché agresivos (algo común por defecto en hosting de
+    // archivos estáticos), fetch() podía devolver una respuesta de esa
+    // caché SIN llegar a tocar la red en absoluto, aunque la lógica de
+    // "red primero" estuviera bien. { cache: 'no-store' } obliga a
+    // fetch() a ignorar por completo la caché HTTP del navegador y
+    // pedir siempre una copia 100% fresca del servidor.
     event.respondWith(
-      fetch(event.request).then(function(networkResp) {
+      fetch(event.request, { cache: 'no-store' }).then(function(networkResp) {
         if (networkResp && networkResp.ok) {
           caches.open(CACHE_NAME).then(function(cache) {
             cache.put(event.request, networkResp.clone());

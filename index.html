@@ -22230,8 +22230,6 @@ function renderVistaEjecutivaSimple() {
             '<div class="exec-kpi-val" style="font-size:22px;font-weight:800;color:var(--txt);font-family:var(--mono);line-height:1">' + fmtMB(invHoy) + '</div>' +
             '<div style="font-size:11.5px;min-width:0">' + deltaHTML(deltaInv, true, invAyer, fechaAyer) + '</div>' +
           '</div>' +
-          (invHoyTieneProyeccion ? '<div class="exec-kpi-note" style="margin-top:5px;font-size:9.5px;color:#2563eb;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">🚢 Incluye reposición proyectada (buque ya descargó, planta aún no reporta cierre)</div>' : '') +
-          (invHoyTieneProyeccionConsumo ? '<div class="exec-kpi-note" style="margin-top:3px;font-size:9.5px;color:#2563eb;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">≈ Incluye inventario proyectado por consumo (plantas que aún no cierran hoy)</div>' : '') +
         '</div>' +
         (esRefineriaExec ? '' :
         '<div style="background:var(--card);border:1px solid var(--bdr);border-radius:10px;padding:10px 14px;min-width:0">' +
@@ -22247,9 +22245,20 @@ function renderVistaEjecutivaSimple() {
           '<div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap">' +
             '<div class="exec-kpi-val" style="font-size:22px;font-weight:800;color:var(--txt);font-family:var(--mono);line-height:1">' + fmtMB(despPromedioPeriodo) + '<span style="font-size:13px;font-weight:700">/d</span></div>' +
           '</div>' +
-          '<div class="exec-kpi-note" style="margin-top:3px;font-size:9.5px;color:var(--txt3);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">De ' + periodoLabelTxt + '</div>' +
         '</div>') +
       '</div>' +
+      // ⚠️ Las notas de proyección/período ANTES vivían DENTRO de cada
+      // tarjeta angosta — con 3 columnas en celular no había espacio y
+      // el texto se cortaba con "...". Ahora van juntas, en una línea
+      // de ancho completo debajo de las 3 tarjetas: nunca se cortan, Y
+      // además las tarjetas quedan más bajas (una razón más para que
+      // el bloque de arriba ocupe menos alto en celular).
+      (invHoyTieneProyeccion || invHoyTieneProyeccionConsumo || (despPromedioPeriodo !== null && !esRefineriaExec) ?
+      '<div class="exec-kpi-notas" style="margin-top:6px;display:flex;flex-direction:column;gap:2px">' +
+        (invHoyTieneProyeccion ? '<div style="font-size:9.5px;color:#2563eb;font-weight:700">🚢 Incluye reposición proyectada (buque ya descargó, planta aún no reporta cierre)</div>' : '') +
+        (invHoyTieneProyeccionConsumo ? '<div style="font-size:9.5px;color:#2563eb;font-weight:700">≈ Incluye inventario proyectado por consumo (plantas que aún no cierran hoy)</div>' : '') +
+        (despPromedioPeriodo !== null && !esRefineriaExec ? '<div style="font-size:9.5px;color:var(--txt3);font-weight:600">⌀ Promedio de despacho calculado sobre ' + periodoLabelTxt + '</div>' : '') +
+      '</div>' : '') +
     '</div>' +
     (esRefineriaExec ? '<div style="margin-bottom:16px;padding:10px 14px;background:#eef2f7;border:1px solid #cbd5e1;border-radius:10px;font-size:12px;color:#475569">🛢️ <b>' + pl + '</b> es una refinería — solo procesa y almacena producto, no vende. Por eso aquí solo se muestra su <b>inventario</b>, sin despacho.</div>' : '') +
     '<div class="exec-mapa-card" style="background:var(--card);border:1px solid var(--bdr);border-radius:14px;padding:22px 24px;margin-bottom:24px">' +
@@ -22832,8 +22841,23 @@ window.addEventListener('appinstalled', function() {
 // que el dashboard siempre muestre datos frescos.
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', function() {
-    navigator.serviceWorker.register('/sw.js').catch(function(err) {
+    navigator.serviceWorker.register('/sw.js').then(function(reg) {
+      // ⚠️ AGREGADO — forzar la revisión de una versión nueva de sw.js
+      // en cada carga, sin esperar el timing propio del navegador
+      // (que puede tardar horas en volver a chequear por su cuenta).
+      reg.update();
+    }).catch(function(err) {
       console.warn('[SW] No se pudo registrar:', err);
+    });
+    // ⚠️ AGREGADO — si un service worker NUEVO reemplaza al viejo
+    // mientras la página está abierta, recargar automáticamente UNA
+    // vez para que el usuario vea el contenido fresco de inmediato,
+    // sin tener que adivinar cuándo volver a recargar a mano.
+    var _swYaRecargo = false;
+    navigator.serviceWorker.addEventListener('controllerchange', function() {
+      if (_swYaRecargo) return;
+      _swYaRecargo = true;
+      window.location.reload();
     });
   });
 }
