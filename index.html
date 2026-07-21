@@ -20985,6 +20985,18 @@ function renderVistaEjecutivaSimple() {
     var invProy = Math.max(0, (r.inv || 0) - dias * pronVal);
     return Object.assign({}, r, { inv: invProy, _proyectadoConsumo: true, _proyectadoBaseFecha: r.fecha, _proyectadoDias: dias });
   }
+  // ⚠️ AGREGADO — el mapa de Vista Ejecutiva (_execMapaDatos) vive FUERA
+  // de esta función, en un scope aparte, así que no podía llamar a
+  // _invArrastrado directamente — por eso usaba una lógica de arrastre
+  // más simple (byDateLatestPerPlant) que no siempre coincidía con lo
+  // que muestran las tarjetas KPI, causando que algunos productos con
+  // datos reales (ej. G. Premium en Supe) no aparecieran en el popup
+  // del mapa aunque sí tuvieran inventario real. Se expone acá para que
+  // el mapa use EXACTAMENTE la misma función/índice que ya usa el resto
+  // del dashboard — se reasigna cada vez que este render corre, así
+  // siempre apunta a los datos más frescos.
+  window._invArrastradoShared = _invArrastrado;
+  window._getInvHistIdxShared = _getInvHistIdx;
   // ⚠️ AGREGADO — detecta si el inventario de UNA FECHA ESPECÍFICA
   // incluye algún componente proyectado (por buque ya descargado, o
   // por consumo estimado de una planta que aún no cierra ese día).
@@ -22734,35 +22746,56 @@ function _execReposicionInfo(r, fechaRef) {
   return { diasRepos: diasRepos, volMB: volTotal, tipo: tipoUnico, bt: r.bt||'', bt2: r.bt2||'' };
 }
 function _execMapaDatos(fecha) {
-  // ⚠️ CORREGIDO — bug real confirmado: antes se recorría un catálogo
-  // FIJO (PRODUCTOS_POR_PLANTA_EXEC) para decidir qué productos
-  // mostrar por planta — una lista escrita a mano que podía quedar
-  // desactualizada (ej. Pucallpa solo mostraba Diesel aunque tuviera
-  // más productos con datos reales). Ahora se descubren los productos
-  // DINÁMICAMENTE a partir de los datos reales de cada planta — mismo
-  // criterio que ya usa "Mapa Operaciones" del dashboard principal,
-  // que arma su lista de productos por planta de la misma forma (sin
-  // catálogo fijo, todo lo que exista en los datos se muestra).
-  var hoy = byDateLatestPerPlant(fecha);
+  // ⚠️ CORREGIDO (segunda vuelta) — bug real confirmado: la vez pasada
+  // se cambió a descubrimiento dinámico, pero usando byDateLatestPerPlant
+  // (una función más simple), que vive en un scope distinto a
+  // _invArrastrado (la función de arrastre/proyección real que sí usan
+  // las tarjetas KPI) — esa diferencia de lógica hacía que algunos
+  // productos con inventario real (ej. G. Premium en Supe) no
+  // aparecieran en el popup del mapa aunque sí se vieran bien en las
+  // tarjetas de arriba. Ahora se usa la MISMA función compartida
+  // (window._invArrastradoShared), iterando sobre el índice completo
+  // de combinaciones planta+producto ya conocidas — garantiza 100% de
+  // consistencia con el resto del dashboard.
   var porInstalacion = {};
-  hoy.forEach(function(r) {
-    if (!PLANT_META_EXEC[r.planta]) return;
+  var idx = (typeof window._getInvHistIdxShared === 'function') ? window._getInvHistIdxShared() : null;
+  var arrastrar = (typeof window._invArrastradoShared === 'function') ? window._invArrastradoShared : null;
+
+  function procesarRegistro(planta, producto, r) {
+    if (!PLANT_META_EXEC[planta]) return;
     if (!invFilaValida(r)) return; // dato en barriles, no MB
-    if (typeof SKIP_COMBOS !== 'undefined' && SKIP_COMBOS.has((r.planta||'')+'|'+(r.producto||''))) return;
-    if (!porInstalacion[r.planta]) porInstalacion[r.planta] = { productos: [], minCob: 999 };
-    var esRef = REFINERIAS.indexOf(r.planta) !== -1;
+    if (typeof SKIP_COMBOS !== 'undefined' && SKIP_COMBOS.has(planta + '|' + producto)) return;
+    if (!porInstalacion[planta]) porInstalacion[planta] = { productos: [], minCob: 999 };
+    var esRef = REFINERIAS.indexOf(planta) !== -1;
     var despReal = r.vreal || r.dem || 0;
-    var pronVal = (typeof pronSheet !== 'undefined' && pronSheet[r.planta+'|'+r.producto]) || r.pron_mes || r.pron || 0;
+    var pronVal = (typeof pronSheet !== 'undefined' && pronSheet[planta + '|' + producto]) || r.pron_mes || r.pron || 0;
     var cobDias = 0;
     if (!esRef && r.inv > 0) {
-      var denom = (r.vfact||0) > 0 ? r.vfact : (despReal > 0 ? despReal : pronVal);
+      var denom = (r.vfact || 0) > 0 ? r.vfact : (despReal > 0 ? despReal : pronVal);
       if (denom > 0) cobDias = Math.round(r.inv / denom);
       if (cobDias > 90) cobDias = 0; // outlier — mismo guard que el resto del sistema
     }
     var rep = _execReposicionInfo(r, fecha);
-    porInstalacion[r.planta].productos.push({ producto: r.producto, existencia: r.inv||0, despReal: despReal, pron: pronVal, cob: cobDias, repos: rep });
-    if (!esRef && cobDias > 0 && cobDias < porInstalacion[r.planta].minCob) porInstalacion[r.planta].minCob = cobDias;
-  });
+    porInstalacion[planta].productos.push({ producto: producto, existencia: r.inv || 0, despReal: despReal, pron: pronVal, cob: cobDias, repos: rep });
+    if (!esRef && cobDias > 0 && cobDias < porInstalacion[planta].minCob) porInstalacion[planta].minCob = cobDias;
+  }
+
+  if (idx && arrastrar) {
+    Object.keys(idx).forEach(function(key) {
+      var pipeIdx = key.indexOf('|');
+      var planta = key.slice(0, pipeIdx);
+      var producto = key.slice(pipeIdx + 1);
+      var r = arrastrar(planta, producto, fecha);
+      if (r) procesarRegistro(planta, producto, r);
+    });
+  } else {
+    // Respaldo — no debería usarse en condiciones normales, solo si
+    // por algún motivo la función compartida no llegó a exponerse.
+    byDateLatestPerPlant(fecha).forEach(function(r) {
+      procesarRegistro(r.planta, r.producto, r);
+    });
+  }
+
   // Asegurar que TODAS las plantas conocidas aparezcan en el resultado
   // (con lista vacía) aunque no tengan ningún reporte reciente — así
   // el marcador en el mapa sigue existiendo, solo se ve "sin datos".
