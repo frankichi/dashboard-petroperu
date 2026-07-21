@@ -44,6 +44,13 @@ self.addEventListener('activate', function(event) {
 });
 
 function _esCacheable(request, url) {
+  // ⚠️ CORREGIDO — bug real confirmado: "Failed to execute 'put' on
+  // 'Cache': Request scheme 'chrome-extension' is unsupported". Este
+  // chequeo no existía, así que peticiones con esquema distinto a
+  // http/https (ej. chrome-extension://, que algunas extensiones del
+  // navegador inyectan en la página) pasaban como "cacheable" y luego
+  // cache.put() fallaba, porque el Cache API SOLO acepta http/https.
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') return false;
   if (url.hostname.indexOf('script.google.com') !== -1) return false;
   if (url.hostname.indexOf('script.googleusercontent.com') !== -1) return false;
   if (request.method !== 'GET') return false;

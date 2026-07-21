@@ -269,14 +269,30 @@ input.input-error{border-color:var(--red)!important;box-shadow:0 0 0 3px rgba(20
    se ve ese documento. Se activa con body.rd-print-mode antes de
    window.print(). */
 #rdPrintReport{ display:none; }
-body.rd-print-mode > *:not(#rdPrintReport){ display:none !important; }
+body.rd-print-mode > *:not(#rdPrintReport):not(#rdPrintCerrarBtn){ display:none !important; }
 body.rd-print-mode #rdPrintReport{
   display:block; max-width:900px; margin:20px auto; background:#fff;
 }
+/* ⚠️ AGREGADO — botón "Cerrar" propio de la página, de respaldo. El
+   diálogo "Guardar como PDF" es del NAVEGADOR/sistema operativo, no
+   algo que esta página controle — en algunos celulares ese diálogo
+   nativo no se ve bien o no aparece con un botón claro de cerrar. Este
+   botón es independiente de eso: siempre visible en pantalla mientras
+   se está en modo impresión, y se oculta automáticamente al imprimir
+   de verdad (@media print más abajo), para que nunca aparezca dentro
+   del PDF generado. */
+#rdPrintCerrarBtn{
+  display:none; position:fixed; top:14px; right:14px; z-index:99999;
+  background:#0f1e3c; color:#fff; border:none; border-radius:8px;
+  padding:10px 18px; font-size:13px; font-weight:800; cursor:pointer;
+  box-shadow:0 4px 14px rgba(0,0,0,.25); font-family:inherit;
+}
+body.rd-print-mode #rdPrintCerrarBtn{ display:flex; align-items:center; gap:6px; }
 @media print{
   body.rd-print-mode{ background:#fff; margin:0; }
   body.rd-print-mode #rdPrintReport{ margin:0; max-width:100%; }
   body.rd-print-mode *{ -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+  #rdPrintCerrarBtn{ display:none !important; }
   @page{ margin:14mm 12mm; }
 }
 /* ── Fila título + calendario (lado a lado, calendario compacto) ──── */
@@ -2900,8 +2916,20 @@ function rdExportarHistPDF() {
   document.title = rdNombreReporte(true);
 
   document.body.classList.add('rd-print-mode');
-  window.print();
   var restaurar = function(){ document.body.classList.remove('rd-print-mode'); document.title = _tituloOriginal; window.removeEventListener('afterprint', restaurar); };
+  // ⚠️ AGREGADO — botón de Cerrar propio, de respaldo (ver comentario
+  // en el CSS más arriba). Se crea una sola vez y se reutiliza en cada
+  // exportación; el onclick se reasigna cada vez para apuntar siempre
+  // al `restaurar` de la exportación actual.
+  var btnCerrar = document.getElementById('rdPrintCerrarBtn');
+  if (!btnCerrar) {
+    btnCerrar = document.createElement('button');
+    btnCerrar.id = 'rdPrintCerrarBtn';
+    btnCerrar.innerHTML = '✕ Cerrar';
+    document.body.appendChild(btnCerrar);
+  }
+  btnCerrar.onclick = restaurar;
+  window.print();
   window.addEventListener('afterprint', restaurar);
   setTimeout(restaurar, 4000);
 }
