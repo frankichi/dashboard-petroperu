@@ -1187,20 +1187,30 @@ function _refreshAllData() {
     }).catch(function(e){ console.warn('[Actualizar] error recargando buques/barcazas:', e); });
   }
   // Forzar recarga sin caché
-  if (typeof fetchData === 'function') {
-    fetchData(true);
-  }
-  // Recargar solicitudes y tracking
+  // ⚠️ CORREGIDO — bug real confirmado: antes se disparaba
+  // fetchData(true) SIN esperarlo (es una función async, siempre
+  // devuelve una promesa), y el re-render de la página activa ocurría
+  // en un setTimeout FIJO de 2.5 segundos — una carrera de tiempos
+  // contra la latencia VARIABLE de Google Apps Script (puede tardar
+  // más, sobre todo en un "arranque en frío"). Si el backend tardaba
+  // más de 2.5s, el re-render se disparaba con los datos VIEJOS
+  // todavía en RAW, y una vez que los datos frescos sí llegaban
+  // (después), nada volvía a pintarlos — exactamente el síntoma
+  // reportado: "la BD tiene datos nuevos pero no llegan al dashboard".
+  // Ahora se espera de verdad a que termine la recarga antes de
+  // re-renderizar, sin importar cuánto tarde esa vez en particular.
+  var _refreshPromise = (typeof fetchData === 'function') ? fetchData(true) : Promise.resolve();
+  // Recargar solicitudes y tracking (no depende de esperar fetchData)
   if (typeof _solLoad === 'function') _solLoad();
-  setTimeout(function() {
+  Promise.resolve(_refreshPromise).catch(function(e){ console.warn('[Actualizar] fetchData falló:', e && e.message); }).then(function() {
     if (btn) { btn.disabled = false; btn.textContent = '↻ Actualizar'; }
-    // Re-renderizar la página activa (con los cachés ya limpios, esto
-    // dispara la recarga real de pronóstico/ventas/cargas desde el Sheets)
+    // Re-renderizar la página activa (con los cachés ya limpios Y los
+    // datos frescos YA en RAW, garantizado por el await de arriba)
     if (typeof rerenderActivePage === 'function') rerenderActivePage();
     // Si estamos en seguimiento, recargar
     var segActive = document.getElementById('pSegD');
     if (segActive && segActive.classList.contains('active') && typeof renderPSegD === 'function') renderPSegD();
-  }, 2500);
+  });
 }
 
 window._pdLoadData = function(cb) {
