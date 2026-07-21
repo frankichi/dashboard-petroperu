@@ -1272,6 +1272,28 @@ function _pdCisByRuta(plan, which) {
   return which ? cis.filter(function(c){ return _pdMatchRuta(c.ruta, which); }) : cis;
 }
 
+// ⚠️ AGREGADO — función que faltaba por completo. Se usaba en 7
+// lugares del módulo de Plan de Distribución (_pdEstBadge(...)) pero
+// nunca se había definido en ningún lado del código, así que cada vez
+// que se intentaba pintar un estado tiraba "ReferenceError: _pdEstBadge
+// is not defined" y rompía el render de esa tabla. Normaliza
+// mayúsculas/minúsculas porque el resto del código no es consistente
+// en cómo guarda el estado (a veces 'PROGRAMADO', a veces 'pendiente').
+function _pdEstBadge(estado) {
+  var e = String(estado || 'pendiente').trim().toUpperCase();
+  var MAPA = {
+    'PENDIENTE':    { txt: 'Pendiente',    bg: '#f1f5f9', col: '#64748b' },
+    'PROGRAMADO':   { txt: 'Programado',   bg: '#eef2ff', col: '#4f46e5' },
+    'EN_TRANSITO':  { txt: 'En tránsito',  bg: '#fef3c7', col: '#a86a00' },
+    'TRANSITO':     { txt: 'En tránsito',  bg: '#fef3c7', col: '#a86a00' },
+    'DESCARGANDO':  { txt: 'Descargando',  bg: '#dbeafe', col: '#1e40af' },
+    'COMPLETADO':   { txt: 'Completado',   bg: '#dcfce7', col: '#1a7a44' },
+    'CONFIRMADO':   { txt: 'Confirmado',   bg: '#dcfce7', col: '#1a7a44' },
+    'CANCELADO':    { txt: 'Cancelado',    bg: '#fdecec', col: '#c8102e' }
+  };
+  var d = MAPA[e] || { txt: estado || 'Pendiente', bg: '#f1f5f9', col: '#64748b' };
+  return '<span style="display:inline-block;padding:2px 9px;border-radius:10px;background:' + d.bg + ';color:' + d.col + ';font-weight:800;font-size:9.5px;white-space:nowrap">' + d.txt + '</span>';
+}
 function _pdRenderResumen(plan) {
   // ⚠️ CORREGIDO — bug real confirmado: window._planDistData (los
   // valores REALES registrados, distinto del plan) solo se inicializa
@@ -19168,8 +19190,15 @@ if (typeof window._iquiFluvPlan === 'undefined') {
 function _iquiTabFluvial(plan, viajesReales) {
   viajesReales = viajesReales || [];
   var barcazas = [];
-  if (typeof _flotaFluvialCache !== 'undefined' && Array.isArray(_flotaFluvialCache) && _flotaFluvialCache.length) {
-    barcazas = _flotaFluvialCache;
+  // ⚠️ CORREGIDO — bug real confirmado: _flotaFluvialCache nunca se
+  // declara en ningún lado del código (residuo de la hoja
+  // flota_fluvial_diaria, que se archivó por no tener uso real). Una
+  // de las dos referencias no tenía el chequeo typeof y tiraba
+  // ReferenceError. Se usa window._flotaFluvialCache en ambos lados
+  // — leer una propiedad de window que no existe nunca lanza error,
+  // a diferencia de referenciar una variable global no declarada.
+  if (Array.isArray(window._flotaFluvialCache) && window._flotaFluvialCache.length) {
+    barcazas = window._flotaFluvialCache;
   } else {
     barcazas = [
       {nombre:'EF REY DAVID',       cap:15, estado:'Operativo',      ruta:'Pucallpa \u2192 Iquitos'},
@@ -19281,7 +19310,7 @@ function _iquiTabFluvial(plan, viajesReales) {
   + '      <th style="padding:9px 10px;font-size:10px;text-transform:uppercase;color:var(--txt3)">Estado</th>'
   + '    </tr></thead><tbody>'+flotaRows+'</tbody>'
   + '  </table></div>'
-  + (barcazas.length === 4 && !(_flotaFluvialCache||[]).length ? '<div style="padding:8px 18px;font-size:11px;color:var(--yel);border-top:1px solid var(--bdr)">&#9888; Datos de ejemplo \u2014 conecta la hoja <code>flota_fluvial_diaria</code> para data en vivo</div>' : '')
+  + (barcazas.length === 4 && !(window._flotaFluvialCache||[]).length ? '<div style="padding:8px 18px;font-size:11px;color:var(--yel);border-top:1px solid var(--bdr)">&#9888; Datos de ejemplo \u2014 conecta la hoja <code>flota_fluvial_diaria</code> para data en vivo</div>' : '')
   + '</div>'
   // Tabla de planificación por barcaza × mes
   + '<div style="background:var(--card);border:1px solid var(--bdr);border-radius:12px;overflow:hidden;margin-top:14px">'
