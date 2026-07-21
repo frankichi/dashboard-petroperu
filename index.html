@@ -22770,6 +22770,23 @@ function _execMapaDatos(fecha) {
     idx[k].sort(function(a, b) { return a.fecha < b.fecha ? -1 : (a.fecha > b.fecha ? 1 : 0); });
   });
 
+  // ⚠️ DIAGNÓSTICO TEMPORAL — para ver en la consola del navegador
+  // exactamente qué combinaciones planta|producto existen de verdad en
+  // RAW ahora mismo, y cuáles quedan filtradas y por qué. Se puede
+  // quitar una vez resuelto el problema. Escribe en consola solo la
+  // primera vez que se abre el mapa en la sesión (no en cada refresco).
+  if (!window._execMapaDebugHecho) {
+    window._execMapaDebugHecho = true;
+    var todasLasKeysSupe = Object.keys(idx).filter(function(k){ return k.indexOf('Supe|') === 0; });
+    console.log('[MAPA-DEBUG] Combos Supe|* encontrados en RAW ahora mismo:', todasLasKeysSupe);
+    todasLasKeysSupe.forEach(function(k) {
+      console.log('[MAPA-DEBUG]', k, '-> filas:', idx[k].length, '| última fecha:', idx[k][idx[k].length-1].fecha, '| inv:', idx[k][idx[k].length-1].inv);
+    });
+    console.log('[MAPA-DEBUG] ¿"Supe" existe en PLANT_META_EXEC?', !!PLANT_META_EXEC['Supe']);
+    console.log('[MAPA-DEBUG] fecha usada para el mapa:', fecha);
+    console.log('[MAPA-DEBUG] Total de filas en RAW ahora mismo:', RAW.length);
+  }
+
   function arrastrarLocal(planta, producto, fechaObjetivo) {
     var arr = idx[planta + '|' + producto];
     if (!arr || !arr.length) return null;
