@@ -22718,45 +22718,40 @@ function _execReposicionInfo(r, fechaRef) {
   return { diasRepos: diasRepos, volMB: volTotal, tipo: tipoUnico, bt: r.bt||'', bt2: r.bt2||'' };
 }
 function _execMapaDatos(fecha) {
-  // Arrastre del último reporte real por planta+producto (mismo criterio
-  // que ahora usan los gráficos vía sumFecha) — si una planta no reportó
-  // exactamente este día, no debe verse vacía/en cero en el mapa; el
-  // inventario físico no desapareció solo porque no llegó el reporte a
-  // tiempo. Antes se usaba fecha exacta a propósito para "calzar" con
-  // los gráficos de abajo — ahora que los gráficos también arrastran,
-  // usar fecha exacta aquí volvería a desalinear ambos.
+  // ⚠️ CORREGIDO — bug real confirmado: antes se recorría un catálogo
+  // FIJO (PRODUCTOS_POR_PLANTA_EXEC) para decidir qué productos
+  // mostrar por planta — una lista escrita a mano que podía quedar
+  // desactualizada (ej. Pucallpa solo mostraba Diesel aunque tuviera
+  // más productos con datos reales). Ahora se descubren los productos
+  // DINÁMICAMENTE a partir de los datos reales de cada planta — mismo
+  // criterio que ya usa "Mapa Operaciones" del dashboard principal,
+  // que arma su lista de productos por planta de la misma forma (sin
+  // catálogo fijo, todo lo que exista en los datos se muestra).
   var hoy = byDateLatestPerPlant(fecha);
-  var porInstalacion = {}; // planta o refinería -> {productos:[], minCob}
-  // Índice de datos reales por planta+producto, para completar el
-  // catálogo oficial (algunos productos pueden no tener reporte
-  // reciente y aun así deben verse en la ficha, en 0).
-  var indexDatos = {};
+  var porInstalacion = {};
   hoy.forEach(function(r) {
     if (!PLANT_META_EXEC[r.planta]) return;
     if (!invFilaValida(r)) return; // dato en barriles, no MB
     if (typeof SKIP_COMBOS !== 'undefined' && SKIP_COMBOS.has((r.planta||'')+'|'+(r.producto||''))) return;
-    indexDatos[r.planta+'|'+r.producto] = r;
+    if (!porInstalacion[r.planta]) porInstalacion[r.planta] = { productos: [], minCob: 999 };
+    var esRef = REFINERIAS.indexOf(r.planta) !== -1;
+    var despReal = r.vreal || r.dem || 0;
+    var pronVal = (typeof pronSheet !== 'undefined' && pronSheet[r.planta+'|'+r.producto]) || r.pron_mes || r.pron || 0;
+    var cobDias = 0;
+    if (!esRef && r.inv > 0) {
+      var denom = (r.vfact||0) > 0 ? r.vfact : (despReal > 0 ? despReal : pronVal);
+      if (denom > 0) cobDias = Math.round(r.inv / denom);
+      if (cobDias > 90) cobDias = 0; // outlier — mismo guard que el resto del sistema
+    }
+    var rep = _execReposicionInfo(r, fecha);
+    porInstalacion[r.planta].productos.push({ producto: r.producto, existencia: r.inv||0, despReal: despReal, pron: pronVal, cob: cobDias, repos: rep });
+    if (!esRef && cobDias > 0 && cobDias < porInstalacion[r.planta].minCob) porInstalacion[r.planta].minCob = cobDias;
   });
+  // Asegurar que TODAS las plantas conocidas aparezcan en el resultado
+  // (con lista vacía) aunque no tengan ningún reporte reciente — así
+  // el marcador en el mapa sigue existiendo, solo se ve "sin datos".
   Object.keys(PLANT_META_EXEC).forEach(function(planta) {
-    var catalogo = PRODUCTOS_POR_PLANTA_EXEC[planta] || [];
-    var esRef = REFINERIAS.indexOf(planta) !== -1;
-    var info = { productos: [], minCob: 999 };
-    catalogo.forEach(function(prod) {
-      var r = indexDatos[planta+'|'+prod];
-      if (!r) { info.productos.push({ producto: prod, existencia: 0, despReal: 0, pron: 0, cob: 0, sinDato: true }); return; }
-      var despReal = r.vreal || r.dem || 0;
-      var pronVal = (typeof pronSheet !== 'undefined' && pronSheet[r.planta+'|'+r.producto]) || r.pron_mes || r.pron || 0;
-      var cobDias = 0;
-      if (!esRef && r.inv > 0) {
-        var denom = (r.vfact||0) > 0 ? r.vfact : (despReal > 0 ? despReal : pronVal);
-        if (denom > 0) cobDias = Math.round(r.inv / denom);
-        if (cobDias > 90) cobDias = 0; // outlier — mismo guard que el resto del sistema
-      }
-      var rep = _execReposicionInfo(r, fecha);
-      info.productos.push({ producto: prod, existencia: r.inv||0, despReal: despReal, pron: pronVal, cob: cobDias, repos: rep });
-      if (!esRef && cobDias > 0 && cobDias < info.minCob) info.minCob = cobDias;
-    });
-    porInstalacion[planta] = info;
+    if (!porInstalacion[planta]) porInstalacion[planta] = { productos: [], minCob: 999 };
   });
   return porInstalacion;
 }
