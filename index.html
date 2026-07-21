@@ -21400,6 +21400,38 @@ function renderVistaEjecutivaSimple() {
     if (!r._btConfirmadoHoy) {
       return { diasRepos: 0, volMB: 0, tipo: '', naves: [] };
     }
+    // ⚠️ AGREGADO — bug real confirmado: un buque DESCARGANDO en
+    // parcial (ej. UCAYALI, 32 de 84 MB ya entregados) mostraba el
+    // MANIFIESTO COMPLETO como "pendiente", mientras esos mismos 32 MB
+    // YA estaban contados en la existencia reportada por la planta —
+    // el mismo volumen aparecía dos veces (una como inventario real,
+    // otra como cabotaje por llegar), inflando artificialmente los
+    // días de cobertura mostrados. Se detecta cuánto ya se recibió
+    // comparando la existencia de hoy contra la de ayer (sumándole de
+    // vuelta el despacho de hoy, para no confundir "recibido" con
+    // "vendido") y se resta del volumen pendiente del buque que está
+    // DESCARGANDO — solo de ese, no de otros buques que sigan en
+    // tránsito sin haber entregado nada todavía.
+    var hayDescargando = naves.some(function(n){ return n.estado === 'DESCARGANDO'; });
+    if (hayDescargando && fechaAyer) {
+      var invHoyProd = r.inv || 0;
+      var invAyerProd = sumFecha(fechaAyer, 'inv', r.planta, r.producto);
+      var despHoyProd = r.vreal || r.dem || 0;
+      var recibidoHoy = Math.max(0, invHoyProd - invAyerProd + despHoyProd);
+      if (recibidoHoy > 0) {
+        var recibidoRestante = recibidoHoy;
+        naves = naves.map(function(n) {
+          if (n.estado === 'DESCARGANDO' && recibidoRestante > 0) {
+            var restar = Math.min(n.vol, recibidoRestante);
+            recibidoRestante -= restar;
+            return Object.assign({}, n, { vol: Math.max(0, n.vol - restar), volManifiesto: n.vol, volYaRecibido: restar });
+          }
+          return n;
+        });
+        volTotal = naves.reduce(function(s, n){ return s + (n.vol || 0); }, 0);
+      }
+    }
+    if (volTotal <= 0) return { diasRepos: 0, volMB: 0, tipo: '', naves: [] };
     var tipos = naves.map(function(n){ return esMaritimoExec(n.buque) ? 'mar\u00edtima' : 'terrestre'; });
     var tipoUnico = new Set(tipos).size === 1 ? tipos[0] : (tipos.length > 1 ? 'mixta' : '');
     // bt/fecha/estado "principales" = el primero de la lista (ya viene
@@ -22786,7 +22818,7 @@ function _execEsMaritimo(nombreBuque) {
   var n = nombreBuque.toUpperCase();
   return _execBuquesMarNacional.some(function(v){ return n.indexOf(v) >= 0; });
 }
-function _execReposicionInfo(r, fechaRef) {
+function _execReposicionInfo(r, fechaRef, arrastrarLocalFn) {
   var denom = (typeof pronSheet !== 'undefined' && pronSheet[r.planta+'|'+r.producto]) || r.pron_mes || r.pron || 0;
   var vol1 = r.vol_rep || 0, vol2 = r.vol_rep_bt2 || 0;
   var volTotal = vol1 + vol2;
@@ -22798,6 +22830,31 @@ function _execReposicionInfo(r, fechaRef) {
   if (!r._btConfirmadoHoy) {
     return { diasRepos: 0, volMB: 0, tipo: '', bt: '', bt2: '' };
   }
+  // ⚠️ AGREGADO — mismo fix que reposicionInfo(): si el buque está
+  // DESCARGANDO en parcial, el volumen ya reflejado en la existencia
+  // reportada se resta del volumen "pendiente" — si no, el mismo
+  // volumen aparece dos veces (como inventario real Y como cabotaje
+  // por llegar), inflando artificialmente los días de cobertura.
+  var estado1 = r.bt_estado || '';
+  if (estado1 === 'DESCARGANDO' && typeof arrastrarLocalFn === 'function') {
+    var p = fechaRef.split('-').map(Number);
+    var dAyer = new Date(Date.UTC(p[0], p[1]-1, p[2]));
+    dAyer.setUTCDate(dAyer.getUTCDate() - 1);
+    var fechaAyerCalc = dAyer.toISOString().slice(0, 10);
+    var rAyer = arrastrarLocalFn(r.planta, r.producto, fechaAyerCalc);
+    var invAyerProd = rAyer ? (rAyer.inv || 0) : 0;
+    var invHoyProd = r.inv || 0;
+    var despHoyProd = r.vreal || r.dem || 0;
+    var recibidoHoy = Math.max(0, invHoyProd - invAyerProd + despHoyProd);
+    if (recibidoHoy > 0) {
+      var restar1 = Math.min(vol1, recibidoHoy);
+      vol1 = Math.max(0, vol1 - restar1);
+      var restante = recibidoHoy - restar1;
+      if (restante > 0) vol2 = Math.max(0, vol2 - restante);
+      volTotal = vol1 + vol2;
+    }
+  }
+  if (volTotal <= 0) return { diasRepos: 0, volMB: 0, tipo: '', bt: '', bt2: '' };
   var tipo1 = vol1 > 0 ? (_execEsMaritimo(r.bt) ? 'marítima' : 'terrestre') : '';
   var tipo2 = vol2 > 0 ? (_execEsMaritimo(r.bt2) ? 'marítima' : 'terrestre') : '';
   var tipos = [tipo1, tipo2].filter(Boolean);
@@ -22874,7 +22931,7 @@ function _execMapaDatos(fecha) {
       if (denom > 0) cobDias = Math.round(r.inv / denom);
       if (cobDias > 90) cobDias = 0; // outlier — mismo guard que el resto del sistema
     }
-    var rep = _execReposicionInfo(r, fecha);
+    var rep = _execReposicionInfo(r, fecha, arrastrarLocal);
     porInstalacion[planta].productos.push({ producto: producto, existencia: r.inv || 0, despReal: despReal, pron: pronVal, cob: cobDias, repos: rep });
     if (!esRef && cobDias > 0 && cobDias < porInstalacion[planta].minCob) porInstalacion[planta].minCob = cobDias;
   });
