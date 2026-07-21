@@ -547,6 +547,44 @@ var _mapLibsLoaded=false;
   padding:10px 18px;background:var(--bg);border-top:1px solid var(--bdr);
   font-size:9.5px;color:var(--txt3);
 }
+/* ⚠️ AGREGADO — mismo caso: TODO el formulario de viaje (campos,
+   etiquetas, filas, secciones, historial, badges, botón guardar) no
+   tenía ningún CSS definido — se veía con inputs/selects/botones en
+   su apariencia cruda por defecto del navegador. Esta es la parte
+   principal de lo que se veía "rústico" al editar una barcaza o
+   cisterna. */
+.pd-sec-title{
+  font-size:10.5px;font-weight:800;color:var(--acc2);text-transform:uppercase;
+  letter-spacing:.04em;margin:16px 0 8px;padding-bottom:5px;border-bottom:1px solid var(--bdr);
+}
+.pd-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:8px}
+.pd-field{display:flex;flex-direction:column;gap:4px}
+.pd-lbl{font-size:9.5px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.03em}
+.pd-inp,.pd-sel{
+  padding:7px 10px;border-radius:7px;border:1px solid var(--bdr);
+  background:var(--card);color:var(--txt);font-size:12px;font-family:var(--sans);
+  width:100%;box-sizing:border-box;
+}
+.pd-inp:focus,.pd-sel:focus{outline:none;border-color:var(--acc);box-shadow:0 0 0 2px var(--acc)22}
+textarea.pd-inp{resize:vertical;min-height:44px;font-family:var(--sans)}
+.pd-obs-hist{
+  background:var(--bg3);border:1px solid var(--bdr);border-radius:8px;
+  padding:8px 10px;margin-bottom:10px;font-size:10.5px;color:var(--txt2);
+  white-space:pre-wrap;max-height:120px;overflow-y:auto;line-height:1.5;
+}
+.pd-savebtn{
+  padding:8px 22px;border-radius:8px;border:none;background:var(--acc);
+  color:#fff;font-size:12px;font-weight:800;cursor:pointer;font-family:var(--sans);
+}
+.pd-savebtn:hover{filter:brightness(1.08)}
+.pd-savebtn:disabled{opacity:.55;cursor:not-allowed}
+.pd-badge{display:inline-block;padding:2px 9px;border-radius:10px;font-size:9.5px;font-weight:800;white-space:nowrap}
+.pd-badge-pend{background:#f1f5f9;color:#64748b}
+.pd-badge-conf{background:#dcfce7;color:#1a7a44}
+.pd-badge-curso{background:#fef3c7;color:#a86a00}
+.pd-badge-desc{background:#dbeafe;color:#1e40af}
+.pd-badge-canc{background:#fdecec;color:#c8102e}
+@media(max-width:640px){ .pd-row{grid-template-columns:1fr} }
 ._el_txt{font-size:11.5px;color:#4a6080;font-family:system-ui,sans-serif;letter-spacing:.12em;text-transform:uppercase;margin-top:4px}
 </style>
 <div id="_early_loader">
@@ -1307,6 +1345,26 @@ function _pdCisByRuta(plan, which) {
 // is not defined" y rompía el render de esa tabla. Normaliza
 // mayúsculas/minúsculas porque el resto del código no es consistente
 // en cómo guarda el estado (a veces 'PROGRAMADO', a veces 'pendiente').
+// ⚠️ AGREGADO — misma situación que _pdEstBadge más abajo: función
+// usada en 3 lugares (el puntito de color junto al nombre del
+// producto) pero nunca definida en ningún lado, tirando
+// "ReferenceError: _pdProdCol is not defined" apenas se abría
+// cualquier ruta (Yurimaguas o Pucallpa-LPO). Colores pensados para
+// los productos reales de este módulo multimodal (Diesel B5 S-50,
+// PI-6, Gas 90, Nafthas), con los demás productos del sistema como
+// respaldo por si algún día se reportan por esta misma ruta.
+function _pdProdCol(nombre) {
+  var n = String(nombre || '').toUpperCase();
+  if (n.indexOf('DIESEL') !== -1)   return '#0ea5e9';
+  if (n.indexOf('PI-6') !== -1 || n.indexOf('PI6') !== -1) return '#8b5cf6';
+  if (n.indexOf('GAS 90') !== -1 || n.indexOf('G. REGULAR') !== -1) return '#f59e0b';
+  if (n.indexOf('NAFTHA') !== -1 || n.indexOf('NAFTA') !== -1) return '#ec4899';
+  if (n.indexOf('PREMIUM') !== -1) return '#10b981';
+  if (n.indexOf('84') !== -1)      return '#ef4444';
+  if (n.indexOf('TA1') !== -1)     return '#6366f1';
+  if (n.indexOf('GLP') !== -1)     return '#14b8a6';
+  return '#94a3b8'; // producto no reconocido — gris neutro en vez de romper
+}
 function _pdEstBadge(estado) {
   var e = String(estado || 'pendiente').trim().toUpperCase();
   var MAPA = {
@@ -1817,6 +1875,79 @@ window._pdSaveTanque = function(rowId){
     .catch(function(e){ if(msg){ msg.textContent='\u274c '+e.message; msg.style.color='#dc2626'; } });
 };
 
+
+// ⚠️ AGREGADO — window._pdSaveFromForm faltaba por completo (ni
+// frontend ni backend existían). Recolecta los campos exactos que
+// arma _pdFormViaje (mismos IDs "pdi-*-{id}"), guarda vía el nuevo
+// endpoint pdGuardarViaje, y actualiza window._planDistData al
+// instante con la MISMA forma que ya usa _rtHandlePlanDist — así el
+// resumen y las tablas reflejan el guardado sin tener que recargar
+// todo el plan desde cero.
+window._pdSaveFromForm = function(id, tipo) {
+  var sess = window._dashSession || {};
+  if (!sess.token) { alert('Sesión no válida. Recarga la página.'); return; }
+  var msgEl = document.getElementById('pdm-' + id);
+  var btn = document.querySelector('.pd-savebtn[data-bid="' + id + '"]');
+  if (btn) { btn.disabled = true; }
+  if (msgEl) { msgEl.textContent = 'Guardando…'; msgEl.style.background = '#f1f5f9'; msgEl.style.color = '#64748b'; }
+
+  function val(campo) {
+    var el = document.getElementById('pdi-' + campo + '-' + id);
+    return el ? el.value : '';
+  }
+
+  var payload = {
+    action: 'pdGuardarViaje',
+    token: sess.token,
+    id: id,
+    tipo: tipo,
+    zarpe_real: val('zarpe'),
+    arribo_real: val('arribo'),
+    vol_real: val('vol'),
+    estado: val('est'),
+    obs: val('obs')
+  };
+  // Los campos de fase 1/2 solo existen para barcazas (ver _pdFormViaje)
+  if (tipo === 'barcaza') {
+    payload.zarpe_vacio = val('zarpe_vacio');
+    payload.eta_yurimaguas = val('eta_yuri');
+    payload.arribo_yurimaguas = val('arribo_yuri');
+    payload.inicio_embarque = val('ini_emb');
+    payload.fin_embarque = val('fin_emb');
+    payload.status_embarque = val('emb_status');
+  }
+
+  var API_URL_SAFE_PD = 'https://script.google.com/macros/s/AKfycbwL5Gec0EmZgha2rNUaORMDT6MBuouyIlV07tlMpQo9O1YcgkiWJdoQUmIafMQhF2kgUg/exec';
+  fetch(API_URL_SAFE_PD, {
+    method: 'POST', redirect: 'follow',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify(payload)
+  }).then(function(r){ return r.json(); })
+  .then(function(res) {
+    if (btn) { btn.disabled = false; }
+    if (!res.success) {
+      if (msgEl) { msgEl.textContent = '✕ ' + (res.message || 'No se pudo guardar'); msgEl.style.background = '#fdecec'; msgEl.style.color = '#c8102e'; }
+      return;
+    }
+    // Actualizar la caché local (misma forma que _rtHandlePlanDist)
+    var d = window._planDistData || { barcazas:{}, cisternas:{} };
+    var store = tipo === 'cisterna' ? 'cisternas' : 'barcazas';
+    d[store][id] = {
+      zarpe_real: res.data.zarpe_real, arribo_real: res.data.arribo_real,
+      vol_real: res.data.vol_real_mb, estado: res.data.estado,
+      obs: res.data.obs, bloqueado: true
+    };
+    window._planDistData = d;
+    if (msgEl) { msgEl.textContent = '✓ Guardado'; msgEl.style.background = '#e9f7ee'; msgEl.style.color = '#1a7a44'; }
+    // Refrescar el resumen para que el % de avance y los totales reflejen el guardado
+    if (typeof window._pdTab === 'function' && window._pdCurrentTab) {
+      setTimeout(function(){ window._pdTab(window._pdCurrentTab); }, 700);
+    }
+  }).catch(function() {
+    if (btn) { btn.disabled = false; }
+    if (msgEl) { msgEl.textContent = '✕ Error de conexión'; msgEl.style.background = '#fdecec'; msgEl.style.color = '#c8102e'; }
+  });
+};
 
 function _pdFormViaje(v, tipo, vd, volPlan) {
   var id = v.id;
