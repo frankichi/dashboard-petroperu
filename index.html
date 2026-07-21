@@ -13395,25 +13395,25 @@ function renderPUpload() {
     + '</div>'
     + '<div style="padding:0 18px 24px">'
     + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px 14px">'
-    + _uplAccordion('acc-ed', '📊', 'Reporte E&D (Excel)',
-        'Existencias y Despachos — archivo .xlsx con hoja "4-Reporte"',
-        uploadEDData ? '✅ Datos cargados' : '',
-        edOpen,
++ _uplAccordion('acc-cisternas', '🚛', 'Movimiento Cisternas',
+        'BD Reporte Diario Movimiento (Transporte Terrestre) · Excel SharePoint',
+        uploadCisternasData ? '✅ ' + (uploadCisternasData.records||[]).length + ' rutas cargadas' : '',
+        !!uploadCisternasData,
         '<div class="upl-date-bar">'
-        + '<label>📅 Fecha del reporte:</label>'
-        + '<input type="date" id="ed-date-override" value="'+(currentDate||new Date().toISOString().slice(0,10))+'">'
-        + '<span class="upl-date-hint">Se aplicará a todos los registros del archivo</span></div>'
-        + '<div class="upload-dropzone" id="dropzone-ed">'
-        + '<div class="upload-dropzone-icon">📁</div>'
+        + '<label>📅 Fecha operativa:</label>'
+        + '<input type="date" id="cisternas-date-override" value="'+(currentDate||new Date().toISOString().slice(0,10))+'">'
+        + '<span class="upl-date-hint">El parser detectará la hoja más reciente automáticamente</span></div>'
+        + '<div class="upload-dropzone" id="dropzone-cisternas">'
+        + '<div class="upload-dropzone-icon">🚛</div>'
         + '<div class="upload-dropzone-text">Arrastra el Excel aquí o haz clic</div>'
-        + '<div class="upload-dropzone-hint">Reporte_E_D_*.xlsx</div>'
-        + '<input type="file" id="file-ed" accept=".xlsx,.xls"></div>'
-        + '<div id="ed-preview">'+uploadEDPreviewHTML+'</div>'
-        + '<div class="upload-actions" id="ed-actions" style="display:'+edActionsVis+'">'
-        + '<button class="upload-btn upload-btn-primary" id="ed-send-btn" onclick="sendEDToGS()">📤 Enviar a Google Sheets</button>'
-        + '<button class="upload-btn upload-btn-secondary" onclick="clearED()">✕ Limpiar</button>'
-        + '<span class="upload-status" id="ed-status"></span></div>'
-    , edFecha)
+        + '<div class="upload-dropzone-hint">BD_Reporte_Diario_Movimiento_*.xlsx</div>'
+        + '<input type="file" id="file-cisternas" accept=".xlsx,.xls,.xlsm"></div>'
+        + '<div id="cisternas-preview">'+uploadCisternasPreviewHTML+'</div>'
+        + '<div class="upload-actions" id="cisternas-actions" style="display:'+(uploadCisternasData?'flex':'none')+'">'
+        + '<button class="upload-btn upload-btn-primary" id="cisternas-send-btn" onclick="sendCisternasToGS()">📤 Enviar a Google Sheets</button>'
+        + '<button class="upload-btn upload-btn-secondary" onclick="clearCisternas()">✕ Limpiar</button>'
+        + '<span class="upload-status" id="cisternas-status"></span></div>'
+    )
     + _uplAccordion('acc-fluvial', '🛥️', 'Reporte Fluvial Diario',
         'Movimientos de barcazas selva: Iquitos–Pucallpa, Iquitos–Yurimaguas, Iquitos–Saramuro (PDF)',
         uploadFluvialData ? '✅ ' + (uploadFluvialData.barcazas||[]).length + ' barcazas cargadas' : '',
@@ -13433,77 +13433,6 @@ function renderPUpload() {
         + '<button class="upload-btn upload-btn-secondary" onclick="clearFluvial()">✕ Limpiar</button>'
         + '<span class="upload-status" id="fluvial-status"></span></div>'
     )
-    + _uplAccordion('acc-cisternas', '🚛', 'Movimiento Cisternas',
-        'BD Reporte Diario Movimiento (Transporte Terrestre) · Excel SharePoint',
-        uploadCisternasData ? '✅ ' + (uploadCisternasData.records||[]).length + ' rutas cargadas' : '',
-        !!uploadCisternasData,
-        '<div class="upl-date-bar">'
-        + '<label>📅 Fecha operativa:</label>'
-        + '<input type="date" id="cisternas-date-override" value="'+(currentDate||new Date().toISOString().slice(0,10))+'">'
-        + '<span class="upl-date-hint">El parser detectará la hoja más reciente automáticamente</span></div>'
-        + '<div class="upload-dropzone" id="dropzone-cisternas">'
-        + '<div class="upload-dropzone-icon">🚛</div>'
-        + '<div class="upload-dropzone-text">Arrastra el Excel aquí o haz clic</div>'
-        + '<div class="upload-dropzone-hint">BD_Reporte_Diario_Movimiento_*.xlsx</div>'
-        + '<input type="file" id="file-cisternas" accept=".xlsx,.xls,.xlsm"></div>'
-        + '<div id="cisternas-preview">'+uploadCisternasPreviewHTML+'</div>'
-        + '<div class="upload-actions" id="cisternas-actions" style="display:'+(uploadCisternasData?'flex':'none')+'">'
-        + '<button class="upload-btn upload-btn-primary" id="cisternas-send-btn" onclick="sendCisternasToGS()">📤 Enviar a Google Sheets</button>'
-        + '<button class="upload-btn upload-btn-secondary" onclick="clearCisternas()">✕ Limpiar</button>'
-        + '<span class="upload-status" id="cisternas-status"></span></div>'
-    )
-    + _uplAccordion('acc-cognos', '💹', 'Ventas Diarias — Dashboard Cognos',
-        'Exportación de ventas reales desde el sistema Cognos (.xlsx)',
-        uploadVentasData ? '✅ Datos cargados' : '', false,
-        '<div class="upload-dropzone" id="dropzone-cognos">'
-        + '<div class="upload-dropzone-icon">📁</div>'
-        + '<div class="upload-dropzone-text">Arrastra el Excel aquí o haz clic</div>'
-        + '<div class="upload-dropzone-hint">Dashboard_*.xlsx / Ventas_Cognos_*.xlsx</div>'
-        + '<input type="file" id="file-cognos" accept=".xlsx,.xls,.xlsm"></div>'
-        + '<div id="ventas-upload-preview"></div>'
-        + '<div class="upload-actions" id="ventas-upload-actions" style="display:none">'
-        + '<button class="upload-btn upload-btn-primary" id="ventas-send-btn" onclick="sendVentasToGS()">📤 Enviar a Google Sheets</button>'
-        + '<button class="upload-btn upload-btn-secondary" onclick="clearVentas()">✕ Limpiar</button>'
-        + '<span class="upload-status" id="ventas-upload-status"></span></div>'
-    , cogFecha)
-    + _uplAccordion('acc-pron', '🎯', 'Pronóstico Colaborativo de Ventas (Excel)',
-        'Archivo mensual "PRONÓSTICO COLABORATIVO DE VENTAS" (hoja PLANTAS) — convierte automáticamente de MB mensual a MBDC diario',
-        '', false,
-        '<div class="upl-date-bar">'
-        + '<label>📅 Mes del pronóstico:</label>'
-        + '<input type="month" id="pron-month-input" value="'+(currentDate?currentDate.slice(0,7):new Date().toISOString().slice(0,7))+'">'
-        + '<span class="upl-date-hint">Se detecta automáticamente del encabezado del Excel, pero puedes ajustarlo</span></div>'
-        + '<div class="upload-dropzone" id="dropzone-pron">'
-        + '<div class="upload-dropzone-icon">📁</div>'
-        + '<div class="upload-dropzone-text">Arrastra el Excel de Pronóstico Colaborativo aquí o haz clic</div>'
-        + '<div class="upload-dropzone-hint">PRONOSTICO_[MES]_[AÑO].xlsx — hoja "PLANTAS"</div>'
-        + '<input type="file" id="file-pron" accept=".xlsx,.xls"></div>'
-        + '<div id="pron-upload-preview"></div>'
-        + '<div class="upload-actions" id="pron-upload-actions" style="display:none">'
-        + '<button class="upload-btn upload-btn-primary" id="pron-send-btn" onclick="sendPronToGS()">📤 Enviar a Google Sheets</button>'
-        + '<button class="upload-btn upload-btn-secondary" onclick="clearPron()">✕ Limpiar</button>'
-        + '<span class="upload-status" id="pron-upload-status"></span></div>'
-    )
-    + _uplAccordion('acc-cargas-naves', '🛳️', 'Cargas de Naves — PDF Diario',
-        'PDF diario de Petroperú — extrae rutas, productos y volúmenes por terminal',
-        '', false,
-        '<div class="upl-date-bar" style="margin-bottom:12px">'
-        + '<label>📅 Fecha del reporte:</label>'
-        + '<input type="date" id="cargas-naves-date" value="'+(currentDate||new Date().toISOString().slice(0,10))+'">'
-        + '<span class="upl-date-hint">Fecha del PDF que vas a subir</span></div>'
-        + '<div class="upload-dropzone" id="dropzone-cargas-naves">'
-        + '<div class="upload-dropzone-icon">📄</div>'
-        + '<div class="upload-dropzone-text">Arrastra el PDF aquí o haz clic</div>'
-        + '<div class="upload-dropzone-hint">Cargas_Naves_*.pdf</div>'
-        + '<input type="file" id="file-cargas-naves" accept=".pdf"></div>'
-        + '<div id="cargas-naves-filename" style="font-size:9.5px;color:var(--txt3);margin-top:6px;padding-left:2px"></div>'
-        + '<div id="cargas-naves-status" style="font-size:10.5px;color:var(--txt3);margin-top:4px"></div>'
-        + '<div id="cargas-naves-preview"></div>'
-        + '<div id="cargas-naves-actions" class="upload-actions" style="display:none">'
-        + '<button class="upload-btn upload-btn-primary" id="cargas-naves-send-btn" onclick="sendCargasNavesToGS()">📤 Guardar en Google Sheets</button>'
-        + '<button class="upload-btn upload-btn-secondary" onclick="clearCargasNaves()">✕ Limpiar</button>'
-        + '<span class="upload-status" id="cargas-naves-send-status"></span></div>'
-    , cargFecha)
     + _uplAccordion('acc-naves', '🚢', 'Posicionamiento de Naves (Texto) [NAVES-TS-V2]',
         'Pega el texto del reporte diario — captura ARRIBÓ/FONDEÓ, AMARRÓ, I.D., T.D., I.C., ZARPÓ y ETA con hora real',
         navesActionsVis==='flex' ? '✅ Datos cargados' : '',
@@ -13529,22 +13458,40 @@ function renderPUpload() {
         + '<button class="upload-btn upload-btn-secondary" onclick="clearNaves()">✕ Limpiar</button>'
         + '<span class="upload-status" id="naves-status"></span></div>'
     , navFecha)
-    + _uplAccordion('acc-tools', '🛠️', 'Herramientas',
-        'Limpiar datos por fecha — útil para re-subir un día específico',
+    + _uplAccordion('acc-cargas-naves', '🛳️', 'Cargas de Naves — PDF Diario',
+        'PDF diario de Petroperú — extrae rutas, productos y volúmenes por terminal',
         '', false,
-        '<div class="upl-date-bar">'
-        + '<label>📅 Fecha a eliminar:</label>'
-        + '<input type="date" id="delete-date-input" value="'+(currentDate||'')+'">'
-        + '<span class="upl-date-hint">Se eliminarán TODOS los registros de ese día del inventario</span></div>'
-        + '<button class="upload-btn upload-btn-secondary" onclick="deleteByDateFromGS()" style="border-color:#e0343455;color:#e03434">🗑️ Eliminar registros de esta fecha</button>'
-        + '<span id="delete-status" style="font-size:10px;color:var(--txt3);margin-left:10px"></span>'
-    )
-    + _uplAccordion('acc-log', '📋', 'Registro de Actividad',
-        'Últimas 10 cargas procesadas en esta sesión',
-        uploadLog.length ? uploadLog.length+' entradas' : '',
-        false,
-        '<div class="upload-log">'+logHTML+'</div>'
-    )
+        '<div class="upl-date-bar" style="margin-bottom:12px">'
+        + '<label>📅 Fecha del reporte:</label>'
+        + '<input type="date" id="cargas-naves-date" value="'+(currentDate||new Date().toISOString().slice(0,10))+'">'
+        + '<span class="upl-date-hint">Fecha del PDF que vas a subir</span></div>'
+        + '<div class="upload-dropzone" id="dropzone-cargas-naves">'
+        + '<div class="upload-dropzone-icon">📄</div>'
+        + '<div class="upload-dropzone-text">Arrastra el PDF aquí o haz clic</div>'
+        + '<div class="upload-dropzone-hint">Cargas_Naves_*.pdf</div>'
+        + '<input type="file" id="file-cargas-naves" accept=".pdf"></div>'
+        + '<div id="cargas-naves-filename" style="font-size:9.5px;color:var(--txt3);margin-top:6px;padding-left:2px"></div>'
+        + '<div id="cargas-naves-status" style="font-size:10.5px;color:var(--txt3);margin-top:4px"></div>'
+        + '<div id="cargas-naves-preview"></div>'
+        + '<div id="cargas-naves-actions" class="upload-actions" style="display:none">'
+        + '<button class="upload-btn upload-btn-primary" id="cargas-naves-send-btn" onclick="sendCargasNavesToGS()">📤 Guardar en Google Sheets</button>'
+        + '<button class="upload-btn upload-btn-secondary" onclick="clearCargasNaves()">✕ Limpiar</button>'
+        + '<span class="upload-status" id="cargas-naves-send-status"></span></div>'
+    , cargFecha)
+    + _uplAccordion('acc-cognos', '💹', 'Ventas Diarias — Dashboard Cognos',
+        'Exportación de ventas reales desde el sistema Cognos (.xlsx)',
+        uploadVentasData ? '✅ Datos cargados' : '', false,
+        '<div class="upload-dropzone" id="dropzone-cognos">'
+        + '<div class="upload-dropzone-icon">📁</div>'
+        + '<div class="upload-dropzone-text">Arrastra el Excel aquí o haz clic</div>'
+        + '<div class="upload-dropzone-hint">Dashboard_*.xlsx / Ventas_Cognos_*.xlsx</div>'
+        + '<input type="file" id="file-cognos" accept=".xlsx,.xls,.xlsm"></div>'
+        + '<div id="ventas-upload-preview"></div>'
+        + '<div class="upload-actions" id="ventas-upload-actions" style="display:none">'
+        + '<button class="upload-btn upload-btn-primary" id="ventas-send-btn" onclick="sendVentasToGS()">📤 Enviar a Google Sheets</button>'
+        + '<button class="upload-btn upload-btn-secondary" onclick="clearVentas()">✕ Limpiar</button>'
+        + '<span class="upload-status" id="ventas-upload-status"></span></div>'
+    , cogFecha)
     + _uplAccordion('acc-ppv', '📈', 'Ventas Diarias PP — Reporte Total Perú',
         'Archivo Excel diario "Reporte_Ventas_Diarias_Total_Perú.xlsx" · Se guarda en hoja pp_ventas_nacionales',
         '',
@@ -13562,7 +13509,60 @@ function renderPUpload() {
         + '<div id="ppv-status" style="font-size:12px;color:var(--txt3);min-height:20px"></div>'
         + '</div>'
     , ppvFecha)
-    + '</div>' // end grid 2-col
++ _uplAccordion('acc-ed', '📊', 'Reporte E&D (Excel)',
+        'Existencias y Despachos — archivo .xlsx con hoja "4-Reporte"',
+        uploadEDData ? '✅ Datos cargados' : '',
+        edOpen,
+        '<div class="upl-date-bar">'
+        + '<label>📅 Fecha del reporte:</label>'
+        + '<input type="date" id="ed-date-override" value="'+(currentDate||new Date().toISOString().slice(0,10))+'">'
+        + '<span class="upl-date-hint">Se aplicará a todos los registros del archivo</span></div>'
+        + '<div class="upload-dropzone" id="dropzone-ed">'
+        + '<div class="upload-dropzone-icon">📁</div>'
+        + '<div class="upload-dropzone-text">Arrastra el Excel aquí o haz clic</div>'
+        + '<div class="upload-dropzone-hint">Reporte_E_D_*.xlsx</div>'
+        + '<input type="file" id="file-ed" accept=".xlsx,.xls"></div>'
+        + '<div id="ed-preview">'+uploadEDPreviewHTML+'</div>'
+        + '<div class="upload-actions" id="ed-actions" style="display:'+edActionsVis+'">'
+        + '<button class="upload-btn upload-btn-primary" id="ed-send-btn" onclick="sendEDToGS()">📤 Enviar a Google Sheets</button>'
+        + '<button class="upload-btn upload-btn-secondary" onclick="clearED()">✕ Limpiar</button>'
+        + '<span class="upload-status" id="ed-status"></span></div>'
+    , edFecha)
+    + _uplAccordion('acc-pron', '🎯', 'Pronóstico Colaborativo de Ventas (Excel)',
+        'Archivo mensual "PRONÓSTICO COLABORATIVO DE VENTAS" (hoja PLANTAS) — convierte automáticamente de MB mensual a MBDC diario',
+        '', false,
+        '<div class="upl-date-bar">'
+        + '<label>📅 Mes del pronóstico:</label>'
+        + '<input type="month" id="pron-month-input" value="'+(currentDate?currentDate.slice(0,7):new Date().toISOString().slice(0,7))+'">'
+        + '<span class="upl-date-hint">Se detecta automáticamente del encabezado del Excel, pero puedes ajustarlo</span></div>'
+        + '<div class="upload-dropzone" id="dropzone-pron">'
+        + '<div class="upload-dropzone-icon">📁</div>'
+        + '<div class="upload-dropzone-text">Arrastra el Excel de Pronóstico Colaborativo aquí o haz clic</div>'
+        + '<div class="upload-dropzone-hint">PRONOSTICO_[MES]_[AÑO].xlsx — hoja "PLANTAS"</div>'
+        + '<input type="file" id="file-pron" accept=".xlsx,.xls"></div>'
+        + '<div id="pron-upload-preview"></div>'
+        + '<div class="upload-actions" id="pron-upload-actions" style="display:none">'
+        + '<button class="upload-btn upload-btn-primary" id="pron-send-btn" onclick="sendPronToGS()">📤 Enviar a Google Sheets</button>'
+        + '<button class="upload-btn upload-btn-secondary" onclick="clearPron()">✕ Limpiar</button>'
+        + '<span class="upload-status" id="pron-upload-status"></span></div>'
+    )
+    + _uplAccordion('acc-tools', '🛠️', 'Herramientas',
+        'Limpiar datos por fecha — útil para re-subir un día específico',
+        '', false,
+        '<div class="upl-date-bar">'
+        + '<label>📅 Fecha a eliminar:</label>'
+        + '<input type="date" id="delete-date-input" value="'+(currentDate||'')+'">'
+        + '<span class="upl-date-hint">Se eliminarán TODOS los registros de ese día del inventario</span></div>'
+        + '<button class="upload-btn upload-btn-secondary" onclick="deleteByDateFromGS()" style="border-color:#e0343455;color:#e03434">🗑️ Eliminar registros de esta fecha</button>'
+        + '<span id="delete-status" style="font-size:10px;color:var(--txt3);margin-left:10px"></span>'
+    )
+    + _uplAccordion('acc-log', '📋', 'Registro de Actividad',
+        'Últimas 10 cargas procesadas en esta sesión',
+        uploadLog.length ? uploadLog.length+' entradas' : '',
+        false,
+        '<div class="upload-log">'+logHTML+'</div>'
+    )
+        + '</div>' // end grid 2-col
     + '</div>'; // end padding wrapper
   _bindUploadEvents();
 }
