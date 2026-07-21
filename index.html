@@ -519,6 +519,34 @@ var _mapLibsLoaded=false;
 .pd-tab.active{color:var(--acc);border-bottom-color:var(--acc)}
 .pd-tab:hover{color:var(--txt)}
 .pd-body{padding:16px 18px;min-height:200px}
+/* ⚠️ AGREGADO — estas 4 clases se usaban en el HTML del panel pero
+   nunca tuvieron NINGÚN estilo definido, así que se veían con la
+   apariencia cruda por defecto del navegador (botón cuadrado sin
+   redondear, texto sin jerarquía, footer pegado sin separación) —
+   esto es lo que se veía "rústico". */
+.pd-close{
+  display:flex;align-items:center;justify-content:center;
+  width:28px;height:28px;border-radius:8px;border:1px solid var(--bdr);
+  background:var(--bg3);color:var(--txt2);font-size:13px;font-weight:700;
+  cursor:pointer;line-height:1;flex-shrink:0;
+}
+.pd-close:hover{background:#fdecec;border-color:#f3b8b8;color:#c8102e}
+.pd-messel{
+  display:flex;align-items:center;gap:8px;flex-wrap:wrap;
+  padding:10px 18px;background:var(--bg);border-bottom:1px solid var(--bdr);
+}
+.pd-mestab{
+  padding:5px 13px;border-radius:20px;border:1px solid var(--bdr);
+  background:var(--card);color:var(--txt2);font-size:10.5px;font-weight:700;
+  cursor:pointer;font-family:var(--sans);transition:.15s;
+}
+.pd-mestab:hover{border-color:var(--acc);color:var(--acc2)}
+.pd-mestab.active{background:var(--acc);border-color:var(--acc);color:#fff;box-shadow:0 2px 6px rgba(0,0,0,.15)}
+.pd-footer{
+  display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;
+  padding:10px 18px;background:var(--bg);border-top:1px solid var(--bdr);
+  font-size:9.5px;color:var(--txt3);
+}
 ._el_txt{font-size:11.5px;color:#4a6080;font-family:system-ui,sans-serif;letter-spacing:.12em;text-transform:uppercase;margin-top:4px}
 </style>
 <div id="_early_loader">
