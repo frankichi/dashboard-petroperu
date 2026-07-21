@@ -22783,22 +22783,6 @@ function _execMapaDatos(fecha) {
     idx[k].sort(function(a, b) { return a.fecha < b.fecha ? -1 : (a.fecha > b.fecha ? 1 : 0); });
   });
 
-  // ⚠️ DIAGNÓSTICO TEMPORAL — para ver en la consola del navegador
-  // exactamente qué combinaciones planta|producto existen de verdad en
-  // RAW ahora mismo, y cuáles quedan filtradas y por qué. Se puede
-  // quitar una vez resuelto el problema. Escribe en consola solo la
-  // primera vez que se abre el mapa en la sesión (no en cada refresco).
-  {
-    var todasLasKeysSupe = Object.keys(idx).filter(function(k){ return k.indexOf('Supe|') === 0; });
-    console.log('[MAPA-DEBUG] Combos Supe|* encontrados en RAW ahora mismo:', todasLasKeysSupe);
-    todasLasKeysSupe.forEach(function(k) {
-      console.log('[MAPA-DEBUG]', k, '-> filas:', idx[k].length, '| última fecha:', idx[k][idx[k].length-1].fecha, '| inv:', idx[k][idx[k].length-1].inv);
-    });
-    console.log('[MAPA-DEBUG] ¿"Supe" existe en PLANT_META_EXEC?', !!PLANT_META_EXEC['Supe']);
-    console.log('[MAPA-DEBUG] fecha usada para el mapa:', fecha);
-    console.log('[MAPA-DEBUG] Total de filas en RAW ahora mismo:', RAW.length);
-  }
-
   function arrastrarLocal(planta, producto, fechaObjetivo) {
     var arr = idx[planta + '|' + producto];
     if (!arr || !arr.length) return null;
@@ -22849,13 +22833,6 @@ function _execMapaDatos(fecha) {
   Object.keys(PLANT_META_EXEC).forEach(function(planta) {
     if (!porInstalacion[planta]) porInstalacion[planta] = { productos: [], minCob: 999 };
   });
-  // ⚠️ DIAGNÓSTICO TEMPORAL (parte 2) — esto muestra el resultado FINAL
-  // que realmente recibe el popup, después de todos los filtros — para
-  // saber si el problema está en la construcción de este resultado, o
-  // en el renderizado del popup (_execFichaTabla) que lo recibe.
-  {
-    console.log('[MAPA-DEBUG-2] porInstalacion["Supe"] FINAL:', JSON.stringify(porInstalacion['Supe']));
-  }
   return porInstalacion;
 }
 function _execCobColor(dias) {
@@ -22872,11 +22849,15 @@ const EXEC_MAPA_COMPLEJOS = {
   'Iquitos': 'Refinería Iquitos'
 };
 function _execFichaTabla(planta, info, esRef) {
-  // ⚠️ DIAGNÓSTICO TEMPORAL (parte 3) — qué recibe REALMENTE la función
-  // que pinta el popup, para compararlo con lo que generó _execMapaDatos.
-  if (planta === 'Supe') {
-    console.log('[MAPA-DEBUG-3] _execFichaTabla recibió para Supe:', JSON.stringify(info));
-  }
+  // ⚠️ CORREGIDO (causa raíz real, confirmada con diagnóstico) — el
+  // HTML generado con <table> estaba 100% completo y correcto (4 filas
+  // confirmadas byte por byte: encabezado + 3 productos), pero el
+  // navegador solo pintaba 2 de las 3 filas de datos dentro del popup
+  // de Leaflet — un problema de renderizado de tablas HTML dentro de
+  // ese contexto específico, no de los datos ni de la lógica. Se
+  // reconstruye todo con <div> + flexbox en vez de <table>/<tr>/<td>,
+  // eliminando por completo cualquier comportamiento especial de tabla
+  // que el navegador pudiera estar interpretando mal.
   var filasHTML = '';
   if (info && info.productos.length) {
     var prods = info.productos.slice().sort(function(a,b){ return PROD_ORDER.indexOf(a.producto) - PROD_ORDER.indexOf(b.producto); });
@@ -22884,26 +22865,26 @@ function _execFichaTabla(planta, info, esRef) {
       var cobTxt = esRef ? '—' : (p.cob > 0 ? p.cob + 'd' : '—');
       var cobCol = esRef ? '#94a3b8' : _execCobColor(p.cob);
       var faded = p.sinDato ? 'opacity:.45' : '';
-      return '<tr style="display:table-row;' + faded + '">' +
-        '<td style="display:table-cell;padding:4px 8px;font-weight:700;color:#0f1e3c">' + p.producto + '</td>' +
-        '<td style="display:table-cell;padding:4px 8px;text-align:right;font-family:ui-monospace,monospace">' + (p.sinDato?'—':p.existencia.toFixed(1)) + '</td>' +
-        '<td style="display:table-cell;padding:4px 8px;text-align:right;font-family:ui-monospace,monospace;color:#0891b2">' + (p.despReal>0?p.despReal.toFixed(2):'—') + '</td>' +
-        '<td style="display:table-cell;padding:4px 8px;text-align:right;font-family:ui-monospace,monospace;color:#7c3aed">' + (p.pron>0?p.pron.toFixed(2):'—') + '</td>' +
-        '<td style="display:table-cell;padding:4px 8px;text-align:center;font-weight:800;color:' + cobCol + '">' + cobTxt + '</td>' +
-        '</tr>';
+      return '<div style="display:flex;align-items:center;padding:4px 8px;border-bottom:1px solid #f1f5f9;' + faded + '">' +
+        '<div style="flex:1.3;font-weight:700;color:#0f1e3c">' + p.producto + '</div>' +
+        '<div style="flex:1;text-align:right;font-family:ui-monospace,monospace">' + (p.sinDato?'—':p.existencia.toFixed(1)) + '</div>' +
+        '<div style="flex:1;text-align:right;font-family:ui-monospace,monospace;color:#0891b2">' + (p.despReal>0?p.despReal.toFixed(2):'—') + '</div>' +
+        '<div style="flex:1;text-align:right;font-family:ui-monospace,monospace;color:#7c3aed">' + (p.pron>0?p.pron.toFixed(2):'—') + '</div>' +
+        '<div style="flex:.8;text-align:center;font-weight:800;color:' + cobCol + '">' + cobTxt + '</div>' +
+        '</div>';
     }).join('');
   } else {
-    filasHTML = '<tr><td colspan="5" style="padding:10px;text-align:center;color:#94a3b8;font-size:11px">Sin productos configurados</td></tr>';
+    filasHTML = '<div style="padding:10px;text-align:center;color:#94a3b8;font-size:11px">Sin productos configurados</div>';
   }
-  var tablaHTML = '<table style="width:100%;border-collapse:collapse;font-size:10.5px;display:table">' +
-      '<thead style="display:table-header-group"><tr style="display:table-row;background:#f1f5f9">' +
-        '<th style="display:table-cell;padding:5px 8px;text-align:left;font-size:8.5px;text-transform:uppercase;color:#64748b">Producto</th>' +
-        '<th style="display:table-cell;padding:5px 8px;text-align:right;font-size:8.5px;text-transform:uppercase;color:#64748b">Exist.</th>' +
-        '<th style="display:table-cell;padding:5px 8px;text-align:right;font-size:8.5px;text-transform:uppercase;color:#64748b">D.Real</th>' +
-        '<th style="display:table-cell;padding:5px 8px;text-align:right;font-size:8.5px;text-transform:uppercase;color:#64748b">Pron.</th>' +
-        '<th style="display:table-cell;padding:5px 8px;text-align:center;font-size:8.5px;text-transform:uppercase;color:#64748b">Cob.</th>' +
-      '</tr></thead><tbody style="display:table-row-group">' + filasHTML + '</tbody>' +
-    '</table>';
+  var tablaHTML = '<div style="width:100%;font-size:10.5px">' +
+      '<div style="display:flex;align-items:center;padding:5px 8px;background:#f1f5f9">' +
+        '<div style="flex:1.3;text-align:left;font-size:8.5px;text-transform:uppercase;color:#64748b;font-weight:700">Producto</div>' +
+        '<div style="flex:1;text-align:right;font-size:8.5px;text-transform:uppercase;color:#64748b;font-weight:700">Exist.</div>' +
+        '<div style="flex:1;text-align:right;font-size:8.5px;text-transform:uppercase;color:#64748b;font-weight:700">D.Real</div>' +
+        '<div style="flex:1;text-align:right;font-size:8.5px;text-transform:uppercase;color:#64748b;font-weight:700">Pron.</div>' +
+        '<div style="flex:.8;text-align:center;font-size:8.5px;text-transform:uppercase;color:#64748b;font-weight:700">Cob.</div>' +
+      '</div>' + filasHTML +
+    '</div>';
 
   // Cabotaje / reposición terrestre programada — debajo de la tabla,
   // mismo criterio (vol_rep/vol_rep_bt2) que usa "Cobertura por planta".
@@ -22935,16 +22916,6 @@ function _execFichaTabla(planta, info, esRef) {
     reposHTML = '<div style="padding:7px 8px;background:#f8fafc;border-top:1px solid #e2e8f0;font-size:10px;color:#94a3b8;text-align:center">Sin reposición programada</div>';
   }
 
-  // ⚠️ DIAGNÓSTICO TEMPORAL (parte 4, definitivo) — cuenta cuántas
-  // filas <tr> tiene el HTML REAL que esta función genera y devuelve,
-  // para Supe. Si esto muestra 4 (1 header + 3 productos), el problema
-  // está en otro lugar DESPUÉS de esta función. Si muestra menos,
-  // el problema está aquí adentro después de todo.
-  if (planta === 'Supe') {
-    var totalTr = (tablaHTML.match(/<tr/g) || []).length;
-    console.log('[MAPA-DEBUG-4] Total de <tr> en tablaHTML para Supe:', totalTr, '(esperado: 4 = 1 encabezado + 3 productos)');
-    console.log('[MAPA-DEBUG-4] tablaHTML completo:', tablaHTML);
-  }
   return tablaHTML + reposHTML;
 }
 window._execMapaSwitchTab = function(id, tab) {
