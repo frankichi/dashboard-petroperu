@@ -561,14 +561,36 @@ body.rd-print-mode #rdPrintCerrarBtn{ display:flex; align-items:center; gap:6px;
     <div class="sol-modal-grid">
       <div class="fld">
         <label>Campo a corregir</label>
-        <select id="solCampo" class="rd-select" style="width:100%">
+        <select id="solCampo" class="rd-select" style="width:100%" onchange="rdSolCambiarCampo()">
           <option value="existencia">Existencia (MB)</option>
           <option value="despacho">Despacho (MB/d)</option>
+          <option value="reposicion">Reposición (tipo/volumen)</option>
         </select>
       </div>
-      <div class="fld">
+      <div class="fld" id="solValorWrap">
         <label>Valor correcto</label>
         <input type="number" step="0.001" id="solValor" placeholder="0.000" style="width:100%">
+      </div>
+    </div>
+    <!-- ⚠️ AGREGADO — a pedido: los operadores a veces se equivocan al
+         marcar una reposición (tipo o volumen incorrecto). Antes no
+         había forma de corregir esto — solo existencia/despacho. Igual
+         que el resto de correcciones, pasa por aprobación de
+         Planificación de Suministro, nunca se aplica directo. -->
+    <div class="sol-modal-grid" id="solReposWrap" style="display:none">
+      <div class="fld">
+        <label>Tipo correcto</label>
+        <select id="solReposTipo" class="rd-select" style="width:100%">
+          <option value="MARITIMO">⛴️ Cabotaje Marítimo</option>
+          <option value="FLUVIAL">🛶 Cabotaje Fluvial</option>
+          <option value="TERRESTRE">🚛 Cisternas</option>
+          <option value="REFINERIA">🏭 Vía Refinería</option>
+          <option value="NINGUNA">✕ No fue una reposición (quitar)</option>
+        </select>
+      </div>
+      <div class="fld" id="solReposVolWrap">
+        <label>Volumen correcto (MB)</label>
+        <input type="number" step="0.001" id="solReposVol" placeholder="0.000" style="width:100%">
       </div>
     </div>
     <div class="fld" style="margin-bottom:16px">
@@ -1093,6 +1115,25 @@ function rdFmt(n) {
 
 
 // ── Solicitud de corrección ────────────────────────────────────────────
+// ⚠️ AGREGADO — alterna entre "un solo valor numérico" (existencia/
+// despacho) y "tipo + volumen" (reposición) según lo que se esté
+// corrigiendo.
+function rdSolCambiarCampo() {
+  var campo = document.getElementById('solCampo').value;
+  var esRepos = campo === 'reposicion';
+  document.getElementById('solValorWrap').style.display = esRepos ? 'none' : '';
+  document.getElementById('solReposWrap').style.display = esRepos ? 'flex' : 'none';
+  if (esRepos) rdSolCambiarTipoRepos();
+}
+function rdSolCambiarTipoRepos() {
+  var tipo = document.getElementById('solReposTipo').value;
+  document.getElementById('solReposVolWrap').style.display = tipo === 'NINGUNA' ? 'none' : '';
+}
+document.addEventListener('DOMContentLoaded', function() {
+  var selTipo = document.getElementById('solReposTipo');
+  if (selTipo) selTipo.addEventListener('change', rdSolCambiarTipoRepos);
+});
+
 function rdAbrirSolicitud() {
   var modal = document.getElementById('solModal');
   var selProd = document.getElementById('solProd');
@@ -1103,6 +1144,8 @@ function rdAbrirSolicitud() {
   }).join('');
   document.getElementById('solValor').value = '';
   document.getElementById('solMotivo').value = '';
+  document.getElementById('solCampo').value = 'existencia';
+  rdSolCambiarCampo();
   modal.classList.add('open');
 }
 function rdCerrarSolicitud() {
@@ -1112,23 +1155,38 @@ function rdCerrarSolicitud() {
 function rdEnviarSolicitud() {
   var prod   = document.getElementById('solProd').value;
   var campo  = document.getElementById('solCampo').value;
-  var valor  = parseFloat(document.getElementById('solValor').value);
   var motivo = document.getElementById('solMotivo').value.trim();
-  if (!prod || isNaN(valor) || valor < 0) { rdToast('⚠ Completa todos los campos', 'error'); return; }
   if (!motivo) { rdToast('⚠ Ingresa el motivo de la corrección', 'error'); return; }
   var hoy = new Date().toISOString().slice(0, 10);
-  // Obtener valor actual del producto
-  var inpExist = document.querySelector('.rd-existencia[data-prod="' + prod + '"]');
-  var valorActual = inpExist ? (parseFloat(inpExist.value) || 0) : 0;
-  rdPost('rdSolicitarCorreccion', {
+  var payload = {
     token: RD.token,
     fecha_dato: hoy,
     producto: prod,
-    campo: campo,
-    valor_actual: valorActual,
-    valor_propuesto: valor,
     motivo: motivo
-  }).then(function(res) {
+  };
+  if (campo === 'reposicion') {
+    // ⚠️ AGREGADO — la corrección de reposición manda el tipo dentro
+    // del propio campo (ej. "reposicion:MARITIMO") para no necesitar
+    // una columna nueva en la hoja de solicitudes — Code.gs lo separa
+    // al aprobar.
+    var tipoRepos = document.getElementById('solReposTipo').value;
+    var volRepos = tipoRepos === 'NINGUNA' ? 0 : parseFloat(document.getElementById('solReposVol').value);
+    if (tipoRepos !== 'NINGUNA' && (isNaN(volRepos) || volRepos <= 0)) {
+      rdToast('⚠ Ingresa el volumen correcto', 'error'); return;
+    }
+    payload.campo = 'reposicion:' + tipoRepos;
+    payload.valor_actual = 0;
+    payload.valor_propuesto = volRepos;
+  } else {
+    var valor = parseFloat(document.getElementById('solValor').value);
+    if (isNaN(valor) || valor < 0) { rdToast('⚠ Completa todos los campos', 'error'); return; }
+    var inpExist = document.querySelector('.rd-existencia[data-prod="' + prod + '"]');
+    var valorActual = inpExist ? (parseFloat(inpExist.value) || 0) : 0;
+    payload.campo = campo;
+    payload.valor_actual = valorActual;
+    payload.valor_propuesto = valor;
+  }
+  rdPost('rdSolicitarCorreccion', payload).then(function(res) {
     rdCerrarSolicitud();
     if (res.success) {
       rdToast('✓ Solicitud enviada a Planificación de Suministro', 'ok');

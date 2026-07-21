@@ -1031,7 +1031,15 @@ function _solRenderPanel() {
 
   function fieldLabel(f) {
     var m = { existencia:'Existencia (MB)', inv:'Existencia (MB)', despacho:'Despacho (MB/d)', dem:'Despacho (MB/d)' };
-    return m[String(f||'').toLowerCase()] || f;
+    var fStr = String(f||'');
+    // ⚠️ AGREGADO — corrección de reposición: el campo llega como
+    // "reposicion:TIPO" — se muestra legible en vez del texto crudo.
+    if (fStr.indexOf('reposicion:') === 0) {
+      var tipo = fStr.slice('reposicion:'.length);
+      var tipoLabel = { MARITIMO:'Marítimo', FLUVIAL:'Fluvial', TERRESTRE:'Terrestre', REFINERIA:'Refinería', NINGUNA:'Quitar (no era reposición)' };
+      return 'Reposición · ' + (tipoLabel[tipo] || tipo);
+    }
+    return m[fStr.toLowerCase()] || f;
   }
 
   function solCard(s) {
@@ -21709,7 +21717,7 @@ function renderVistaEjecutivaSimple() {
     var navesHTML = '';
     if (d.reposNaves && d.reposNaves.length > 1) {
       navesHTML = d.reposNaves.map(function(n) {
-        var etiquetaFecha = n.fecha ? ((n.estado === 'COMPLETADO' ? 'ya descarg\u00f3 ' : 'ETA ') + n.fecha) : '';
+        var etiquetaFecha = n.fecha ? ((n.estado === 'COMPLETADO' ? 'ya descarg\u00f3 ' : n.estado === 'DESCARGANDO' ? 'lleg\u00f3 (descargando) ' : 'ETA ') + n.fecha) : '';
         var prodTxt = n.producto ? (n.producto + ' \u2014 ') : '';
         return '<div style="margin-top:3px">\uD83D\uDEA2 <b>' + (n.buque||'\u2014') + '</b> \u00b7 ' + prodTxt + n.vol.toFixed(1) + ' MB' + (etiquetaFecha ? ' \u00b7 ' + etiquetaFecha : '') + '</div>';
       }).join('');
@@ -21717,13 +21725,23 @@ function renderVistaEjecutivaSimple() {
     var reposHTML = d.diasRepos > 0
       ? (d.reposDetalle && d.reposDetalle.length > 1
           ? '<b>Reposici\u00f3n total (' + d.reposDetalle.length + ' productos)</b><br>' + d.volReposMB.toFixed(1) + ' MB \u2192 +' + d.diasRepos + ' d\u00edas equivalentes<br>' + d.reposDetalle.join('<br>')
-          : '<b>Reposici\u00f3n ' + (d.tipoRepos||'') + (d.reposEstado === 'COMPLETADO' ? ' \u2705 ya descarg\u00f3, ya en inventario' : '') + '</b><br>Volumen total: ' + d.volReposMB.toFixed(1) + ' MB'
+          : '<b>Reposici\u00f3n ' + (d.tipoRepos||'') +
+              // ⚠️ AGREGADO — antes solo se distinguía "COMPLETADO" de
+              // todo lo demás; un buque DESCARGANDO ahora mismo (estado
+              // real que ya viene del posicionamiento de naves) se
+              // mostraba igual que uno que ni siquiera ha llegado — con
+              // el mismo texto genérico "ETA: fecha". Ahora se muestra
+              // el estado real tal como se conoce.
+              (d.reposEstado === 'COMPLETADO' ? ' \u2705 ya descarg\u00f3, ya en inventario'
+                : d.reposEstado === 'DESCARGANDO' ? ' \uD83D\uDD34 descargando ahora'
+                : d.reposEstado === 'EN TRANSITO' || d.reposEstado === 'EN_TRANSITO' ? ' \uD83D\uDEA2 en tr\u00e1nsito'
+                : '') + '</b><br>Volumen total: ' + d.volReposMB.toFixed(1) + ' MB'
             + (navesHTML
                 ? navesHTML
                 : ((d.reposBt ? '<br>Buque/Barcaza: ' + d.reposBt : '')
-                  + (d.reposFecha ? ('<br>' + (d.reposEstado === 'COMPLETADO' ? 'Descarg\u00f3 el: ' : 'Fecha de reposici\u00f3n (ETA): ') + d.reposFecha) : '')))
+                  + (d.reposFecha ? ('<br>' + (d.reposEstado === 'COMPLETADO' ? 'Descarg\u00f3 el: ' : d.reposEstado === 'DESCARGANDO' ? 'Lleg\u00f3 el: ' : 'Fecha de reposici\u00f3n (ETA): ') + d.reposFecha) : '')))
             + (reposEsPendiente ? '<br>D\u00edas equivalentes: +' + d.diasRepos + 'd' : '')
-            + (reposLejana ? '<br><span style="color:#93c5fd">\u26a0\ufe0f A\u00fan a ' + diasHastaETA + ' d\u00edas \u2014 no confirmado, no cuenta como inventario todav\u00eda</span>' : ''))
+            + (reposLejana && d.reposEstado !== 'DESCARGANDO' ? '<br><span style="color:#93c5fd">\u26a0\ufe0f A\u00fan a ' + diasHastaETA + ' d\u00edas \u2014 no confirmado, no cuenta como inventario todav\u00eda</span>' : ''))
       : '';
     var pronHTML = '<div style="color:#93c5fd">Demanda pron\u00f3stico' + (prod!=='Todos'?(' ('+prod+')'):'') + ': ' + (d.pronMB||0).toFixed(2) + ' MB/d\u00eda</div>';
     // ⚠️ CORREGIDO — bug real confirmado: antes AMBOS segmentos de la
@@ -22646,17 +22664,40 @@ function renderVistaEjecutivaSimple() {
       var r = reposSerieAj[i] || 0;
       return Math.max(0, parseFloat((v - r).toFixed(1)));
     });
-    var COLOR_INV_PROYECTADO = '#d97706'; // ámbar — distinto del azul normal, para que no se confunda con un cierre real
+    // ⚠️ CORREGIDO — el ámbar (#d97706) se confundía con el naranja que
+    // ya usa el sistema para "Atención 8-12d" en la escala de cobertura
+    // (criterio de 8 a 14 días) — dos significados completamente
+    // distintos con el mismo color. Ahora "proyectado" usa un patrón de
+    // rayas diagonales en el MISMO azul del inventario normal — se nota
+    // a simple vista que es "la misma categoría, pero con una textura
+    // distinta que avisa que no es un cierre confirmado", sin inventar
+    // un color nuevo que pueda chocar con otro significado ya existente.
+    function _crearPatronRayasAzul() {
+      var pCanvas = document.createElement('canvas');
+      pCanvas.width = 10; pCanvas.height = 10;
+      var pCtx = pCanvas.getContext('2d');
+      pCtx.fillStyle = '#1e5f8f';
+      pCtx.fillRect(0, 0, 10, 10);
+      pCtx.strokeStyle = 'rgba(255,255,255,.55)';
+      pCtx.lineWidth = 3;
+      pCtx.beginPath();
+      pCtx.moveTo(0, 10); pCtx.lineTo(10, 0);
+      pCtx.moveTo(-2, 2); pCtx.lineTo(2, -2);
+      pCtx.moveTo(8, 12); pCtx.lineTo(12, 8);
+      pCtx.stroke();
+      return ctxInv.getContext('2d').createPattern(pCanvas, 'repeat');
+    }
+    var COLOR_INV_PROYECTADO = _crearPatronRayasAzul();
     var invDatasets = [{
       label: 'Inventario',
       data: hayRepos ? invBaseSerie : invSerie,
       // ⚠️ AGREGADO — las barras de días con inventario PROYECTADO
       // (buque ya descargó pero la planta aún no cierra oficial, o
       // consumo estimado de una planta sin cierre ese día) se pintan
-      // de otro color — antes se veían igual que un cierre real y la
-      // gente pensaba que ya se había reportado.
+      // con un patrón de rayas — antes se veían igual que un cierre
+      // real y la gente pensaba que ya se había reportado.
       backgroundColor: function(ctx) { return invEsProyectadoSerie[ctx.dataIndex] ? COLOR_INV_PROYECTADO : gInv; },
-      hoverBackgroundColor: function(ctx) { return invEsProyectadoSerie[ctx.dataIndex] ? '#f59e0b' : '#2f7ab8'; },
+      hoverBackgroundColor: function(ctx) { return invEsProyectadoSerie[ctx.dataIndex] ? COLOR_INV_PROYECTADO : '#2f7ab8'; },
       borderRadius: hayRepos ? 0 : 5, maxBarThickness: barMode?36:26, stack: 'inv'
     }];
     if (hayRepos) {
@@ -22762,7 +22803,12 @@ function _execReposicionInfo(r, fechaRef) {
   var tipos = [tipo1, tipo2].filter(Boolean);
   var tipoUnico = tipos.length === 1 ? tipos[0] : (tipos.length > 1 ? 'mixta' : '');
   var diasRepos = denom > 0 ? Math.round(volTotal / denom) : 0;
-  return { diasRepos: diasRepos, volMB: volTotal, tipo: tipoUnico, bt: r.bt||'', bt2: r.bt2||'' };
+  // ⚠️ AGREGADO — bt_estado YA se calculaba en el backend (cruzando
+  // contra Cargas de Naves), pero nunca llegaba hasta el popup del
+  // mapa — por eso parecía que el sistema "no sabía" que un buque ya
+  // estaba descargando, cuando en realidad el dato ya existía, solo no
+  // se mostraba. Se expone acá tal cual.
+  return { diasRepos: diasRepos, volMB: volTotal, tipo: tipoUnico, bt: r.bt||'', bt2: r.bt2||'', estado: r.bt_estado||'' };
 }
 function _execMapaDatos(fecha) {
   // ⚠️ CORREGIDO (tercera vuelta, causa raíz real) — el intento anterior
@@ -22896,6 +22942,7 @@ function _execFichaTabla(planta, info, esRef) {
   // mismo criterio (vol_rep/vol_rep_bt2) que usa "Cobertura por planta".
   var reposActivos = (info && info.productos || []).filter(function(p) { return p.repos && p.repos.volMB > 0; });
   var reposHTML;
+  var ESTADO_BT_LABEL = { 'DESCARGANDO': '🔴 Descargando', 'COMPLETADO': '✅ Completado', 'EN TRANSITO': '🚢 En tránsito', 'PROGRAMADO': '📅 Programado' };
   if (esRef) {
     reposHTML = ''; // las refinerías no reciben cabotaje por BT (concepto no aplica)
   } else if (reposActivos.length) {
@@ -22904,14 +22951,27 @@ function _execFichaTabla(planta, info, esRef) {
       var rep = p.repos;
       var icono = iconoTipo[rep.tipo] || '📦';
       var btTxt = [rep.bt, rep.bt2].filter(Boolean).join(' + ');
-      return '<div style="display:flex;align-items:center;justify-content:space-between;padding:5px 0;border-bottom:1px solid #f1f5f9;font-size:10px">' +
+      var estadoTxt = rep.estado ? (ESTADO_BT_LABEL[String(rep.estado).toUpperCase()] || rep.estado) : '';
+      return '<div style="padding:5px 0;border-bottom:1px solid #f1f5f9;font-size:10px">' +
+        '<div style="display:flex;align-items:center;justify-content:space-between">' +
         '<div><span style="font-weight:700;color:#0f1e3c">' + p.producto + '</span>' +
           (btTxt ? ' <span style="color:#94a3b8">· ' + btTxt + '</span>' : '') + '</div>' +
         '<div style="display:flex;align-items:center;gap:6px;flex-shrink:0">' +
           '<span style="color:#64748b">' + icono + ' ' + rep.tipo + '</span>' +
           '<span style="font-family:ui-monospace,monospace;font-weight:800;color:#2563eb">' + rep.volMB.toFixed(1) + ' MB</span>' +
           '<span style="font-family:ui-monospace,monospace;color:#94a3b8">(' + rep.diasRepos + 'd)</span>' +
-        '</div></div>';
+        '</div></div>' +
+        // ⚠️ AGREGADO — el estado del buque (bt_estado) ya se calculaba
+        // automáticamente en el backend, cruzando contra Cargas de
+        // Naves, pero nunca se mostraba acá — por eso parecía que el
+        // sistema no sabía que un buque ya estaba descargando, cuando
+        // en realidad el dato ya existía. También se aclara que el
+        // volumen es el MANIFIESTO total declarado por el buque, no
+        // necesariamente lo que ya se recibió físicamente — para
+        // evitar la ambigüedad exacta del caso reportado (buque de 57
+        // MB, planta con solo 32 MB reflejados en su inventario).
+        (estadoTxt ? '<div style="margin-top:2px;font-size:9px;color:#64748b">' + estadoTxt + ' · volumen = manifiesto del buque, no necesariamente lo ya descargado</div>' : '') +
+        '</div>';
     }).join('');
     reposHTML =
       '<div style="padding:8px 8px 6px;background:#f8fafc;border-top:1px solid #e2e8f0">' +
