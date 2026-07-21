@@ -4129,7 +4129,48 @@ function renderPResumen() {
   // Filas del día más reciente con datos
   var fechas = [...new Set(RAW.map(function(r){return r.fecha;}))].sort();
   var fechaUso = fechas[fechas.length-1] || hoy;
-  var filasDia = RAW.filter(function(r){ return r.fecha === fechaUso && r.inv > 0; });
+  // ⚠️ CORREGIDO — bug real confirmado: este filtro solo tomaba filas
+  // con fecha EXACTAMENTE igual a fechaUso — cualquier planta que no
+  // hubiera cerrado su reporte formal justo ese día quedaba totalmente
+  // afuera del total, aunque sí tuviera un reporte reciente (ayer, por
+  // ejemplo). Vista Ejecutiva, en cambio, usa arrastre/proyección (el
+  // último dato conocido de cada planta+producto, con el consumo
+  // estimado restado día a día) — así que para la MISMA fecha, ambos
+  // paneles mostraban totales distintos. Ahora el panel de control usa
+  // el mismo criterio de arrastre, para que los números coincidan.
+  var _rpIdx = {};
+  RAW.forEach(function(r) {
+    if (!r.fecha || r.inv == null) return;
+    var k = r.planta + '|' + r.producto;
+    (_rpIdx[k] = _rpIdx[k] || []).push(r);
+  });
+  Object.keys(_rpIdx).forEach(function(k) {
+    _rpIdx[k].sort(function(a, b) { return a.fecha < b.fecha ? -1 : (a.fecha > b.fecha ? 1 : 0); });
+  });
+  function _rpArrastrar(planta, producto, fechaObjetivo) {
+    var arr = _rpIdx[planta + '|' + producto];
+    if (!arr || !arr.length) return null;
+    var lo = 0, hi = arr.length - 1, best = -1;
+    while (lo <= hi) {
+      var mid = (lo + hi) >> 1;
+      if (arr[mid].fecha <= fechaObjetivo) { best = mid; lo = mid + 1; } else hi = mid - 1;
+    }
+    if (best < 0) return null;
+    var r = arr[best];
+    if (r.fecha === fechaObjetivo) return r;
+    var pronVal = r.pron_mes || r.pron || 0;
+    if (pronVal <= 0) return r;
+    var p1 = r.fecha.split('-').map(Number), p2 = fechaObjetivo.split('-').map(Number);
+    var d1 = Date.UTC(p1[0], p1[1] - 1, p1[2]), d2 = Date.UTC(p2[0], p2[1] - 1, p2[2]);
+    var dias = Math.round((d2 - d1) / 86400000);
+    if (dias <= 0) return r;
+    var invProy = Math.max(0, (r.inv || 0) - dias * pronVal);
+    return Object.assign({}, r, { inv: invProy, _proyectadoConsumo: true });
+  }
+  var filasDia = Object.keys(_rpIdx).map(function(k) {
+    var pipeIdx = k.indexOf('|');
+    return _rpArrastrar(k.slice(0, pipeIdx), k.slice(pipeIdx + 1), fechaUso);
+  }).filter(function(r) { return r && r.inv > 0; });
 
   // Agrupar por planta: sumar inventario y tomar cobertura mínima de sus productos
   var COB_SANO_MAX = 90; // más de 90 días de cobertura es señal de dato mal
