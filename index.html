@@ -22837,6 +22837,14 @@ function _execMapaDatos(fecha) {
   Object.keys(PLANT_META_EXEC).forEach(function(planta) {
     if (!porInstalacion[planta]) porInstalacion[planta] = { productos: [], minCob: 999 };
   });
+  // ⚠️ DIAGNÓSTICO TEMPORAL (parte 2) — esto muestra el resultado FINAL
+  // que realmente recibe el popup, después de todos los filtros — para
+  // saber si el problema está en la construcción de este resultado, o
+  // en el renderizado del popup (_execFichaTabla) que lo recibe.
+  if (!window._execMapaDebugHecho2) {
+    window._execMapaDebugHecho2 = true;
+    console.log('[MAPA-DEBUG-2] porInstalacion["Supe"] FINAL:', JSON.stringify(porInstalacion['Supe']));
+  }
   return porInstalacion;
 }
 function _execCobColor(dias) {
@@ -22853,6 +22861,12 @@ const EXEC_MAPA_COMPLEJOS = {
   'Iquitos': 'Refinería Iquitos'
 };
 function _execFichaTabla(planta, info, esRef) {
+  // ⚠️ DIAGNÓSTICO TEMPORAL (parte 3) — qué recibe REALMENTE la función
+  // que pinta el popup, para compararlo con lo que generó _execMapaDatos.
+  if (planta === 'Supe' && !window._execFichaDebugHecho) {
+    window._execFichaDebugHecho = true;
+    console.log('[MAPA-DEBUG-3] _execFichaTabla recibió para Supe:', JSON.stringify(info));
+  }
   var filasHTML = '';
   if (info && info.productos.length) {
     var prods = info.productos.slice().sort(function(a,b){ return PROD_ORDER.indexOf(a.producto) - PROD_ORDER.indexOf(b.producto); });
