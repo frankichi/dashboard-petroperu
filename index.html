@@ -22549,7 +22549,20 @@ function renderVistaEjecutivaSimple() {
           '<div id="exec-mapa-kpis"></div>' +
         '</div>' +
       '</div>' +
-      '<div id="exec-mapa-container" style="height:460px;border-radius:10px;overflow:hidden;background:#eef2f7;position:relative;z-index:1;isolation:isolate;' + (window._execMapaOculto ? 'display:none' : '') + '"></div>' +
+      // ⚠️ CORREGIDO (causa raíz real, confirmada con diagnóstico) — el
+      // contenedor de Leaflet tenía overflow:hidden, necesario para
+      // recortar las esquinas redondeadas del mapa — pero eso también
+      // recorta CUALQUIER popup que sea más alto de lo normal (ej. una
+      // planta con 3 productos en vez de 2), aunque el popup en sí
+      // tuviera los datos completos y bien armados (confirmado con el
+      // diagnóstico: los 3 productos llegaban bien hasta el renderizado,
+      // pero se recortaban visualmente al mostrarse). Un div envolvente
+      // con su propio overflow:hidden NO sirve — el recorte se hereda
+      // de cualquier ancestro, sin importar el contenedor inmediato.
+      // Se quita el recorte por completo: se prioriza que los datos
+      // completos siempre sean visibles sobre el detalle estético de
+      // esquinas perfectamente redondeadas en casos extremos.
+      '<div id="exec-mapa-container" style="height:460px;border-radius:10px;background:#eef2f7;position:relative;z-index:1;isolation:isolate;' + (window._execMapaOculto ? 'display:none' : '') + '"></div>' +
       '<div id="exec-mapa-hint" style="font-size:10.5px;color:var(--txt3);margin-top:8px;' + (window._execMapaOculto ? 'display:none' : '') + '">📍 Toca cualquier instalación para ver existencia, despacho real, pronóstico y cobertura por producto</div>' +
     '</div>' +
     '<div class="exec-charts-row">' +
