@@ -3293,6 +3293,12 @@ const SKIP_COMBOS = new Set(['Callao|GLP','Pisco|TA1','El Milagro|TA1','Conchán
   'Piura|GLP','Eten|GLP','Salaverry|GLP','Chimbote|GLP','Supe|GLP','Pisco|GLP',
   'Mollendo|GLP','Ilo|GLP','Iquitos|GLP','Pucallpa|GLP','Yurimaguas|GLP',
   'Tarapoto|GLP','El Milagro|GLP','Juliaca|GLP','Cusco|GLP','Conchán|GLP',
+  // ⚠️ AGREGADO — a pedido: Conchán no debe mostrar estos 2 productos en
+  // el panel gerencial por el momento (datos residuales, no productos
+  // reales de esta planta). Al pasar el mapa a descubrimiento 100%
+  // dinámico (mostrar todo lo que exista en los datos, sin catálogo
+  // fijo), estos volvieron a aparecer — se excluyen explícitamente acá.
+  'Conchán|Alcohol Carburante', 'Conchán|G. Regular HS',
 ]);
 var _covModalData = {crit:[], warn:[], ok:[], restr:[]};
 var ventasDiariasMap = {};
