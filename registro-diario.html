@@ -1759,7 +1759,17 @@ function rdRefreshMiReporte() {
   if (!RD.fechaReporte) rdInicializarFechaReporte();
   rdRenderFechaBanner();
   var hoy = RD.fechaReporte;
-  var cacheKey = hoy;
+  // ⚠️ CORREGIDO — bug real confirmado: la clave de caché era SOLO la
+  // fecha, sin la planta. Si el mismo navegador pasaba de una sesión a
+  // otra (ej. un admin usando "ver como" para cambiar de planta, o dos
+  // supervisores distintos usando el mismo dispositivo sin recargar la
+  // página), la caché de una fecha podía devolver el reporte de OTRA
+  // planta guardado bajo esa misma fecha — exactamente lo reportado:
+  // el encabezado decía "Supervisor Iquitos" pero el reporte mostraba
+  // los datos de Eten. Ahora la clave incluye la planta efectiva
+  // (la que se está viendo, sea la propia o "ver como" de un admin).
+  var plantaEfectiva = RD.plantaAdminVista || RD.planta || '';
+  var cacheKey = plantaEfectiva + '|' + hoy;
   var cached = window._rdMiReporteCache[cacheKey];
 
   if (cached) {
@@ -1769,16 +1779,16 @@ function rdRefreshMiReporte() {
     rdGet('rdGetMiReporte', { token: RD.token, fecha: hoy }).then(res => {
       if (res.success) window._rdMiReporteCache[cacheKey] = res;
       // Solo se vuelve a pintar si el usuario SIGUE viendo esta misma
-      // fecha (si ya cambió a otra mientras tanto, esta respuesta
-      // llegó tarde y se descarta silenciosamente — evita parpadeos o
-      // pisar lo que se está viendo ahora).
-      if (res.success && RD.fechaReporte === hoy) _rdAplicarReporteResp(res, hoy);
+      // fecha Y la misma planta (si ya cambió a otra mientras tanto,
+      // esta respuesta llegó tarde y se descarta silenciosamente —
+      // evita parpadeos o pisar lo que se está viendo ahora).
+      if (res.success && RD.fechaReporte === hoy && (RD.plantaAdminVista || RD.planta || '') === plantaEfectiva) _rdAplicarReporteResp(res, hoy);
     }).catch(function() { /* la copia en caché ya se mostró; un fallo de red en el refresco silencioso no es grave */ });
     return;
   }
 
-  // ── Primera vez que se ve esta fecha en la sesión: sin nada que
-  // mostrar todavía, sí hace falta el loader normal.
+  // ── Primera vez que se ve esta fecha (para esta planta) en la
+  // sesión: sin nada que mostrar todavía, sí hace falta el loader normal.
   rdShowLoader(true);
   rdGet('rdGetMiReporte', { token: RD.token, fecha: hoy }).then(res => {
     rdShowLoader(false);
@@ -1950,10 +1960,11 @@ function rdConfirmarGuardar() {
       // duplicado con los mismos datos.
       var btnPrincipal = document.getElementById('btnGuardar');
       if (btnPrincipal) { btnPrincipal.disabled = true; btnPrincipal.title = 'Guardado ✓'; btnPrincipal.style.opacity = '.45'; btnPrincipal.style.cursor = 'not-allowed'; }
-      // ⚠️ Invalidar la caché de esta fecha — sin esto, el refresco de
-      // abajo mostraría brevemente el estado VIEJO (cacheado, de antes
-      // de guardar) antes de corregirse solo en segundo plano.
-      if (window._rdMiReporteCache) delete window._rdMiReporteCache[RD.fechaReporte];
+      // ⚠️ Invalidar la caché de esta fecha+planta — sin esto, el
+      // refresco de abajo mostraría brevemente el estado VIEJO
+      // (cacheado, de antes de guardar) antes de corregirse solo en
+      // segundo plano. Misma clave planta+fecha que usa rdRefreshMiReporte.
+      if (window._rdMiReporteCache) delete window._rdMiReporteCache[(RD.plantaAdminVista || RD.planta || '') + '|' + RD.fechaReporte];
       rdRefreshMiReporte();
     }
     else { rdToast(res.message || 'Error al guardar', 'error'); if (/sesi\u00f3n/i.test(res.message || '')) rdLogout(); }
@@ -2415,14 +2426,17 @@ function rdRenderCalendario() {
 // esperar la latencia completa de Google Apps Script recién en ese
 // momento.
 function rdCalPrecargar(iso) {
-  if (window._rdMiReporteCache[iso]) return; // ya está en caché, nada que hacer
-  if (window._rdCalPrecargando && window._rdCalPrecargando[iso]) return; // ya en curso
+  // Misma clave planta+fecha que usa rdRefreshMiReporte — ver el
+  // comentario ahí sobre por qué la fecha sola no bastaba.
+  var cacheKey = (RD.plantaAdminVista || RD.planta || '') + '|' + iso;
+  if (window._rdMiReporteCache[cacheKey]) return; // ya está en caché, nada que hacer
+  if (window._rdCalPrecargando && window._rdCalPrecargando[cacheKey]) return; // ya en curso
   window._rdCalPrecargando = window._rdCalPrecargando || {};
-  window._rdCalPrecargando[iso] = true;
+  window._rdCalPrecargando[cacheKey] = true;
   rdGet('rdGetMiReporte', { token: RD.token, fecha: iso }).then(function(res) {
-    if (res.success) window._rdMiReporteCache[iso] = res;
+    if (res.success) window._rdMiReporteCache[cacheKey] = res;
   }).catch(function() {}).finally(function() {
-    if (window._rdCalPrecargando) delete window._rdCalPrecargando[iso];
+    if (window._rdCalPrecargando) delete window._rdCalPrecargando[cacheKey];
   });
 }
 
