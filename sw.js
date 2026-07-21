@@ -90,9 +90,21 @@ self.addEventListener('fetch', function(event) {
     // pedir siempre una copia 100% fresca del servidor.
     event.respondWith(
       fetch(event.request, { cache: 'no-store' }).then(function(networkResp) {
+        // ⚠️ CORREGIDO — bug real confirmado: "Failed to execute
+        // 'clone' on 'Response': Response body is already used". La
+        // versión anterior llamaba networkResp.clone() DENTRO de un
+        // .then() de caches.open() — que es asíncrono. En ese lapso,
+        // el navegador ya recibía networkResp (vía el "return" de más
+        // abajo) y podía empezar a leer su cuerpo para pintar la
+        // página. Para cuando el .then() de caches.open() finalmente
+        // se ejecutaba, el cuerpo ya estaba "en uso" y clone() fallaba
+        // — pasaba en CADA carga de página, no era intermitente.
+        // Ahora se clona de inmediato, de forma síncrona, apenas se
+        // tiene la respuesta — antes de cualquier espera asíncrona.
         if (networkResp && networkResp.ok) {
+          var paraGuardar = networkResp.clone();
           caches.open(CACHE_NAME).then(function(cache) {
-            cache.put(event.request, networkResp.clone());
+            cache.put(event.request, paraGuardar);
           });
         }
         return networkResp;
