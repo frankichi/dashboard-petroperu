@@ -464,7 +464,17 @@ var _mapLibsLoaded=false;
     .then(function(res) {
       btnEl.disabled = false;
       btnEl.textContent = 'Ingresar';
-      console.log('[AUTH] respuesta:', JSON.stringify(res));
+      // ⚠️ CORREGIDO — hallazgo real de seguridad: el token de sesión
+      // firmado (válido 12 horas, equivalente a la contraseña mientras
+      // dura) se imprimía COMPLETO en la consola del navegador. Esto no
+      // es teórico — quedó expuesto en una captura de pantalla real
+      // compartida durante el desarrollo de esta misma aplicación.
+      // Cualquiera con esa captura podía usar el token directamente,
+      // sin necesitar el usuario/contraseña. Se redacta antes de
+      // mostrarlo, conservando el resto de la respuesta para
+      // diagnóstico.
+      var resParaLog = res ? Object.assign({}, res, { token: res.token ? '[REDACTADO]' : undefined }) : res;
+      console.log('[AUTH] respuesta:', JSON.stringify(resParaLog));
       if (res && res.success) {
         // ── Acceso restringido: SOLO esta cuenta puede entrar al panel
         // de control nacional (index.html). Cualquier otra cuenta válida
@@ -1063,7 +1073,12 @@ function _solRenderPanel() {
       + '<div><div style="font-size:9px;color:var(--txt3);text-transform:uppercase;letter-spacing:.4px">Fecha dato</div><div style="font-size:12px;font-weight:700;color:var(--txt)">' + String(s.fecha_dato||'').slice(0,10) + '</div></div>'
       + '<div><div style="font-size:9px;color:var(--txt3);text-transform:uppercase;letter-spacing:.4px">Cambio</div><div style="font-size:12px;font-weight:700"><span style="color:var(--txt3);text-decoration:line-through;font-weight:500">'+s.valor_actual+'</span> \u2192 <span style="color:'+accent+'">'+s.valor_propuesto+'</span> <span style="color:'+deltaColor+';font-size:10px">('+deltaTxt+')</span></div></div>'
       + '</div>'
-      + (s.motivo ? '<div style="font-size:11px;color:var(--txt2);background:var(--bg2);border-radius:7px;padding:8px 11px;margin-bottom:10px;font-style:italic">\u201c' + s.motivo + '\u201d</div>' : '')
+      // ⚠️ CORREGIDO — vulnerabilidad XSS almacenado real, más grave que
+      // la anterior porque este campo lo escribe CUALQUIER operador de
+      // planta (no solo admin) al solicitar una corrección — código
+      // HTML/JavaScript en el motivo se ejecutaría en el navegador de
+      // Planificación de Suministro al revisar la solicitud.
+      + (s.motivo ? '<div style="font-size:11px;color:var(--txt2);background:var(--bg2);border-radius:7px;padding:8px 11px;margin-bottom:10px;font-style:italic">\u201c' + escapeHtml(s.motivo) + '\u201d</div>' : '')
       + (isPend
         ? '<div style="display:flex;gap:8px">'
           + '<button onclick="_solResponder(\'' + s.id + '\',true)" style="flex:1;padding:9px 14px;border-radius:8px;border:none;background:#1a7a44;color:#fff;font-size:12px;font-weight:800;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px">\u2713 Aprobar y aplicar</button>'
@@ -1072,7 +1087,7 @@ function _solRenderPanel() {
         : '<div style="font-size:10.5px;color:var(--txt3);display:flex;align-items:center;gap:6px">'
           + (s.estado==='APROBADA' ? '\u2705' : '\u274c') + ' ' + s.estado + ' por <b style="color:var(--txt2)">' + (s.resuelto_por||'\u2014') + '</b>'
           + (s.fecha_resp ? ' \u00b7 ' + String(s.fecha_resp).slice(0,16) : '')
-          + (s.comentario_resp ? '<span style="margin-left:4px">\u2014 "' + s.comentario_resp + '"</span>' : '')
+          + (s.comentario_resp ? '<span style="margin-left:4px">\u2014 "' + escapeHtml(s.comentario_resp) + '"</span>' : '')
           + '</div>')
       + '</div>';
   }
@@ -22273,7 +22288,16 @@ function renderVistaEjecutivaSimple() {
           + '<td style="padding:5px 10px;text-align:right">' + (f.desp > 0 ? f.desp.toFixed(1) : '—') + '</td>'
           + '<td style="padding:5px 10px;text-align:right">' + (f.pron > 0 ? f.pron.toFixed(2) : '—') + '</td>'
           + '<td style="padding:5px 10px;text-align:right;font-weight:700;color:' + cobColor + '">' + (f.cob !== null ? f.cob + 'd' : '—') + '</td>'
-          + '<td style="padding:5px 10px;color:#64748b;font-size:9.5px">' + (f.comentario || '—') + '</td>'
+          // ⚠️ CORREGIDO — vulnerabilidad XSS almacenado real: f.comentario
+          // es texto libre escrito por el operador de la planta (via
+          // comentario_prod) — se insertaba directo en el HTML sin
+          // escapar. Cualquiera con acceso a Registro Diario podía
+          // escribir código HTML/JavaScript en su comentario, que se
+          // ejecutaría en el navegador de quien viera este reporte
+          // (incluyendo administradores). escapeHtml() ya existe en el
+          // código (se usa en otros formularios) — solo faltaba
+          // aplicarlo acá.
+          + '<td style="padding:5px 10px;color:#64748b;font-size:9.5px">' + escapeHtml(f.comentario || '—') + '</td>'
           + '</tr>';
       }).join('');
       return '<tr><td colspan="6" style="padding:6px 10px;font-weight:800;color:#0a3a5c;background:#eef2f7;font-size:10.5px">🏭 ' + plNombre + ' <span style="font-weight:600;color:#64748b">— ' + totalPlanta.toFixed(1) + ' MB total</span></td></tr>' + filasProdHTML;
