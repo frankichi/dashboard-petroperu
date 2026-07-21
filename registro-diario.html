@@ -1026,7 +1026,7 @@ function rdRenderTopbar() {
 
 document.getElementById('btnLogin').addEventListener('click', function () {
   const email = document.getElementById('loginEmail').value.trim();
-  const password = document.getElementById('loginPassword').value;
+  const password = document.getElementById('loginPassword').value.trim();
   const btn = this; btn.disabled = true; btn.textContent = 'Ingresando…';
   rdPost('rdLogin', { email: email, password: password }).then(res => {
     btn.disabled = false; btn.textContent = 'Ingresar';
@@ -1051,8 +1051,8 @@ document.getElementById('btnRegistrar').addEventListener('click', function () {
   const nombre = document.getElementById('regNombre').value.trim();
   const email = document.getElementById('regEmail').value.trim();
   const planta = document.getElementById('regPlanta').value;
-  const p1 = document.getElementById('regPassword').value;
-  const p2 = document.getElementById('regPassword2').value;
+  const p1 = document.getElementById('regPassword').value.trim();
+  const p2 = document.getElementById('regPassword2').value.trim();
   document.getElementById('pwMismatchErr').style.display = 'none';
   if (p1 !== p2) { document.getElementById('pwMismatchErr').style.display = 'block'; return; }
   const btn = this; btn.disabled = true; btn.textContent = 'Creando cuenta…';
@@ -1076,8 +1076,12 @@ document.getElementById('btnRecuperar').addEventListener('click', function () {
 
 document.getElementById('btnReset').addEventListener('click', function () {
   const token = new URLSearchParams(location.search).get('token');
-  const p1 = document.getElementById('resetPassword').value;
-  const p2 = document.getElementById('resetPassword2').value;
+  // ⚠️ AGREGADO — mismo trim() que ya se aplica en el backend, para
+  // que la validación "coinciden" de acá sea consistente con lo que
+  // realmente se va a guardar (si no, un espacio de más podría
+  // "coincidir" en pantalla pero el backend igual lo recorta distinto).
+  const p1 = document.getElementById('resetPassword').value.trim();
+  const p2 = document.getElementById('resetPassword2').value.trim();
   if (p1 !== p2) { rdMsg('resetMsg', 'Las contraseñas no coinciden', false); return; }
   const btn = this; btn.disabled = true; btn.textContent = 'Guardando…';
   rdPost('rdResetPassword', { token: token, newPassword: p1 }).then(res => {
