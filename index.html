@@ -1273,7 +1273,14 @@ function _pdCisByRuta(plan, which) {
 }
 
 function _pdRenderResumen(plan) {
-  var d = window._planDistData;
+  // ⚠️ CORREGIDO — bug real confirmado: window._planDistData (los
+  // valores REALES registrados, distinto del plan) solo se inicializa
+  // cuando se abre el formulario de una ruta específica (más abajo en
+  // este archivo) — si el usuario entra directo al resumen SIN haber
+  // pasado antes por ahí, esta variable seguía sin definir y
+  // "d.barcazas" tiraba "Cannot read properties of undefined". Mismo
+  // valor por defecto que ya se usa en otras partes de este archivo.
+  var d = window._planDistData || { barcazas:{}, cisternas:{} };
   var totalYu  = plan.barcazas_yu.reduce(function(a,b){return a+b.productos.reduce(function(x,y){return x+y.vol_plan;},0);},0);
   var totalLpo = plan.barcazas_lpo.reduce(function(a,b){return a+b.productos.reduce(function(x,y){return x+y.vol_plan;},0);},0);
   var totalCis = plan.cisternas.reduce(function(a,b){return a+b.vol_plan;},0);
@@ -1326,7 +1333,8 @@ function _pdRenderResumen(plan) {
 // ── Render formulario barcazas ──
 function _pdRenderBarcazas(plan, ruta) {
   var lista = ruta==='yu' ? plan.barcazas_yu : plan.barcazas_lpo;
-  var d = window._planDistData;
+  // Mismo fix que en _pdRenderResumen — ver comentario ahí.
+  var d = window._planDistData || { barcazas:{}, cisternas:{} };
   var html = '<div>';
   lista.forEach(function(b) {
     var bd = d.barcazas[b.id]||{};
@@ -20773,6 +20781,37 @@ function renderVistaEjecutivaSimple() {
     var invProy = Math.max(0, (r.inv || 0) - dias * pronVal);
     return Object.assign({}, r, { inv: invProy, _proyectadoConsumo: true, _proyectadoBaseFecha: r.fecha, _proyectadoDias: dias });
   }
+  // ⚠️ AGREGADO — detecta si el inventario de UNA FECHA ESPECÍFICA
+  // incluye algún componente proyectado (por buque ya descargado, o
+  // por consumo estimado de una planta que aún no cierra ese día).
+  // Reutiliza EXACTAMENTE la misma iteración planta×producto que
+  // sumFecha('inv',...) usa para sumar el total — así el resultado es
+  // 100% consistente con lo que realmente se está graficando, no una
+  // aproximación aparte. Se usa para pintar de otro color las barras
+  // de inventario proyectado en la gráfica — la gente confundía esos
+  // días con reportes ya cerrados de verdad.
+  function fechaTieneProyeccion(fecha, planta, producto) {
+    var combo = COMBO_PLANTAS[planta];
+    var plantasIter = combo ? combo.plantasInv
+      : (!planta || planta === 'Nacional') ? PLANTAS_18_OFICIALES.concat(REFINERIAS) : [planta];
+    var productosIter = (producto && producto !== 'Todos') ? [producto]
+      : (typeof PRODUCTO_ORDEN !== 'undefined' ? PRODUCTO_ORDEN : ['Diesel','D2S50-H','G. Regular','G. Premium','G. 84','TA1','GLP','G. Regular HS','PI6']);
+    if (combo && combo.productosRestrict) {
+      productosIter = productosIter.filter(function(pr){ return combo.productosRestrict.indexOf(pr) !== -1; });
+    }
+    for (var i = 0; i < plantasIter.length; i++) {
+      var pl2 = plantasIter[i];
+      if (!combo && (!planta || planta === 'Nacional') && PLANTAS_DUPLICADAS_EN_REFINERIA.indexOf(pl2) !== -1) continue;
+      for (var j = 0; j < productosIter.length; j++) {
+        var pr2 = productosIter[j];
+        if (typeof SKIP_COMBOS !== 'undefined' && SKIP_COMBOS.has(pl2 + '|' + pr2)) continue;
+        var r = _invArrastrado(pl2, pr2, fecha);
+        if (!r) continue;
+        if (r._proyectado || r._proyectadoConsumo) return true;
+      }
+    }
+    return false;
+  }
   function sumFecha(fecha, field, planta, producto) {
     if (field === 'inv') {
       // Inventario = STOCK, no un flujo del día — se arrastra el último
@@ -20930,6 +20969,13 @@ function renderVistaEjecutivaSimple() {
     }
     labels = datesN.map(function(d){ return d.slice(8,10); }); // solo el número de día — el mes ya está en el título
     invSerie = datesN.map(function(d){ var v=sumFecha(d,'inv',pl,prod); return v>0?parseFloat(v.toFixed(1)):null; });
+    // ⚠️ AGREGADO — en Vista Nacional NO se pinta la diferenciación de
+    // proyectado: a nivel consolidado casi siempre HAY alguna planta con
+    // algo proyectado en cualquier fecha (18 plantas + 3 refinerías), así
+    // que pintar la barra nacional en ámbar por eso sería ruido casi
+    // permanente, no una señal útil. Solo tiene sentido al ver UNA planta
+    // específica, donde sí es información clara y accionable.
+    var invEsProyectadoSerie = (!pl || pl === 'Nacional') ? datesN.map(function(){ return false; }) : datesN.map(function(d){ return fechaTieneProyeccion(d, pl, prod); });
     despSerie = datesN.map(function(d){
       var v = RAW.filter(function(r){ return r.fecha===d && filaAplica(r, pl, prod); })
                  .reduce(function(s,r){ return s+despRow(r); }, 0);
@@ -20964,6 +21010,13 @@ function renderVistaEjecutivaSimple() {
     var datesN = (DATES || []).slice(Math.max(0, idxFin - n + 1), idxFin + 1);
     labels = datesN.map(mesCorto);
     invSerie = datesN.map(function(d){ var v=sumFecha(d,'inv',pl,prod); return v>0?parseFloat(v.toFixed(1)):null; });
+    // ⚠️ AGREGADO — en Vista Nacional NO se pinta la diferenciación de
+    // proyectado: a nivel consolidado casi siempre HAY alguna planta con
+    // algo proyectado en cualquier fecha (18 plantas + 3 refinerías), así
+    // que pintar la barra nacional en ámbar por eso sería ruido casi
+    // permanente, no una señal útil. Solo tiene sentido al ver UNA planta
+    // específica, donde sí es información clara y accionable.
+    var invEsProyectadoSerie = (!pl || pl === 'Nacional') ? datesN.map(function(){ return false; }) : datesN.map(function(d){ return fechaTieneProyeccion(d, pl, prod); });
     despSerie = datesN.map(function(d){
       var v = RAW.filter(function(r){ return r.fecha===d && filaAplica(r, pl, prod); })
                  .reduce(function(s,r){ return s+despRow(r); }, 0);
@@ -22358,9 +22411,17 @@ function renderVistaEjecutivaSimple() {
       var r = reposSerieAj[i] || 0;
       return Math.max(0, parseFloat((v - r).toFixed(1)));
     });
+    var COLOR_INV_PROYECTADO = '#d97706'; // ámbar — distinto del azul normal, para que no se confunda con un cierre real
     var invDatasets = [{
       label: 'Inventario',
-      data: hayRepos ? invBaseSerie : invSerie, backgroundColor: gInv, hoverBackgroundColor: '#2f7ab8',
+      data: hayRepos ? invBaseSerie : invSerie,
+      // ⚠️ AGREGADO — las barras de días con inventario PROYECTADO
+      // (buque ya descargó pero la planta aún no cierra oficial, o
+      // consumo estimado de una planta sin cierre ese día) se pintan
+      // de otro color — antes se veían igual que un cierre real y la
+      // gente pensaba que ya se había reportado.
+      backgroundColor: function(ctx) { return invEsProyectadoSerie[ctx.dataIndex] ? COLOR_INV_PROYECTADO : gInv; },
+      hoverBackgroundColor: function(ctx) { return invEsProyectadoSerie[ctx.dataIndex] ? '#f59e0b' : '#2f7ab8'; },
       borderRadius: hayRepos ? 0 : 5, maxBarThickness: barMode?36:26, stack: 'inv'
     }];
     if (hayRepos) {
@@ -22381,7 +22442,10 @@ function renderVistaEjecutivaSimple() {
             backgroundColor: '#0a3a5c', padding: 10, cornerRadius: 8, titleFont: {weight:'700'},
             callbacks: {
               title: function(ctx){ var f = datesN[ctx[0].dataIndex]; return f ? (_execNombreDiaCorto(f) + '. ' + mesCorto(f)) : ''; },
-              label: function(c){ return (c.dataset.label||'') + ': ' + fmtMB(c.parsed.y); }
+              label: function(c){
+                var esProy = c.dataset.label === 'Inventario' && invEsProyectadoSerie[c.dataIndex];
+                return (c.dataset.label||'') + ': ' + fmtMB(c.parsed.y) + (esProy ? ' ⚠️ proyectado' : '');
+              }
             }
           }
         },
