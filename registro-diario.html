@@ -2070,16 +2070,24 @@ var _histData = [];
 window._histLoaded = false;
 
 function rdLoadHistorico() {
-  if (!RD.token || !RD.planta) return;
+  // ⚠️ CORREGIDO — bug real confirmado: esta función usaba RD.planta
+  // directo, mientras que el resto del código (guardado, caché del
+  // reporte, etc.) ya usa el patrón "RD.plantaAdminVista || RD.planta"
+  // para saber la planta EFECTIVA que se está viendo — si un admin
+  // entraba en modo "ver como" sin que RD.planta llegara a
+  // sincronizarse correctamente, el histórico se pedía para la planta
+  // equivocada (o ninguna), pareciendo que simplemente "no carga".
+  var plantaEfectiva = RD.plantaAdminVista || RD.planta;
+  if (!RD.token || !plantaEfectiva) return;
   var dias = document.getElementById('histPeriodo') ? parseInt(document.getElementById('histPeriodo').value) : 7;
   var sub = document.getElementById('histSub');
-  if (sub) sub.textContent = 'Planta: ' + plantaLabel(RD.planta) + ' \u00b7 \u00daltimos ' + dias + ' d\u00edas';
+  if (sub) sub.textContent = 'Planta: ' + plantaLabel(plantaEfectiva) + ' \u00b7 \u00daltimos ' + dias + ' d\u00edas';
   var content = document.getElementById('histContent');
   if (content) content.innerHTML = '<div class="rd-loading">\u23f3 Cargando hist\u00f3rico\u2026</div>';
 
   // Cargar hist\u00f3rico y cabotajes en paralelo, ambos con fallback propio
   function cargarHistorico() {
-    return rdGet('rdGetHistoricoInventario', { token: RD.token, planta: RD.planta, dias: dias })
+    return rdGet('rdGetHistoricoInventario', { token: RD.token, planta: plantaEfectiva, dias: dias })
       .then(function(res) {
         if (res && res.success === false && !res.registros) throw new Error('no_endpoint');
         var regs = Array.isArray(res) ? res : (res.registros || res.data || []);
@@ -2088,15 +2096,15 @@ function rdLoadHistorico() {
       })
       .catch(function() {
         console.warn('[HIST] usando fallback getHistorico');
-        var _legacyPlanta = RD.planta === 'Conchan' ? 'Conchán' : RD.planta;
+        var _legacyPlanta = plantaEfectiva === 'Conchan' ? 'Conchán' : plantaEfectiva;
         return rdGet('getHistorico', { planta: _legacyPlanta, dias: dias })
           .then(function(res2) {
             var rows = Array.isArray(res2) ? res2 : (res2.data || res2.registros || []);
             var fechaCorte = new Date();
             fechaCorte.setDate(fechaCorte.getDate() - dias);
             var fcStr = fechaCorte.toISOString().slice(0, 10);
-            var plantaLeg  = rdPlantaLegacyFront(RD.planta);
-            var plantaNorm = RD.planta;
+            var plantaLeg  = rdPlantaLegacyFront(plantaEfectiva);
+            var plantaNorm = plantaEfectiva;
             return rows.filter(function(r) {
               var pl = (r.planta || '').trim();
               return (pl === plantaLeg || pl === plantaNorm) && (r.fecha || '') >= fcStr;
@@ -2132,8 +2140,8 @@ function rdLoadHistorico() {
         .replace(/[\u00ed\u00ec]/g,'i').replace(/[\u00f3\u00f2]/g,'o')
         .replace(/[\u00fa\u00f9]/g,'u').trim();
     }
-    var plantaN = norm(RD.planta);
-    return rdGet('rdGetCabotajesPlanta', { token: RD.token, planta: RD.planta, dias: '120' })
+    var plantaN = norm(plantaEfectiva);
+    return rdGet('rdGetCabotajesPlanta', { token: RD.token, planta: plantaEfectiva, dias: '120' })
       .then(function(res) {
         var cabs = res.cabotajes || [];
         console.log('[cabotajes] endpoint: encontrados=' + cabs.length + ' total=' + (res._total||0));
@@ -2775,7 +2783,7 @@ function rdRenderHistoricoTable() {
         var tag = parseReposicionTag(r.comentario_prod);
         if (!tag) return '<td style="color:#94a3b8;font-size:10.5px;text-align:center">—</td>';
         return '<td style="font-size:10.5px"><span style="font-weight:700;color:#1e40af">' + tag.tipoLabel + '</span> '
-          + '<span style="font-family:var(--mono);font-weight:800;color:#2563eb">+' + tag.volumenMB.toFixed(1) + ' MB</span></td>';
+          + '<span style="font-family:var(--mono);font-weight:800;color:#2563eb">+' + tag.volumenMB.toFixed(2) + ' MB</span></td>';
       })()
         + (function() {
         // Comentario a nivel de PRODUCTO — hay 2 fuentes posibles para
@@ -2819,7 +2827,7 @@ function rdExportarHistExcel() {
   var filas = [];
   filas.push(['PETROPER\u00da S.A. \u2014 HIST\u00d3RICO DE INVENTARIO']);
   filas.push(['Registro Diario \u00b7 Planificaci\u00f3n de Suministro']);
-  filas.push(['Planta:', plantaLabel(RD.planta || '')]);
+  filas.push(['Planta:', plantaLabel(RD.plantaAdminVista || RD.planta || '')]);
   filas.push(['Generado el:', new Date().toLocaleDateString('es-PE') + ' ' + new Date().toLocaleTimeString('es-PE',{hour:'2-digit',minute:'2-digit'})]);
   filas.push([]);
   filas.push(['Fecha', 'Producto', 'Existencia (MB)', 'Dem. Real (MB/d)', 'Pron. Mensual (MB)', 'Cobertura', 'Cabotaje / Nave', 'Reposición marcada', 'Comentario']);
@@ -2942,7 +2950,7 @@ function rdExportarHistPDF() {
       '</div>' +
       '<div style="border:1px solid #e2e8f0;border-top:none;padding:16px 24px;background:#f8fafc">' +
         '<table style="width:100%;font-size:11px"><tr>' +
-          '<td><b>Planta / Terminal:</b> ' + plantaLabel(RD.planta||'') + '</td>' +
+          '<td><b>Planta / Terminal:</b> ' + plantaLabel(RD.plantaAdminVista || RD.planta || '') + '</td>' +
           '<td style="text-align:right"><b>Generado el:</b> ' + fechaGen + '</td>' +
         '</tr></table>' +
       '</div>' +
