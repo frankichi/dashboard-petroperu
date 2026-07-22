@@ -4995,6 +4995,11 @@ function updateEventTicker() {
       if (TK_SKIP_COMBOS.indexOf((r.planta||'')+'|'+(r.producto||'')) >= 0) return false;
       if (EXCL.some(function(x){ return r.producto && r.producto.toUpperCase().includes(x.toUpperCase()); })) return false;
       if (SKIP_COMBOS.has((r.planta||'')+'|'+(r.producto||''))) return false;
+      // ⚠️ AGREGADO — mismo cruce contra el catálogo oficial que ya se
+      // aplicó en Centro de Decisiones, mapa y desplegable — cubre
+      // automáticamente cualquier combo planta/producto residual,
+      // sin necesitar agregarlo a mano a TK_SKIP_COMBOS cada vez.
+      if (typeof PRODUCTOS_POR_PLANTA_EXEC !== 'undefined' && PRODUCTOS_POR_PLANTA_EXEC[r.planta] && PRODUCTOS_POR_PLANTA_EXEC[r.planta].indexOf(r.producto) === -1) return false;
       if (TK_EXCL_PLANTS.indexOf(r.planta) >= 0) return false;
       var vp = TK_VALID[r.producto];
       if (vp && vp.indexOf(r.planta) < 0) return false;
@@ -5180,6 +5185,11 @@ function decBuildRecs() {
   var act = today.filter(function(r){
     return !EXCL.some(function(x){ return r.producto && r.producto.toUpperCase().includes(x.toUpperCase()); })
       && !SKIP_COMBOS.has((r.planta||'')+'|'+(r.producto||''))
+      // ⚠️ AGREGADO — cruzar también contra el catálogo oficial de
+      // productos por planta (caso real confirmado: El Milagro
+      // aparecía con G. 84 en las alertas de Centro de Decisiones,
+      // aunque esa planta no maneja ese producto según el catálogo).
+      && (typeof PRODUCTOS_POR_PLANTA_EXEC === 'undefined' || !PRODUCTOS_POR_PLANTA_EXEC[r.planta] || PRODUCTOS_POR_PLANTA_EXEC[r.planta].indexOf(r.producto) !== -1)
       && ((r.inv||0) > 0 || (r.pron||0) > 0 || (r.vfact||0) > 0 ||
           (pronDiarioAprobado(r)) > 0);
   });
@@ -5472,7 +5482,7 @@ function renderP1() {
   const prev  = byDate(DATES[DATES.indexOf(currentDate) - 1] || '');
   if (!today.length) return;
   const EXCLUIR = ['ULSD EXPO','Regular HS'];
-  const active = today.filter(r => !EXCLUIR.some(x => r.producto && r.producto.toUpperCase().includes(x.toUpperCase())) && !SKIP_COMBOS.has((r.planta||'')+'|'+(r.producto||'')));
+  const active = today.filter(r => !EXCLUIR.some(x => r.producto && r.producto.toUpperCase().includes(x.toUpperCase())) && !SKIP_COMBOS.has((r.planta||'')+'|'+(r.producto||'')) && (typeof PRODUCTOS_POR_PLANTA_EXEC === 'undefined' || !PRODUCTOS_POR_PLANTA_EXEC[r.planta] || PRODUCTOS_POR_PLANTA_EXEC[r.planta].indexOf(r.producto) !== -1));
   const COB_CRIT = 8;
   const COB_WARN = 15;
   window.COB_CRIT = COB_CRIT;
@@ -6321,7 +6331,7 @@ function renderPR() {
     return;
   }
   const EXCLUIR  = ['A. Iquitos','A. Tarapoto','A. LimaCallao','A. Cusco'];
-  const active   = today.filter(r => !EXCLUIR.some(x => r.planta===x) && !SKIP_COMBOS.has((r.planta||'')+'|'+(r.producto||'')));
+  const active   = today.filter(r => !EXCLUIR.some(x => r.planta===x) && !SKIP_COMBOS.has((r.planta||'')+'|'+(r.producto||'')) && (typeof PRODUCTOS_POR_PLANTA_EXEC === 'undefined' || !PRODUCTOS_POR_PLANTA_EXEC[r.planta] || PRODUCTOS_POR_PLANTA_EXEC[r.planta].indexOf(r.producto) !== -1));
   const restrictList = active.filter(r => {
     const pr =pronDiarioAprobado(r);
     const vf = r.vfact || 0;
@@ -8895,6 +8905,7 @@ function renderP6() {
   var active = today.filter(function(r) {
     return !EXCL_PL.some(function(x) { return r.planta === x; })
       && !SKIP_COMBOS.has((r.planta||'')+'|'+(r.producto||''))
+      && (typeof PRODUCTOS_POR_PLANTA_EXEC === 'undefined' || !PRODUCTOS_POR_PLANTA_EXEC[r.planta] || PRODUCTOS_POR_PLANTA_EXEC[r.planta].indexOf(r.producto) !== -1)
       && (r.inv > 0 || (r.pron||0) > 0 || (r.vfact||0) > 0);
   });
   var REGIONS = {
@@ -9074,7 +9085,8 @@ function renderPA() {
   const EXCLUIR = ['ULSD EXPO','Regular HS'];
   const active = today.filter(r => !EXCLUIR.some(x =>
     r.producto && r.producto.toUpperCase().includes(x.toUpperCase()))
-    && !SKIP_COMBOS.has((r.planta||'')+'|'+(r.producto||'')));
+    && !SKIP_COMBOS.has((r.planta||'')+'|'+(r.producto||''))
+    && (typeof PRODUCTOS_POR_PLANTA_EXEC === 'undefined' || !PRODUCTOS_POR_PLANTA_EXEC[r.planta] || PRODUCTOS_POR_PLANTA_EXEC[r.planta].indexOf(r.producto) !== -1));
   const PLANT_META = {
     'Talara':     {lat:-4.577,  lng:-81.272, tipo:'Refinería', region:'Piura'},
     'Eten':       {lat:-6.921,  lng:-79.860, tipo:'Terminal',  region:'Lambayeque'},
@@ -10623,7 +10635,7 @@ function _renderPCInto(container, editMode) {
   const today = byLatest();
   console.log('[pC] byLatest length:', today.length, 'currentDate:', currentDate, 'RAW:', RAW.length);
   const EXCLUIR = ['ULSD EXPO','Regular HS'];
-  const active = today.filter(r => !EXCLUIR.some(x => r.producto && r.producto.toUpperCase().includes(x.toUpperCase())) && !SKIP_COMBOS.has((r.planta||'')+'|'+(r.producto||'')));
+  const active = today.filter(r => !EXCLUIR.some(x => r.producto && r.producto.toUpperCase().includes(x.toUpperCase())) && !SKIP_COMBOS.has((r.planta||'')+'|'+(r.producto||'')) && (typeof PRODUCTOS_POR_PLANTA_EXEC === 'undefined' || !PRODUCTOS_POR_PLANTA_EXEC[r.planta] || PRODUCTOS_POR_PLANTA_EXEC[r.planta].indexOf(r.producto) !== -1));
   console.log('[pC] active rows:', active.length);
   if (!active.length) {
     container.innerHTML = '<div style="padding:40px;text-align:center;color:var(--txt3)">Sin datos para la fecha seleccionada. Fecha activa: ' + (currentDate || 'no definida') + ' — RAW: ' + RAW.length + ' registros</div>';
@@ -12002,7 +12014,7 @@ function _pTendRestoreHidden() {
 function renderPD() {
   const today = byLatest();
   const EXCLUIR = ['ULSD EXPO','Regular HS'];
-  const active = today.filter(r => !EXCLUIR.some(x => r.producto && r.producto.toUpperCase().includes(x.toUpperCase())) && !SKIP_COMBOS.has((r.planta||'')+'|'+(r.producto||'')));
+  const active = today.filter(r => !EXCLUIR.some(x => r.producto && r.producto.toUpperCase().includes(x.toUpperCase())) && !SKIP_COMBOS.has((r.planta||'')+'|'+(r.producto||'')) && (typeof PRODUCTOS_POR_PLANTA_EXEC === 'undefined' || !PRODUCTOS_POR_PLANTA_EXEC[r.planta] || PRODUCTOS_POR_PLANTA_EXEC[r.planta].indexOf(r.producto) !== -1));
   const productos = [...new Set(active.map(r=>r.producto))].sort();
   if (!productos.includes(curveProdFilter)) curveProdFilter = productos[0]||'';
   const prodBtns = productos.map(p =>
@@ -16376,6 +16388,7 @@ function openRestrModal(tipo) {
   var today = byLatest();
   var restr = today.filter(function(r) {
     if (SKIP_COMBOS.has((r.planta||'')+'|'+(r.producto||''))) return false;
+    if (typeof PRODUCTOS_POR_PLANTA_EXEC !== 'undefined' && PRODUCTOS_POR_PLANTA_EXEC[r.planta] && PRODUCTOS_POR_PLANTA_EXEC[r.planta].indexOf(r.producto) === -1) return false;
     var pr = pronDiarioAprobado(r);
     return (r.vfact||0) > 0 && pr > 0 && (r.vfact||0) < pr && r.producto !== 'TA1' && r.producto !== 'GLP';
   });
@@ -22466,6 +22479,12 @@ function renderVistaEjecutivaSimple() {
       if (combo) { if (combo.plantasInv.indexOf(r.planta) === -1) return false; }
       else if (pl !== 'Nacional' && r.planta !== pl) return false;
       if (typeof SKIP_COMBOS !== 'undefined' && SKIP_COMBOS.has((r.planta||'')+'|'+pr)) return false;
+      // ⚠️ AGREGADO — cruzar también contra el catálogo oficial de
+      // productos por planta (PRODUCTOS_POR_PLANTA_EXEC) — antes este
+      // desplegable solo miraba si HABÍA datos, sin verificar si ese
+      // producto realmente correspondía a esa planta según el catálogo
+      // real, mostrando opciones de más cuando había datos residuales.
+      if (!combo && pl !== 'Nacional' && typeof _execProductoValidoParaPlanta === 'function' && !_execProductoValidoParaPlanta(r.planta, pr)) return false;
       return true;
     });
     if (tieneDatos) return true;
@@ -22944,6 +22963,34 @@ function _execReposicionInfo(r, fechaRef, arrastrarLocalFn) {
   // se mostraba. Se expone acá tal cual.
   return { diasRepos: diasRepos, volMB: volTotal, tipo: tipoUnico, bt: r.bt||'', bt2: r.bt2||'', estado: r.bt_estado||'' };
 }
+// ⚠️ AGREGADO — catálogo oficial de productos por planta terminal,
+// proporcionado directamente por Planificación de Suministro. Antes el
+// mapa mostraba/omitía productos según lo que apareciera en los datos
+// (descubrimiento 100% dinámico) o según una lista de exclusiones que
+// se iba completando reactivamente cada vez que aparecía un caso
+// puntual (Conchán|Alcohol Carburante, etc.) — un enfoque que siempre
+// iba a ir un paso atrás de la realidad. Este catálogo es la fuente
+// de verdad definitiva: solo se muestra un producto en el mapa si
+// esta lista dice que esa planta realmente lo maneja.
+// NOTA: esto es SOLO para las 18 plantas terminales. Las refinerías
+// (Refinería Talara, Refinería Conchán, Refinería Iquitos) son
+// entidades separadas en los datos, con su propio catálogo — distinto
+// al de la planta terminal del mismo nombre — y no están cubiertas
+// por esta lista; sus productos se siguen mostrando sin este filtro.
+// ⚠️ AGREGADO — el mapa (_execMapaDatos) no estaba aplicando el mismo
+// catálogo oficial de productos por planta que ya usa "Cobertura por
+// Producto" (PRODUCTOS_POR_PLANTA_EXEC, definida más arriba) — por
+// eso el mapa podía mostrar productos que esa otra vista ya sabía que
+// no correspondían a cada planta. Se reutiliza el MISMO catálogo, en
+// vez de mantener una segunda lista aparte que podría desincronizarse.
+// Nota: cubre las 18 plantas terminales; las refinerías tienen su
+// propio catálogo (también ya definido ahí), y no se filtran acá.
+function _execProductoValidoParaPlanta(planta, producto) {
+  var lista = PRODUCTOS_POR_PLANTA_EXEC[planta];
+  if (!lista) return true; // planta sin catálogo definido — no se filtra
+  return lista.indexOf(producto) !== -1;
+}
+
 function _execMapaDatos(fecha) {
   // ⚠️ CORREGIDO (tercera vuelta, causa raíz real) — el intento anterior
   // reutilizaba _getInvHistIdx()/_invArrastrado() de otro ámbito, pero
@@ -22996,6 +23043,7 @@ function _execMapaDatos(fecha) {
     var producto = key.slice(pipeIdx + 1);
     if (!PLANT_META_EXEC[planta]) return;
     if (typeof SKIP_COMBOS !== 'undefined' && SKIP_COMBOS.has(key)) return;
+    if (!_execProductoValidoParaPlanta(planta, producto)) return;
     var r = arrastrarLocal(planta, producto, fecha);
     if (!r) return;
     if (!porInstalacion[planta]) porInstalacion[planta] = { productos: [], minCob: 999 };
