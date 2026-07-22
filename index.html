@@ -1059,7 +1059,7 @@ function _solRenderPanel() {
     var accent = isPend ? '#e8a000' : (s.estado==='APROBADA' ? '#1a7a44' : '#c8102e');
     var bgTint = isPend ? '#e8a00010' : (s.estado==='APROBADA' ? '#1a7a4410' : '#c8102e10');
     var delta = (parseFloat(s.valor_propuesto)||0) - (parseFloat(s.valor_actual)||0);
-    var deltaTxt = (delta>=0?'+':'') + delta.toFixed(2);
+    var deltaTxt = (delta>=0?'+':'') + delta.toFixed(DEC);
     var deltaColor = delta>=0 ? '#1a7a44' : '#c8102e';
     return '<div style="background:var(--card);border:1px solid var(--bdr);border-left:3.5px solid '+accent+';border-radius:10px;padding:14px 16px;margin-bottom:10px;box-shadow:0 1px 3px rgba(0,0,0,.04)">'
       + '<div style="display:flex;align-items:flex-start;gap:10px;margin-bottom:10px">'
@@ -1450,8 +1450,8 @@ function _pdRenderResumen(plan) {
   var avPct    = total>0?Math.round(realTot/total*100):0;
 
   var html = '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px">'
-    + '<div style="background:var(--bg3);border:1px solid var(--bdr);border-radius:9px;padding:12px;text-align:center"><div style="font-size:8px;font-weight:700;color:var(--txt3);text-transform:uppercase">Plan total mes</div><div style="font-size:22px;font-weight:800;font-family:monospace;color:#818cf8;margin-top:3px">'+total.toFixed(2)+'</div><div style="font-size:9px;color:var(--txt3)">MB</div></div>'
-    + '<div style="background:var(--bg3);border:1px solid var(--bdr);border-radius:9px;padding:12px;text-align:center"><div style="font-size:8px;font-weight:700;color:var(--txt3);text-transform:uppercase">Real registrado</div><div style="font-size:22px;font-weight:800;font-family:monospace;color:#4ade80;margin-top:3px">'+realTot.toFixed(2)+'</div><div style="font-size:9px;color:var(--txt3)">MB</div></div>'
+    + '<div style="background:var(--bg3);border:1px solid var(--bdr);border-radius:9px;padding:12px;text-align:center"><div style="font-size:8px;font-weight:700;color:var(--txt3);text-transform:uppercase">Plan total mes</div><div style="font-size:22px;font-weight:800;font-family:monospace;color:#818cf8;margin-top:3px">'+total.toFixed(DEC)+'</div><div style="font-size:9px;color:var(--txt3)">MB</div></div>'
+    + '<div style="background:var(--bg3);border:1px solid var(--bdr);border-radius:9px;padding:12px;text-align:center"><div style="font-size:8px;font-weight:700;color:var(--txt3);text-transform:uppercase">Real registrado</div><div style="font-size:22px;font-weight:800;font-family:monospace;color:#4ade80;margin-top:3px">'+realTot.toFixed(DEC)+'</div><div style="font-size:9px;color:var(--txt3)">MB</div></div>'
     + '<div style="background:var(--bg3);border:1px solid var(--bdr);border-radius:9px;padding:12px;text-align:center"><div style="font-size:8px;font-weight:700;color:var(--txt3);text-transform:uppercase">% Avance</div><div style="font-size:22px;font-weight:800;font-family:monospace;color:'+(avPct>=90?'#4ade80':avPct>=70?'#fbbf24':'#f87171')+';margin-top:3px">'+avPct+'%</div><div style="font-size:9px;color:var(--txt3)">del plan</div></div>'
     + '</div>';
 
@@ -1466,7 +1466,7 @@ function _pdRenderResumen(plan) {
     r[0].forEach(function(b){
       var bd=d.barcazas[b.id]||{};
       var vp=b.productos.reduce(function(a,p){return a+p.vol_plan;},0);
-      html+='<tr style="border-bottom:1px solid var(--bdr)"><td style="padding:7px 12px;font-weight:700;color:var(--txt)">'+b.empujador.replace('EF / ','')+'<span style="font-size:8px;color:var(--txt3);font-weight:400;margin-left:5px">'+b.capacidad+'</span></td><td style="padding:7px 12px;text-align:center;color:var(--txt2)">'+b.zarpe_plan+'</td><td style="padding:7px 12px;text-align:center;color:var(--txt2)">'+b.arribo_plan+'</td><td style="padding:7px 12px;text-align:right;font-weight:800;color:'+r[2]+'">'+vp.toFixed(2)+'</td><td style="padding:7px 12px;text-align:right;color:'+(bd.vol_real?'#4ade80':'var(--txt3)')+'">'+( bd.vol_real||'&mdash;')+'</td><td style="padding:7px 12px;text-align:center">'+_pdEstBadge(bd.estado||'pendiente')+'</td></tr>';
+      html+='<tr style="border-bottom:1px solid var(--bdr)"><td style="padding:7px 12px;font-weight:700;color:var(--txt)">'+b.empujador.replace('EF / ','')+'<span style="font-size:8px;color:var(--txt3);font-weight:400;margin-left:5px">'+b.capacidad+'</span></td><td style="padding:7px 12px;text-align:center;color:var(--txt2)">'+b.zarpe_plan+'</td><td style="padding:7px 12px;text-align:center;color:var(--txt2)">'+b.arribo_plan+'</td><td style="padding:7px 12px;text-align:right;font-weight:800;color:'+r[2]+'">'+vp.toFixed(DEC)+'</td><td style="padding:7px 12px;text-align:right;color:'+(bd.vol_real?'#4ade80':'var(--txt3)')+'">'+( bd.vol_real||'&mdash;')+'</td><td style="padding:7px 12px;text-align:center">'+_pdEstBadge(bd.estado||'pendiente')+'</td></tr>';
     });
     html+='</tbody></table></div>';
   });
@@ -1482,7 +1482,7 @@ function _pdRenderResumen(plan) {
     html+='<table style="width:100%;border-collapse:collapse;font-size:10.5px"><thead><tr style="background:var(--bg2);color:var(--txt3)"><th style="padding:6px 12px;text-align:left;font-size:9px">Viaje</th><th style="padding:6px 12px;text-align:center;font-size:9px">Zarpe</th><th style="padding:6px 12px;text-align:right;font-size:9px">Plan MB</th><th style="padding:6px 12px;text-align:right;font-size:9px">Real MB</th><th style="padding:6px 12px;text-align:center;font-size:9px">Estado</th></tr></thead><tbody>';
     lista.forEach(function(c){
       var cd=d.cisternas[c.id]||{};
-      html+='<tr style="border-bottom:1px solid var(--bdr)"><td style="padding:7px 12px;font-weight:700;color:var(--txt)">'+c.desc+'<span style="font-size:8px;color:var(--txt3);font-weight:400;margin-left:5px">'+c.producto+'</span></td><td style="padding:7px 12px;text-align:center;color:var(--txt2)">'+c.zarpe_plan+'</td><td style="padding:7px 12px;text-align:right;font-weight:800;color:#f59e0b">'+c.vol_plan.toFixed(2)+'</td><td style="padding:7px 12px;text-align:right;color:'+(cd.vol_real?'#4ade80':'var(--txt3)')+'">'+( cd.vol_real||'&mdash;')+'</td><td style="padding:7px 12px;text-align:center">'+_pdEstBadge(cd.estado||'pendiente')+'</td></tr>';
+      html+='<tr style="border-bottom:1px solid var(--bdr)"><td style="padding:7px 12px;font-weight:700;color:var(--txt)">'+c.desc+'<span style="font-size:8px;color:var(--txt3);font-weight:400;margin-left:5px">'+c.producto+'</span></td><td style="padding:7px 12px;text-align:center;color:var(--txt2)">'+c.zarpe_plan+'</td><td style="padding:7px 12px;text-align:right;font-weight:800;color:#f59e0b">'+c.vol_plan.toFixed(DEC)+'</td><td style="padding:7px 12px;text-align:right;color:'+(cd.vol_real?'#4ade80':'var(--txt3)')+'">'+( cd.vol_real||'&mdash;')+'</td><td style="padding:7px 12px;text-align:center">'+_pdEstBadge(cd.estado||'pendiente')+'</td></tr>';
     });
     html+='</tbody></table></div>';
   });
@@ -1506,7 +1506,7 @@ function _pdRenderBarcazas(plan, ruta) {
       + '<div style="margin-top:4px;display:flex;gap:5px;flex-wrap:wrap">'+b.productos.map(function(p){return '<span style="font-size:8.5px;padding:2px 7px;background:var(--bg2);border:1px solid var(--bdr);border-radius:5px;display:inline-flex;align-items:center;gap:4px"><span style="width:6px;height:6px;border-radius:50%;background:'+_pdProdCol(p.nombre)+';flex-shrink:0;display:inline-block"></span>'+p.nombre+' <b>'+p.vol_plan+'MB</b></span>';}).join('')+'</div>'
       + '</div><div style="text-align:right;flex-shrink:0">'
       + _pdEstBadge(bd.estado||'pendiente')
-      + '<div style="font-size:9.5px;color:var(--txt3);margin-top:3px">Plan: <b style="color:var(--txt)">'+vp.toFixed(2)+'MB</b></div>'
+      + '<div style="font-size:9.5px;color:var(--txt3);margin-top:3px">Plan: <b style="color:var(--txt)">'+vp.toFixed(DEC)+'MB</b></div>'
       + (bd.vol_real?'<div style="font-size:9.5px;color:#4ade80">Real: <b>'+bd.vol_real+'MB</b></div>':'')
       + (bd.arribo_yurimaguas?'<div style="font-size:8.5px;color:#38bdf8;margin-top:2px">\u2693 Yuri: '+bd.arribo_yurimaguas+'</div>':'')
       + (bd.status_embarque&&bd.status_embarque!=='PENDIENTE'?'<div style="font-size:8.5px;color:#f59e0b">\u26a1 Emb.: '+bd.status_embarque+'</div>':'')
@@ -1566,7 +1566,7 @@ function _pdRenderCisternas(plan, ruta) {
       + '<div style="font-size:20px;margin-bottom:2px">'+s.icon+'</div>'
       + '<div style="font-size:24px;font-weight:800;color:'+s.color+';font-family:monospace;line-height:1">'+agg.n+'</div>'
       + '<div style="font-size:10px;font-weight:800;color:'+s.color+';margin:2px 0">'+s.label+'</div>'
-      + '<div style="font-size:12px;font-weight:800;color:#1e293b;font-family:monospace">'+agg.mb.toFixed(2)+' MB</div>'
+      + '<div style="font-size:12px;font-weight:800;color:#1e293b;font-family:monospace">'+agg.mb.toFixed(DEC)+' MB</div>'
       + '<div style="font-size:8px;color:#94a3b8;margin-top:2px">'+s.sub+'</div>'
       + '</div>';
   });
@@ -1582,7 +1582,7 @@ function _pdRenderCisternas(plan, ruta) {
       var col = _pdProdCol(r.producto||'');
       html += '<span style="display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:20px;font-size:10px;font-weight:700;background:'+col+'18;border:1px solid '+col+'44;color:#1e293b">'
         + '<span style="width:7px;height:7px;border-radius:50%;background:'+col+';flex-shrink:0"></span>'
-        + (r.producto||'\u2014') + ' <b style="font-family:monospace">'+totN+'</b> cist \u00b7 <b style="font-family:monospace">'+totMB.toFixed(2)+'</b> MB</span>';
+        + (r.producto||'\u2014') + ' <b style="font-family:monospace">'+totN+'</b> cist \u00b7 <b style="font-family:monospace">'+totMB.toFixed(DEC)+'</b> MB</span>';
     });
     html += '</div>';
   }
@@ -1763,7 +1763,7 @@ function _pdRenderTanqueYuri(plan) {
   ];
   html += '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px">';
   KPIS.forEach(function(k){
-    var v = k.signed && k.val>0 ? '+'+k.val.toFixed(2) : k.val.toFixed(2);
+    var v = k.signed && k.val>0 ? '+'+k.val.toFixed(DEC) : k.val.toFixed(DEC);
     html += '<div style="background:'+k.bg+';border:1.5px solid '+k.bd+';border-radius:12px;padding:12px 14px;text-align:center">'
       + '<div style="font-size:9px;font-weight:800;color:'+k.color+';text-transform:uppercase;letter-spacing:.03em;margin-bottom:3px">'+k.lbl+'</div>'
       + '<div style="font-size:20px;font-weight:800;color:'+k.color+';font-family:monospace;line-height:1">'+v+'</div>'
@@ -1865,13 +1865,13 @@ function _pdTanqueCard(rowId, rec, isNew, prodList, prodDefault){
   html += '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:#e2e8f0;border-top:2px solid #cbd5e1">'
     + '<div style="background:#fff;padding:9px 14px;text-align:center">'
     +   '<div style="font-size:8.5px;font-weight:700;color:#64748b;text-transform:uppercase">Disponible p/ Iquitos</div>'
-    +   '<div id="tq-'+rowId+'-disp" style="font-size:16px;font-weight:800;color:#4f46e5;font-family:monospace">'+disp.toFixed(2)+'</div></div>'
+    +   '<div id="tq-'+rowId+'-disp" style="font-size:16px;font-weight:800;color:#4f46e5;font-family:monospace">'+disp.toFixed(DEC)+'</div></div>'
     + '<div style="background:#fff;padding:9px 14px;text-align:center">'
     +   '<div style="font-size:8.5px;font-weight:700;color:#64748b;text-transform:uppercase">Gap vs programado</div>'
-    +   '<div id="tq-'+rowId+'-gap" style="font-size:16px;font-weight:800;color:'+gapCol+';font-family:monospace">'+(gap>0?'+':'')+gap.toFixed(2)+'</div></div>'
+    +   '<div id="tq-'+rowId+'-gap" style="font-size:16px;font-weight:800;color:'+gapCol+';font-family:monospace">'+(gap>0?'+':'')+gap.toFixed(DEC)+'</div></div>'
     + '<div style="background:#fff;padding:9px 14px;text-align:center">'
     +   '<div style="font-size:8.5px;font-weight:700;color:#64748b;text-transform:uppercase">Saldo comprometido final</div>'
-    +   '<div id="tq-'+rowId+'-fin" style="font-size:16px;font-weight:800;color:#0891b2;font-family:monospace">'+fin.toFixed(2)+'</div></div>'
+    +   '<div id="tq-'+rowId+'-fin" style="font-size:16px;font-weight:800;color:#0891b2;font-family:monospace">'+fin.toFixed(DEC)+'</div></div>'
     + '</div>';
 
   html += '</div>';
@@ -1883,9 +1883,9 @@ window._pdTqRecalc = function(rowId){
   function n(k){ var e=document.getElementById('tq-'+rowId+'-'+k); return e&&e.value!==''?(parseFloat(e.value)||0):0; }
   var riq = n('inv_transf_riq'), vt = n('vol_transito'), vd = n('vol_por_descargar'), cb = n('carga_barc'), pi = n('prog_iquitos');
   var disp = riq+vt+vd, gap = disp-pi, fin = riq-cb;
-  var d=document.getElementById('tq-'+rowId+'-disp'); if(d) d.textContent=disp.toFixed(2);
-  var g=document.getElementById('tq-'+rowId+'-gap'); if(g){ g.textContent=(gap>0?'+':'')+gap.toFixed(2); g.style.color=gap>=0?'#16a34a':'#dc2626'; }
-  var f=document.getElementById('tq-'+rowId+'-fin'); if(f) f.textContent=fin.toFixed(2);
+  var d=document.getElementById('tq-'+rowId+'-disp'); if(d) d.textContent=disp.toFixed(DEC);
+  var g=document.getElementById('tq-'+rowId+'-gap'); if(g){ g.textContent=(gap>0?'+':'')+gap.toFixed(DEC); g.style.color=gap>=0?'#16a34a':'#dc2626'; }
+  var f=document.getElementById('tq-'+rowId+'-fin'); if(f) f.textContent=fin.toFixed(DEC);
 };
 
 function _pdLoadTanqueYuri(mes, cb){
@@ -2153,10 +2153,10 @@ function _pdRenderCumpl(rows) {
   });
   var tPlan=todos.reduce(function(a,v){return a+v.vol_plan;},0);
   var tReal=rows.reduce(function(a,r){return a+(parseFloat(r.vol_real_mb)||0);},0);
-  var pct=tPlan>0?(tReal/tPlan*100).toFixed(2):'0.0';
+  var pct=tPlan>0?(tReal/tPlan*100).toFixed(DEC):'0.0';
   var html='<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:12px">'
-    +'<div style="background:var(--bg3);border:1px solid var(--bdr);border-radius:9px;padding:12px;text-align:center"><div style="font-size:8px;font-weight:700;color:var(--txt3);text-transform:uppercase">Plan total</div><div style="font-size:22px;font-weight:800;font-family:monospace;color:#818cf8;margin-top:3px">'+tPlan.toFixed(2)+'</div><div style="font-size:9px;color:var(--txt3)">MB</div></div>'
-    +'<div style="background:var(--bg3);border:1px solid var(--bdr);border-radius:9px;padding:12px;text-align:center"><div style="font-size:8px;font-weight:700;color:var(--txt3);text-transform:uppercase">Real registrado</div><div style="font-size:22px;font-weight:800;font-family:monospace;color:#4ade80;margin-top:3px">'+tReal.toFixed(2)+'</div><div style="font-size:9px;color:var(--txt3)">MB</div></div>'
+    +'<div style="background:var(--bg3);border:1px solid var(--bdr);border-radius:9px;padding:12px;text-align:center"><div style="font-size:8px;font-weight:700;color:var(--txt3);text-transform:uppercase">Plan total</div><div style="font-size:22px;font-weight:800;font-family:monospace;color:#818cf8;margin-top:3px">'+tPlan.toFixed(DEC)+'</div><div style="font-size:9px;color:var(--txt3)">MB</div></div>'
+    +'<div style="background:var(--bg3);border:1px solid var(--bdr);border-radius:9px;padding:12px;text-align:center"><div style="font-size:8px;font-weight:700;color:var(--txt3);text-transform:uppercase">Real registrado</div><div style="font-size:22px;font-weight:800;font-family:monospace;color:#4ade80;margin-top:3px">'+tReal.toFixed(DEC)+'</div><div style="font-size:9px;color:var(--txt3)">MB</div></div>'
     +'<div style="background:var(--bg3);border:1px solid var(--bdr);border-radius:9px;padding:12px;text-align:center"><div style="font-size:8px;font-weight:700;color:var(--txt3);text-transform:uppercase">% Cumplimiento</div><div style="font-size:22px;font-weight:800;font-family:monospace;color:'+(parseFloat(pct)>=95?'#4ade80':parseFloat(pct)>=80?'#fbbf24':'#f87171')+';margin-top:3px">'+pct+'%</div><div style="font-size:9px;color:var(--txt3)">del plan</div></div>'
     +'</div>'
     +'<div style="background:var(--bdr);border-radius:6px;height:7px;margin-bottom:14px;overflow:hidden"><div style="height:100%;width:'+Math.min(100,parseFloat(pct))+'%;background:linear-gradient(90deg,#4f46e5,#4ade80);border-radius:6px;transition:width .5s"></div></div>'
@@ -2173,7 +2173,7 @@ function _pdRenderCumpl(rows) {
       +'<td style="padding:7px 10px;color:var(--txt);font-weight:700">'+v.label+'<div style="font-size:8.5px;color:var(--txt3);font-weight:400">'+v.ruta+'</div></td>'
       +'<td style="padding:7px 10px;color:var(--txt3);font-size:9.5px">'+v.tipo+'</td>'
       +'<td style="padding:7px 10px"><span style="font-size:8.5px;padding:2px 6px;background:var(--bg3);border-radius:4px">'+v.prod+'</span></td>'
-      +'<td style="padding:7px 10px;text-align:right;font-weight:700;color:var(--txt2)">'+v.vol_plan.toFixed(2)+'</td>'
+      +'<td style="padding:7px 10px;text-align:right;font-weight:700;color:var(--txt2)">'+v.vol_plan.toFixed(DEC)+'</td>'
       +'<td style="padding:7px 10px;text-align:right"><input type="number" step="0.1" min="0" id="pdc-vol-'+v.id+'" value="'+(vr||'')+'" placeholder="'+v.vol_plan+'" style="width:70px;padding:3px 6px;background:var(--bg3);border:1.5px solid var(--bdr);border-radius:4px;color:var(--txt);font-size:10.5px;text-align:right"></td>'
       +'<td style="padding:7px 10px;text-align:right;font-weight:800;color:'+pC+'" id="pdc-pct-'+v.id+'">'+(pV!=='-'?pV+'%':'&mdash;')+'</td>'
       +'<td style="padding:7px 10px;text-align:center">'+_pdEstBadge(cr.estado||'pendiente')+'</td>'
@@ -2443,13 +2443,13 @@ function _pdSaRenderCumpl(rows) {
     });
   var tPlan = todos.reduce(function(a,v){return a+v.vol_plan;},0);
   var tReal = safeR.reduce(function(a,r){return a+(parseFloat(r.vol_real_mb)||0);},0);
-  var pct   = tPlan>0 ? (tReal/tPlan*100).toFixed(2) : '0.0';
+  var pct   = tPlan>0 ? (tReal/tPlan*100).toFixed(DEC) : '0.0';
   var pctCol = parseFloat(pct)>=95?'#16a34a':parseFloat(pct)>=80?'#d97706':'#dc2626';
 
   var html = '<div style="display:flex;align-items:center;gap:8px;background:#eef2ff;border:1px solid #c7d2fe;border-radius:10px;padding:8px 12px;margin-bottom:12px;font-size:10px;color:#3730a3;font-weight:600">&#128674; Cumplimiento de <b>barcazas</b> hacia Refiner\u00eda Iquitos. Las cisternas abastecen a las barcazas en puerto y se controlan en el tablero diario de cada ruta.</div>'
     + '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px">'
-    + '<div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:14px;text-align:center"><div style="font-size:8px;font-weight:800;color:#94a3b8;text-transform:uppercase;letter-spacing:.04em">Plan total</div><div style="font-size:24px;font-weight:800;font-family:monospace;color:#4f46e5;margin-top:3px">'+tPlan.toFixed(2)+'</div><div style="font-size:9px;color:#94a3b8">MB</div></div>'
-    + '<div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:14px;text-align:center"><div style="font-size:8px;font-weight:800;color:#94a3b8;text-transform:uppercase;letter-spacing:.04em">Real registrado</div><div style="font-size:24px;font-weight:800;font-family:monospace;color:#16a34a;margin-top:3px">'+tReal.toFixed(2)+'</div><div style="font-size:9px;color:#94a3b8">MB</div></div>'
+    + '<div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:14px;text-align:center"><div style="font-size:8px;font-weight:800;color:#94a3b8;text-transform:uppercase;letter-spacing:.04em">Plan total</div><div style="font-size:24px;font-weight:800;font-family:monospace;color:#4f46e5;margin-top:3px">'+tPlan.toFixed(DEC)+'</div><div style="font-size:9px;color:#94a3b8">MB</div></div>'
+    + '<div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:14px;text-align:center"><div style="font-size:8px;font-weight:800;color:#94a3b8;text-transform:uppercase;letter-spacing:.04em">Real registrado</div><div style="font-size:24px;font-weight:800;font-family:monospace;color:#16a34a;margin-top:3px">'+tReal.toFixed(DEC)+'</div><div style="font-size:9px;color:#94a3b8">MB</div></div>'
     + '<div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:14px;text-align:center"><div style="font-size:8px;font-weight:800;color:#94a3b8;text-transform:uppercase;letter-spacing:.04em">% Cumplimiento</div><div style="font-size:24px;font-weight:800;font-family:monospace;color:'+pctCol+';margin-top:3px">'+pct+'%</div><div style="font-size:9px;color:#94a3b8">del plan</div></div>'
     + '</div>'
     + '<div style="background:#e2e8f0;border-radius:6px;height:7px;margin-bottom:14px;overflow:hidden"><div style="height:100%;width:'+Math.min(100,parseFloat(pct))+'%;background:linear-gradient(90deg,#4f46e5,#16a34a);border-radius:6px;transition:width .5s"></div></div>'
@@ -2466,7 +2466,7 @@ function _pdSaRenderCumpl(rows) {
       + '<td style="padding:8px 10px;color:#1e293b;font-weight:700">'+v.label+'<div style="font-size:8.5px;color:#94a3b8;font-weight:400">'+(v.ruta||'')+'</div></td>'
       + '<td style="padding:8px 10px;color:#64748b;font-size:9.5px">'+v.tipo+'</td>'
       + '<td style="padding:8px 10px"><span style="font-size:8.5px;padding:2px 6px;background:#f1f5f9;border-radius:4px;color:#475569">'+v.prod+'</span></td>'
-      + '<td style="padding:8px 10px;text-align:right;font-weight:700;color:#475569;font-family:monospace">'+v.vol_plan.toFixed(2)+'</td>'
+      + '<td style="padding:8px 10px;text-align:right;font-weight:700;color:#475569;font-family:monospace">'+v.vol_plan.toFixed(DEC)+'</td>'
       + '<td style="padding:6px 10px;text-align:right"><input type="number" step="0.1" min="0" id="pdc-vol-'+v.id+'" value="'+(vr||'')+'" placeholder="'+v.vol_plan+'" style="width:70px;padding:4px 6px;background:#fff;border:1.5px solid #cbd5e1;border-radius:6px;color:#1e293b;font-size:10.5px;text-align:right"></td>'
       + '<td style="padding:8px 10px;text-align:right;font-weight:800;font-family:monospace;color:'+pC+'" id="pdc-pct-'+v.id+'">'+(pV!=='-'?pV+'%':'&mdash;')+'</td>'
       + '<td style="padding:8px 10px;text-align:center">'+_pdEstBadge(cr.estado||'pendiente')+'</td>'
@@ -2939,6 +2939,13 @@ const PLANTAS_18_OFICIALES = ['Talara','Piura','Eten','Salaverry','Chimbote','Su
 const URL_PARAMS    = new URLSearchParams(window.location.search);
 const EXECUTIVE_MODE = URL_PARAMS.get('view') === 'executive';
 window.EXECUTIVE_MODE = EXECUTIVE_MODE;
+// ⚠️ AGREGADO — a pedido: Vista Ejecutiva (panel gerencial) muestra las
+// cifras con 1 decimal; el resto del sistema (panel de control) sigue
+// con 2. Como ambos paneles comparten el mismo código (executive.html
+// se genera a partir de este archivo), se usa esta variable en vez de
+// codificar "2" directo en cada .toFixed(...) — así ambos paneles
+// pueden tener su propia precisión sin duplicar el código.
+var DEC = EXECUTIVE_MODE ? 1 : 2;
 const INVENTORY_REPORT_MODE = URL_PARAMS.get('view') === 'inventory-report';
 window.INVENTORY_REPORT_MODE = INVENTORY_REPORT_MODE;
 const IQUI_INFORME_MODE = URL_PARAMS.get('view') === 'iqui-informe';
@@ -3305,22 +3312,22 @@ function btBreakdownTooltip(bts) {
   if (bts.hasConfirmed) {
     lines.push('✓ CONFIRMADO (E&D):');
     bts.confirmed.forEach(function(b) {
-      lines.push('  • ' + b.name + ' — ' + b.vol.toFixed(2) + ' MB' + (b.eta ? ' · ETA ' + b.eta : ''));
+      lines.push('  • ' + b.name + ' — ' + b.vol.toFixed(DEC) + ' MB' + (b.eta ? ' · ETA ' + b.eta : ''));
     });
-    lines.push('  Subtotal: ' + bts.confirmedVol.toFixed(2) + ' MB');
+    lines.push('  Subtotal: ' + bts.confirmedVol.toFixed(DEC) + ' MB');
   }
   if (bts.hasProjected) {
     if (lines.length) lines.push('');
     lines.push('📋 PROYECTADO (Simulador):');
     bts.projected.forEach(function(b) {
-      lines.push('  • ' + b.name + ' — ' + b.vol.toFixed(2) + ' MB' + (b.eta ? ' · ETA ' + b.eta : ''));
+      lines.push('  • ' + b.name + ' — ' + b.vol.toFixed(DEC) + ' MB' + (b.eta ? ' · ETA ' + b.eta : ''));
     });
-    lines.push('  Subtotal: ' + bts.projectedVol.toFixed(2) + ' MB');
+    lines.push('  Subtotal: ' + bts.projectedVol.toFixed(DEC) + ' MB');
   }
   if (bts.hasConfirmed && bts.hasProjected) {
     lines.push('');
     lines.push('━━━━━━━━━━━━━━━━━━');
-    lines.push('TOTAL: ' + bts.totalVol.toFixed(2) + ' MB');
+    lines.push('TOTAL: ' + bts.totalVol.toFixed(DEC) + ' MB');
   }
   return lines.join('\n');
 }
@@ -4222,8 +4229,8 @@ function renderPResumen() {
   var semTxt   = criticas.length > 0 ? 'RIESGO CRÍTICO' : (alertas.length > 0 ? 'ADVERTENCIA' : 'OPERACIÓN NORMAL');
   var semIco   = criticas.length > 0 ? '🔴' : (alertas.length > 0 ? '🟡' : '🟢');
 
-  function fmtInv(v) { return (v/1000).toFixed(2) + ' MB'; }
-  function fmtN(v)   { return v != null && !isNaN(v) ? v.toFixed(2) : '—'; }
+  function fmtInv(v) { return (v/1000).toFixed(DEC) + ' MB'; }
+  function fmtN(v)   { return v != null && !isNaN(v) ? v.toFixed(DEC) : '—'; }
   function cobClass(c) { return c < CONFIG.COB_RED ? 'var(--red)' : c < CONFIG.COB_AMB ? 'var(--yel)' : c < CONFIG.COB_YEL ? 'var(--ora)' : 'var(--grn)'; }
 
   // ── Sparkline 7 días para inventario nacional ────────────────────────
@@ -4238,7 +4245,7 @@ function renderPResumen() {
     var pts = vals.map(function(v,i){
       var x = pad + (i/(vals.length-1))*(w-pad*2);
       var y = h - pad - ((v-mn)/(mx-mn||1))*(h-pad*2);
-      return x.toFixed(2)+','+y.toFixed(2);
+      return x.toFixed(DEC)+','+y.toFixed(DEC);
     }).join(' ');
     var last = vals[vals.length-1], prev = vals[vals.length-2];
     var col = last >= prev ? '#1a9e50' : '#e03434';
@@ -4328,8 +4335,8 @@ function renderPResumen() {
               .map(function(x){ return '<span style="font-size:9.5px;padding:1px 7px;border-radius:8px;background:'+(x.cob<CONFIG.COB_RED?'var(--red)':'var(--yel)')+'18;color:'+(x.cob<CONFIG.COB_RED?'var(--red)':'var(--yel)')+';border:1px solid '+(x.cob<CONFIG.COB_RED?'var(--red)':'var(--yel)')+'40;white-space:nowrap">'+x.prod+'</span>'; }).join(' ');
             return '<tr onclick="showPage(\'pC\', document.querySelector(\'.sb-item[data-pid=pC]\')); setTimeout(function(){window._filtroProd=null;window._filtroPlanta=\''+p+'\';rerenderActivePage();},200)" style="cursor:pointer">' +
               '<td style="padding:8px 12px;border-bottom:1px solid var(--bdr)33;font-weight:700;color:var(--txt)">' + p + '</td>' +
-              '<td style="padding:8px 12px;border-bottom:1px solid var(--bdr)33;text-align:right;font-family:var(--mono);font-weight:800;font-size:13px;color:'+cobClass(cobMin)+'">' + (cobMin > 0 ? cobMin.toFixed(2)+'d' : '—') + '</td>' +
-              '<td style="padding:8px 12px;border-bottom:1px solid var(--bdr)33;text-align:right;font-family:var(--mono);font-size:11px;color:var(--txt2)">' + d.inv.toFixed(2) + ' MB</td>' +
+              '<td style="padding:8px 12px;border-bottom:1px solid var(--bdr)33;text-align:right;font-family:var(--mono);font-weight:800;font-size:13px;color:'+cobClass(cobMin)+'">' + (cobMin > 0 ? cobMin.toFixed(DEC)+'d' : '—') + '</td>' +
+              '<td style="padding:8px 12px;border-bottom:1px solid var(--bdr)33;text-align:right;font-family:var(--mono);font-size:11px;color:var(--txt2)">' + d.inv.toFixed(DEC) + ' MB</td>' +
               '<td style="padding:8px 12px;border-bottom:1px solid var(--bdr)33"><div style="display:flex;gap:4px;flex-wrap:wrap;align-items:center;min-height:20px">' + (prodsCrit || '<span style="font-size:9.5px;color:var(--grn)">Todos OK</span>') + '</div></td>' +
               '<td style="padding:8px 12px;border-bottom:1px solid var(--bdr)33"><span class="sem '+estClass+'">' + estTxt + '</span></td>' +
             '</tr>';
@@ -4679,7 +4686,7 @@ function openProductModal(prod) {
         <div class="pm-kpi">
           <div class="pm-kpi-lbl">V. Factible total</div>
           <div class="pm-kpi-val">${fmt(totalVfact)} <span class="pm-kpi-unit">MBDC</span></div>
-          <div class="pm-kpi-sub" style="color:${gapVf>0?'#dc2626':'#16a34a'}">${gapVf>0 ? '▼' : '▲'} ${Math.abs(gapVf).toFixed(2)}% vs pronóstico</div>
+          <div class="pm-kpi-sub" style="color:${gapVf>0?'#dc2626':'#16a34a'}">${gapVf>0 ? '▼' : '▲'} ${Math.abs(gapVf).toFixed(DEC)}% vs pronóstico</div>
         </div>
         <div class="pm-kpi">
           <div class="pm-kpi-lbl">Venta real (ayer)</div>
@@ -4769,7 +4776,7 @@ function openProductModal(prod) {
                 <td style="text-align:right;font-variant-numeric:tabular-nums">${fmt(r.vfact)}</td>
                 <td style="text-align:right;font-variant-numeric:tabular-nums;color:#a855f7">${p > 0 ? fmt(p) : '—'}</td>
                 <td style="text-align:right;font-variant-numeric:tabular-nums;color:${cobCol};font-weight:700">${r.cob > 0 ? Math.round(r.cob) : '—'}</td>
-                <td style="text-align:right;font-variant-numeric:tabular-nums">${pct.toFixed(2)}%</td>
+                <td style="text-align:right;font-variant-numeric:tabular-nums">${pct.toFixed(DEC)}%</td>
               </tr>`;
             }).join('')}
           </tbody>
@@ -5225,9 +5232,9 @@ function decBuildRecs() {
     recs.push({
       sev:'urgente',
       titulo:(r._dCob<=0?'\u26d4 QUIEBRE':'\ud83d\udea8 CR\u00cdTICO '+r._dCob+'d')+' \u00b7 '+r.planta+' \u00b7 '+r.producto,
-      detalle:'Inv. '+(r.inv||0).toFixed(2)+' MB'+(btVencido?' \u00b7 BT '+fRep+' VENCIDO sin descarga':(fRepValida?' \u00b7 BT '+fRep+' llega tarde':' \u00b7 sin BT programado')),
+      detalle:'Inv. '+(r.inv||0).toFixed(DEC)+' MB'+(btVencido?' \u00b7 BT '+fRep+' VENCIDO sin descarga':(fRepValida?' \u00b7 BT '+fRep+' llega tarde':' \u00b7 sin BT programado')),
       accion: donante
-        ? 'Evaluar transferencia desde '+donante.planta+distTxt+' (cob '+donante._dCob+'d, inv '+(donante.inv||0).toFixed(2)+' MB)'+(FLUV.indexOf(r.planta)>=0?' o convoy fluvial':' v\u00eda BT o cisternas')
+        ? 'Evaluar transferencia desde '+donante.planta+distTxt+' (cob '+donante._dCob+'d, inv '+(donante.inv||0).toFixed(DEC)+' MB)'+(FLUV.indexOf(r.planta)>=0?' o convoy fluvial':' v\u00eda BT o cisternas')
         : 'Sin donante con holgura \u2014 priorizar reposici\u00f3n y evaluar restricci\u00f3n de despacho'
     });
   });
@@ -5276,7 +5283,7 @@ function decBuildRecs() {
     recs.push({
       sev:'media',
       titulo:'\u2702\ufe0f Restricci\u00f3n activa \u00b7 '+r.planta+' \u00b7 '+r.producto,
-      detalle:'V.Factible '+r.vfact.toFixed(2)+' vs pron\u00f3stico '+pron.toFixed(2)+' MBDC (\u2212'+pct+'%)',
+      detalle:'V.Factible '+r.vfact.toFixed(DEC)+' vs pron\u00f3stico '+pron.toFixed(DEC)+' MBDC (\u2212'+pct+'%)',
       accion:'Comunicar racionamiento a comercial; levantar restricci\u00f3n al confirmar reposici\u00f3n'
     });
   });
@@ -5316,8 +5323,8 @@ function decBuildRecs() {
       recs.push({
         sev: r._dCob <= 7 ? 'alta' : 'media',
         titulo: '\u26fd Reposici\u00f3n sugerida \u00b7 ' + r.planta + ' \u00b7 ' + r.producto,
-        detalle: 'Cobertura ' + r._dCob + 'd \u00b7 Inv. ' + (r.inv||0).toFixed(2) + ' MB de ' + capacidad.toFixed(2) + ' MB capacidad \u00b7 vac\u00edo disponible ' + vacio.toFixed(2) + ' MB',
-        accion: 'Programar reposici\u00f3n de \u2248' + volSugerido.toFixed(2) + ' MB (limitado por ' + limitante + ') para llegar cerca de ' + DIAS_OBJETIVO_SANO + 'd de cobertura'
+        detalle: 'Cobertura ' + r._dCob + 'd \u00b7 Inv. ' + (r.inv||0).toFixed(DEC) + ' MB de ' + capacidad.toFixed(DEC) + ' MB capacidad \u00b7 vac\u00edo disponible ' + vacio.toFixed(DEC) + ' MB',
+        accion: 'Programar reposici\u00f3n de \u2248' + volSugerido.toFixed(DEC) + ' MB (limitado por ' + limitante + ') para llegar cerca de ' + DIAS_OBJETIVO_SANO + 'd de cobertura'
       });
     });
   }
@@ -5400,7 +5407,7 @@ function renderPDec() {
         +'<div style="display:flex;flex-wrap:wrap;gap:14px;margin-top:9px;align-items:flex-end">'
         +'<div><div style="font-size:8px;color:var(--txt3);text-transform:uppercase">Fuente</div><div style="font-size:11px;font-weight:700;color:var(--txt)">'+cl.planta+' \u00b7 '+cl.producto+'</div></div>'
         +'<div><div style="font-size:8px;color:var(--txt3);text-transform:uppercase">Cob.</div><div style="font-size:15px;font-weight:800;font-family:var(--mono);color:'+cobC+'">'+cobTxt+'</div></div>'
-        +'<div><div style="font-size:8px;color:var(--txt3);text-transform:uppercase">Inv.</div><div style="font-size:11px;font-weight:700;font-family:var(--mono);color:var(--txt2)">'+inv.toFixed(2)+' MB</div></div>'
+        +'<div><div style="font-size:8px;color:var(--txt3);text-transform:uppercase">Inv.</div><div style="font-size:11px;font-weight:700;font-family:var(--mono);color:var(--txt2)">'+inv.toFixed(DEC)+' MB</div></div>'
         +'</div></div>';
     }).join('');
   } catch(e) { console.error('[pDec] clientes error:', e); cliHtml = '<div style="color:#ef4444;padding:12px">Error clientes: '+e.message+'</div>'; }
@@ -5609,7 +5616,7 @@ function renderP1() {
     const delta   = prevVol > 0 ? ((currVol - prevVol) / prevVol * 100) : null;
     const deltaClass = delta === null ? 'flat' : delta > 0 ? 'up' : delta < 0 ? 'down' : 'flat';
     const deltaIcon  = delta === null ? '' : delta > 0 ? '▲' : delta < 0 ? '▼' : '—';
-    const deltaStr   = delta === null ? '' : Math.abs(delta).toFixed(2) + '%';
+    const deltaStr   = delta === null ? '' : Math.abs(delta).toFixed(DEC) + '%';
     const isSelected = activeFilter === prod;
     const prodSafe = JSON.stringify(prod).replace(/"/g, '&quot;');
     return `
@@ -5703,7 +5710,7 @@ function renderP1() {
     });
     const maxDiasGanados = Math.max(...diasGanadosList, 0);
     const promDiasGanados = diasGanadosList.length
-      ? (diasGanadosList.reduce((a,b)=>a+b,0)/diasGanadosList.length).toFixed(2)
+      ? (diasGanadosList.reduce((a,b)=>a+b,0)/diasGanadosList.length).toFixed(DEC)
       : 0;
     const maxPron = Math.max(...filtered.map(r=>pronDiarioAprobado(r)), 1);
     const plantaBlocks = Object.entries(byPlanta)
@@ -5735,7 +5742,7 @@ function renderP1() {
           const redPct      = pron > 0 ? ((pron - vfact) / pron * 100) : 0;
           const pronPct     = Math.min(100, pron   / maxPron * 100);
           const vfactPct    = Math.min(100, vfact  / maxPron * 100);
-          const invMBval    = (r.inv||0).toFixed(2);
+          const invMBval    = (r.inv||0).toFixed(DEC);
           const nuevaFechaStr = addDays(currentDate, cobRestr);
           const nuevaFechaFmt = fmtDateShort(nuevaFechaStr);
           const vol1   = r.vol_rep || 0;
@@ -5743,7 +5750,7 @@ function renderP1() {
           function mkBtLine(bt, vol, eta) {
             return '<div style="display:flex;align-items:center;gap:6px">'
               + '<span style="font-weight:800;font-size:11px;color:var(--acc2)">' + bt + '</span>'
-              + '<span style="font-size:10.5px;font-weight:700;color:var(--grn);font-family:var(--mono)">+' + vol.toFixed(2) + ' MB</span>'
+              + '<span style="font-size:10.5px;font-weight:700;color:var(--grn);font-family:var(--mono)">+' + vol.toFixed(DEC) + ' MB</span>'
               + '<span style="font-size:10px;color:var(--txt3)">ETA ' + fmtDate(eta||'') + '</span>'
               + '</div>';
           }
@@ -5771,12 +5778,12 @@ function renderP1() {
                 return `<div class="dbullet">
                   <div class="dbullet-header">
                     <div style="display:flex;align-items:baseline;gap:5px">
-                      <span class="dbullet-vfact" style="color:${gapCol}">${vfact.toFixed(2)}</span>
-                      <span class="dbullet-pron">/ ${pron.toFixed(2)} MBDC</span>
+                      <span class="dbullet-vfact" style="color:${gapCol}">${vfact.toFixed(DEC)}</span>
+                      <span class="dbullet-pron">/ ${pron.toFixed(DEC)} MBDC</span>
                     </div>
-                    <span class="dbullet-pct-badge" style="color:${gapCol}">▼ ${redPct.toFixed(2)}%</span>
+                    <span class="dbullet-pct-badge" style="color:${gapCol}">▼ ${redPct.toFixed(DEC)}%</span>
                   </div>
-                  <div class="dbullet-bar-wrap" title="VFact ${vfact.toFixed(2)} MBDC · Pronóstico ${pron.toFixed(2)} MBDC · Recorte ${redPct.toFixed(2)}%">
+                  <div class="dbullet-bar-wrap" title="VFact ${vfact.toFixed(DEC)} MBDC · Pronóstico ${pron.toFixed(DEC)} MBDC · Recorte ${redPct.toFixed(DEC)}%">
                     <div class="dbullet-seg-vfact" style="width:${vfPct}%;background:${vfColor}"></div>
                     <div class="dbullet-seg-gap" style="left:${vfPct}%;width:${gapPct}%;background:${gapBg};border-left-color:${gapCol}"></div>
                     <span class="dbullet-bar-label">${sevLbl}</span>
@@ -5833,7 +5840,7 @@ function renderP1() {
       <div class="restr-stats">
         <div class="restr-stat" style="cursor:pointer" onclick="window.openRestrModal('restricciones')" title="Ver detalle"><div class="restr-stat-lbl">Restricciones</div><div class="restr-stat-val">${nRestr}</div><div class="restr-stat-sub">activas hoy</div></div>
         <div class="restr-stat" style="cursor:pointer" onclick="window.openRestrModal('plantas')" title="Ver plantas"><div class="restr-stat-lbl">Plantas</div><div class="restr-stat-val">${nPlantas}</div><div class="restr-stat-sub">afectadas</div></div>
-        <div class="restr-stat" style="cursor:pointer" onclick="window.openRestrModal('reduccion')" title="Ver impacto"><div class="restr-stat-lbl">Reduc. Promedio</div><div class="restr-stat-val" style="font-size:20px">${redProm.toFixed(2)}%</div><div class="restr-stat-sub">vs pronóstico</div></div>
+        <div class="restr-stat" style="cursor:pointer" onclick="window.openRestrModal('reduccion')" title="Ver impacto"><div class="restr-stat-lbl">Reduc. Promedio</div><div class="restr-stat-val" style="font-size:20px">${redProm.toFixed(DEC)}%</div><div class="restr-stat-sub">vs pronóstico</div></div>
         <div class="restr-stat" style="cursor:pointer" onclick="window.openRestrModal('dias')" title="Ver ganancia"><div class="restr-stat-lbl">Días Ganados Prom.</div><div class="restr-stat-val" style="color:#a855f7">${promDiasGanados}d</div><div class="restr-stat-sub">por restricción</div></div>
       </div>
       <div class="restr-legend">
@@ -5937,7 +5944,7 @@ function renderP1() {
       </div>
       <div style="background:var(--card);border:1px solid var(--bdr);border-left:3px solid #059669;border-radius:9px;padding:9px 12px">
         <div style="font-size:8.5px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--txt3)">🚛 MB terrestre hoy</div>
-        <div style="font-size:19px;font-weight:800;font-family:var(--mono);color:#059669">${mbTerrHoy.toFixed(2)}</div>
+        <div style="font-size:19px;font-weight:800;font-family:var(--mono);color:#059669">${mbTerrHoy.toFixed(DEC)}</div>
         <div style="font-size:8.5px;color:var(--txt3)">${Object.keys(cisternasSet).length} unidades en ruta</div>
       </div>
       <div style="background:var(--card);border:1px solid var(--bdr);border-left:3px solid ${puertosCerr.length?'#dc2626':'#16a34a'};border-radius:9px;padding:9px 12px">
@@ -5985,7 +5992,7 @@ function renderP1() {
       if (!Object.keys(btMap).length && !hasSimShips) return '';
       const cards = Object.values(btMap).map(bt => {
         const prodPills = Object.entries(bt.productos)
-          .map(([p,v])=>`<span class="bt-prod-pill">${p} <strong>${v.toFixed(2)} MB</strong></span>`)
+          .map(([p,v])=>`<span class="bt-prod-pill">${p} <strong>${v.toFixed(DEC)} MB</strong></span>`)
           .join('');
         const destMap = {};
         bt.destinos.forEach(d=>{
@@ -5993,7 +6000,7 @@ function renderP1() {
           destMap[d.planta].prods.push({prod:d.producto,vol:d.vol});
         });
         const destCards = Object.entries(destMap).map(([planta,dd])=>{
-          const prodPillsD = dd.prods.map(p=>`<span class="bt-dest-prod">${p.prod} ${p.vol.toFixed(2)} MB</span>`).join('');
+          const prodPillsD = dd.prods.map(p=>`<span class="bt-dest-prod">${p.prod} ${p.vol.toFixed(DEC)} MB</span>`).join('');
           const volD = dd.prods.reduce((s,p)=>s+p.vol,0);
           return `<div class="bt-dest-row">
             <div class="bt-dest-left">
@@ -6001,7 +6008,7 @@ function renderP1() {
               <span class="bt-dest-planta">${planta}</span>
               <span class="bt-dest-fecha">${dd.eta?fmtDate(dd.eta):''}</span>
             </div>
-            <div class="bt-dest-vol">${volD.toFixed(2)} MB <span class="bt-dest-status">PROGRAMADO</span></div>
+            <div class="bt-dest-vol">${volD.toFixed(DEC)} MB <span class="bt-dest-status">PROGRAMADO</span></div>
             <div class="bt-dest-prods">${prodPillsD}</div>
           </div>`;
         }).join('');
@@ -6052,7 +6059,7 @@ function renderP1() {
           ? actualTermNames.map(tName => {
               const recs = actualByTerminal[tName];
               const ops  = getCardOps(tName);
-              const prodsText = recs.map(r=>`${r.producto} ${r.volumen_mb.toFixed(2)} MB`).join(' · ');
+              const prodsText = recs.map(r=>`${r.producto} ${r.volumen_mb.toFixed(DEC)} MB`).join(' · ');
               const opsText = ops
                 ? [ops.ic?`IC: Día ${ops.ic}`:'', ops.td?`TD: Día ${ops.td}`:'', ops.tc?`TC: Día ${ops.tc}`:''].filter(Boolean).join(' │ ')
                 : '';
@@ -6090,7 +6097,7 @@ function renderP1() {
             ? `<span style="font-family:var(--mono);font-size:9.5px;color:${nodeC};">${icDate?'IC '+icDate:''}${icDate&&tdDate?' ':''}${tdDate?'TD '+tdDate:''}</span>`
             : planDate ? `<span style="font-size:9.5px;color:var(--txt3)">${planDate} <span style="color:#f59e0b;font-size:8px">tent.</span></span>` : '';
           const hasCierre = cierres.some(c => planta.toUpperCase().startsWith(c.planta.slice(0,6)));
-          const prodPillsD = td.prods.map(p=>`<span style="font-size:9px;color:var(--txt3)">${p.prod} <strong style="color:var(--txt)">${p.vol.toFixed(2)}</strong></span>`).join(' · ');
+          const prodPillsD = td.prods.map(p=>`<span style="font-size:9px;color:var(--txt3)">${p.prod} <strong style="color:var(--txt)">${p.vol.toFixed(DEC)}</strong></span>`).join(' · ');
           return `<div style="display:flex;align-items:flex-start;gap:7px;padding:5px 10px;border-bottom:1px solid var(--bdr)18">
             <span style="width:16px;height:16px;border-radius:50%;background:${nodeC}20;border:1.5px solid ${nodeC};display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:800;color:${nodeC};flex-shrink:0;margin-top:1px">${icon}</span>
             <div style="flex:1;min-width:0">
@@ -6098,7 +6105,7 @@ function renderP1() {
                 <span style="font-weight:800;font-size:11px;color:var(--txt)">${planta}</span>
                 ${hasCierre?'<span style="font-size:8px;color:#ef4444;font-weight:700">⚠️Puerto cerrado</span>':''}
                 ${dateCell}
-                <span style="font-family:var(--mono);font-size:10px;font-weight:700;color:var(--txt);margin-left:auto">${volD.toFixed(2)} MB</span>
+                <span style="font-family:var(--mono);font-size:10px;font-weight:700;color:var(--txt);margin-left:auto">${volD.toFixed(DEC)} MB</span>
               </div>
               <div style="margin-top:2px">${prodPillsD}</div>
             </div>
@@ -6116,7 +6123,7 @@ function renderP1() {
               ${etaLine ? `<div style="font-size:9px;color:#fbbf24;font-weight:700">🕐 ETA ${etaLine}</div>` : ''}
             </div>
             <div class="bt-card-new-vol">
-              <div>${(bt.volTotal>0?bt.volTotal:cargasLatest.reduce((s,r)=>s+(r.volumen_mb||0),0)).toFixed(2)} MB</div>
+              <div>${(bt.volTotal>0?bt.volTotal:cargasLatest.reduce((s,r)=>s+(r.volumen_mb||0),0)).toFixed(DEC)} MB</div>
               <div style="font-size:9px;color:var(--txt3)">carga total</div>
             </div>
           </div>
@@ -6151,10 +6158,10 @@ function renderP1() {
             });
           });
           const prodPills = Object.entries(prodAgg).map(function(e) {
-            return '<span class="bt-prod-pill" style="background:rgba(96,165,250,.12);border-color:rgba(96,165,250,.4);color:#60a5fa;font-style:italic">' + e[0] + ' <strong>' + e[1].toFixed(2) + ' MB</strong></span>';
+            return '<span class="bt-prod-pill" style="background:rgba(96,165,250,.12);border-color:rgba(96,165,250,.4);color:#60a5fa;font-style:italic">' + e[0] + ' <strong>' + e[1].toFixed(DEC) + ' MB</strong></span>';
           }).join('');
           const escalas = (ship.stops||[]).map(function(st, i) {
-            const stProds = (st.prods||[]).map(function(p) { return normProd(p.producto||'') + ' ' + (p.vol||0).toFixed(2) + 'MB'; }).join(' · ');
+            const stProds = (st.prods||[]).map(function(p) { return normProd(p.producto||'') + ' ' + (p.vol||0).toFixed(DEC) + 'MB'; }).join(' · ');
             return '<div style="display:flex;align-items:center;gap:8px;padding:5px 12px;border-bottom:1px solid var(--bdr)22;font-size:10.5px">'
               + '<span style="width:18px;height:18px;border-radius:50%;background:rgba(96,165,250,.2);color:#60a5fa;display:inline-flex;align-items:center;justify-content:center;font-size:9px;font-weight:800;flex-shrink:0">' + (i+1) + '</span>'
               + '<span style="font-weight:700;color:var(--txt);min-width:90px">' + (st.planta||'—') + '</span>'
@@ -6169,7 +6176,7 @@ function renderP1() {
             +     '<div class="bt-card-new-name" style="font-style:italic">' + ship.name + ' <span style="font-size:9px;background:rgba(255,255,255,.2);padding:1px 6px;border-radius:3px;font-style:normal;letter-spacing:.5px;margin-left:4px">PROYECTADO</span></div>'
             +     '<div class="bt-card-new-sub">Origen: ' + (ship.origen||'—') + (ship.zarpeDate?' · Zarpe '+fmtDate(ship.zarpeDate):'') + ' · ' + (ship.stops||[]).length + ' escalas</div>'
             +   '</div>'
-            +   '<div class="bt-card-new-vol">' + totalVol.toFixed(2) + '<span style="font-size:10px;opacity:.7;font-weight:600;margin-left:3px">MB</span></div>'
+            +   '<div class="bt-card-new-vol">' + totalVol.toFixed(DEC) + '<span style="font-size:10px;opacity:.7;font-weight:600;margin-left:3px">MB</span></div>'
             + '</div>'
             + '<div class="bt-card-new-prods" style="padding:8px 12px;display:flex;flex-wrap:wrap;gap:4px;background:var(--bg3)">' + prodPills + '</div>'
             + '<div class="bt-dest-section" style="padding:0">'
@@ -6443,7 +6450,7 @@ function renderPR() {
     <div style="padding:10px 18px 14px;display:grid;grid-template-columns:repeat(4,1fr);gap:10px;max-width:600px">
       ${[['Restricciones',nRestr.toString(),'#ef4444'],
          ['Plantas',nPlantas.toString(),'#f97316'],
-         ['Reduc. promedio',redProm.toFixed(2)+'%','#a855f7'],
+         ['Reduc. promedio',redProm.toFixed(DEC)+'%','#a855f7'],
          ['Días ganados prom.',promDias+'d','#60a5fa']]
         .map(([l,v,c])=>`<div style="background:${c}12;border:1px solid ${c}25;border-radius:10px;padding:10px;text-align:center">
           <div style="font-size:20px;font-weight:800;color:${c};font-family:var(--mono)">${v}</div>
@@ -6731,7 +6738,7 @@ async function openBTModal(buqueName) {
         const totVol= d.prods.reduce((s,p)=>s+p.vol,0);
         const isLast= i===n-1;
         const pills = d.prods.map(p =>
-          `<span style="display:inline-flex;align-items:center;gap:3px;background:${nodeC}12;border:1px solid ${nodeC}28;border-radius:4px;padding:2px 7px;font-size:9.5px;font-weight:700;white-space:nowrap">${p.prod} <span style="color:${nodeC}">${p.vol.toFixed(2)}</span></span>`
+          `<span style="display:inline-flex;align-items:center;gap:3px;background:${nodeC}12;border:1px solid ${nodeC}28;border-radius:4px;padding:2px 7px;font-size:9.5px;font-weight:700;white-space:nowrap">${p.prod} <span style="color:${nodeC}">${p.vol.toFixed(DEC)}</span></span>`
         ).join('');
         const ops = buildTerminalOps(d.terminal, d.desde, d.hasta) || {};
         const termCierres = getCierresParaTerminal(d.terminal, d.desde, d.hasta);
@@ -6764,13 +6771,13 @@ async function openBTModal(buqueName) {
             rightHTML += `<div style="font-family:var(--mono);font-size:10.5px;font-weight:800;color:#60b5ff">Llegó ${ops.ic||ops.arribo}</div>`;
           }
           if (drPlan) rightHTML += `<div style="font-size:8.5px;color:var(--txt3);text-decoration:line-through;opacity:.5">${drPlan}</div>`;
-          rightHTML += `<div style="font-family:var(--mono);font-size:9px;color:var(--txt3)">${totVol.toFixed(2)} MB</div>`;
+          rightHTML += `<div style="font-family:var(--mono);font-size:9px;color:var(--txt3)">${totVol.toFixed(DEC)} MB</div>`;
           rightHTML += `</div>`;
         } else {
           rightHTML = `<div style="text-align:right">
             <div style="font-size:10.5px;color:${nodeC}">${drPlan||'—'}</div>
             <div style="font-size:8px;color:#f59e0b">tentativo</div>
-            <div style="font-family:var(--mono);font-size:9px;color:var(--txt3)">${totVol.toFixed(2)} MB</div>
+            <div style="font-family:var(--mono);font-size:9px;color:var(--txt3)">${totVol.toFixed(DEC)} MB</div>
           </div>`;
         }
         return `<div style="${rowBg}display:grid;grid-template-columns:32px 1fr auto;align-items:stretch">
@@ -6840,7 +6847,7 @@ async function openBTModal(buqueName) {
             </div>
           </div>
           <div style="text-align:right">
-            <div style="font-size:11px;font-weight:800;font-family:var(--mono);color:var(--txt)">${viajeVol.toFixed(2)} MB</div>
+            <div style="font-size:11px;font-weight:800;font-family:var(--mono);color:var(--txt)">${viajeVol.toFixed(DEC)} MB</div>
             <div style="font-size:8.5px;background:${viajeColor}20;color:${viajeColor};border:1px solid ${viajeColor}40;border-radius:6px;padding:1px 7px;font-weight:700;margin-top:2px">${viajeLabel}</div>
           </div>
         </div>
@@ -6916,7 +6923,7 @@ async function openBTModal(buqueName) {
           <span style="color:var(--txt3);font-size:11px;margin-left:8px">${d.producto}</span>
           ${d.isBT2?'<span style="font-size:8px;background:#a855f718;color:#a855f7;border:1px solid #a855f730;padding:1px 5px;border-radius:4px;margin-left:4px">BT2</span>':''}
         </div>
-        <span style="font-family:var(--mono);font-weight:800;color:#60b5ff">${d.vol.toFixed(2)} MB</span>
+        <span style="font-family:var(--mono);font-weight:800;color:#60b5ff">${d.vol.toFixed(DEC)} MB</span>
         <span style="font-family:var(--mono);font-size:10.5px;color:var(--acc2)">${d.eta?fmtDate(d.eta):'—'}</span>
         ${!inExecMode ? `<button title="Editar volumen de cabotaje (sincerar)"
           onclick="window._p5EditVolRep('${d.planta}','${d.producto}','${d.fecha||currentDate}',${d.isBT2},${d.vol})"
@@ -6944,7 +6951,7 @@ async function openBTModal(buqueName) {
         </div>
         <!-- KPIs -->
         <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;padding:10px 18px;border-bottom:1px solid var(--bdr);flex-shrink:0">
-          ${_btKpi('Carga prog.', latestMB>0?latestMB.toFixed(2)+' MB':'—', '#3b82f6')}
+          ${_btKpi('Carga prog.', latestMB>0?latestMB.toFixed(DEC)+' MB':'—', '#3b82f6')}
           ${_btKpi('Viajes hist.', allViajes.size.toString(), '#8b5cf6')}
           ${_btKpi('Terminales', allTerminals.size.toString(), '#06b6d4')}
           ${_btKpi('Pos. registros', hasPos?(navParsed.events.length||'—').toString():'—', '#f59e0b')}
@@ -7170,7 +7177,7 @@ function _updateShipOpsBar(){
   criticos.sort(function(a,b){return a.cob-b.cob;}).forEach(function(cr){
     riskHTML+='<span class="sop-vessel" style="border-color:#f59e0b55">'
       +'<span style="color:#f59e0b;font-weight:800">\u26a0 '+cr.planta+'</span>'
-      +'<span style="color:#fcd34d;font-size:10px"> '+cr.cob.toFixed(2)+'d '+(cr.prods.length?cr.prods[0]:'')+'</span>'
+      +'<span style="color:#fcd34d;font-size:10px"> '+cr.cob.toFixed(DEC)+'d '+(cr.prods.length?cr.prods[0]:'')+'</span>'
       +'</span>';
   });
   if(minimasPlantas.length){
@@ -7357,7 +7364,7 @@ function cobOnVfactChange(planta, producto, valMbdc) {
   var cobClass = cob <= 0 ? 'cob-cov-warn' : cob < CONFIG.COB_RED ? 'cob-cov-crit' : cob < CONFIG.COB_YEL ? 'cob-cov-warn' : 'cob-cov-ok';
   var el;
   el = document.getElementById('cob-reduc-' + sid);
-  if (el) { el.style.color = reducColor; el.textContent = pronMbdc > 0 ? (reducPct > 0 ? '+' : '') + reducPct.toFixed(2) + '%' : '\u2014'; }
+  if (el) { el.style.color = reducColor; el.textContent = pronMbdc > 0 ? (reducPct > 0 ? '+' : '') + reducPct.toFixed(DEC) + '%' : '\u2014'; }
   el = document.getElementById('cob-days-' + sid);
   if (el) { el.className = 'cob-cov-cell ' + cobClass; el.textContent = cob > 0 ? cob + 'd' : '\u2014'; }
   el = document.getElementById('cob-fecha-' + sid);
@@ -7408,7 +7415,7 @@ function cobSetPron(planta, producto) {
   var row = document.getElementById('cob-row-' + sid);
   if (row) {
     var vfInput = row.querySelector('input[data-vfact]');
-    if (vfInput) vfInput.value = pronVal.toFixed(2);
+    if (vfInput) vfInput.value = pronVal.toFixed(DEC);
   }
   cobOnVfactChange(planta, producto, pronVal);
 }
@@ -7762,7 +7769,7 @@ async function cobApplyRefinery() {
       pron: 0, vult7: 0, vreal: 0, dem_prom: 0, dem: 0, var_dem: 0, vfact: 0,
       cob: 0, fecha_cobertura: '', fecha_reposicion: r.fecha_reposicion || '',
       bt: r.bt || '', vol_rep: r.vol_rep || 0, vacio: r.vacio || 0,
-      comentario: (r.comentario || '') + ' [+Ref: ' + adj.toFixed(2) + ' MB]',
+      comentario: (r.comentario || '') + ' [+Ref: ' + adj.toFixed(DEC) + ' MB]',
       fecha_repos_bt2: r.fecha_repos_bt2 || '', bt2: r.bt2 || '',
       vol_rep_bt2: r.vol_rep_bt2 || 0, vacio2: 0
     });
@@ -8024,7 +8031,7 @@ function _renderP2Body() {
         vrealMbdc      = ventaExacta;
         vrealSource    = 'Cognos ' + prevDateStr;
         vrealFromCognos= true;
-        vrealSuffix    = venta7dAvg > 0 ? ' · prom7d: ' + venta7dAvg.toFixed(2) : '';
+        vrealSuffix    = venta7dAvg > 0 ? ' · prom7d: ' + venta7dAvg.toFixed(DEC) : '';
       } else {
         // Sin Cognos: buscar el vreal del DÍA ANTERIOR en RAW (no del día actual)
         var prevRaw = RAW.filter(function(x){
@@ -8034,7 +8041,7 @@ function _renderP2Body() {
         vrealMbdc      = prevVreal || r.vreal || r.dem || 0;
         vrealSource    = 'E&D ' + prevDateStr;
         vrealFromCognos= false;
-        vrealSuffix    = venta7dAvg > 0 ? ' · Cognos prom7d: ' + venta7dAvg.toFixed(2) : '';
+        vrealSuffix    = venta7dAvg > 0 ? ' · Cognos prom7d: ' + venta7dAvg.toFixed(DEC) : '';
       }
       var _cobOv = cobOverrides[key];
       var vfactDisplay = _getVfactEffective(r);  // hereda del día ant. si vfact=0
@@ -8051,7 +8058,7 @@ function _renderP2Body() {
       var pronBarW = 0;
       var reducPct = (pronMbdc > 0 && vfactDisplay > 0) ? ((vfactDisplay - pronMbdc) / pronMbdc * 100) : 0;
       var reducColor = reducPct < -10 ? 'var(--red)' : reducPct < 0 ? 'var(--yel)' : 'var(--grn)';
-      var reducStr = (pronMbdc > 0 && vfactDisplay > 0) ? (reducPct > 0 ? '+' : '') + reducPct.toFixed(2) + '%' : '\u2014';
+      var reducStr = (pronMbdc > 0 && vfactDisplay > 0) ? (reducPct > 0 ? '+' : '') + reducPct.toFixed(DEC) + '%' : '\u2014';
       const bts = getBTsForRow(r.planta, r.producto, r);
       const btTooltip = btBreakdownTooltip(bts).replace(/"/g, '&quot;');
       var fechaNuevaCob = '';
@@ -8078,12 +8085,12 @@ function _renderP2Body() {
         + '</td>'
         + '<td class="r" style="white-space:nowrap">'
         + (cobEditMode
-          ? '<input class="cob-edit" type="number" step="0.01" min="0" value="' + baseInv.toFixed(2) + '" style="width:60px" '
+          ? '<input class="cob-edit" type="number" step="0.01" min="0" value="' + baseInv.toFixed(DEC) + '" style="width:60px" '
             + 'onchange="cobOnInvChange(\'' + r.planta.replace(/'/g, "\\'") + '\',\'' + r.producto.replace(/'/g, "\\'") + '\',this.value)" '
             + 'oninput="cobOnInvChange(\'' + r.planta.replace(/'/g, "\\'") + '\',\'' + r.producto.replace(/'/g, "\\'") + '\',this.value)">'
-            + (refAdj > 0 ? '<span style="font-size:8px;color:var(--acc2);font-weight:700" title="Planta ' + baseInv.toFixed(2) + ' + Ref. ' + refAdj.toFixed(2) + ' = ' + invMb.toFixed(2) + ' MB"> +' + refAdj.toFixed(2) + '</span>' : '')
-          : '<span style="font-family:var(--mono);font-weight:700">' + baseInv.toFixed(2) + '</span>'
-            + (refAdj > 0 ? '<span style="font-size:8px;color:var(--acc2);font-weight:700"> +' + refAdj.toFixed(2) + '</span>' : ''))
+            + (refAdj > 0 ? '<span style="font-size:8px;color:var(--acc2);font-weight:700" title="Planta ' + baseInv.toFixed(DEC) + ' + Ref. ' + refAdj.toFixed(DEC) + ' = ' + invMb.toFixed(DEC) + ' MB"> +' + refAdj.toFixed(DEC) + '</span>' : '')
+          : '<span style="font-family:var(--mono);font-weight:700">' + baseInv.toFixed(DEC) + '</span>'
+            + (refAdj > 0 ? '<span style="font-size:8px;color:var(--acc2);font-weight:700"> +' + refAdj.toFixed(DEC) + '</span>' : ''))
         // ⚠️ Insignia de fecha real del dato — sin esto, un valor
         // ARRASTRADO (última fecha con reporte real, r.fecha) se ve
         // IDÉNTICO a un valor recién guardado para la fecha que se está
@@ -8098,20 +8105,20 @@ function _renderP2Body() {
         // AZUL para distinguirla claramente de un dato ya confirmado por
         // la planta (verde) o un simple arrastre sin novedad (naranja).
         + (r._proyectado
-            ? '<div style="font-size:8px;color:#2563eb;font-weight:700;white-space:nowrap" title="Buque ' + (r.bt||'') + ' confirmó descarga de ' + (r.vol_rep||0).toFixed(2) + ' MB (base: ' + (r._proyectado_base_inv||0).toFixed(2) + ' MB del ' + r._proyectado_base_fecha + ') — la planta aún no reporta su cierre oficial para ' + r.fecha + '">🚢 proyectado (BT descargó)</div>'
+            ? '<div style="font-size:8px;color:#2563eb;font-weight:700;white-space:nowrap" title="Buque ' + (r.bt||'') + ' confirmó descarga de ' + (r.vol_rep||0).toFixed(DEC) + ' MB (base: ' + (r._proyectado_base_inv||0).toFixed(DEC) + ' MB del ' + r._proyectado_base_fecha + ') — la planta aún no reporta su cierre oficial para ' + r.fecha + '">🚢 proyectado (BT descargó)</div>'
             : (r.fecha && currentDate && r.fecha !== currentDate && !cobOverrides[key] && cobInvOverrides[key] === undefined
                 ? '<div style="font-size:8px;color:var(--ora);font-weight:700;white-space:nowrap" title="No hay reporte para ' + currentDate + ' — se muestra el último dato real, del ' + r.fecha + '">⚠ dato del ' + r.fecha + '</div>'
                 : (r.fecha === currentDate ? '<div style="font-size:8px;color:var(--grn);font-weight:700">✓ dato de hoy</div>' : '')))
         + '</td>'
-        + '<td class="r">' + pronMbdc.toFixed(2) + '</td>'
+        + '<td class="r">' + pronMbdc.toFixed(DEC) + '</td>'
         + '<td class="r" title="' + vrealSource + vrealSuffix + '" style="white-space:nowrap">'
         + (cobEditMode
-          ? '<input class="cob-edit" type="number" step="0.01" min="0" value="' + vrealMbdc.toFixed(2) + '" style="width:62px" '
+          ? '<input class="cob-edit" type="number" step="0.01" min="0" value="' + vrealMbdc.toFixed(DEC) + '" style="width:62px" '
             + 'onchange="cobOnDespChange(\'' + r.planta.replace(/'/g,"\\'")+'\',\'' + r.producto.replace(/'/g,"\\'")+'\',this.value)" '
             + 'oninput="cobOnDespChange(\'' + r.planta.replace(/'/g,"\\'")+'\',\'' + r.producto.replace(/'/g,"\\'")+'\',this.value)">'
             + (cobDespachoOverrides[key] !== undefined
               ? '<span style="font-size:7px;color:var(--ora);font-weight:700;margin-left:2px">✎</span>' : '')
-          : '<span style="font-family:var(--mono)">' + vrealMbdc.toFixed(2) + '</span>'
+          : '<span style="font-family:var(--mono)">' + vrealMbdc.toFixed(DEC) + '</span>'
             + (vrealFromCognos
                 ? '<span style="font-size:7px;color:var(--grn);margin-left:3px;font-weight:700" title="' + vrealSource + vrealSuffix + '">●C</span>'
                 : '<span style="font-size:7px;color:var(--txt3);margin-left:3px;opacity:.6" title="Fuente: E&D">E</span>'))
@@ -8119,18 +8126,18 @@ function _renderP2Body() {
         + '<td class="r" style="vertical-align:middle">'
         + '<div style="display:flex;align-items:center;gap:3px;justify-content:flex-end">'
         + (cobEditMode
-          ? '<input class="cob-edit" type="number" step="0.01" min="0" value="' + vfactDisplay.toFixed(2) + '" data-vfact="1" '
+          ? '<input class="cob-edit" type="number" step="0.01" min="0" value="' + vfactDisplay.toFixed(DEC) + '" data-vfact="1" '
             + 'onchange="cobOnVfactChange(\'' + r.planta.replace(/'/g, "\\'") + '\',\'' + r.producto.replace(/'/g, "\\'") + '\',this.value)" '
             + 'oninput="cobOnVfactChange(\'' + r.planta.replace(/'/g, "\\'") + '\',\'' + r.producto.replace(/'/g, "\\'") + '\',this.value)">'
             + '<button id="cob-up-' + sid + '" onclick="cobSetPron(\'' + r.planta.replace(/'/g, "\\'") + '\',\'' + r.producto.replace(/'/g, "\\'") + '\')" '
-            + 'title="Nivelar al pronóstico (' + pronMbdc.toFixed(2) + ')" '
+            + 'title="Nivelar al pronóstico (' + pronMbdc.toFixed(DEC) + ')" '
             + 'style="background:#1d6fd622;border:1px solid #1d6fd644;border-radius:4px;color:#4d9de0;cursor:pointer;font-size:10px;padding:2px 6px;font-weight:700;white-space:nowrap;flex-shrink:0;'
             + (vfactDisplay === pronMbdc && pronMbdc > 0 ? 'opacity:0.35;' : '')
             + '"'
             + '>↑P</button>'
-          : '<span style="font-family:var(--mono);color:' + (isReduced ? 'var(--red)' : 'var(--txt)') + ';font-weight:700">' + vfactDisplay.toFixed(2) + '</span>'
+          : '<span style="font-family:var(--mono);color:' + (isReduced ? 'var(--red)' : 'var(--txt)') + ';font-weight:700">' + vfactDisplay.toFixed(DEC) + '</span>'
             + (isReduced ? '<button onclick="cobSetPron(\'' + r.planta.replace(/'/g, "\\'") + '\',\'' + r.producto.replace(/'/g, "\\'") + '\')" '
-              + 'title="Nivelar al pronóstico (' + pronMbdc.toFixed(2) + ')" '
+              + 'title="Nivelar al pronóstico (' + pronMbdc.toFixed(DEC) + ')" '
               + 'style="background:#1d6fd622;border:1px solid #1d6fd644;border-radius:4px;color:#4d9de0;cursor:pointer;font-size:10px;padding:2px 6px;font-weight:700">↑P</button>' : ''))
         + '</div></td>'
         + '<td class="r" id="cob-reduc-' + sid + '" style="color:' + reducColor + ';font-weight:700;font-size:10px">' + reducStr + '</td>'
@@ -8147,14 +8154,14 @@ function _renderP2Body() {
             var dR = r.vreal || r.dem || 0;
             if (cobEditMode) {
               return '<td class="r" style="white-space:nowrap">'
-                + '<input class="cob-edit" type="number" step="0.01" min="0" value="' + dR.toFixed(2) + '" style="width:62px" '
+                + '<input class="cob-edit" type="number" step="0.01" min="0" value="' + dR.toFixed(DEC) + '" style="width:62px" '
                 + 'onchange="cobOnDespRealChange(\'' + r.planta.replace(/'/g,"\\'") + '\',\'' + r.producto.replace(/'/g,"\\'") + '\',this.value)" '
                 + 'oninput="cobOnDespRealChange(\'' + r.planta.replace(/'/g,"\\'") + '\',\'' + r.producto.replace(/'/g,"\\'") + '\',this.value)">'
                 + (cobDespRealOverrides[key] !== undefined
                   ? '<span style="font-size:7px;color:var(--ora);font-weight:700;margin-left:2px" title="Modificado, sin guardar">\u270e</span>' : '')
                 + '</td>';
             }
-            return '<td class="r" title="Despacho reportado por la planta en Registro Diario \u2014 clic en Editar para modificar"><span style="font-family:var(--mono);font-weight:700;font-size:10.5px;color:var(--txt2)">' + (dR > 0 ? dR.toFixed(2) : '\u2014') + '</span></td>';
+            return '<td class="r" title="Despacho reportado por la planta en Registro Diario \u2014 clic en Editar para modificar"><span style="font-family:var(--mono);font-weight:700;font-size:10.5px;color:var(--txt2)">' + (dR > 0 ? dR.toFixed(DEC) : '\u2014') + '</span></td>';
           })()
         + (function() {
             // Cobertura "real": inventario ÷ despacho REAL reportado ese día
@@ -8181,10 +8188,10 @@ function _renderP2Body() {
             }
             if (usandoPron) {
               var colPron = cobFinal <= 0 ? 'var(--txt3)' : cobFinal < CONFIG.COB_RED ? 'var(--red)' : cobFinal < CONFIG.COB_AMB ? 'var(--yel)' : 'var(--grn)';
-              return '<td class="r" title="Despacho real de ese d\u00eda fue anormalmente bajo (' + despReal.toFixed(2) + ' MB/d, cobertura real ' + cobRealRaw + 'd) \u2014 se us\u00f3 la demanda pron\u00f3stico en su lugar para este d\u00eda"><span style="font-family:var(--mono);font-weight:700;font-size:10.5px;color:' + colPron + ';cursor:help">\uD83C\uDFAF ' + cobFinal + 'd</span></td>';
+              return '<td class="r" title="Despacho real de ese d\u00eda fue anormalmente bajo (' + despReal.toFixed(DEC) + ' MB/d, cobertura real ' + cobRealRaw + 'd) \u2014 se us\u00f3 la demanda pron\u00f3stico en su lugar para este d\u00eda"><span style="font-family:var(--mono);font-weight:700;font-size:10.5px;color:' + colPron + ';cursor:help">\uD83C\uDFAF ' + cobFinal + 'd</span></td>';
             }
             if (cobRealRaw > COB_REAL_FALLBACK_UMBRAL) {
-              return '<td class="r" title="Despacho reportado (' + despReal.toFixed(2) + ' MB/d) es demasiado bajo, y tampoco hay pron\u00f3stico disponible para respaldar el c\u00e1lculo"><span style="font-family:var(--mono);font-weight:700;font-size:10px;color:#a86a00;cursor:help">\u26a0 ' + cobRealRaw + 'd</span></td>';
+              return '<td class="r" title="Despacho reportado (' + despReal.toFixed(DEC) + ' MB/d) es demasiado bajo, y tampoco hay pron\u00f3stico disponible para respaldar el c\u00e1lculo"><span style="font-family:var(--mono);font-weight:700;font-size:10px;color:#a86a00;cursor:help">\u26a0 ' + cobRealRaw + 'd</span></td>';
             }
             var colReal = cobRealRaw <= 0 ? 'var(--txt3)' : cobRealRaw < CONFIG.COB_RED ? 'var(--red)' : cobRealRaw < CONFIG.COB_AMB ? 'var(--yel)' : 'var(--grn)';
             return '<td class="r" title="Inventario \u00f7 despacho real reportado en Registro Diario"><span style="font-family:var(--mono);font-weight:700;font-size:10.5px;color:' + colReal + '">' + (cobRealRaw > 0 ? cobRealRaw + 'd' : '\u2014') + '</span></td>';
@@ -8218,18 +8225,18 @@ function _renderP2Body() {
           + (function() {
               var parts = [];
               bts.confirmed.forEach(function(b) {
-                parts.push('<span style="font-family:var(--mono);font-weight:700">' + b.vol.toFixed(2) + '</span>');
+                parts.push('<span style="font-family:var(--mono);font-weight:700">' + b.vol.toFixed(DEC) + '</span>');
               });
               bts.projected.forEach(function(b) {
-                parts.push('<span style="font-family:var(--mono);font-style:italic;color:#60a5fa;font-weight:600">' + b.vol.toFixed(2) + '</span>');
+                parts.push('<span style="font-family:var(--mono);font-style:italic;color:#60a5fa;font-weight:600">' + b.vol.toFixed(DEC) + '</span>');
               });
               if (bts.hasConfirmed && bts.hasProjected) {
-                parts.push('<span style="font-size:8px;color:var(--txt3);font-family:var(--mono)">= ' + bts.totalVol.toFixed(2) + ' MB</span>');
+                parts.push('<span style="font-size:8px;color:var(--txt3);font-family:var(--mono)">= ' + bts.totalVol.toFixed(DEC) + ' MB</span>');
               }
               return parts.length ? parts.join('<br>') : '\u2014';
             })()
         + '</td>'
-        + '<td class="r">' + (r.vacio ? (r.vacio||0).toFixed(2) : '\u2014') + '</td>'
+        + '<td class="r">' + (r.vacio ? (r.vacio||0).toFixed(DEC) : '\u2014') + '</td>'
         + (function() {
             var btVol1 = r.vol_rep || 0;
             var btVol2 = r.vol_rep_bt2 || 0;
@@ -8237,13 +8244,13 @@ function _renderP2Body() {
             var safeP = r.planta.replace(/'/g,"\\'"); var safePr = r.producto.replace(/'/g,"\\'");
             if (cobEditMode) {
               return '<td class="r" style="white-space:nowrap">'
-                + '<input type="number" step="0.1" min="0" value="' + btVol1.toFixed(2) + '"'
+                + '<input type="number" step="0.1" min="0" value="' + btVol1.toFixed(DEC) + '"'
                 + ' style="width:52px;padding:2px 4px;border:1.5px solid var(--acc);border-radius:5px;font-family:var(--mono);font-size:10px;background:var(--bg);color:var(--txt);text-align:right"'
                 + ' title="vol_rep BT1 — guardar con Guardar cambios"'
                 + ' onchange="cobVolRepChange(\'' + safeP + '\',\'' + safePr + '\',\'vol_rep\',this.value)"'
                 + ' oninput="cobVolRepChange(\'' + safeP + '\',\'' + safePr + '\',\'vol_rep\',this.value)"'
                 + '/>'
-                + (btVol2 > 0 ? '<br><input type="number" step="0.1" min="0" value="' + btVol2.toFixed(2) + '"'
+                + (btVol2 > 0 ? '<br><input type="number" step="0.1" min="0" value="' + btVol2.toFixed(DEC) + '"'
                   + ' style="width:52px;padding:2px 4px;border:1px dashed var(--acc);border-radius:5px;font-family:var(--mono);font-size:10px;background:var(--bg);color:#a78bfa;text-align:right;margin-top:2px"'
                   + ' title="vol_rep BT2"'
                   + ' onchange="cobVolRepChange(\'' + safeP + '\',\'' + safePr + '\',\'vol_rep_bt2\',this.value)"'
@@ -8252,8 +8259,8 @@ function _renderP2Body() {
             }
             return '<td class="r" style="white-space:nowrap">'
               + (totalVolRep > 0
-                ? '<span style="font-family:var(--mono);font-weight:700;color:var(--acc2)">' + btVol1.toFixed(2) + '</span>'
-                  + (btVol2 > 0 ? '<br><span style="font-family:var(--mono);font-size:9px;color:#a78bfa">' + btVol2.toFixed(2) + '</span>' : '')
+                ? '<span style="font-family:var(--mono);font-weight:700;color:var(--acc2)">' + btVol1.toFixed(DEC) + '</span>'
+                  + (btVol2 > 0 ? '<br><span style="font-family:var(--mono);font-size:9px;color:#a78bfa">' + btVol2.toFixed(DEC) + '</span>' : '')
                 : '\u2014')
               + '</td>';
           })()
@@ -8282,7 +8289,7 @@ function _renderP2Body() {
               if (val === null || val === undefined) return '';
               var d = (cur != null && val > 0) ? delta(val, cur) : '';
               return '<span class="cob-hist-pill"><span class="cob-hist-lbl">'+label+'</span>'
-                + '<span class="cob-hist-val">'+val.toFixed(2)+'</span>'
+                + '<span class="cob-hist-val">'+val.toFixed(DEC)+'</span>'
                 + (d||'')
                 + (note ? '<span class="cob-hist-note">'+note+'</span>' : '')
                 + '</span>';
@@ -8308,7 +8315,7 @@ function _renderP2Body() {
     var pronVal = cobGetPron(r);
     pronItems += '<div class="cob-pron-item">'
       + '<label>' + key + '</label>'
-      + '<input type="number" step="0.01" value="' + pronVal.toFixed(2) + '" data-planta="' + r.planta + '" data-producto="' + r.producto + '">'
+      + '<input type="number" step="0.01" value="' + pronVal.toFixed(DEC) + '" data-planta="' + r.planta + '" data-producto="' + r.producto + '">'
       + '</div>';
   });
   Object.keys(pronSheet).forEach(function(k) {
@@ -8320,7 +8327,7 @@ function _renderP2Body() {
     pronSeen[label] = true;
     pronItems += '<div class="cob-pron-item" style="border-left:2px solid var(--acc);padding-left:4px">'
       + '<label>' + label + '</label>'
-      + '<input type="number" step="0.01" value="' + (pronSheet[k] || 0).toFixed(2) + '" data-planta="' + planta + '" data-producto="' + producto + '">'
+      + '<input type="number" step="0.01" value="' + (pronSheet[k] || 0).toFixed(DEC) + '" data-planta="' + planta + '" data-producto="' + producto + '">'
       + '</div>';
   });
   var hasOverrides = Object.keys(cobOverrides).length > 0 || Object.keys(cobInvOverrides).length > 0 || Object.keys(cobDespachoOverrides).length > 0;
@@ -8363,14 +8370,14 @@ function _renderP2Body() {
     + (cobEditMode && hasOverrides ? (function() {
         var items = [];
         Object.keys(cobInvOverrides).forEach(function(k) {
-          var parts = k.split('|'); items.push('📦 ' + parts[0] + ' · ' + parts.slice(1).join('|') + ': Inventario → ' + cobInvOverrides[k].toFixed(2) + ' MB');
+          var parts = k.split('|'); items.push('📦 ' + parts[0] + ' · ' + parts.slice(1).join('|') + ': Inventario → ' + cobInvOverrides[k].toFixed(DEC) + ' MB');
         });
         Object.keys(cobOverrides).forEach(function(k) {
           var parts = k.split('|'); var ov = cobOverrides[k];
-          if (ov && typeof ov.vfact === 'number') items.push('📊 ' + parts[0] + ' · ' + parts.slice(1).join('|') + ': V.Factible → ' + ov.vfact.toFixed(2) + ' MBDC');
+          if (ov && typeof ov.vfact === 'number') items.push('📊 ' + parts[0] + ' · ' + parts.slice(1).join('|') + ': V.Factible → ' + ov.vfact.toFixed(DEC) + ' MBDC');
         });
         Object.keys(cobDespachoOverrides).forEach(function(k) {
-          var parts = k.split('|'); items.push('🚚 ' + parts[0] + ' · ' + parts.slice(1).join('|') + ': Despacho → ' + cobDespachoOverrides[k].toFixed(2) + ' MB');
+          var parts = k.split('|'); items.push('🚚 ' + parts[0] + ' · ' + parts.slice(1).join('|') + ': Despacho → ' + cobDespachoOverrides[k].toFixed(DEC) + ' MB');
         });
         return '<div style="background:#fff7ed;border-top:1px solid var(--ora)44;padding:8px 18px;font-size:10.5px">'
           + '<div style="font-weight:800;color:var(--ora);margin-bottom:4px">📝 Se guardará para la fecha ' + currentDate + ':</div>'
@@ -8707,7 +8714,7 @@ async function _renderP5Async() {
         const ops=getTermOps(navEntries,d.terminal,d.desde,d.hasta)||{};
         const hasIC=!!(ops.ic||ops.arribo), hasTD=!!(ops.td||ops.tc);
         const totVol=d.prods.reduce((s,p)=>s+p.vol,0);
-        const prodsText=d.prods.map(p=>`<span style="font-size:10px;font-weight:700;color:var(--txt)">${p.prod}</span> <span style="font-family:var(--mono);font-size:10px;color:${nc}">${p.vol.toFixed(2)}</span>`).join('<span style="color:var(--bdr);margin:0 5px">·</span>');
+        const prodsText=d.prods.map(p=>`<span style="font-size:10px;font-weight:700;color:var(--txt)">${p.prod}</span> <span style="font-family:var(--mono);font-size:10px;color:${nc}">${p.vol.toFixed(DEC)}</span>`).join('<span style="color:var(--bdr);margin:0 5px">·</span>');
         let dateCell='';
         if (hasIC && hasTD) {
           dateCell=`<div style="line-height:1.4">
@@ -8731,7 +8738,7 @@ async function _renderP5Async() {
             ${actv?'<span style="font-size:8.5px;color:#fbbf24;font-weight:700;margin-left:6px;background:#fbbf2415;padding:1px 6px;border-radius:4px">📍 descargando ahora</span>':''}
           </div>
           <div style="font-size:10.5px">${prodsText}</div>
-          <div style="text-align:right;min-width:130px">${dateCell}<div style="font-family:var(--mono);font-size:8.5px;color:var(--txt3);margin-top:2px">${totVol.toFixed(2)} MB</div></div>
+          <div style="text-align:right;min-width:130px">${dateCell}<div style="font-family:var(--mono);font-size:8.5px;color:var(--txt3);margin-top:2px">${totVol.toFixed(DEC)} MB</div></div>
         </div>`;
       }
       function viajeSection(viaje, vd, isActive) {
@@ -8772,7 +8779,7 @@ async function _renderP5Async() {
                 <div style="font-size:8.5px;color:var(--txt3);margin-top:3px">${nDone} descargada${nDone!==1?'s':''} de ${terms.length} escalas · ${pctDone}% completado</div>
               </div>
               <div style="text-align:right;flex-shrink:0">
-                <div style="font-size:18px;font-weight:800;font-family:var(--mono);color:var(--txt)">${vVol.toFixed(2)} MB</div>
+                <div style="font-size:18px;font-weight:800;font-family:var(--mono);color:var(--txt)">${vVol.toFixed(DEC)} MB</div>
                 <div style="font-size:8.5px;color:var(--txt3)">${terms.length} escala${terms.length!==1?'s':''}</div>
               </div>
             </div>
@@ -8813,7 +8820,7 @@ async function _renderP5Async() {
                 <span style="color:var(--txt3);margin-left:6px;font-size:11px">${r.producto}</span>
                 ${isBT2?'<span style="font-size:7.5px;color:#a855f7;margin-left:4px;background:#a855f715;padding:1px 5px;border-radius:3px">BT2</span>':''}
                 <div style="display:flex;align-items:center;gap:8px;margin-top:3px">
-                  <span style="font-family:var(--mono);font-weight:800;font-size:13px;color:#60b5ff">${vol.toFixed(2)} MB</span>
+                  <span style="font-family:var(--mono);font-weight:800;font-size:13px;color:#60b5ff">${vol.toFixed(DEC)} MB</span>
                   <span style="font-size:9.5px;color:var(--txt3)">${eta?fmtDate(eta):'—'}</span>
                 </div>
               </div>`;
@@ -9258,7 +9265,7 @@ function renderPA() {
       const popThLabel  = isRef ? '● REFINERÍA' : '● TERMINAL';
       const tableRows = d.records.sort((a,b) => prodSortKey(a.producto) - prodSortKey(b.producto)).map(r => {
         const rc   = cobColor(r._mapCob||0);
-        const inv  = (r.inv||0).toFixed(2);
+        const inv  = (r.inv||0).toFixed(DEC);
         const demRaw = r.dem||r.dem_prom||0;
         const pronRaw = pronDiarioAprobado(r);
         // Guard: la columna "dem" (col DESPACHO DIARIO de inventario) a veces
@@ -9271,8 +9278,8 @@ function renderPA() {
         const demSuspicious = demRaw > 0 && pronRaw > 0 && demRaw > pronRaw * 50;
         const dem = demSuspicious
           ? `<span title="Dato posiblemente mal cargado en el E&D — revisar fuente" style="color:${isLight?'#c2410c':'#fb923c'};cursor:help">⚠ ${demRaw.toFixed(0)}</span>`
-          : demRaw.toFixed(2);
-        const pron = pronRaw.toFixed(2);
+          : demRaw.toFixed(DEC);
+        const pron = pronRaw.toFixed(DEC);
         const cobs = (r._mapCob||0) > 0 ? Math.round(r._mapCob||0)+'d' : '0d';
         const btRow = r.bt
           ? `<div style="font-size:9px;color:${popBtColor};margin-top:2px;font-weight:600">🚢 ${r.bt} · ETA ${fmtDate(r.fecha_reposicion||'')}</div>`
@@ -9348,7 +9355,7 @@ function renderPA() {
             var items = rows2.map(function(c){
               return '<div style="display:flex;justify-content:space-between;gap:8px;padding:3px 0;font-size:10px">'
                 + '<span style="color:'+popTxt3+'">\ud83d\udea2 '+c.buque+' \u00b7 '+(normProd(c.producto)||c.producto)+'</span>'
-                + '<span style="font-family:var(--mono);font-weight:700;color:'+popTxt+'">'+c.volumen_mb.toFixed(2)+' MB</span>'
+                + '<span style="font-family:var(--mono);font-weight:700;color:'+popTxt+'">'+c.volumen_mb.toFixed(DEC)+' MB</span>'
                 + '</div>';
             }).join('');
             return '<div style="padding:8px 16px 12px;border-top:1px solid '+popBadgeBdr+'">'
@@ -9366,7 +9373,7 @@ function renderPA() {
       if (!r.bt) return;
       if (!btShips[r.bt]) btShips[r.bt] = {stops:[], eta: r.fecha_reposicion||'', totalVol:0, prods:[]};
       btShips[r.bt].totalVol += (r.vol_rep||0);
-      if (r.vol_rep > 0) btShips[r.bt].prods.push(r.planta+': '+r.producto+' '+(r.vol_rep).toFixed(2)+'MB');
+      if (r.vol_rep > 0) btShips[r.bt].prods.push(r.planta+': '+r.producto+' '+(r.vol_rep).toFixed(DEC)+'MB');
       var pm = PLANT_META[r.planta];
       if (pm && !btShips[r.bt].stops.some(function(s) { return s.planta === r.planta; })) {
         btShips[r.bt].stops.push({planta: r.planta, lat: pm.lat, lng: pm.lng});
@@ -9477,7 +9484,7 @@ function renderPA() {
             vol: t.volumen_mb || 0, producto: t.producto || ''
           });
         }
-        if (t.volumen_mb > 0) { shipMap[name].totalVol += t.volumen_mb; shipMap[name].productos.push(t.producto + ' ' + t.volumen_mb.toFixed(2) + 'MB'); }
+        if (t.volumen_mb > 0) { shipMap[name].totalVol += t.volumen_mb; shipMap[name].productos.push(t.producto + ' ' + t.volumen_mb.toFixed(DEC) + 'MB'); }
       });
       Object.keys(shipMap).forEach(function(name) {
         if (btShips[name]) return; // ya está (del inventario)
@@ -9802,13 +9809,13 @@ function renderPA() {
       }
       var volStr = '';
       if (ship.totalVol > 0 && ship.capMB > 0) {
-        volStr = ship.totalVol.toFixed(2) + ' / ' + ship.capMB.toFixed(2) + ' MB';
+        volStr = ship.totalVol.toFixed(DEC) + ' / ' + ship.capMB.toFixed(DEC) + ' MB';
         var fillPct = Math.round((ship.totalVol/ship.capMB)*100);
         volStr += ' <span style="font-size:9.5px;color:#94a3b8">(' + fillPct + '%)</span>';
       } else if (ship.capMB > 0) {
-        volStr = 'Cap. ' + ship.capMB.toFixed(2) + ' MB';
+        volStr = 'Cap. ' + ship.capMB.toFixed(DEC) + ' MB';
       } else if (ship.totalVol > 0) {
-        volStr = ship.totalVol.toFixed(2) + ' MB';
+        volStr = ship.totalVol.toFixed(DEC) + ' MB';
       }
       var rutaDisplay = ship.ruta_str || stopsList;
       var cargaHtml = '';
@@ -10261,7 +10268,7 @@ function _renderCisKPIs(records) {
   + _cisKpiCard('En tránsito', totTrans, '#0891b2', 'cisternas', 'TRANS')
   + _cisKpiCard('En carga', totCarga, '#d97706', 'cargando', 'CARGA')
   + _cisKpiCard('En descarga', totDesc, '#16a34a', 'descargando', 'DESC')
-  + _cisKpiCard('Vol. tránsito', (totGalTrans/42000).toFixed(2), '#7c2d12', 'MB total', 'VOL')
+  + _cisKpiCard('Vol. tránsito', (totGalTrans/42000).toFixed(DEC), '#7c2d12', 'MB total', 'VOL')
   + _cisKpiCard('Rutas activas', rutasActivas.size, '#7c3aed', destSet.size + ' destinos', 'RUTAS');
   document.getElementById('cis-kpis').innerHTML = html;
 }
@@ -10558,7 +10565,7 @@ function renderPB() {
     simShips.forEach(function(ship) {
       const b = (ship.name||'').toUpperCase();
       (ship.stops||[]).forEach(function(st) {
-        const prods = (st.prods||[]).map(p => (p.producto||'')+(p.vol>0?' '+p.vol.toFixed(2):''));
+        const prods = (st.prods||[]).map(p => (p.producto||'')+(p.vol>0?' '+p.vol.toFixed(DEC):''));
         const vol   = (st.prods||[]).reduce((s,p)=>s+(p.vol||0),0);
         if (!btMap[b]) btMap[b] = [];
         if (st.etaDate) btMap[b].push({terminal:st.planta||'?', desde:st.etaDate, hasta:st.etaDate,
@@ -10584,14 +10591,14 @@ function renderPB() {
         const isActual = e.estado === 'ACTUAL' || (e.desde <= currentDate && e.hasta >= currentDate);
         const opacity  = e.estado === 'COMPLETADO' ? '0.45' : '1';
         const label    = `${buque} → ${e.terminal}`;
-        const tooltip  = `${buque} V${e.producto} ${e.vol.toFixed(2)} MB · ${fmtDate(e.desde)}${e.hasta!==e.desde?' → '+fmtDate(e.hasta):''} [${e.estado}]`;
+        const tooltip  = `${buque} V${e.producto} ${e.vol.toFixed(DEC)} MB · ${fmtDate(e.desde)}${e.hasta!==e.desde?' → '+fmtDate(e.hasta):''} [${e.estado}]`;
         return `<div class="gantt-row">
           <div class="gantt-label" title="${tooltip}">${label}</div>
           <div class="gantt-track">
             <div class="gantt-today" style="left:${todayPct}%"></div>
             <div class="gantt-block" style="left:${startP}%;width:${w}%;background:${col};opacity:${opacity};${isActual?'box-shadow:0 0 8px '+col+'88':'border:1px dashed '+col+'99'}"
               title="${tooltip}">
-              <span>${e.terminal} · ${e.vol.toFixed(2)} MB</span>
+              <span>${e.terminal} · ${e.vol.toFixed(DEC)} MB</span>
             </div>
           </div>
         </div>`;
@@ -10849,7 +10856,7 @@ function _pronEvRender(el) {
       if (v === null) return;
       var x = pad + (i / (meses.length - 1)) * (w - pad*2);
       var y = h - pad - ((v - mn) / (mx - mn || 1)) * (h - pad*2);
-      pts.push(x.toFixed(2) + ',' + y.toFixed(2));
+      pts.push(x.toFixed(DEC) + ',' + y.toFixed(DEC));
     });
     var d = delta(r);
     var col = d === null ? 'var(--txt3)' : (d > 0 ? '#22c55e' : d < 0 ? '#ef4444' : 'var(--txt3)');
@@ -10863,14 +10870,14 @@ function _pronEvRender(el) {
   var tbody = datos.map(function(r) {
     var d   = delta(r);
     var p   = pct(r);
-    var ult = meses.length ? (r.meses[meses[meses.length-1]] !== undefined ? r.meses[meses[meses.length-1]].toFixed(2) : '—') : '—';
-    var dStr = d === null ? '—' : (d >= 0 ? '+' : '') + d.toFixed(2);
-    var pStr = p === null ? '—' : (p >= 0 ? '+' : '') + p.toFixed(2) + '%';
+    var ult = meses.length ? (r.meses[meses[meses.length-1]] !== undefined ? r.meses[meses[meses.length-1]].toFixed(DEC) : '—') : '—';
+    var dStr = d === null ? '—' : (d >= 0 ? '+' : '') + d.toFixed(DEC);
+    var pStr = p === null ? '—' : (p >= 0 ? '+' : '') + p.toFixed(DEC) + '%';
     var dCol = d === null ? 'var(--txt3)' : (d > 0.0001 ? 'var(--grn)' : d < -0.0001 ? 'var(--red)' : 'var(--txt3)');
     var mesesCols = meses.map(function(m) {
       var v = r.meses[m];
       return '<td style="text-align:right;font-family:var(--mono);font-size:10px;padding:6px 10px;border-bottom:1px solid var(--bdr)22">' +
-        (v !== undefined ? v.toFixed(2) : '<span style="color:var(--bdr)">—</span>') + '</td>';
+        (v !== undefined ? v.toFixed(DEC) : '<span style="color:var(--bdr)">—</span>') + '</td>';
     }).join('');
     return '<tr>' +
       '<td style="padding:6px 12px;border-bottom:1px solid var(--bdr)22;font-weight:700;color:var(--txt);white-space:nowrap">' + r.planta + '</td>' +
@@ -11036,11 +11043,11 @@ function renderPTend() {
     // base = INVENTARIO DISPONIBLE (RAW, igual que INV.DISP en Coberturas)
     // El cabotaje (vol_rep del BT) se apila ENCIMA: es producto en tránsito,
     // NO incluido en el inventario físico de la planta.
-    baseByDate.push(parseFloat(baseSinRepos.toFixed(2)));
-    reposByDate.push(totRepos > 0 ? parseFloat(totRepos.toFixed(2)) : 0);
-    marByDate.push(parseFloat(totMar.toFixed(2)));
-    terrByDate.push(parseFloat(totTerr.toFixed(2)));
-    invRawByDate.push(parseFloat(totInvRaw.toFixed(2)));
+    baseByDate.push(parseFloat(baseSinRepos.toFixed(DEC)));
+    reposByDate.push(totRepos > 0 ? parseFloat(totRepos.toFixed(DEC)) : 0);
+    marByDate.push(parseFloat(totMar.toFixed(DEC)));
+    terrByDate.push(parseFloat(totTerr.toFixed(DEC)));
+    invRawByDate.push(parseFloat(totInvRaw.toFixed(DEC)));
     dateLabels.push(d);
   });
   // ── Cobertura en días por barra: inv_total / pronóstico (MBDC) ──────────
@@ -11206,8 +11213,8 @@ function renderPTend() {
         return '<span style="display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:10px;font-size:9.5px;font-weight:700;background:'+col+'18;border:1px solid '+col+'44;white-space:nowrap">'
           + '<span style="width:7px;height:7px;border-radius:50%;background:'+col+';display:inline-block;flex-shrink:0"></span>'
           + '<span style="color:var(--txt);font-weight:800">' + p + '</span>'
-          + (d.mar>0  ? '&nbsp;<span style="color:'+COL_MAR+';font-size:9px;font-weight:700">&#9972;&nbsp;<span style="font-family:var(--mono)">'+d.mar.toFixed(2)+'</span></span>' : '')
-          + (d.terr>0 ? '&nbsp;<span style="color:'+COL_TERR+';font-size:9px;font-weight:700">&#128656;&nbsp;<span style="font-family:var(--mono)">'+d.terr.toFixed(2)+'</span></span>' : '')
+          + (d.mar>0  ? '&nbsp;<span style="color:'+COL_MAR+';font-size:9px;font-weight:700">&#9972;&nbsp;<span style="font-family:var(--mono)">'+d.mar.toFixed(DEC)+'</span></span>' : '')
+          + (d.terr>0 ? '&nbsp;<span style="color:'+COL_TERR+';font-size:9px;font-weight:700">&#128656;&nbsp;<span style="font-family:var(--mono)">'+d.terr.toFixed(DEC)+'</span></span>' : '')
           + '</span>';
       }).join('');
     return '<div style="border-bottom:1px solid var(--bdr)">'
@@ -11217,9 +11224,9 @@ function renderPTend() {
       +  (btRaw ? '<div style="font-size:9.5px;color:var(--txt3)">'+typeIcon+' '+btRaw+'</div>' : '')
       +'</div>'
       +'<span style="font-size:10px;font-weight:700;color:var(--txt3);text-align:center;background:var(--bg3);padding:2px 5px;border-radius:6px">'+pctOfNac.toFixed(0)+'%</span>'
-      +'<span style="font-size:11px;font-family:var(--mono);font-weight:700;color:'+COL_MAR+';text-align:right">'+(r.mar>0?r.mar.toFixed(2):'—')+'</span>'
-      +'<span style="font-size:11px;font-family:var(--mono);font-weight:700;color:'+COL_TERR+';text-align:right">'+(r.terr>0?r.terr.toFixed(2):'—')+'</span>'
-      +'<span style="font-size:12px;font-family:var(--mono);font-weight:800;color:var(--txt);text-align:right">'+r.total.toFixed(2)+'</span>'
+      +'<span style="font-size:11px;font-family:var(--mono);font-weight:700;color:'+COL_MAR+';text-align:right">'+(r.mar>0?r.mar.toFixed(DEC):'—')+'</span>'
+      +'<span style="font-size:11px;font-family:var(--mono);font-weight:700;color:'+COL_TERR+';text-align:right">'+(r.terr>0?r.terr.toFixed(DEC):'—')+'</span>'
+      +'<span style="font-size:12px;font-family:var(--mono);font-weight:800;color:var(--txt);text-align:right">'+r.total.toFixed(DEC)+'</span>'
       +'</div>'
       + (prodPills ? '<div style="padding:3px 14px 7px;display:flex;flex-wrap:wrap;gap:4px">'+prodPills+'</div>' : '')
       + '</div>';
@@ -11262,22 +11269,22 @@ function renderPTend() {
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:16px">
       <div class="pinv-kcard">
         <div class="pinv-kcard-lbl">Inventario total</div>
-        <div class="pinv-kcard-val" style="font-size:22px;color:${cfg.bar}">${lastTotal.toFixed(2)}</div>
+        <div class="pinv-kcard-val" style="font-size:22px;color:${cfg.bar}">${lastTotal.toFixed(DEC)}</div>
         <div class="pinv-kcard-sub">MB nacional · ${fmtLabel(lastDate)}</div>
       </div>
       <div class="pinv-kcard">
         <div class="pinv-kcard-lbl">Variación día ant.</div>
-        <div class="pinv-kcard-val" style="font-size:22px;color:${delta>=0?'var(--grn)':'var(--red)'}">${delta>=0?'▲':'▼'} ${Math.abs(delta).toFixed(2)}</div>
+        <div class="pinv-kcard-val" style="font-size:22px;color:${delta>=0?'var(--grn)':'var(--red)'}">${delta>=0?'▲':'▼'} ${Math.abs(delta).toFixed(DEC)}</div>
         <div class="pinv-kcard-sub">MB vs día anterior</div>
       </div>
       <div class="pinv-kcard">
         <div class="pinv-kcard-lbl" style="color:${COL_MAR}">🚢 Cabotaje Marítimo</div>
-        <div class="pinv-kcard-val" style="font-size:22px;color:${COL_MAR}">${lastMar.toFixed(2)}</div>
+        <div class="pinv-kcard-val" style="font-size:22px;color:${COL_MAR}">${lastMar.toFixed(DEC)}</div>
         <div class="pinv-kcard-sub">MB en buques BT</div>
       </div>
       <div class="pinv-kcard">
         <div class="pinv-kcard-lbl" style="color:${COL_TERR}">🚛 Tránsito Terrestre</div>
-        <div class="pinv-kcard-val" style="font-size:22px;color:${COL_TERR}">${lastTerr.toFixed(2)}</div>
+        <div class="pinv-kcard-val" style="font-size:22px;color:${COL_TERR}">${lastTerr.toFixed(DEC)}</div>
         <div class="pinv-kcard-sub">MB en cisternas</div>
       </div>
     </div>
@@ -11330,9 +11337,9 @@ function renderPTend() {
           <span class="pinv-chart-dot" style="background:var(--acc)"></span>
           Cabotaje por planta — ${fmtLabel(lastDate)}
         </div>
-        <span style="font-size:11px;color:var(--txt3)">Total: <b style="color:var(--txt)">${totalCabLast.toFixed(2)} MB</b>
-          &nbsp;·&nbsp;<span style="color:${COL_MAR}">🚢 ${lastMar.toFixed(2)} mar.</span>
-          &nbsp;·&nbsp;<span style="color:${COL_TERR}">🚛 ${lastTerr.toFixed(2)} terr.</span>
+        <span style="font-size:11px;color:var(--txt3)">Total: <b style="color:var(--txt)">${totalCabLast.toFixed(DEC)} MB</b>
+          &nbsp;·&nbsp;<span style="color:${COL_MAR}">🚢 ${lastMar.toFixed(DEC)} mar.</span>
+          &nbsp;·&nbsp;<span style="color:${COL_TERR}">🚛 ${lastTerr.toFixed(DEC)} terr.</span>
         </span>
       </div>
       <!-- Cabecera tabla -->
@@ -11387,8 +11394,8 @@ function renderPTend() {
           +   '<span style="position:absolute;top:0;left:50%;transform:translateX(-50%);font-size:8.5px;font-weight:800;color:var(--txt);line-height:14px">'+pct.toFixed(0)+'%</span>'
           + '</div>'
           + '<div style="font-size:10px;font-family:var(--mono);color:var(--txt2);text-align:right">'
-          +   '<b style="color:var(--txt)">'+cur.toFixed(2)+'</b> / '+cap.toFixed(2)+' MB'
-          +   ' \u00b7 <span style="color:#16a34a">'+libre.toFixed(2)+' libre</span>'
+          +   '<b style="color:var(--txt)">'+cur.toFixed(DEC)+'</b> / '+cap.toFixed(DEC)+' MB'
+          +   ' \u00b7 <span style="color:#16a34a">'+libre.toFixed(DEC)+' libre</span>'
           + '</div>'
           + '</div>';
       }).join('');
@@ -11518,17 +11525,17 @@ function renderPTend() {
                 var v = ctx.parsed.y;
                 if (v == null || v <= 0) return null;
                 var icons = ['📦','🚢','🚛','📉'];
-                return '  '+icons[ctx.datasetIndex]+' '+ctx.dataset.label+': '+v.toFixed(2)+' MB';
+                return '  '+icons[ctx.datasetIndex]+' '+ctx.dataset.label+': '+v.toFixed(DEC)+' MB';
               },
               footer: function(ctx) {
                 var i = ctx[0].dataIndex;
                 var invD = baseByDate[i]||0;
                 var cabT = (marByDate[i]||0)+(terrByDate[i]||0);
                 var vv = ventasLine[i];
-                var s = '  ─────────────────\n  Inv. disponible: '+invD.toFixed(2)+' MB';
-                if (cabT > 0) s += '\n  En tránsito (BT): '+cabT.toFixed(2)+' MB';
+                var s = '  ─────────────────\n  Inv. disponible: '+invD.toFixed(DEC)+' MB';
+                if (cabT > 0) s += '\n  En tránsito (BT): '+cabT.toFixed(DEC)+' MB';
                 if (cobByDate[i] != null) s += '\n  Cobertura: '+cobByDate[i]+' días';
-                if (vv != null && vv > 0) s += '\n  Venta Cognos: '+vv.toFixed(2)+' MB'+(planta!=='Nacional'?' ['+planta+']':'');
+                if (vv != null && vv > 0) s += '\n  Venta Cognos: '+vv.toFixed(DEC)+' MB'+(planta!=='Nacional'?' ['+planta+']':'');
                 return s;
               }
             }
@@ -11796,7 +11803,7 @@ function renderPTend() {
                     };
                     var lbl = ctx.dataset.label || '';
                     var prefix = prefixes[lbl] || '';
-                    return '  ' + prefix + ' ' + lbl + ': ' + v.toFixed(2) + ' MB';
+                    return '  ' + prefix + ' ' + lbl + ': ' + v.toFixed(DEC) + ' MB';
                   }
                 }
               }
@@ -11808,7 +11815,7 @@ function renderPTend() {
               },
               yV: {
                 type:'linear', position:'left', min:0,
-                ticks: { color:labelColorV, font:{size:10}, callback:function(v){ return v.toFixed(2)+' MB'; } },
+                ticks: { color:labelColorV, font:{size:10}, callback:function(v){ return v.toFixed(DEC)+' MB'; } },
                 grid: { color:gridColorV },
                 title: { display:true, text:'MB/d\u00eda', color:labelColorV, font:{size:10,weight:'700'} }
               }
@@ -12055,13 +12062,13 @@ function renderPD() {
         <div class="curve-card-title">
           <span style="width:8px;height:8px;border-radius:50%;background:${statusColor};display:inline-block"></span>
           ${r.planta}
-          <span style="margin-left:auto;font-size:10px;color:var(--txt3);font-weight:500">${(inv).toFixed?inv.toFixed(2):inv} MB inv · ${cobDias}d cob</span>
+          <span style="margin-left:auto;font-size:10px;color:var(--txt3);font-weight:500">${(inv).toFixed?inv.toFixed(DEC):inv} MB inv · ${cobDias}d cob</span>
         </div>
         <div class="curve-canvas-wrap"><canvas id="${cardId}"></canvas></div>
         <div class="curve-status">
           <span class="curve-tag ${cobDias<4?'warn':'ok'}">Quiebre en ~${daysToQuiebre}d</span>
           ${btETA ? `<span class="curve-tag ok">🚢 BT ETA ${fmtDate(btETA)}</span>` : ''}
-          <span class="curve-tag ${dem>0?'ok':'warn'}" style="margin-left:auto">Dem: ${(dem).toFixed?dem.toFixed(2):dem} MB/d</span>
+          <span class="curve-tag ${dem>0?'ok':'warn'}" style="margin-left:auto">Dem: ${(dem).toFixed?dem.toFixed(DEC):dem} MB/d</span>
         </div>
       </div>`;
   }).join('');
@@ -12184,7 +12191,7 @@ function renderPD() {
             legend: {display: false},
             tooltip: {
               callbacks: {
-                label: ctx => '  ' + ctx.dataset.label + ': ' + ctx.parsed.y.toFixed(2) + ' MB'
+                label: ctx => '  ' + ctx.dataset.label + ': ' + ctx.parsed.y.toFixed(DEC) + ' MB'
               }
             }
           },
@@ -12276,15 +12283,15 @@ function simLoad() {
     const v2 = r.vol_rep_bt2 || 0;
     if (v1>0) {
       const k = r.planta+'||'+r.producto+'||1';
-      btMap[r.bt].stops[k] = {planta:r.planta, producto:r.producto, vol:parseFloat(v1.toFixed(2)), etaDate:r.fecha_reposicion||'',
-        prods:[{producto:r.producto, vol:parseFloat(v1.toFixed(2))}]};
+      btMap[r.bt].stops[k] = {planta:r.planta, producto:r.producto, vol:parseFloat(v1.toFixed(DEC)), etaDate:r.fecha_reposicion||'',
+        prods:[{producto:r.producto, vol:parseFloat(v1.toFixed(DEC))}]};
       btMap[r.bt].prodCap[r.producto] = (btMap[r.bt].prodCap[r.producto]||0) + v1;
     }
     if (v2>0) {
       const k = r.planta+'||'+r.producto+'||2';
       const prod2 = r.producto+'(BT2)';
-      btMap[r.bt].stops[k] = {planta:r.planta, producto:prod2, vol:parseFloat(v2.toFixed(2)), etaDate:r.fecha_repos_bt2||'',
-        prods:[{producto:prod2, vol:parseFloat(v2.toFixed(2))}]};
+      btMap[r.bt].stops[k] = {planta:r.planta, producto:prod2, vol:parseFloat(v2.toFixed(DEC)), etaDate:r.fecha_repos_bt2||'',
+        prods:[{producto:prod2, vol:parseFloat(v2.toFixed(DEC))}]};
       btMap[r.bt].prodCap[prod2] = (btMap[r.bt].prodCap[prod2]||0) + v2;
     }
   });
@@ -12336,7 +12343,7 @@ function simUpdateFleetSidebar(ship) {
   const used = ship.stops.reduce((a,st)=>a+st.vol,0);
   const pct  = ship.volTotal>0 ? Math.min(100,used/ship.volTotal*100) : 0;
   const fillC = pct>100?'#e03434':pct>90?'#c9970a':'#1a9e50';
-  el.querySelector('.sim-sb-meta').textContent = `${ship.stops.length} escalas · ${used.toFixed(2)}/${ship.volTotal} MB`;
+  el.querySelector('.sim-sb-meta').textContent = `${ship.stops.length} escalas · ${used.toFixed(DEC)}/${ship.volTotal} MB`;
   el.querySelector('.sim-sb-fill').style.width = pct+'%';
   el.querySelector('.sim-sb-fill').style.background = fillC;
 }
@@ -12348,7 +12355,7 @@ function simUpdateCapBar(ship) {
   const fillEl  = document.getElementById('sim-capfill-'+ship.id);
   const numEl   = document.getElementById('sim-capnums-'+ship.id);
   if (fillEl) { fillEl.style.width=pct+'%'; fillEl.style.background=capColor; }
-  if (numEl)  { numEl.style.color=capColor; numEl.textContent=`${used.toFixed(2)} / ${ship.volTotal} MB  ${remain>=0?remain.toFixed(2)+' libre':Math.abs(remain).toFixed(2)+' exceso'}`; }
+  if (numEl)  { numEl.style.color=capColor; numEl.textContent=`${used.toFixed(DEC)} / ${ship.volTotal} MB  ${remain>=0?remain.toFixed(DEC)+' libre':Math.abs(remain).toFixed(DEC)+' exceso'}`; }
   const byProd = {};
   ship.stops.forEach(st=>{ byProd[st.producto]=(byProd[st.producto]||0)+st.vol; });
   Object.entries(byProd).forEach(([prod,assign])=>{
@@ -12359,7 +12366,7 @@ function simUpdateCapBar(ship) {
     const barEl  = document.getElementById('sim-prodfill-'+ship.id+'-'+prod.replace(/[^a-z0-9]/gi,'_'));
     const numEl2 = document.getElementById('sim-prodnums-'+ship.id+'-'+prod.replace(/[^a-z0-9]/gi,'_'));
     if (barEl)  { barEl.style.width=pct2.toFixed(0)+'%'; barEl.style.background=fillC; }
-    if (numEl2) { numEl2.textContent = assign.toFixed(2)+' MB'+(rem!==null?' ('+(rem>=0?'-'+rem.toFixed(2):'+'+Math.abs(rem).toFixed(2))+'MB)':''); numEl2.style.color=fillC; }
+    if (numEl2) { numEl2.textContent = assign.toFixed(DEC)+' MB'+(rem!==null?' ('+(rem>=0?'-'+rem.toFixed(DEC):'+'+Math.abs(rem).toFixed(DEC))+'MB)':''); numEl2.style.color=fillC; }
   });
   simUpdateFleetSidebar(ship);
 }
@@ -12537,7 +12544,7 @@ function simExportCSV() {
       const d    = getDistDays(prev, st.planta);
       const prods= st.prods && st.prods.length ? st.prods : [{producto:st.producto||'',vol:st.vol||0}];
       prods.forEach(pr => {
-        rows.push([fechaProg,s.name,s.origen,s.zarpeDate,totalVol.toFixed(2),i+1,st.planta,pr.producto,pr.vol,st.etaDate,d?d.toFixed(2):'—']);
+        rows.push([fechaProg,s.name,s.origen,s.zarpeDate,totalVol.toFixed(DEC),i+1,st.planta,pr.producto,pr.vol,st.etaDate,d?d.toFixed(DEC):'—']);
       });
     });
   });
@@ -12571,18 +12578,18 @@ async function simSaveToGS() {
     const totalVol = s.stops.reduce((a,st)=>a+(st.vol||0),0);
     const lastEta  = s.stops.filter(st=>st.etaDate).pop();
     rows.push({tipo:'BUQUE',fecha_prog:fechaProg,timestamp,buque:s.name,origen:s.origen,
-      zarpe:s.zarpeDate,vol_total_mb:totalVol.toFixed(2),n_escalas:s.stops.length,
+      zarpe:s.zarpeDate,vol_total_mb:totalVol.toFixed(DEC),n_escalas:s.stops.length,
       retorno_est:lastEta?lastEta.etaDate:'',escala_num:'',planta:'',eta:'',dist_dias:'',
-      productos:Object.entries(s.prodCap||{}).map(([p,v])=>p+':'+v.toFixed(2)).join(' | ')});
+      productos:Object.entries(s.prodCap||{}).map(([p,v])=>p+':'+v.toFixed(DEC)).join(' | ')});
     s.stops.forEach((st,i)=>{
       const prev=i===0?s.origen:s.stops[i-1].planta;
       const d=getDistDays(prev,st.planta);
       const prods=st.prods&&st.prods.length?st.prods:[{producto:st.producto||'',vol:st.vol||0}];
       prods.forEach(pr=>{
         rows.push({tipo:'ESCALA',fecha_prog:fechaProg,timestamp,buque:s.name,origen:s.origen,
-          zarpe:s.zarpeDate,vol_total_mb:totalVol.toFixed(2),n_escalas:s.stops.length,
+          zarpe:s.zarpeDate,vol_total_mb:totalVol.toFixed(DEC),n_escalas:s.stops.length,
           retorno_est:lastEta?lastEta.etaDate:'',escala_num:i+1,planta:st.planta,
-          eta:st.etaDate,dist_dias:d?d.toFixed(2):'',productos:pr.producto+':'+pr.vol.toFixed(2)});
+          eta:st.etaDate,dist_dias:d?d.toFixed(DEC):'',productos:pr.producto+':'+pr.vol.toFixed(DEC)});
       });
     });
   });
@@ -12796,7 +12803,7 @@ function renderPE() {
       fleetHTML += '<div class="sim-ship-avatar" style="background:' + col + '">' + s.name.slice(0, 2).toUpperCase() + '</div>';
       fleetHTML += '<div class="sim-ship-info">';
       fleetHTML += '<div class="sim-ship-n">' + s.name + '</div>';
-      fleetHTML += '<div class="sim-ship-meta sim-sb-meta">' + s.stops.length + ' escalas · ' + used.toFixed(2) + '/' + s.volTotal + ' MB</div>';
+      fleetHTML += '<div class="sim-ship-meta sim-sb-meta">' + s.stops.length + ' escalas · ' + used.toFixed(DEC) + '/' + s.volTotal + ' MB</div>';
       fleetHTML += '</div>';
       fleetHTML += '<button class="sim-ship-xbtn" onclick="event.stopPropagation();simDelShip(' + s.id + ')" title="Eliminar">✕</button>';
       fleetHTML += '</div>';
@@ -12827,7 +12834,7 @@ function renderPE() {
       const pct2    = cap > 0 ? Math.min(100, assign / cap * 100) : 0;
       const fillC2  = rem2 !== null ? (rem2 < 0 ? '#e03434' : rem2 === 0 ? '#c9970a' : '#1a9e50') : '#1d4ed8';
       const pid     = prod.replace(/[^a-z0-9]/gi, '_');
-      const remStr  = rem2 !== null ? ' (' + (rem2 >= 0 ? '-' + rem2.toFixed(2) : '+' + Math.abs(rem2).toFixed(2)) + 'MB)' : '';
+      const remStr  = rem2 !== null ? ' (' + (rem2 >= 0 ? '-' + rem2.toFixed(DEC) : '+' + Math.abs(rem2).toFixed(DEC)) + 'MB)' : '';
       prodRows += '<div style="display:grid;grid-template-columns:180px 1fr 160px 28px;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--bdr)33">';
       prodRows += '<select class="sim-fld-input" style="font-size:11px" onchange="simChangeProdName(' + active.id + ',\'' + prod.replace(/'/g, "\\'") + '\',this.value)">';
       PRODUCTS.forEach(function(p) {
@@ -12837,7 +12844,7 @@ function renderPE() {
       prodRows += '<div style="position:relative;height:8px;background:var(--bdr);border-radius:4px;overflow:hidden"><div id="sim-prodfill-' + active.id + '-' + pid + '" style="position:absolute;left:0;top:0;height:100%;width:' + pct2.toFixed(0) + '%;background:' + fillC2 + ';border-radius:4px;transition:width .3s"></div></div>';
       prodRows += '<div style="display:flex;align-items:center;gap:6px">';
       prodRows += '<input type="number" value="' + (cap || '') + '" min="0" step="0.1" placeholder="Cap. MB" style="width:70px;background:var(--card2);color:var(--txt);border:1px solid var(--bdr);border-radius:4px;padding:4px 7px;font-size:11.5px;font-family:var(--mono);text-align:right" oninput="simProdCapDirect(' + active.id + ',\'' + prod.replace(/'/g, "\\'") + '\',this.value)">';
-      prodRows += '<div id="sim-prodnums-' + active.id + '-' + pid + '" style="font-size:10px;font-family:var(--mono);color:' + fillC2 + ';white-space:nowrap;min-width:90px">' + assign.toFixed(2) + ' MB' + remStr + '</div>';
+      prodRows += '<div id="sim-prodnums-' + active.id + '-' + pid + '" style="font-size:10px;font-family:var(--mono);color:' + fillC2 + ';white-space:nowrap;min-width:90px">' + assign.toFixed(DEC) + ' MB' + remStr + '</div>';
       prodRows += '</div>';
       prodRows += '<button onclick="simDelProd(' + active.id + ',\'' + prod.replace(/'/g, "\\'") + '\')" style="background:none;border:none;color:var(--txt3);cursor:pointer;font-size:14px;padding:2px 4px;border-radius:3px" title="Quitar">✕</button>';
       prodRows += '</div>';
@@ -12862,7 +12869,7 @@ function renderPE() {
     cfg += '<div style="display:flex;align-items:center;gap:12px;margin-bottom:10px">';
     cfg += '<div style="font-size:8.5px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--txt3);width:90px;flex-shrink:0">Carga Total</div>';
     cfg += '<div style="flex:1;height:8px;background:var(--bdr);border-radius:4px;overflow:hidden"><div id="sim-capfill-' + active.id + '" style="height:100%;width:' + pct + '%;background:' + capColor + ';border-radius:4px;transition:width .4s"></div></div>';
-    cfg += '<div id="sim-capnums-' + active.id + '" style="font-size:11.5px;font-weight:800;font-family:var(--mono);color:' + capColor + ';white-space:nowrap;min-width:160px;text-align:right">' + used.toFixed(2) + ' / ' + active.volTotal + ' MB  ' + (remain >= 0 ? remain.toFixed(2) + ' libre' : Math.abs(remain).toFixed(2) + ' exceso') + '</div>';
+    cfg += '<div id="sim-capnums-' + active.id + '" style="font-size:11.5px;font-weight:800;font-family:var(--mono);color:' + capColor + ';white-space:nowrap;min-width:160px;text-align:right">' + used.toFixed(DEC) + ' / ' + active.volTotal + ' MB  ' + (remain >= 0 ? remain.toFixed(DEC) + ' libre' : Math.abs(remain).toFixed(DEC) + ' exceso') + '</div>';
     cfg += '</div>';
     cfg += '<div style="display:grid;grid-template-columns:180px 1fr 160px 28px;gap:8px;padding:4px 0 6px;border-bottom:1px solid var(--bdr);margin-bottom:2px">';
     cfg += '<div style="font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--txt3)">Producto</div>';
@@ -12882,7 +12889,7 @@ function renderPE() {
       st.vol = st.prods.reduce(function(a,p){ return a+p.vol; }, 0);
       const prev    = idx === 0 ? active.origen : active.stops[idx-1].planta;
       const distD   = getDistDays(prev, st.planta);
-      const distStr = distD !== null ? (distD*24).toFixed(0)+'h ('+distD.toFixed(2)+'d)' : '—';
+      const distStr = distD !== null ? (distD*24).toFixed(0)+'h ('+distD.toFixed(DEC)+'d)' : '—';
       const totalVol= st.vol;
       const pctVol  = active.volTotal > 0 ? Math.min(100, totalVol/active.volTotal*100) : 0;
       const myProds = Object.keys(prodCap).length > 0 ? Object.keys(prodCap) : PRODUCTS;
@@ -12891,12 +12898,12 @@ function renderPE() {
       stopsHTML += '<div class="sim-stop-num" style="background:'+col+'">'+(idx+1)+'</div>';
       stopsHTML += '<div style="flex:1">';
       stopsHTML += '<div class="sim-stop-planta">'+st.planta;
-      const prodSummary = st.prods.map(function(p){ return p.producto+(p.vol>0?' '+p.vol.toFixed(2)+'MB':''); }).join(' · ');
+      const prodSummary = st.prods.map(function(p){ return p.producto+(p.vol>0?' '+p.vol.toFixed(DEC)+'MB':''); }).join(' · ');
       stopsHTML += ' <span style="font-size:10px;font-weight:400;color:var(--txt3)">→ '+prodSummary+'</span></div>';
       stopsHTML += '<div style="font-size:9.5px;color:var(--txt3)">Desde '+prev+' · '+distStr+'</div>';
       stopsHTML += '</div>';
       if (st.etaDate) stopsHTML += '<div class="sim-stop-eta-badge">📅 '+fmtD(st.etaDate)+'</div>';
-      stopsHTML += '<div style="font-size:11px;font-weight:800;font-family:var(--mono);color:var(--acc2);padding:0 8px;white-space:nowrap">'+totalVol.toFixed(2)+' MB</div>';
+      stopsHTML += '<div style="font-size:11px;font-weight:800;font-family:var(--mono);color:var(--acc2);padding:0 8px;white-space:nowrap">'+totalVol.toFixed(DEC)+' MB</div>';
       stopsHTML += '<button class="sim-stop-del2" onclick="simDelStop('+active.id+','+idx+')">🗑</button>';
       stopsHTML += '</div>'; // stop-head
       stopsHTML += '<div style="padding:8px 12px 6px;border-bottom:1px solid var(--bdr)33">';
@@ -13029,15 +13036,15 @@ function renderPE() {
     stopsListHTML += '<div class="sim-sum-stop">';
     stopsListHTML += '<div class="sim-sum-stop-dot" style="background:' + st.col + '"></div>';
     stopsListHTML += '<div style="flex:1;min-width:0"><div class="sim-sum-stop-name" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + st.planta + ' · ' + st.producto + '</div><div style="font-size:9px;color:var(--txt3)">' + st.shipName + '</div></div>';
-    stopsListHTML += '<div style="text-align:right;flex-shrink:0"><div class="sim-sum-stop-vol">' + st.vol.toFixed(2) + ' MB</div><div class="sim-sum-stop-eta">' + (st.etaDate ? fmtD(st.etaDate) : '') + '</div></div>';
+    stopsListHTML += '<div style="text-align:right;flex-shrink:0"><div class="sim-sum-stop-vol">' + st.vol.toFixed(DEC) + ' MB</div><div class="sim-sum-stop-eta">' + (st.etaDate ? fmtD(st.etaDate) : '') + '</div></div>';
     stopsListHTML += '</div>';
   });
   if (!stopsListHTML) stopsListHTML = '<div style="font-size:10px;color:var(--txt3);padding:8px 0">Sin escalas</div>';
   const utilColor = parseFloat(utilPct) > 100 ? 'var(--red)' : 'var(--acc2)';
   const summaryHTML = '<div class="sim-sum-section"><div class="sim-sum-title">Resumen Flota</div>'
     + '<div class="sim-kpi2"><span class="sim-kpi2-lbl">Buques</span><span class="sim-kpi2-val">' + simShips.length + '</span></div>'
-    + '<div class="sim-kpi2"><span class="sim-kpi2-lbl">Cap. Total</span><span class="sim-kpi2-val">' + totalCap.toFixed(2) + ' MB</span></div>'
-    + '<div class="sim-kpi2"><span class="sim-kpi2-lbl">Asignado</span><span class="sim-kpi2-val">' + totalUsed.toFixed(2) + ' MB</span></div>'
+    + '<div class="sim-kpi2"><span class="sim-kpi2-lbl">Cap. Total</span><span class="sim-kpi2-val">' + totalCap.toFixed(DEC) + ' MB</span></div>'
+    + '<div class="sim-kpi2"><span class="sim-kpi2-lbl">Asignado</span><span class="sim-kpi2-val">' + totalUsed.toFixed(DEC) + ' MB</span></div>'
     + '<div class="sim-kpi2"><span class="sim-kpi2-lbl">Utilización</span><span class="sim-kpi2-val" style="color:' + utilColor + '">' + utilPct + '%</span></div>'
     + '<div class="sim-kpi2"><span class="sim-kpi2-lbl">Escalas</span><span class="sim-kpi2-val">' + allStops.length + '</span></div>'
     + '</div>'
@@ -13132,7 +13139,7 @@ function simRunScenario(tipo) {
       rows += '<tr style="border-top:1px solid var(--bdr)">'
         + cell(d.planta + ' \u00b7 ' + d.prod)
         + cell(Object.keys(d.buques).join(', '), 'var(--txt3)')
-        + cell(d.vol.toFixed(2)+' MB', 'var(--txt2)', true)
+        + cell(d.vol.toFixed(DEC)+' MB', 'var(--txt2)', true)
         + cell(cCon+'d', cobColor3(cCon), true)
         + cell(cSin+'d', cobColor3(cSin), true)
         + cell((delta>=0?'+':'')+delta+'d', delta<0?'#ef4444':'#16a34a', true)
@@ -13157,7 +13164,7 @@ function simRunScenario(tipo) {
         rows2 += '<tr style="border-top:1px solid var(--bdr)">'
           + cell(pl + ' \u00b7 ' + ((typeof normProd==='function')?normProd(c.producto):c.producto))
           + cell(c.buque, 'var(--txt3)')
-          + cell(c.volumen_mb.toFixed(2)+' MB','var(--txt2)',true)
+          + cell(c.volumen_mb.toFixed(DEC)+' MB','var(--txt2)',true)
           + cell(cSin+'d', cobColor3(cSin), true)
           + '</tr>';
       });
@@ -13167,8 +13174,8 @@ function simRunScenario(tipo) {
       var c0 = cobOf(r.inv||0, dem);
       rowsT += '<tr style="border-top:1px solid var(--bdr)">'
         + cell('Talara \u00b7 ' + r.producto)
-        + cell((r.inv||0).toFixed(2)+' MB','var(--txt2)',true)
-        + cell(dem.toFixed(2)+' MBDC','var(--txt3)',true)
+        + cell((r.inv||0).toFixed(DEC)+' MB','var(--txt2)',true)
+        + cell(dem.toFixed(DEC)+' MBDC','var(--txt3)',true)
         + cell(c0+'d sin producci\u00f3n', cobColor3(c0), true)
         + '</tr>';
     });
@@ -13216,8 +13223,8 @@ function simRunScenario(tipo) {
         var riesgo = c0 < 15;
         rows4 += '<tr style="border-top:1px solid var(--bdr)">'
           + cell(r.planta + ' \u00b7 ' + r.producto)
-          + cell((r.inv||0).toFixed(2)+' MB','var(--txt2)',true)
-          + cell(dem.toFixed(2)+' MBDC','var(--txt3)',true)
+          + cell((r.inv||0).toFixed(DEC)+' MB','var(--txt2)',true)
+          + cell(dem.toFixed(DEC)+' MBDC','var(--txt3)',true)
           + cell(c0+'d', cobColor3(c0), true)
           + cell(riesgo ? '\u26a0\ufe0f cr\u00edtico en vaciante (<15d)' : '\u2705 resiste vaciante', riesgo?'#ef4444':'#16a34a')
           + '</tr>';
@@ -13870,7 +13877,7 @@ window._ppvHandleFile = function(file) {
           + PROD_ORDER.map(function(p) {
               var v = byFecha[d][p];
               return '<td style="text-align:right;padding:5px 8px;font-family:var(--mono);font-size:11px">'
-                + (v != null ? v.toFixed(2) : '—') + '</td>';
+                + (v != null ? v.toFixed(DEC) : '—') + '</td>';
             }).join('')
           + '</tr>';
       }).join('');
@@ -14086,10 +14093,10 @@ function buildEDPreview() {
       + '<td>' + r.planta + '</td>'
       + '<td>' + r.producto + '</td>'
       + '<td style="color:var(--acc2);font-weight:700">' + r.producto_dash + '</td>'
-      + '<td style="text-align:right">' + r.inv.toFixed(2) + '</td>'
-      + '<td style="text-align:right;color:var(--txt3)">' + (r.capacidad > 0 ? r.capacidad.toFixed(2) : '\u2014') + '</td>'
+      + '<td style="text-align:right">' + r.inv.toFixed(DEC) + '</td>'
+      + '<td style="text-align:right;color:var(--txt3)">' + (r.capacidad > 0 ? r.capacidad.toFixed(DEC) : '\u2014') + '</td>'
       + '<td style="text-align:right;font-size:10px;color:' + (r.capacidad>0 ? (r.inv/r.capacidad>0.9?'var(--ora)':'var(--txt3)') : 'var(--txt3)') + '">' + (r.capacidad > 0 ? Math.round(r.inv/r.capacidad*100)+'%' : '\u2014') + '</td>'
-      + '<td style="text-align:right">' + r.despacho.toFixed(2) + '</td>'
+      + '<td style="text-align:right">' + r.despacho.toFixed(DEC) + '</td>'
       + '<td style="text-align:right">' + r.prom7d.toFixed(3) + '</td>'
       + '<td style="text-align:right;font-weight:700;color:' + cobColor + '">' + r.autonomia + '</td>'
       + '<td>' + (r.bt || '\u2014') + '</td>'
@@ -14569,7 +14576,7 @@ function _renderCisternasPreview(data) {
     +   _cisternaKPI('En descarga', totDesc, '#16a34a')
     +   _cisternaKPI('Vacías retorno', totVac, '#64748b')
     + '</div>'
-    + '<div style="font-size:10.5px;color:var(--txt2);margin-bottom:6px"><b>Volumen en tránsito:</b> <span style="font-family:var(--mono);color:var(--acc2)">' + Math.round(totGalTrans).toLocaleString() + ' gal</span> (' + (totGalTrans/42000).toFixed(2) + ' MB)</div>'
+    + '<div style="font-size:10.5px;color:var(--txt2);margin-bottom:6px"><b>Volumen en tránsito:</b> <span style="font-family:var(--mono);color:var(--acc2)">' + Math.round(totGalTrans).toLocaleString() + ' gal</span> (' + (totGalTrans/42000).toFixed(DEC) + ' MB)</div>'
     + (topDest.length ? '<div style="font-size:10.5px;color:var(--txt2)"><b>Top destinos:</b> ' + topDest.map(function(d) { return d[0]+' (' + d[1] + ')'; }).join(' · ') + '</div>' : '')
     + '</div></div>';
   prevEl.innerHTML = html;
@@ -14899,7 +14906,7 @@ function buildCargasNavesPreview(records, fechaRpt) {
         var stateColor = td.estado==='ACTUAL' ? '#fbbf24' : td.estado==='COMPLETADO' ? '#4ade80' : '#60a5fa';
         var stateBg    = td.estado==='ACTUAL' ? '#fbbf2415' : td.estado==='COMPLETADO' ? '#4ade8010' : '#60a5fa10';
         var dot        = td.estado==='ACTUAL' ? '●' : td.estado==='COMPLETADO' ? '✓' : '○';
-        var prodText   = td.prods.map(function(p){return p.prod+' <strong>'+p.vol.toFixed(2)+'</strong>';}).join(' · ');
+        var prodText   = td.prods.map(function(p){return p.prod+' <strong>'+p.vol.toFixed(DEC)+'</strong>';}).join(' · ');
         var dateRange  = td.desde ? (td.desde===td.hasta ? fmtDate(td.desde) : fmtDate(td.desde)+' → '+fmtDate(td.hasta)) : '—';
         html += '<div style="display:grid;grid-template-columns:16px 1fr auto auto;gap:6px;align-items:center;'
               + 'padding:6px 14px;border-bottom:1px solid var(--bdr)22;background:'+stateBg+'">'
@@ -15486,8 +15493,8 @@ function buildCobPreview() {
     + '<thead><tr><th>Planta</th><th>Producto</th><th>Pron.(MBDC)</th><th>V.Real</th><th>V.Fact</th><th>Cob(d)</th><th>BT</th><th>Vol</th></tr></thead><tbody>';
   regs.slice(0, 25).forEach(function(r) {
     html += '<tr><td>' + r.planta + '</td><td style="font-weight:700">' + r.producto + '</td>'
-      + '<td class="r">' + r.pron.toFixed(2) + '</td><td class="r">' + r.vreal.toFixed(2) + '</td>'
-      + '<td class="r" style="color:var(--acc2);font-weight:700">' + r.vfact.toFixed(2) + '</td>'
+      + '<td class="r">' + r.pron.toFixed(DEC) + '</td><td class="r">' + r.vreal.toFixed(DEC) + '</td>'
+      + '<td class="r" style="color:var(--acc2);font-weight:700">' + r.vfact.toFixed(DEC) + '</td>'
       + '<td class="r">' + r.cob + '</td><td>' + (r.bt || '\u2014') + '</td>'
       + '<td class="r">' + (r.volRep || '\u2014') + '</td></tr>';
   });
@@ -16055,15 +16062,15 @@ function openWhatIf(planta, producto) {
     + '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px">'
     + '<div style="background:var(--bg3);border-radius:8px;padding:10px;text-align:center">'
     + '<div style="font-size:9px;color:var(--txt3);text-transform:uppercase">Inventario</div>'
-    + '<div style="font-size:18px;font-weight:800;color:var(--txt);font-family:var(--mono)">' + inv.toFixed(2) + '</div>'
+    + '<div style="font-size:18px;font-weight:800;color:var(--txt);font-family:var(--mono)">' + inv.toFixed(DEC) + '</div>'
     + '<div style="font-size:8px;color:var(--txt3)">MB</div></div>'
     + '<div style="background:var(--bg3);border-radius:8px;padding:10px;text-align:center">'
     + '<div style="font-size:9px;color:var(--txt3);text-transform:uppercase">Pron\u00f3stico</div>'
-    + '<div style="font-size:18px;font-weight:800;color:#2563eb;font-family:var(--mono)">' + pronVal.toFixed(2) + '</div>'
+    + '<div style="font-size:18px;font-weight:800;color:#2563eb;font-family:var(--mono)">' + pronVal.toFixed(DEC) + '</div>'
     + '<div style="font-size:8px;color:var(--txt3)">MBDC</div></div>'
     + '<div style="background:var(--bg3);border-radius:8px;padding:10px;text-align:center">'
     + '<div style="font-size:9px;color:var(--txt3);text-transform:uppercase">V. Factible</div>'
-    + '<div style="font-size:18px;font-weight:800;color:#d97706;font-family:var(--mono)" id="wi-vfact-display">' + (vfactVal > 0 ? vfactVal.toFixed(2) : pronVal.toFixed(2)) + '</div>'
+    + '<div style="font-size:18px;font-weight:800;color:#d97706;font-family:var(--mono)" id="wi-vfact-display">' + (vfactVal > 0 ? vfactVal.toFixed(DEC) : pronVal.toFixed(DEC)) + '</div>'
     + '<div style="font-size:8px;color:var(--txt3)">MBDC</div></div>'
     + '<div style="background:var(--bg3);border-radius:8px;padding:10px;text-align:center">'
     + '<div style="font-size:9px;color:var(--txt3);text-transform:uppercase">Cob. Base</div>'
@@ -16073,35 +16080,35 @@ function openWhatIf(planta, producto) {
     + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;gap:10px;flex-wrap:wrap">'
     + '<span style="font-size:11px;font-weight:700;color:var(--txt)">Ajustar V. Factible (MBDC)</span>'
     + '<div style="display:flex;align-items:center;gap:6px">'
-    +   '<input type="number" id="wi-input" min="0" max="' + (pronVal * 2 || 5).toFixed(2) + '" step="0.01" value="' + (vfactVal > 0 ? vfactVal : pronVal).toFixed(2) + '" '
+    +   '<input type="number" id="wi-input" min="0" max="' + (pronVal * 2 || 5).toFixed(DEC) + '" step="0.01" value="' + (vfactVal > 0 ? vfactVal : pronVal).toFixed(DEC) + '" '
     +     'style="width:90px;padding:5px 8px;background:var(--bg2);border:1.5px solid #d97706;border-radius:6px;color:#d97706;font-family:var(--mono);font-weight:800;font-size:14px;text-align:right" '
     +     'oninput="updateWhatIfFromInput(\'' + planta.replace(/'/g, "\\'") + '\',\'' + producto.replace(/'/g, "\\'") + '\')">'
     +   '<span style="font-size:10px;color:var(--txt3);font-weight:700">MBDC</span>'
     + '</div></div>'
     + '<div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap">'
-    + '<button onclick="setWhatIfValue(\'' + planta.replace(/'/g, "\\'") + '\',\'' + producto.replace(/'/g, "\\'") + '\',' + pronVal.toFixed(2) + ')" '
+    + '<button onclick="setWhatIfValue(\'' + planta.replace(/'/g, "\\'") + '\',\'' + producto.replace(/'/g, "\\'") + '\',' + pronVal.toFixed(DEC) + ')" '
     +   'title="Igualar V. Factible al pronóstico mensual (escenario base)" '
     +   'style="flex:1;min-width:110px;padding:6px 10px;background:rgba(22,163,74,.12);border:1px solid rgba(22,163,74,.4);color:#16a34a;border-radius:5px;cursor:pointer;font-size:10.5px;font-weight:700;font-family:var(--sans);display:inline-flex;align-items:center;justify-content:center;gap:4px">'
-    +   '↻ Pronóstico (' + pronVal.toFixed(2) + ')</button>'
+    +   '↻ Pronóstico (' + pronVal.toFixed(DEC) + ')</button>'
     + (r.dem_prom > 0
-      ? '<button onclick="setWhatIfValue(\'' + planta.replace(/'/g, "\\'") + '\',\'' + producto.replace(/'/g, "\\'") + '\',' + r.dem_prom.toFixed(2) + ')" '
+      ? '<button onclick="setWhatIfValue(\'' + planta.replace(/'/g, "\\'") + '\',\'' + producto.replace(/'/g, "\\'") + '\',' + r.dem_prom.toFixed(DEC) + ')" '
         + 'title="Igualar V. Factible al promedio de demanda real (últimos días)" '
         + 'style="flex:1;min-width:110px;padding:6px 10px;background:rgba(37,99,235,.12);border:1px solid rgba(37,99,235,.4);color:#2563eb;border-radius:5px;cursor:pointer;font-size:10.5px;font-weight:700;font-family:var(--sans);display:inline-flex;align-items:center;justify-content:center;gap:4px">'
-        + '📊 Demanda real (' + r.dem_prom.toFixed(2) + ')</button>'
+        + '📊 Demanda real (' + r.dem_prom.toFixed(DEC) + ')</button>'
       : '')
     + (vfactVal > 0 && vfactVal !== pronVal
-      ? '<button onclick="setWhatIfValue(\'' + planta.replace(/'/g, "\\'") + '\',\'' + producto.replace(/'/g, "\\'") + '\',' + vfactVal.toFixed(2) + ')" '
+      ? '<button onclick="setWhatIfValue(\'' + planta.replace(/'/g, "\\'") + '\',\'' + producto.replace(/'/g, "\\'") + '\',' + vfactVal.toFixed(DEC) + ')" '
         + 'title="Restaurar el valor original guardado en GS" '
         + 'style="flex:1;min-width:110px;padding:6px 10px;background:rgba(100,116,139,.12);border:1px solid rgba(100,116,139,.4);color:#64748b;border-radius:5px;cursor:pointer;font-size:10.5px;font-weight:700;font-family:var(--sans);display:inline-flex;align-items:center;justify-content:center;gap:4px">'
-        + '⟲ Valor original (' + vfactVal.toFixed(2) + ')</button>'
+        + '⟲ Valor original (' + vfactVal.toFixed(DEC) + ')</button>'
       : '')
     + '</div>'
-    + '<input type="range" id="wi-slider" min="0" max="' + (pronVal * 2 || 5).toFixed(2) + '" step="0.01" value="' + (vfactVal > 0 ? vfactVal : pronVal).toFixed(2) + '" '
+    + '<input type="range" id="wi-slider" min="0" max="' + (pronVal * 2 || 5).toFixed(DEC) + '" step="0.01" value="' + (vfactVal > 0 ? vfactVal : pronVal).toFixed(DEC) + '" '
     + 'style="width:100%;accent-color:#d97706" oninput="updateWhatIf(\'' + planta.replace(/'/g, "\\'") + '\',\'' + producto.replace(/'/g, "\\'") + '\')">'
     + '<div style="display:flex;justify-content:space-between;font-size:8px;color:var(--txt3)">'
-    + '<span>0</span><span>Pron: ' + pronVal.toFixed(2) + '</span><span>' + (pronVal * 2 || 5).toFixed(2) + '</span></div></div>'
+    + '<span>0</span><span>Pron: ' + pronVal.toFixed(DEC) + '</span><span>' + (pronVal * 2 || 5).toFixed(DEC) + '</span></div></div>'
     + '<div style="height:250px;margin-bottom:16px"><canvas id="wi-chart"></canvas></div>'
-    + (btName ? '<div style="font-size:10px;color:var(--acc2);margin-bottom:12px">\uD83D\uDEA2 BT: <strong>' + btName + '</strong> · ETA ' + (btEta ? fmtDate(btEta) : '\u2014') + ' · ' + btVol.toFixed(2) + ' MB</div>' : '')
+    + (btName ? '<div style="font-size:10px;color:var(--acc2);margin-bottom:12px">\uD83D\uDEA2 BT: <strong>' + btName + '</strong> · ETA ' + (btEta ? fmtDate(btEta) : '\u2014') + ' · ' + btVol.toFixed(DEC) + ' MB</div>' : '')
     + '<div style="display:flex;gap:10px">'
     + '<button onclick="applyWhatIf(\'' + planta.replace(/'/g, "\\'") + '\',\'' + producto.replace(/'/g, "\\'") + '\')" '
     + 'style="flex:1;padding:10px;background:#2563eb;color:#fff;border:none;border-radius:8px;font-weight:700;cursor:pointer;font-size:12px">'
@@ -16167,9 +16174,9 @@ function updateWhatIf(planta, producto) {
   if (!slider) return;
   var val = parseFloat(slider.value) || 0;
   var input = document.getElementById('wi-input');
-  if (input) input.value = val.toFixed(2);
+  if (input) input.value = val.toFixed(DEC);
   var vfDisplay = document.getElementById('wi-vfact-display');
-  if (vfDisplay) vfDisplay.textContent = val.toFixed(2);
+  if (vfDisplay) vfDisplay.textContent = val.toFixed(DEC);
   renderWhatIfChart(planta, producto);
 }
 function updateWhatIfFromInput(planta, producto) {
@@ -16180,25 +16187,25 @@ function updateWhatIfFromInput(planta, producto) {
   var slider = document.getElementById('wi-slider');
   if (slider) {
     var curMax = parseFloat(slider.max) || 5;
-    if (val > curMax) { slider.max = (val * 1.2).toFixed(2); }  // expandir si el usuario escribe valor mayor
-    slider.value = val.toFixed(2);
+    if (val > curMax) { slider.max = (val * 1.2).toFixed(DEC); }  // expandir si el usuario escribe valor mayor
+    slider.value = val.toFixed(DEC);
   }
   var vfDisplay = document.getElementById('wi-vfact-display');
-  if (vfDisplay) vfDisplay.textContent = val.toFixed(2);
+  if (vfDisplay) vfDisplay.textContent = val.toFixed(DEC);
   renderWhatIfChart(planta, producto);
 }
 function setWhatIfValue(planta, producto, value) {
   var val = parseFloat(value) || 0;
   var input = document.getElementById('wi-input');
   var slider = document.getElementById('wi-slider');
-  if (input) input.value = val.toFixed(2);
+  if (input) input.value = val.toFixed(DEC);
   if (slider) {
     var curMax = parseFloat(slider.max) || 5;
-    if (val > curMax) { slider.max = (val * 1.2).toFixed(2); }
-    slider.value = val.toFixed(2);
+    if (val > curMax) { slider.max = (val * 1.2).toFixed(DEC); }
+    slider.value = val.toFixed(DEC);
   }
   var vfDisplay = document.getElementById('wi-vfact-display');
-  if (vfDisplay) vfDisplay.textContent = val.toFixed(2);
+  if (vfDisplay) vfDisplay.textContent = val.toFixed(DEC);
   renderWhatIfChart(planta, producto);
 }
 async function applyWhatIf(planta, producto) {
@@ -16341,11 +16348,11 @@ function openCoverageModal(tipo) {
       { label:'Producto', px:'10px',
         render: function(r) { return '<span style="font-weight:700;color:var(--txt)">' + r.producto + '</span>'; }},
       { label:'Inv (MB)', align:'right',
-        render: function(r) { return '<span style="font-family:var(--mono);font-weight:700;color:var(--txt)">' + (r.inv||0).toFixed(2) + '</span>'; }},
+        render: function(r) { return '<span style="font-family:var(--mono);font-weight:700;color:var(--txt)">' + (r.inv||0).toFixed(DEC) + '</span>'; }},
       { label:'Dem.', align:'right',
-        render: function(r) { return '<span style="font-family:var(--mono);color:#94a3b8">' + (r.dem||r.dem_prom||0).toFixed(2) + '</span>'; }},
+        render: function(r) { return '<span style="font-family:var(--mono);color:#94a3b8">' + (r.dem||r.dem_prom||0).toFixed(DEC) + '</span>'; }},
       { label:'Pron.', align:'right',
-        render: function(r) { var p=(pronDiarioAprobado(r)); return '<span style="font-family:var(--mono);color:#93c5fd">' + p.toFixed(2) + '</span>'; }},
+        render: function(r) { var p=(pronDiarioAprobado(r)); return '<span style="font-family:var(--mono);color:#93c5fd">' + p.toFixed(DEC) + '</span>'; }},
       { label:'Cobertura', align:'center', px:'10px',
         render: function(r) {
           var c = Math.round(r.cob||0);
@@ -16398,29 +16405,29 @@ function openRestrModal(tipo) {
     var totalPronS = 0, totalVfS = 0;
     restr.forEach(function(r) { var pr =pronDiarioAprobado(r); totalPronS+=pr; totalVfS+=(r.vfact||0); });
     var diffS = totalPronS - totalVfS;
-    var redS  = totalPronS > 0 ? (diffS/totalPronS*100).toFixed(2) : 0;
+    var redS  = totalPronS > 0 ? (diffS/totalPronS*100).toFixed(DEC) : 0;
     var byPlS = {}; restr.forEach(function(r){byPlS[r.planta]=true;});
     var byProdR = {};
     restr.forEach(function(r){ if(!byProdR[r.producto]) byProdR[r.producto]=[]; byProdR[r.producto].push(r); });
     var kpiBar = '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px">'
       + _kpiCard('#ef4444','Restricciones',restr.length,'planta·producto')
       + _kpiCard('#f59e0b','Plantas',Object.keys(byPlS).length,'afectadas')
-      + _kpiCard('#3b82f6','Pron. Total',totalPronS.toFixed(2)+' MBDC','demanda esperada')
+      + _kpiCard('#3b82f6','Pron. Total',totalPronS.toFixed(DEC)+' MBDC','demanda esperada')
       + _kpiCard('#ef4444','Reducción','-'+redS+'%','vs pronóstico')
       + '</div>';
     var colsR = [
       { label:'Producto', px:'10px',
         render: function(r){ return '<span style="font-weight:700;color:var(--txt)">' + r.producto + '</span>'; }},
       { label:'Inv (MB)', align:'right',
-        render: function(r){ return '<span style="font-family:var(--mono);font-weight:700;color:var(--txt)">'+(r.inv||0).toFixed(2)+'</span>'; }},
+        render: function(r){ return '<span style="font-family:var(--mono);font-weight:700;color:var(--txt)">'+(r.inv||0).toFixed(DEC)+'</span>'; }},
       { label:'Pronóstico', align:'right',
-        render: function(r){ var pr=pronDiarioAprobado(r); return '<span style="font-family:var(--mono);color:#93c5fd">'+pr.toFixed(2)+'</span>'; }},
+        render: function(r){ var pr=pronDiarioAprobado(r); return '<span style="font-family:var(--mono);color:#93c5fd">'+pr.toFixed(DEC)+'</span>'; }},
       { label:'V. Factible', align:'right',
-        render: function(r){ return '<span style="font-family:var(--mono);color:#fbbf24;font-weight:700">'+(r.vfact||0).toFixed(2)+'</span>'; }},
+        render: function(r){ return '<span style="font-family:var(--mono);color:#fbbf24;font-weight:700">'+(r.vfact||0).toFixed(DEC)+'</span>'; }},
       { label:'Recorte', align:'right',
         render: function(r){
           var pr=pronDiarioAprobado(r);
-          var red=pr>0?((pr-(r.vfact||0))/pr*100).toFixed(2):0;
+          var red=pr>0?((pr-(r.vfact||0))/pr*100).toFixed(DEC):0;
           return '<span style="color:#f87171;font-weight:700">-'+red+'%</span>'; }},
       { label:'Cobertura', align:'center', px:'10px',
         render: function(r){
@@ -16445,7 +16452,7 @@ function openRestrModal(tipo) {
         + '<div style="font-weight:800;font-size:13px;margin-bottom:10px;color:var(--txt)">'+pl+'</div>';
       recs.forEach(function(r) {
         var pr =pronDiarioAprobado(r);
-        var red = pr > 0 ? ((pr-(r.vfact||0))/pr*100).toFixed(2) : 0;
+        var red = pr > 0 ? ((pr-(r.vfact||0))/pr*100).toFixed(DEC) : 0;
         body += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;padding:5px 8px;background:var(--bg2);border-radius:6px">'
           + '<span style="font-size:11px;font-weight:600;color:var(--txt2)">'+r.producto+'</span>'
           + '<span style="font-size:10px;color:#f87171;font-weight:700">-'+red+'%</span>'
@@ -16465,19 +16472,19 @@ function openRestrModal(tipo) {
     body = '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;margin-bottom:18px">'
       + '<div style="background:#2563eb12;border:1px solid #2563eb30;border-radius:10px;padding:16px;text-align:center">'
         + '<div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#60a5fa;margin-bottom:6px">Demanda Pronóstico</div>'
-        + '<div style="font-size:28px;font-weight:800;color:#3b82f6;font-family:var(--mono)">'+totalPron.toFixed(2)+'</div>'
+        + '<div style="font-size:28px;font-weight:800;color:#3b82f6;font-family:var(--mono)">'+totalPron.toFixed(DEC)+'</div>'
         + '<div style="font-size:9px;color:var(--txt3);margin-top:2px">MBDC</div></div>'
       + '<div style="background:#d9770614;border:1px solid #d9770630;border-radius:10px;padding:16px;text-align:center">'
         + '<div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#fbbf24;margin-bottom:6px">Demanda Factible</div>'
-        + '<div style="font-size:28px;font-weight:800;color:#f59e0b;font-family:var(--mono)">'+totalVfact.toFixed(2)+'</div>'
+        + '<div style="font-size:28px;font-weight:800;color:#f59e0b;font-family:var(--mono)">'+totalVfact.toFixed(DEC)+'</div>'
         + '<div style="font-size:9px;color:var(--txt3);margin-top:2px">MBDC</div></div>'
       + '<div style="background:#dc262612;border:1px solid #dc262630;border-radius:10px;padding:16px;text-align:center">'
         + '<div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#f87171;margin-bottom:6px">Reducción Neta</div>'
-        + '<div style="font-size:28px;font-weight:800;color:#ef4444;font-family:var(--mono)">-'+diff.toFixed(2)+'</div>'
+        + '<div style="font-size:28px;font-weight:800;color:#ef4444;font-family:var(--mono)">-'+diff.toFixed(DEC)+'</div>'
         + '<div style="font-size:9px;color:var(--txt3);margin-top:2px">MBDC no atendidos</div></div>'
       + '</div>'
       + '<div style="background:var(--bg3);border:1px solid var(--bdr);border-radius:8px;padding:14px;font-size:12px;color:var(--txt2);line-height:1.7">'
-      + 'La restricción reduce la demanda atendida en <strong style="color:var(--txt)">'+diff.toFixed(2)+' MBDC</strong> respecto al pronóstico. '
+      + 'La restricción reduce la demanda atendida en <strong style="color:var(--txt)">'+diff.toFixed(DEC)+' MBDC</strong> respecto al pronóstico. '
       + 'Equivale a <strong style="color:var(--txt)">'+Math.round(diff*30)+' MB</strong> menos de venta mensual estimada.'
       + '</div>';
   } else {
@@ -16658,7 +16665,7 @@ function progRenderKPIs() {
     <div class="prog-kpi"><div class="lbl">Programadas</div><div class="val" style="color:#0369a1">${prog}</div></div>
     <div class="prog-kpi"><div class="lbl">En curso</div><div class="val" style="color:#92400e">${act}</div></div>
     <div class="prog-kpi"><div class="lbl">Completadas</div><div class="val" style="color:#065f46">${comp}</div></div>
-    <div class="prog-kpi"><div class="lbl">Volumen total (MB)</div><div class="val">${vol.toFixed(2)}</div></div>
+    <div class="prog-kpi"><div class="lbl">Volumen total (MB)</div><div class="val">${vol.toFixed(DEC)}</div></div>
     <div class="prog-kpi"><div class="lbl">Pend. de sync</div><div class="val" style="color:${pend?'#d97706':'#16a34a'}">${pend}</div></div>
   `;
 }
@@ -16702,7 +16709,7 @@ function progRenderTable() {
             <td>${escapeHtml(t.viaje||'')}</td>
             <td>${escapeHtml(t.origen||'—')} → ${escapeHtml(t.terminal||'—')}</td>
             <td>${escapeHtml(t.producto||'')}</td>
-            <td style="text-align:right;font-variant-numeric:tabular-nums">${(parseFloat(t.volumen_mb)||0).toFixed(2)}</td>
+            <td style="text-align:right;font-variant-numeric:tabular-nums">${(parseFloat(t.volumen_mb)||0).toFixed(DEC)}</td>
             ${isFluvial ? `
               <td class="prog-date">${escapeHtml(t.fecha_zarpe_cisterna||'—')}</td>
               <td class="prog-date">${escapeHtml(t.fecha_carga||'—')}</td>
@@ -17406,7 +17413,7 @@ function mmRenderUI() {
       <div class="prog-kpi"><div class="lbl">En tránsito</div><div class="val" style="color:#92400e">${enTransito}</div></div>
       <div class="prog-kpi"><div class="lbl">En embarque</div><div class="val" style="color:#831843">${embarque}</div></div>
       <div class="prog-kpi"><div class="lbl">Completadas</div><div class="val" style="color:#065f46">${completado}</div></div>
-      <div class="prog-kpi"><div class="lbl">Vol. retornado a Iquitos (MB)</div><div class="val">${volTotal.toFixed(2)}</div></div>
+      <div class="prog-kpi"><div class="lbl">Vol. retornado a Iquitos (MB)</div><div class="val">${volTotal.toFixed(DEC)}</div></div>
       <div class="prog-kpi"><div class="lbl">Ciclos activos</div><div class="val">${ciclosOrden.length}</div></div>
     </div>
     <div id="mm-explainer" style="background:var(--card);border:1px solid var(--bdr);border-radius:10px;padding:14px 16px;margin-bottom:14px;font-size:12px;line-height:1.55">
@@ -17541,7 +17548,7 @@ function mmRenderTimeline(ciclosOrden, ciclos) {
     const vol     = items.filter(i=>i.etapa==='CONVOY_VUELTA').reduce((s,r)=>s+(parseFloat(r.volumen_mb)||0),0);
     html += `<tr style="background:var(--bg2)">
       <td colspan="${totalDias+1}" style="padding:5px 10px;font-weight:700;font-size:12px;border-bottom:1px solid var(--bdr);color:var(--txt)">
-        🔁 ${escapeHtml(cid)}${prod?' · '+escapeHtml(prod):''}${vol?` · ${vol.toFixed(2)} MB`:''}
+        🔁 ${escapeHtml(cid)}${prod?' · '+escapeHtml(prod):''}${vol?` · ${vol.toFixed(DEC)} MB`:''}
       </td>
     </tr>`;
     function buildRow(rowLabel, startDate, endDate, phaseKey, extra='') {
@@ -17582,7 +17589,7 @@ function mmRenderTimeline(ciclosOrden, ciclos) {
         const llegada = vuelta.fecha_llegada_est;
         const finDesc = new Date(llegada+'T12:00:00'); finDesc.setDate(finDesc.getDate()+2);
         html += buildRow('🏭 Descarga RFIQ', llegada, finDesc.toISOString().slice(0,10), 'DESCARGA_IQUITOS',
-          vuelta.volumen_mb ? ` ${parseFloat(vuelta.volumen_mb).toFixed(2)} MB` : '');
+          vuelta.volumen_mb ? ` ${parseFloat(vuelta.volumen_mb).toFixed(DEC)} MB` : '');
       }
     }
     if (cisternas.length) {
@@ -17648,7 +17655,7 @@ function mmRenderGantt(ciclosOrden, ciclos, rdef) {
         <div style="font-weight:700;font-size:13px">${escapeHtml(cid)}</div>
         <div style="display:flex;gap:6px;margin-top:3px;flex-wrap:wrap">
           ${productoCiclo ? `<span style="font-size:10px;background:var(--bg3);border:1px solid var(--bdr);padding:1px 6px;border-radius:10px;color:var(--txt2)">${escapeHtml(productoCiclo)}</span>` : ''}
-          ${volumenCiclo ? `<span style="font-size:10px;background:#1B3A6B22;border:1px solid #1B3A6B44;padding:1px 6px;border-radius:10px;color:#1B3A6B">${volumenCiclo.toFixed(2)} MB</span>` : ''}
+          ${volumenCiclo ? `<span style="font-size:10px;background:#1B3A6B22;border:1px solid #1B3A6B44;padding:1px 6px;border-radius:10px;color:#1B3A6B">${volumenCiclo.toFixed(DEC)} MB</span>` : ''}
         </div>
         <div style="color:var(--txt3);font-size:10px;margin-top:3px">${escapeHtml(firstDate||'')}</div>
         <button class="prog-ical-btn" onclick="mmDeleteCiclo('${escapeHtml(cid)}')" style="margin-top:4px;font-size:10px;color:#dc2626" title="Eliminar todo el ciclo">🗑</button>
@@ -17665,7 +17672,7 @@ function mmRenderGantt(ciclosOrden, ciclos, rdef) {
       html += `<div onclick="mmOpenEtapaEditor('${escapeHtml(it.id_local)}')"
         title="${escapeHtml(it.etapa)}: ${escapeHtml(it.fecha_salida||'')} → ${escapeHtml(it.fecha_llegada_est||'')}${it.vehiculo?' · '+escapeHtml(it.vehiculo):''}"
         style="position:absolute;left:${left}%;width:${width}%;top:${top}px;height:18px;background:${c.bg};border:1.5px solid ${c.border};border-radius:4px;font-size:10px;color:${c.text};padding:0 6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer;line-height:16px;font-weight:700">
-        ${c.emoji} ${escapeHtml(it.etapa.replace(/_/g,' '))}${it.vehiculo?' · '+escapeHtml(it.vehiculo):''}${it.volumen_mb?' ('+parseFloat(it.volumen_mb).toFixed(2)+' MB)':''}
+        ${c.emoji} ${escapeHtml(it.etapa.replace(/_/g,' '))}${it.vehiculo?' · '+escapeHtml(it.vehiculo):''}${it.volumen_mb?' ('+parseFloat(it.volumen_mb).toFixed(DEC)+' MB)':''}
       </div>`;
     });
     cisternas.forEach((it, idx) => {
@@ -17755,7 +17762,7 @@ function mmRenderTabla() {
             <td><span style="background:${c.bg};border-left:3px solid ${c.border};padding:2px 6px;border-radius:3px;font-size:11px;color:${c.text}">${c.emoji} ${escapeHtml(r.etapa||'')}</span></td>
             <td>${escapeHtml(r.vehiculo||'')}</td>
             <td>${escapeHtml(r.producto||'')}</td>
-            <td style="text-align:right;font-variant-numeric:tabular-nums">${(parseFloat(r.volumen_mb)||0).toFixed(2)}</td>
+            <td style="text-align:right;font-variant-numeric:tabular-nums">${(parseFloat(r.volumen_mb)||0).toFixed(DEC)}</td>
             <td>${escapeHtml(r.fecha_salida||'')}</td>
             <td>${escapeHtml(r.fecha_llegada_est||'')}</td>
             <td>${escapeHtml(r.fecha_llegada_real||'')}</td>
@@ -17805,7 +17812,7 @@ function mmRenderFlota(ciclosOrden, ciclos) {
           <div class="pinv-kcard-val" style="color:${disponibles.length>0?'var(--grn)':'var(--red)'}">${disponibles.length}</div>
         </div>
         <div class="pinv-kcard"><div class="pinv-kcard-lbl">Vol. en tránsito (MB)</div>
-          <div class="pinv-kcard-val">${activeConvoys.reduce((s,c)=>s+c.vol,0).toFixed(2)}</div>
+          <div class="pinv-kcard-val">${activeConvoys.reduce((s,c)=>s+c.vol,0).toFixed(DEC)}</div>
         </div>
       </div>
     </div>
@@ -17825,7 +17832,7 @@ function mmRenderFlota(ciclosOrden, ciclos) {
         <div style="display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap;font-size:10px">
           ${conv.zarpe ? `<span style="background:var(--bg3);border:1px solid var(--bdr);padding:2px 7px;border-radius:5px;color:var(--txt3)">⚓ Zarpe: ${conv.zarpe}</span>` : ''}
           ${conv.eta   ? `<span style="background:var(--bg3);border:1px solid var(--bdr);padding:2px 7px;border-radius:5px;color:var(--txt3)">🏭 ETA IQ: ${conv.eta}</span>` : ''}
-          ${conv.vol>0 ? `<span style="background:#1B3A6B22;border:1px solid #1B3A6B44;padding:2px 7px;border-radius:5px;color:#1B3A6B;font-weight:700">${conv.vol.toFixed(2)} MB total</span>` : ''}
+          ${conv.vol>0 ? `<span style="background:#1B3A6B22;border:1px solid #1B3A6B44;padding:2px 7px;border-radius:5px;color:#1B3A6B;font-weight:700">${conv.vol.toFixed(DEC)} MB total</span>` : ''}
         </div>
         <div style="border-top:1px solid var(--bdr);padding-top:8px">
           ${conv.barcazas.length ? conv.barcazas.map(b => {
@@ -17838,7 +17845,7 @@ function mmRenderFlota(ciclosOrden, ciclos) {
                   <div style="height:100%;width:${pct}%;background:${rutaColor};border-radius:3px;transition:width .3s"></div>
                 </div>
               </div>
-              <span style="font-size:10.5px;color:var(--txt2);white-space:nowrap">${b.vol>0?b.vol.toFixed(2):'-'}/${bcap} MB</span>
+              <span style="font-size:10.5px;color:var(--txt2);white-space:nowrap">${b.vol>0?b.vol.toFixed(DEC):'-'}/${bcap} MB</span>
             </div>
             <div style="font-size:10px;color:var(--txt3);margin:-4px 0 6px 8px">${escapeHtml(b.producto||'—')}</div>`;
           }).join('') : '<div style="font-size:11px;color:var(--txt3)">Sin barcazas asignadas aún</div>'}
@@ -17977,7 +17984,7 @@ function mcCalcETA() {
     <table style="width:100%;font-size:11px;border-collapse:collapse">
       <tr><td style="padding:2px 6px;font-weight:600">⚓ Zarpe desde ${isLPO?'LPO Pucallpa':'Yurimaguas'}</td><td style="padding:2px 6px"><strong>${fmtD(zarpeD)}</strong></td></tr>
       <tr><td style="padding:2px 6px;font-weight:600">🏭 ETA Refinería Iquitos</td><td style="padding:2px 6px"><strong>${fmtD(etaD)}</strong> (7 días vía río)</td></tr>
-      <tr><td style="padding:2px 6px;font-weight:600">📦 Volumen total convoy</td><td style="padding:2px 6px"><strong>${volTotal.toFixed(2)} MB</strong></td></tr>
+      <tr><td style="padding:2px 6px;font-weight:600">📦 Volumen total convoy</td><td style="padding:2px 6px"><strong>${volTotal.toFixed(DEC)} MB</strong></td></tr>
       <tr><td style="padding:2px 6px;font-weight:600">🚢 Barcazas en convoy</td>
         <td style="padding:2px 6px">${barcazasActivas.map(b=>`${escapeHtml(b.nombre)}: ${b.prod||'—'} (${b.vol} MB)`).join(' | ')||'—'}</td></tr>
     </table>
@@ -18155,7 +18162,7 @@ function mmUpdatePreview() {
       <tr style="border-bottom:1px solid #d97706aa">
         <td style="padding:2px 6px;font-weight:600;color:#1d4ed8">⛴️ ${nBarcazas} barcaza(s) zarpa(n) LPO → Iquitos</td>
         <td style="padding:2px 6px">${fmt(fZarpeBarcaza)}</td>
-        <td style="padding:2px 6px;color:#666">Llevan ${vol.toFixed(2)} MB · tránsito 7 días</td>
+        <td style="padding:2px 6px;color:#666">Llevan ${vol.toFixed(DEC)} MB · tránsito 7 días</td>
       </tr>
       <tr style="border-bottom:1px solid #d97706aa">
         <td style="padding:2px 6px;font-weight:600;color:#065f46">🏭 Arribo a Refinería Iquitos</td>
@@ -18395,9 +18402,9 @@ function _invReportRangeRows() {
   }).map(function(r) {
     return {
       fecha: r.fecha, planta: r.planta, producto: r.producto,
-      existencia: parseFloat((r.inv||0).toFixed(2)),
-      despacho_real: parseFloat((r.vreal||r.dem||0).toFixed(2)),
-      pronostico_mbdc: parseFloat((r.pron||0).toFixed(2)),
+      existencia: parseFloat((r.inv||0).toFixed(DEC)),
+      despacho_real: parseFloat((r.vreal||r.dem||0).toFixed(DEC)),
+      pronostico_mbdc: parseFloat((r.pron||0).toFixed(DEC)),
       cobertura_dias: r.cob || ''
     };
   }).sort(function(a,b) {
@@ -18439,9 +18446,9 @@ function exportInvReportPDF() {
     filasHTML += '<tr style="background:#eef2f7"><td colspan="6" style="padding:7px 10px;font-weight:800;color:#0a3a5c;font-size:11px;border-top:2px solid #0a3a5c">\ud83d\udcc5 '+f+'</td></tr>';
     porFecha[f].forEach(function(x) {
       filasHTML += '<tr><td style="padding:5px 10px">'+x.planta+'</td><td style="padding:5px 10px">'+x.producto+'</td>'
-        + '<td style="padding:5px 10px;text-align:right">'+x.existencia.toFixed(2)+'</td>'
-        + '<td style="padding:5px 10px;text-align:right">'+x.despacho_real.toFixed(2)+'</td>'
-        + '<td style="padding:5px 10px;text-align:right">'+x.pronostico_mbdc.toFixed(2)+'</td>'
+        + '<td style="padding:5px 10px;text-align:right">'+x.existencia.toFixed(DEC)+'</td>'
+        + '<td style="padding:5px 10px;text-align:right">'+x.despacho_real.toFixed(DEC)+'</td>'
+        + '<td style="padding:5px 10px;text-align:right">'+x.pronostico_mbdc.toFixed(DEC)+'</td>'
         + '<td style="padding:5px 10px;text-align:right">'+(x.cobertura_dias || '\u2014')+'</td></tr>';
     });
   });
@@ -18510,18 +18517,18 @@ function _buildInventoryReportHTML() {
   var cP=cC>0?Math.round(cS/cC):0;
   var fStr='',fSh='';
   if(currentDate){var fd=new Date(currentDate+'T12:00:00');var DA=['domingo','lunes','martes','mi\u00e9rcoles','jueves','viernes','s\u00e1bado'];var DC=['Dom','Lun','Mar','Mi\u00e9','Jue','Vie','S\u00e1b'];var MA=['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];var MC=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];fStr=DA[fd.getDay()]+' '+fd.getDate()+' de '+MA[fd.getMonth()]+' de '+fd.getFullYear();fSh=DC[fd.getDay()]+' '+fd.getDate()+' '+MC[fd.getMonth()]+'. '+fd.getFullYear();}
-  var wL=['*INVENTARIO PETROPER\u00da \u2014 '+fSh+'*','','*Total: '+gT.toFixed(2)+' MB* | VF: '+vT.toFixed(2)+' MBDC | Cob: '+cP+'d',''];
-  PO.forEach(function(p){var pt=pTot[p];if(pt&&pt.inv>0.1)wL.push('\u2022 '+PL[p]+': *'+pt.inv.toFixed(2)+' MB*');});
+  var wL=['*INVENTARIO PETROPER\u00da \u2014 '+fSh+'*','','*Total: '+gT.toFixed(DEC)+' MB* | VF: '+vT.toFixed(DEC)+' MBDC | Cob: '+cP+'d',''];
+  PO.forEach(function(p){var pt=pTot[p];if(pt&&pt.inv>0.1)wL.push('\u2022 '+PL[p]+': *'+pt.inv.toFixed(DEC)+' MB*');});
   wL.push('','\u2501\u2501\u2501 INVENTARIO POR PLANTA \u2501\u2501\u2501','');
-  PLO.forEach(function(planta){var rows=[],ptl=0;(PPr[planta]||[]).forEach(function(prod){var r=recMap[planta+'|'+prod];if(!r)return;var inv=gi(r);if(inv<0.01)return;var cob=gc(r);rows.push({prod:prod,inv:inv,cob:cob});ptl+=inv;});if(!rows.length)return;wL.push('*'+planta+'* \u2014 '+ptl.toFixed(2)+' MB');rows.forEach(function(r){wL.push('  \u2022 '+PL[r.prod]+': '+r.inv.toFixed(2)+' MB'+(r.cob>0?' ('+r.cob+'d)':''));});wL.push('');});
+  PLO.forEach(function(planta){var rows=[],ptl=0;(PPr[planta]||[]).forEach(function(prod){var r=recMap[planta+'|'+prod];if(!r)return;var inv=gi(r);if(inv<0.01)return;var cob=gc(r);rows.push({prod:prod,inv:inv,cob:cob});ptl+=inv;});if(!rows.length)return;wL.push('*'+planta+'* \u2014 '+ptl.toFixed(DEC)+' MB');rows.forEach(function(r){wL.push('  \u2022 '+PL[r.prod]+': '+r.inv.toFixed(DEC)+' MB'+(r.cob>0?' ('+r.cob+'d)':''));});wL.push('');});
   wL.push('_Fuente: Planificación de Suministro \u00b7 Petroper\u00fa_');
   var waT=wL.join('\
 ');
-  var pcH=PO.map(function(p){var pt=pTot[p];if(!pt||pt.inv<0.1)return'';var pct=(gT>0?(pt.inv/gT*100):0).toFixed(2),bw=Math.round(pt.inv/gT*100);return'<div style="background:'+PB[p]+';border:1px solid '+PC[p]+'22;border-radius:12px;padding:16px 18px;display:flex;flex-direction:column;gap:6px"><div style="display:flex;align-items:center;gap:8px"><span style="font-size:20px">'+PE[p]+'</span><span style="font-size:11px;font-weight:700;color:'+PC[p]+';text-transform:uppercase;letter-spacing:.06em">'+PL[p]+'</span></div><div style="font-size:24px;font-weight:800;color:'+PC[p]+'">'+pt.inv.toFixed(2)+'<span style="font-size:13px;font-weight:600;margin-left:4px">MB</span></div><div style="background:#00000012;border-radius:4px;height:5px;overflow:hidden"><div style="background:'+PC[p]+';height:100%;width:'+bw+'%;border-radius:4px"></div></div><div style="font-size:10px;color:'+PC[p]+'99;font-weight:600">'+pct+'% del total</div></div>';}).join('');
+  var pcH=PO.map(function(p){var pt=pTot[p];if(!pt||pt.inv<0.1)return'';var pct=(gT>0?(pt.inv/gT*100):0).toFixed(DEC),bw=Math.round(pt.inv/gT*100);return'<div style="background:'+PB[p]+';border:1px solid '+PC[p]+'22;border-radius:12px;padding:16px 18px;display:flex;flex-direction:column;gap:6px"><div style="display:flex;align-items:center;gap:8px"><span style="font-size:20px">'+PE[p]+'</span><span style="font-size:11px;font-weight:700;color:'+PC[p]+';text-transform:uppercase;letter-spacing:.06em">'+PL[p]+'</span></div><div style="font-size:24px;font-weight:800;color:'+PC[p]+'">'+pt.inv.toFixed(DEC)+'<span style="font-size:13px;font-weight:600;margin-left:4px">MB</span></div><div style="background:#00000012;border-radius:4px;height:5px;overflow:hidden"><div style="background:'+PC[p]+';height:100%;width:'+bw+'%;border-radius:4px"></div></div><div style="font-size:10px;color:'+PC[p]+'99;font-weight:600">'+pct+'% del total</div></div>';}).join('');
   var pData=[];PLO.forEach(function(planta){var rows=[],ptl=0;(PPr[planta]||[]).forEach(function(prod){var r=recMap[planta+'|'+prod];if(!r)return;var inv=gi(r);if(inv<0.01)return;var cob=gc(r);rows.push({prod:prod,inv:inv,cob:cob});ptl+=inv;});if(rows.length)pData.push({planta:planta,region:PReg[planta]||'',rows:rows,total:ptl});});
   var regions={};pData.forEach(function(p){if(!regions[p.region])regions[p.region]=[];regions[p.region].push(p);});
   var plH='';
-  RO.forEach(function(region){var rP=regions[region];if(!rP||!rP.length)return;plH+='<div style="margin-bottom:32px"><div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;padding-bottom:10px;border-bottom:2px solid '+RC[region]+'33"><span style="background:'+RC[region]+';color:#fff;font-size:10px;font-weight:800;padding:3px 10px;border-radius:20px;letter-spacing:.08em;text-transform:uppercase">'+region+'</span><span style="font-size:12px;color:#6b7280;font-weight:600">'+rP.length+' planta'+(rP.length>1?'s':'')+'</span></div><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:12px">';rP.forEach(function(p){var minCob=999,hasCob=false;p.rows.forEach(function(r){if(r.cob>0){minCob=Math.min(minCob,r.cob);hasCob=true;}});var crit=p.rows.filter(function(r){return r.cob>0&&r.cob<=5;}).length;var bdr=crit>0?'#dc2626':hasCob&&minCob<=7?'#d97706':'#e5e7eb';plH+='<div style="background:#fff;border-radius:12px;box-shadow:0 1px 8px rgba(0,0,0,.07);padding:16px 18px;border-left:4px solid '+bdr+'"><div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px"><div><div style="font-size:14px;font-weight:800;color:#111827">'+p.planta+'</div><div style="font-size:10px;color:#6b7280;font-weight:500;margin-top:2px">'+p.total.toFixed(2)+' MB inventario total</div></div>'+(hasCob?'<div style="text-align:right;flex-shrink:0"><div style="font-size:20px;font-weight:900;color:'+cc(minCob)+'">'+minCob+'d</div><div style="font-size:9px;font-weight:700;color:'+cc(minCob)+';text-transform:uppercase;letter-spacing:.04em">'+cobLabel(minCob)+'</div></div>':'')+'</div><div style="display:flex;flex-direction:column;gap:8px">';p.rows.forEach(function(r){var hC=r.cob>0,bW=hC?cobBarW(r.cob):0,bC=hC?cbBar(r.cob):'#d1d5db';plH+='<div><div style="display:flex;align-items:center;gap:6px;margin-bottom:4px"><span style="font-size:13px;flex-shrink:0">'+PE[r.prod]+'</span><span style="font-size:11px;font-weight:700;color:#374151;flex:1">'+PL[r.prod]+'</span><span style="font-size:11px;font-weight:700;color:#111827">'+r.inv.toFixed(2)+'<span style="font-size:10px;font-weight:400;color:#9ca3af"> MB</span></span>'+(hC?'<span style="background:'+cb(r.cob)+';color:'+cc(r.cob)+';font-size:9px;font-weight:800;padding:2px 7px;border-radius:10px;min-width:32px;text-align:center;flex-shrink:0">'+r.cob+'d</span>':'')+'</div>'+(hC?'<div style="position:relative;background:#f3f4f6;border-radius:4px;height:6px;overflow:hidden"><div style="position:absolute;left:0;top:0;height:100%;width:'+bW+'%;background:'+bC+';border-radius:4px"></div><div style="position:absolute;left:23%;top:0;height:100%;width:1px;background:rgba(0,0,0,.15)"></div><div style="position:absolute;left:50%;top:0;height:100%;width:1px;background:rgba(0,0,0,.15)"></div></div>':'<div style="background:#f3f4f6;border-radius:4px;height:6px"></div>')+'</div>';});plH+='</div></div>';});plH+='</div></div>';});
+  RO.forEach(function(region){var rP=regions[region];if(!rP||!rP.length)return;plH+='<div style="margin-bottom:32px"><div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;padding-bottom:10px;border-bottom:2px solid '+RC[region]+'33"><span style="background:'+RC[region]+';color:#fff;font-size:10px;font-weight:800;padding:3px 10px;border-radius:20px;letter-spacing:.08em;text-transform:uppercase">'+region+'</span><span style="font-size:12px;color:#6b7280;font-weight:600">'+rP.length+' planta'+(rP.length>1?'s':'')+'</span></div><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:12px">';rP.forEach(function(p){var minCob=999,hasCob=false;p.rows.forEach(function(r){if(r.cob>0){minCob=Math.min(minCob,r.cob);hasCob=true;}});var crit=p.rows.filter(function(r){return r.cob>0&&r.cob<=5;}).length;var bdr=crit>0?'#dc2626':hasCob&&minCob<=7?'#d97706':'#e5e7eb';plH+='<div style="background:#fff;border-radius:12px;box-shadow:0 1px 8px rgba(0,0,0,.07);padding:16px 18px;border-left:4px solid '+bdr+'"><div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px"><div><div style="font-size:14px;font-weight:800;color:#111827">'+p.planta+'</div><div style="font-size:10px;color:#6b7280;font-weight:500;margin-top:2px">'+p.total.toFixed(DEC)+' MB inventario total</div></div>'+(hasCob?'<div style="text-align:right;flex-shrink:0"><div style="font-size:20px;font-weight:900;color:'+cc(minCob)+'">'+minCob+'d</div><div style="font-size:9px;font-weight:700;color:'+cc(minCob)+';text-transform:uppercase;letter-spacing:.04em">'+cobLabel(minCob)+'</div></div>':'')+'</div><div style="display:flex;flex-direction:column;gap:8px">';p.rows.forEach(function(r){var hC=r.cob>0,bW=hC?cobBarW(r.cob):0,bC=hC?cbBar(r.cob):'#d1d5db';plH+='<div><div style="display:flex;align-items:center;gap:6px;margin-bottom:4px"><span style="font-size:13px;flex-shrink:0">'+PE[r.prod]+'</span><span style="font-size:11px;font-weight:700;color:#374151;flex:1">'+PL[r.prod]+'</span><span style="font-size:11px;font-weight:700;color:#111827">'+r.inv.toFixed(DEC)+'<span style="font-size:10px;font-weight:400;color:#9ca3af"> MB</span></span>'+(hC?'<span style="background:'+cb(r.cob)+';color:'+cc(r.cob)+';font-size:9px;font-weight:800;padding:2px 7px;border-radius:10px;min-width:32px;text-align:center;flex-shrink:0">'+r.cob+'d</span>':'')+'</div>'+(hC?'<div style="position:relative;background:#f3f4f6;border-radius:4px;height:6px;overflow:hidden"><div style="position:absolute;left:0;top:0;height:100%;width:'+bW+'%;background:'+bC+';border-radius:4px"></div><div style="position:absolute;left:23%;top:0;height:100%;width:1px;background:rgba(0,0,0,.15)"></div><div style="position:absolute;left:50%;top:0;height:100%;width:1px;background:rgba(0,0,0,.15)"></div></div>':'<div style="background:#f3f4f6;border-radius:4px;height:6px"></div>')+'</div>';});plH+='</div></div>';});plH+='</div></div>';});
   var minD=(DATES&&DATES.length)?DATES[0]:'',maxD=(DATES&&DATES.length)?DATES[DATES.length-1]:'';
   var datePicker=INVENTORY_REPORT_MODE?('<input type="date" id="inv-date-picker" value="'+(currentDate||'')+'" min="'+minD+'" max="'+maxD+'" onchange="setInvReportDate(this.value)" style="background:rgba(255,255,255,.15);color:#fff;border:1.5px solid rgba(255,255,255,.3);padding:8px 12px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;color-scheme:dark">'):'';
   var shareBtn=INVENTORY_REPORT_MODE?'<button onclick="copyPageLink()" style="background:rgba(255,255,255,.15);color:#fff;border:1.5px solid rgba(255,255,255,.3);padding:9px 18px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">\ud83d\udd17 Copiar link</button>':'';
@@ -18541,7 +18548,7 @@ function _buildInventoryReportHTML() {
   return '<style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#f1f5f9;min-height:100vh}@media print{.no-print{display:none!important}}</style>'
     +'<div style="background:linear-gradient(135deg,#0a3a5c 0%,#1e3a8a 60%,#0f4c81 100%);padding:28px 32px 24px;position:sticky;top:0;z-index:100"><div style="max-width:1200px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:16px"><div style="display:flex;align-items:center;gap:16px"><div style="background:rgba(255,255,255,.15);border-radius:14px;width:52px;height:52px;display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:900;color:#fff;border:1.5px solid rgba(255,255,255,.25)">PP</div><div><div style="color:#fff;font-size:22px;font-weight:800;letter-spacing:-.3px">Inventario PETROPER\u00da</div><div style="color:rgba(255,255,255,.7);font-size:12px;margin-top:3px;font-weight:500">'+fStr+' \u00b7 Planificaci\u00f3n de Suministro</div></div></div><div class="no-print" style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">'+datePicker+shareBtn+'<button onclick="copyWA()" style="background:rgba(255,255,255,.15);color:#fff;border:1.5px solid rgba(255,255,255,.3);padding:9px 18px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">\ud83d\udccb Copiar WhatsApp</button><button onclick="window.print()" style="background:rgba(255,255,255,.15);color:#fff;border:1.5px solid rgba(255,255,255,.3);padding:9px 18px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">\ud83d\udda8\ufe0f PDF</button></div></div></div>'
     +periodoBarHTML
-    +'<div style="background:#fff;border-bottom:1px solid #e5e7eb;padding:20px 32px"><div style="max-width:1200px;margin:0 auto;display:flex;gap:32px;flex-wrap:wrap;align-items:center"><div><div style="font-size:28px;font-weight:900;color:#0a3a5c;letter-spacing:-.5px">'+gT.toFixed(2)+'<span style="font-size:16px;font-weight:600;color:#6b7280;margin-left:4px">MB</span></div><div style="font-size:10px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:.08em;margin-top:2px">Total nacional</div></div><div style="width:1px;height:40px;background:#e5e7eb"></div>'+(vT>0?'<div><div style="font-size:28px;font-weight:900;color:#065f46;letter-spacing:-.5px">'+vT.toFixed(2)+'<span style="font-size:16px;font-weight:600;color:#6b7280;margin-left:4px">MBDC</span></div><div style="font-size:10px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:.08em;margin-top:2px">Venta factible diaria</div></div><div style="width:1px;height:40px;background:#e5e7eb"></div>':'')+(cP>0?'<div><div style="font-size:28px;font-weight:900;color:'+cc(cP)+';letter-spacing:-.5px">'+cP+'<span style="font-size:16px;font-weight:600;color:#6b7280;margin-left:4px">d\u00edas</span></div><div style="font-size:10px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:.08em;margin-top:2px">Cobertura promedio</div></div>':'')+'</div></div>'
+    +'<div style="background:#fff;border-bottom:1px solid #e5e7eb;padding:20px 32px"><div style="max-width:1200px;margin:0 auto;display:flex;gap:32px;flex-wrap:wrap;align-items:center"><div><div style="font-size:28px;font-weight:900;color:#0a3a5c;letter-spacing:-.5px">'+gT.toFixed(DEC)+'<span style="font-size:16px;font-weight:600;color:#6b7280;margin-left:4px">MB</span></div><div style="font-size:10px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:.08em;margin-top:2px">Total nacional</div></div><div style="width:1px;height:40px;background:#e5e7eb"></div>'+(vT>0?'<div><div style="font-size:28px;font-weight:900;color:#065f46;letter-spacing:-.5px">'+vT.toFixed(DEC)+'<span style="font-size:16px;font-weight:600;color:#6b7280;margin-left:4px">MBDC</span></div><div style="font-size:10px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:.08em;margin-top:2px">Venta factible diaria</div></div><div style="width:1px;height:40px;background:#e5e7eb"></div>':'')+(cP>0?'<div><div style="font-size:28px;font-weight:900;color:'+cc(cP)+';letter-spacing:-.5px">'+cP+'<span style="font-size:16px;font-weight:600;color:#6b7280;margin-left:4px">d\u00edas</span></div><div style="font-size:10px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:.08em;margin-top:2px">Cobertura promedio</div></div>':'')+'</div></div>'
     +'<div style="max-width:1200px;margin:0 auto;padding:28px 32px">'
     +'<div style="margin-bottom:32px"><div style="display:flex;align-items:center;gap:10px;margin-bottom:16px"><div style="width:4px;height:20px;background:#0a3a5c;border-radius:2px"></div><h2 style="font-size:15px;font-weight:800;color:#0a3a5c;text-transform:uppercase;letter-spacing:.06em">Por Producto</h2></div><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px">'+pcH+'</div></div>'
     +'<div><div style="display:flex;align-items:center;gap:12px;margin-bottom:8px"><div style="width:4px;height:20px;background:#0a3a5c;border-radius:2px"></div><h2 style="font-size:15px;font-weight:800;color:#0a3a5c;text-transform:uppercase;letter-spacing:.06em">Por Planta</h2></div>'
@@ -18992,8 +18999,8 @@ function _iquiTabPlanDist() {
   var avPct=total>0?Math.round(realTot/total*100):0;
 
   html += '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:14px">';
-  [['Total plan','#818cf8',total.toFixed(2),'MB total'],
-   ['Ejecutado','#4ade80',realTot.toFixed(2),'MB real'],
+  [['Total plan','#818cf8',total.toFixed(DEC),'MB total'],
+   ['Ejecutado','#4ade80',realTot.toFixed(DEC),'MB real'],
    ['% Avance',(avPct>=90?'#4ade80':avPct>=70?'#fbbf24':'#f87171'),avPct+'%','del plan'],
    ['Viajes','#38bdf8',(plan.barcazas_yu.length+plan.barcazas_lpo.length+plan.cisternas.length)+'','barcazas+cist.']
   ].forEach(function(k){
@@ -19045,7 +19052,7 @@ function _pdInlineTable(lista, tipo_ruta, titulo, gradiente, d) {
         + '<div style="font-size:8px;color:var(--txt3);font-weight:400">'+b.capacidad+'</div></td>'
       + '<td style="padding:6px 10px;text-align:center;color:var(--txt2)">'+b.zarpe_plan+'</td>'
       + '<td style="padding:6px 10px;text-align:center;color:var(--txt2)">'+b.arribo_plan+'</td>'
-      + '<td style="padding:6px 10px;text-align:right;font-weight:800;color:#38bdf8">'+vp.toFixed(2)+'</td>'
+      + '<td style="padding:6px 10px;text-align:right;font-weight:800;color:#38bdf8">'+vp.toFixed(DEC)+'</td>'
       + '<td style="padding:4px 6px;text-align:center"><input type="date" id="pdi-zarpe-'+b.id+'" value="'+(bd.zarpe_real||'')+'" '+(bloq?'disabled':'')+' style="padding:3px 5px;background:var(--bg2);border:1px solid var(--bdr);border-radius:4px;color:var(--txt);font-size:9px;width:110px"></td>'
       + '<td style="padding:4px 6px;text-align:center"><input type="date" id="pdi-arribo-'+b.id+'" value="'+(bd.arribo_real||'')+'" '+(bloq?'disabled':'')+' style="padding:3px 5px;background:var(--bg2);border:1px solid var(--bdr);border-radius:4px;color:var(--txt);font-size:9px;width:110px"></td>'
       + '<td style="padding:4px 6px;text-align:right"><input type="number" step="0.1" min="0" id="pdi-vol-'+b.id+'" value="'+(bd.vol_real||'')+'" placeholder="'+vp+'" '+(bloq?'disabled':'')+' style="padding:3px 5px;background:var(--bg2);border:1px solid var(--bdr);border-radius:4px;color:var(--txt);font-size:9px;width:60px;text-align:right"></td>'
@@ -19089,7 +19096,7 @@ function _pdInlineCistTable(lista, d) {
       + '<td style="padding:6px 10px;font-weight:700;color:var(--txt)">'+c.desc
         + '<div style="font-size:8px;color:var(--txt3);font-weight:400">'+c.producto+'</div></td>'
       + '<td style="padding:6px 10px;text-align:center;color:var(--txt2)">'+c.zarpe_plan+'</td>'
-      + '<td style="padding:6px 10px;text-align:right;font-weight:800;color:#f59e0b">'+c.vol_plan.toFixed(2)+'</td>'
+      + '<td style="padding:6px 10px;text-align:right;font-weight:800;color:#f59e0b">'+c.vol_plan.toFixed(DEC)+'</td>'
       + '<td style="padding:4px 6px;text-align:center"><input type="date" id="pdi-zarpe-'+c.id+'" value="'+(cd.zarpe_real||'')+'" '+(bloq?'disabled':'')+' style="padding:3px 5px;background:var(--bg2);border:1px solid var(--bdr);border-radius:4px;color:var(--txt);font-size:9px;width:110px"></td>'
       + '<td style="padding:4px 6px;text-align:center"><input type="date" id="pdi-arribo-'+c.id+'" value="'+(cd.arribo_real||'')+'" '+(bloq?'disabled':'')+' style="padding:3px 5px;background:var(--bg2);border:1px solid var(--bdr);border-radius:4px;color:var(--txt);font-size:9px;width:110px"></td>'
       + '<td style="padding:4px 6px;text-align:right"><input type="number" step="0.1" min="0" id="pdi-vol-'+c.id+'" value="'+(cd.vol_real||'')+'" placeholder="'+c.vol_plan+'" '+(bloq?'disabled':'')+' style="padding:3px 5px;background:var(--bg2);border:1px solid var(--bdr);border-radius:4px;color:var(--txt);font-size:9px;width:60px;text-align:right"></td>'
@@ -19360,7 +19367,7 @@ function _iquiTabTerrestre(plan, viajesReales) {
       + '    <div style="font-size:10px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.04em">Capacidad estimada</div>'
       + '    <div style="font-size:22px;font-weight:800;font-family:var(--mono);color:'+(cap>=planMB?'var(--grn)':'var(--red)')+'">'+cap.toFixed(0)+' <span style="font-size:12px">MB/mes</span></div>'
       + '    <div style="font-size:10px;color:var(--txt3)">'
-      +      cist+' cist. &times; '+vxm+' viajes/mes &times; '+capProm.toFixed(2)+' MB = <b style="color:var(--txt)">'+cap.toFixed(0)+' MB</b>'
+      +      cist+' cist. &times; '+vxm+' viajes/mes &times; '+capProm.toFixed(DEC)+' MB = <b style="color:var(--txt)">'+cap.toFixed(0)+' MB</b>'
       + '    </div>'
       + '    <div style="font-size:10px;color:var(--txt3)">Plan: <b style="color:var(--txt)">'+planMB+' MB</b> &middot; <span style="color:'+factColor+';font-weight:700">'+(cap>=planMB?'\u2713 Factible':'\u26a0 Insuficiente: falta '+(planMB-cap).toFixed(0)+' MB')+'</span></div>'
       + '  </div>'
@@ -20380,10 +20387,10 @@ window._puertosRefresh = function() {
           var kpiDivs = dataEl.querySelectorAll('.pw-kpi-val');
           if (kpiDivs.length >= 1) {
             kpiDivs[0].style.color = wCol;
-            kpiDivs[0].textContent = waveNow.toFixed(2)+'m';
+            kpiDivs[0].textContent = waveNow.toFixed(DEC)+'m';
           } else {
             dataEl.innerHTML = ''
-              + _puertosKpiMini('Olas (m)', waveNow.toFixed(2)+'m', wCol)
+              + _puertosKpiMini('Olas (m)', waveNow.toFixed(DEC)+'m', wCol)
               + _puertosKpiMini('Viento', '...', '#8a9bb8')
               + _puertosKpiMini('Dir.', '...', '#8a9bb8');
           }
@@ -20428,7 +20435,7 @@ window._puertosRefresh = function() {
               +   '<div style="position:absolute;bottom:0;left:0;right:0;background:'+colBar+';border-radius:3px 3px 0 0;height:'+pct+'%;min-height:3px;transition:height .3s"></div>'
               +   '<div style="position:absolute;left:0;right:0;bottom:'+umbralPct+'%;height:1.5px;background:#ef4444;opacity:.7"></div>'
               + '</div>'
-              + '<div style="font-size:9.5px;font-weight:800;font-family:monospace;color:'+colBar+';text-align:center">'+w.toFixed(2)+'</div>'
+              + '<div style="font-size:9.5px;font-weight:800;font-family:monospace;color:'+colBar+';text-align:center">'+w.toFixed(DEC)+'</div>'
               + '<div style="font-size:7px;font-weight:700;color:'+colBar+';text-align:center;line-height:1;white-space:nowrap">'+estadoDay+'</div>'
               + '</div>';
           }).join('');
@@ -20468,14 +20475,14 @@ window._puertosRefresh = function() {
               var kpiDivs2 = dataEl2.querySelectorAll('.pw-kpi-val');
               if (kpiDivs2.length >= 3) {
                 kpiDivs2[0].style.color = waveC;
-                kpiDivs2[0].textContent = waveNow!=null ? waveNow.toFixed(2)+'m' : '\u2014';
+                kpiDivs2[0].textContent = waveNow!=null ? waveNow.toFixed(DEC)+'m' : '\u2014';
                 kpiDivs2[1].style.color = '#7c3aed';
                 kpiDivs2[1].textContent = windNow!=null ? Math.round(windNow)+' km/h' : '\u2014';
                 kpiDivs2[2].style.color = '#0891b2';
                 kpiDivs2[2].textContent = wdirNow!=null ? _puertosDirViento(wdirNow) : '\u2014';
               } else {
                 dataEl2.innerHTML = ''
-                  + _puertosKpiMini('Olas (m)', waveNow!=null?waveNow.toFixed(2)+'m':'\u2014', waveC)
+                  + _puertosKpiMini('Olas (m)', waveNow!=null?waveNow.toFixed(DEC)+'m':'\u2014', waveC)
                   + _puertosKpiMini('Viento', windNow!=null?Math.round(windNow)+' km/h':'\u2014', '#7c3aed')
                   + _puertosKpiMini('Dir.', wdirNow!=null?_puertosDirViento(wdirNow):'\u2014', '#0891b2');
               }
@@ -20668,8 +20675,8 @@ window._riosRefresh = function() {
             _riosKpiCard('Caudal actual', (cur!=null?Math.round(cur).toLocaleString('es-PE'):'\u2014')+' m\u00b3/s', r.color)
           + _riosKpiCard('Tendencia 7d', trendArrow+' '+(trendPct>=0?'+':'')+trendPct.toFixed(0)+'%', trendCol)
           + _riosKpiCard('Nivel relativo', nivelTxt, est.c)
-          + _riosKpiCard('Nivel (MSNM)', nivelMsnm.toFixed(2)+' m', r.color)
-          + _riosKpiCard('Alto/Calado (ft)', caladoFt.toFixed(2)+' ft', r.color);
+          + _riosKpiCard('Nivel (MSNM)', nivelMsnm.toFixed(DEC)+' m', r.color)
+          + _riosKpiCard('Alto/Calado (ft)', caladoFt.toFixed(DEC)+' ft', r.color);
 
         // Barras: 7 días previos + hoy + 7 pronóstico, con línea de promedio y etiquetas legibles
         var chartEl = document.getElementById('rw-chart-'+k);
@@ -21279,7 +21286,7 @@ function renderVistaEjecutivaSimple() {
       }
     }
     labels = datesN.map(function(d){ return d.slice(8,10); }); // solo el número de día — el mes ya está en el título
-    invSerie = datesN.map(function(d){ var v=sumFecha(d,'inv',pl,prod); return v>0?parseFloat(v.toFixed(2)):null; });
+    invSerie = datesN.map(function(d){ var v=sumFecha(d,'inv',pl,prod); return v>0?parseFloat(v.toFixed(DEC)):null; });
     // ⚠️ AGREGADO — en Vista Nacional NO se pinta la diferenciación de
     // proyectado: a nivel consolidado casi siempre HAY alguna planta con
     // algo proyectado en cualquier fecha (18 plantas + 3 refinerías), así
@@ -21290,7 +21297,7 @@ function renderVistaEjecutivaSimple() {
     despSerie = datesN.map(function(d){
       var v = RAW.filter(function(r){ return r.fecha===d && filaAplica(r, pl, prod); })
                  .reduce(function(s,r){ return s+despRow(r); }, 0);
-      return v>0 ? parseFloat(v.toFixed(2)) : null;
+      return v>0 ? parseFloat(v.toFixed(DEC)) : null;
     });
     reposSerie = datesN.map(function(d){
       var tot = 0;
@@ -21299,11 +21306,11 @@ function renderVistaEjecutivaSimple() {
         var tag = parseReposicionTag(r.comentario_prod);
         if (tag) tot += tag.volumenMB;
       });
-      return tot > 0 ? parseFloat(tot.toFixed(2)) : null;
+      return tot > 0 ? parseFloat(tot.toFixed(DEC)) : null;
     });
     pronSerie = datesN.map(function(d){
       var v = pronParaFechaExec(d, (COMBO_PLANTAS[pl] ? COMBO_PLANTAS[pl].plantaDespacho : pl), prod);
-      return v > 0 ? parseFloat(v.toFixed(2)) : null;
+      return v > 0 ? parseFloat(v.toFixed(DEC)) : null;
     });
     if (mSel) _pTendEnsurePronMesesExec([mSel]);
   } else {
@@ -21320,7 +21327,7 @@ function renderVistaEjecutivaSimple() {
     var idxFin = idxHoy >= 0 ? idxHoy : ((DATES||[]).length - 1);
     var datesN = (DATES || []).slice(Math.max(0, idxFin - n + 1), idxFin + 1);
     labels = datesN.map(mesCorto);
-    invSerie = datesN.map(function(d){ var v=sumFecha(d,'inv',pl,prod); return v>0?parseFloat(v.toFixed(2)):null; });
+    invSerie = datesN.map(function(d){ var v=sumFecha(d,'inv',pl,prod); return v>0?parseFloat(v.toFixed(DEC)):null; });
     // ⚠️ AGREGADO — en Vista Nacional NO se pinta la diferenciación de
     // proyectado: a nivel consolidado casi siempre HAY alguna planta con
     // algo proyectado en cualquier fecha (18 plantas + 3 refinerías), así
@@ -21331,7 +21338,7 @@ function renderVistaEjecutivaSimple() {
     despSerie = datesN.map(function(d){
       var v = RAW.filter(function(r){ return r.fecha===d && filaAplica(r, pl, prod); })
                  .reduce(function(s,r){ return s+despRow(r); }, 0);
-      return v>0 ? parseFloat(v.toFixed(2)) : null;
+      return v>0 ? parseFloat(v.toFixed(DEC)) : null;
     });
     // Volumen de reposición "pintado" en la barra de inventario — leído
     // de la etiqueta estructurada que deja Registro Diario al marcar
@@ -21343,11 +21350,11 @@ function renderVistaEjecutivaSimple() {
         var tag = parseReposicionTag(r.comentario_prod);
         if (tag) tot += tag.volumenMB;
       });
-      return tot > 0 ? parseFloat(tot.toFixed(2)) : null;
+      return tot > 0 ? parseFloat(tot.toFixed(DEC)) : null;
     });
     pronSerie = datesN.map(function(d){
       var v = pronParaFechaExec(d, (COMBO_PLANTAS[pl] ? COMBO_PLANTAS[pl].plantaDespacho : pl), prod);
-      return v > 0 ? parseFloat(v.toFixed(2)) : null;
+      return v > 0 ? parseFloat(v.toFixed(DEC)) : null;
     });
     _pTendEnsurePronMesesExec([...new Set(datesN.map(function(d){return d.slice(0,7);}))]);
   }
@@ -21551,7 +21558,7 @@ function renderVistaEjecutivaSimple() {
       diasTotal += info.diasRepos;
       if (info.tipo) tipos.push(info.tipo);
       var etiquetaFecha = info.fecha ? ((info.estado === 'COMPLETADO' ? ', ya descarg\u00f3 ' : ', ETA ') + info.fecha) : '';
-      detalle.push(r.producto + ': ' + info.volMB.toFixed(2) + ' MB (' + (info.bt || '\u2014') + etiquetaFecha + ') \u2192 +' + info.diasRepos + 'd');
+      detalle.push(r.producto + ': ' + info.volMB.toFixed(DEC) + ' MB (' + (info.bt || '\u2014') + etiquetaFecha + ') \u2192 +' + info.diasRepos + 'd');
       if (btUnico === null) { btUnico = info.bt; fechaUnico = info.fecha; estadoUnico = info.estado; }
       else if (btUnico !== info.bt) { btUnico = ''; fechaUnico = ''; estadoUnico = ''; } // más de un buque distinto — no hay uno solo que mostrar
       // Cada nave se etiqueta con su producto, para distinguirlas cuando
@@ -21832,12 +21839,12 @@ function renderVistaEjecutivaSimple() {
       navesHTML = d.reposNaves.map(function(n) {
         var etiquetaFecha = n.fecha ? ((n.estado === 'COMPLETADO' ? 'ya descarg\u00f3 ' : n.estado === 'DESCARGANDO' ? 'lleg\u00f3 (descargando) ' : 'ETA ') + n.fecha) : '';
         var prodTxt = n.producto ? (n.producto + ' \u2014 ') : '';
-        return '<div style="margin-top:3px">\uD83D\uDEA2 <b>' + (n.buque||'\u2014') + '</b> \u00b7 ' + prodTxt + n.vol.toFixed(2) + ' MB' + (etiquetaFecha ? ' \u00b7 ' + etiquetaFecha : '') + '</div>';
+        return '<div style="margin-top:3px">\uD83D\uDEA2 <b>' + (n.buque||'\u2014') + '</b> \u00b7 ' + prodTxt + n.vol.toFixed(DEC) + ' MB' + (etiquetaFecha ? ' \u00b7 ' + etiquetaFecha : '') + '</div>';
       }).join('');
     }
     var reposHTML = d.diasRepos > 0
       ? (d.reposDetalle && d.reposDetalle.length > 1
-          ? '<b>Reposici\u00f3n total (' + d.reposDetalle.length + ' productos)</b><br>' + d.volReposMB.toFixed(2) + ' MB \u2192 +' + d.diasRepos + ' d\u00edas equivalentes<br>' + d.reposDetalle.join('<br>')
+          ? '<b>Reposici\u00f3n total (' + d.reposDetalle.length + ' productos)</b><br>' + d.volReposMB.toFixed(DEC) + ' MB \u2192 +' + d.diasRepos + ' d\u00edas equivalentes<br>' + d.reposDetalle.join('<br>')
           : '<b>Reposici\u00f3n ' + (d.tipoRepos||'') +
               // ⚠️ AGREGADO — antes solo se distinguía "COMPLETADO" de
               // todo lo demás; un buque DESCARGANDO ahora mismo (estado
@@ -21848,7 +21855,7 @@ function renderVistaEjecutivaSimple() {
               (d.reposEstado === 'COMPLETADO' ? ' \u2705 ya descarg\u00f3, ya en inventario'
                 : d.reposEstado === 'DESCARGANDO' ? ' \uD83D\uDD34 descargando ahora'
                 : d.reposEstado === 'EN TRANSITO' || d.reposEstado === 'EN_TRANSITO' ? ' \uD83D\uDEA2 en tr\u00e1nsito'
-                : '') + '</b><br>Volumen total: ' + d.volReposMB.toFixed(2) + ' MB'
+                : '') + '</b><br>Volumen total: ' + d.volReposMB.toFixed(DEC) + ' MB'
             + (navesHTML
                 ? navesHTML
                 : ((d.reposBt ? '<br>Buque/Barcaza: ' + d.reposBt : '')
@@ -21856,7 +21863,7 @@ function renderVistaEjecutivaSimple() {
             + (reposEsPendiente ? '<br>D\u00edas equivalentes: +' + d.diasRepos + 'd' : '')
             + (reposLejana && d.reposEstado !== 'DESCARGANDO' ? '<br><span style="color:#93c5fd">\u26a0\ufe0f A\u00fan a ' + diasHastaETA + ' d\u00edas \u2014 no confirmado, no cuenta como inventario todav\u00eda</span>' : ''))
       : '';
-    var pronHTML = '<div style="color:#93c5fd">Demanda pron\u00f3stico' + (prod!=='Todos'?(' ('+prod+')'):'') + ': ' + (d.pronMB||0).toFixed(2) + ' MB/d\u00eda</div>';
+    var pronHTML = '<div style="color:#93c5fd">Demanda pron\u00f3stico' + (prod!=='Todos'?(' ('+prod+')'):'') + ': ' + (d.pronMB||0).toFixed(DEC) + ' MB/d\u00eda</div>';
     // ⚠️ CORREGIDO — bug real confirmado: antes AMBOS segmentos de la
     // barra (el sólido de inventario Y el rayado de reposición/cabotaje)
     // compartían el mismo popup combinado (reposición + pronóstico) —
@@ -21909,7 +21916,7 @@ function renderVistaEjecutivaSimple() {
         '<div><span style="font-weight:700;color:var(--txt)">' + x.planta + '</span> <span style="color:var(--txt3)">· ' + x.producto + '</span></div>' +
         '<div style="display:flex;align-items:center;gap:10px">' +
           '<span style="font-size:11px;color:var(--txt2)">' + x.tag.tipoLabel + '</span>' +
-          '<span style="font-family:var(--mono);font-weight:800;color:#2563eb">+' + x.tag.volumenMB.toFixed(2) + ' MB</span>' +
+          '<span style="font-family:var(--mono);font-weight:800;color:#2563eb">+' + x.tag.volumenMB.toFixed(DEC) + ' MB</span>' +
         '</div></div>';
     }).join('');
     reposSectionHTML = '<div style="background:var(--card);border:1px solid var(--bdr);border-radius:14px;padding:22px 24px;margin-bottom:20px">' +
@@ -22269,7 +22276,7 @@ function renderVistaEjecutivaSimple() {
     filasNac.forEach(function(f, i) {
       var row = ws.getRow(headerRowIdx + 1 + i);
       var critico = f.cob !== null && f.cob !== undefined && f.cob <= 7;
-      var vals = [f.planta, f.producto, parseFloat(f.inv.toFixed(2)), f.desp > 0 ? parseFloat(f.desp.toFixed(2)) : null, f.pron > 0 ? parseFloat(f.pron.toFixed(2)) : null, f.cob !== null ? f.cob : null, f.comentario || ''];
+      var vals = [f.planta, f.producto, parseFloat(f.inv.toFixed(DEC)), f.desp > 0 ? parseFloat(f.desp.toFixed(DEC)) : null, f.pron > 0 ? parseFloat(f.pron.toFixed(DEC)) : null, f.cob !== null ? f.cob : null, f.comentario || ''];
       vals.forEach(function(v, ci) {
         var cell = row.getCell(ci + 1);
         cell.value = v;
@@ -22318,9 +22325,9 @@ function renderVistaEjecutivaSimple() {
           var bg = critico ? '#fca5a5' : '#fff';
           return '<tr style="background:' + bg + '">'
             + '<td style="padding:6px 10px;font-weight:700;color:#0a3a5c;border-bottom:1px solid #e2e8f0">' + f.terminal + '</td>'
-            + '<td style="padding:6px 10px;text-align:right;border-bottom:1px solid #e2e8f0">' + f.inv.toFixed(2) + '</td>'
-            + '<td style="padding:6px 10px;text-align:right;border-bottom:1px solid #e2e8f0">' + f.despReportado.toFixed(2) + '</td>'
-            + '<td style="padding:6px 10px;text-align:right;border-bottom:1px solid #e2e8f0">' + f.pron.toFixed(2) + '</td>'
+            + '<td style="padding:6px 10px;text-align:right;border-bottom:1px solid #e2e8f0">' + f.inv.toFixed(DEC) + '</td>'
+            + '<td style="padding:6px 10px;text-align:right;border-bottom:1px solid #e2e8f0">' + f.despReportado.toFixed(DEC) + '</td>'
+            + '<td style="padding:6px 10px;text-align:right;border-bottom:1px solid #e2e8f0">' + f.pron.toFixed(DEC) + '</td>'
             + '<td style="padding:6px 10px;text-align:right;font-weight:800;border-bottom:1px solid #e2e8f0">' + (f.cob || 0) + '</td>'
             + '<td style="padding:6px 10px;text-align:center;border-bottom:1px solid #e2e8f0">' + f.fechaCob + '</td>'
             + '</tr>';
@@ -22358,9 +22365,9 @@ function renderVistaEjecutivaSimple() {
         var cobColor = f.cob === null ? '#64748b' : (f.cob <= 7 ? '#dc2626' : (f.cob <= 14 ? '#e8a000' : '#16a34a'));
         return '<tr style="background:' + (i % 2 ? '#f8fafc' : '#fff') + '">'
           + '<td style="padding:5px 10px 5px 26px;color:#334155">' + f.producto + '</td>'
-          + '<td style="padding:5px 10px;text-align:right">' + f.inv.toFixed(2) + '</td>'
-          + '<td style="padding:5px 10px;text-align:right">' + (f.desp > 0 ? f.desp.toFixed(2) : '—') + '</td>'
-          + '<td style="padding:5px 10px;text-align:right">' + (f.pron > 0 ? f.pron.toFixed(2) : '—') + '</td>'
+          + '<td style="padding:5px 10px;text-align:right">' + f.inv.toFixed(DEC) + '</td>'
+          + '<td style="padding:5px 10px;text-align:right">' + (f.desp > 0 ? f.desp.toFixed(DEC) : '—') + '</td>'
+          + '<td style="padding:5px 10px;text-align:right">' + (f.pron > 0 ? f.pron.toFixed(DEC) : '—') + '</td>'
           + '<td style="padding:5px 10px;text-align:right;font-weight:700;color:' + cobColor + '">' + (f.cob !== null ? f.cob + 'd' : '—') + '</td>'
           // ⚠️ CORREGIDO — vulnerabilidad XSS almacenado real: f.comentario
           // es texto libre escrito por el operador de la planta (via
@@ -22374,7 +22381,7 @@ function renderVistaEjecutivaSimple() {
           + '<td style="padding:5px 10px;color:#64748b;font-size:9.5px">' + escapeHtml(f.comentario || '—') + '</td>'
           + '</tr>';
       }).join('');
-      return '<tr><td colspan="6" style="padding:6px 10px;font-weight:800;color:#0a3a5c;background:#eef2f7;font-size:10.5px">🏭 ' + plNombre + ' <span style="font-weight:600;color:#64748b">— ' + totalPlanta.toFixed(2) + ' MB total</span></td></tr>' + filasProdHTML;
+      return '<tr><td colspan="6" style="padding:6px 10px;font-weight:800;color:#0a3a5c;background:#eef2f7;font-size:10.5px">🏭 ' + plNombre + ' <span style="font-weight:600;color:#64748b">— ' + totalPlanta.toFixed(DEC) + ' MB total</span></td></tr>' + filasProdHTML;
     }).join('');
     var detalleNacionalHTML =
       '<div style="page-break-before:always;padding-top:6px">'
@@ -22445,11 +22452,11 @@ function renderVistaEjecutivaSimple() {
       +   '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:22px">'
       +     '<div style="background:#f0f4fb;border:1px solid #dbe4f3;border-radius:10px;padding:14px 16px">'
       +       '<div style="font-size:9.5px;font-weight:700;color:#5a6e88;text-transform:uppercase;letter-spacing:.05em">Inventario Nacional</div>'
-      +       '<div style="font-size:22px;font-weight:800;color:#0a3a5c;font-family:ui-monospace,monospace;margin-top:4px">' + invTotalDia.toFixed(2) + ' MB</div>'
+      +       '<div style="font-size:22px;font-weight:800;color:#0a3a5c;font-family:ui-monospace,monospace;margin-top:4px">' + invTotalDia.toFixed(DEC) + ' MB</div>'
       +     '</div>'
       +     '<div style="background:#f0f4fb;border:1px solid #dbe4f3;border-radius:10px;padding:14px 16px">'
       +       '<div style="font-size:9.5px;font-weight:700;color:#5a6e88;text-transform:uppercase;letter-spacing:.05em">Despacho Nacional</div>'
-      +       '<div style="font-size:22px;font-weight:800;color:#0a3a5c;font-family:ui-monospace,monospace;margin-top:4px">' + (despTotalDia > 0 ? despTotalDia.toFixed(2) + ' MB' : '—') + '</div>'
+      +       '<div style="font-size:22px;font-weight:800;color:#0a3a5c;font-family:ui-monospace,monospace;margin-top:4px">' + (despTotalDia > 0 ? despTotalDia.toFixed(DEC) + ' MB' : '—') + '</div>'
       +     '</div>'
       +     '<div style="background:#f0f4fb;border:1px solid #dbe4f3;border-radius:10px;padding:14px 16px">'
       +       '<div style="font-size:9.5px;font-weight:700;color:#5a6e88;text-transform:uppercase;letter-spacing:.05em">Cobertura promedio</div>'
@@ -22798,7 +22805,7 @@ function renderVistaEjecutivaSimple() {
     var invBaseSerie = invSerie.map(function(v, i) {
       if (v == null) return null;
       var r = reposSerieAj[i] || 0;
-      return Math.max(0, parseFloat((v - r).toFixed(2)));
+      return Math.max(0, parseFloat((v - r).toFixed(DEC)));
     });
     // ⚠️ CORREGIDO — el ámbar (#d97706) se confundía con el naranja que
     // ya usa el sistema para "Atención 8-12d" en la escala de cobertura
@@ -23109,9 +23116,9 @@ function _execFichaTabla(planta, info, esRef) {
       var faded = p.sinDato ? 'opacity:.45' : '';
       return '<div style="display:flex;align-items:center;padding:4px 8px;border-bottom:1px solid #f1f5f9;' + faded + '">' +
         '<div style="flex:1.3;font-weight:700;color:#0f1e3c">' + p.producto + '</div>' +
-        '<div style="flex:1;text-align:right;font-family:ui-monospace,monospace">' + (p.sinDato?'—':p.existencia.toFixed(2)) + '</div>' +
-        '<div style="flex:1;text-align:right;font-family:ui-monospace,monospace;color:#0891b2">' + (p.despReal>0?p.despReal.toFixed(2):'—') + '</div>' +
-        '<div style="flex:1;text-align:right;font-family:ui-monospace,monospace;color:#7c3aed">' + (p.pron>0?p.pron.toFixed(2):'—') + '</div>' +
+        '<div style="flex:1;text-align:right;font-family:ui-monospace,monospace">' + (p.sinDato?'—':p.existencia.toFixed(DEC)) + '</div>' +
+        '<div style="flex:1;text-align:right;font-family:ui-monospace,monospace;color:#0891b2">' + (p.despReal>0?p.despReal.toFixed(DEC):'—') + '</div>' +
+        '<div style="flex:1;text-align:right;font-family:ui-monospace,monospace;color:#7c3aed">' + (p.pron>0?p.pron.toFixed(DEC):'—') + '</div>' +
         '<div style="flex:.8;text-align:center;font-weight:800;color:' + cobCol + '">' + cobTxt + '</div>' +
         '</div>';
     }).join('');
@@ -23148,7 +23155,7 @@ function _execFichaTabla(planta, info, esRef) {
           (btTxt ? ' <span style="color:#94a3b8">· ' + btTxt + '</span>' : '') + '</div>' +
         '<div style="display:flex;align-items:center;gap:6px;flex-shrink:0">' +
           '<span style="color:#64748b">' + icono + ' ' + rep.tipo + '</span>' +
-          '<span style="font-family:ui-monospace,monospace;font-weight:800;color:#2563eb">' + rep.volMB.toFixed(2) + ' MB</span>' +
+          '<span style="font-family:ui-monospace,monospace;font-weight:800;color:#2563eb">' + rep.volMB.toFixed(DEC) + ' MB</span>' +
           '<span style="font-family:ui-monospace,monospace;color:#94a3b8">(' + rep.diasRepos + 'd)</span>' +
         '</div></div>' +
         // ⚠️ AGREGADO — el estado del buque (bt_estado) ya se calculaba
@@ -24144,8 +24151,8 @@ function getCapacidad(planta, producto) {
       </div>
       <div class="pinv-kcard">
         <div class="pinv-kcard-lbl">Cobertura promedio</div>
-        <div class="pinv-kcard-val ${cobClass(avgCob)}">${avgCob > 0 ? avgCob.toFixed(2)+'d' : '—'}</div>
-        <div class="pinv-kcard-sub">Rango: ${minCob<99999?minCob.toFixed(2)+'d':'—'} – ${maxCob>0?maxCob.toFixed(2)+'d':'—'}</div>
+        <div class="pinv-kcard-val ${cobClass(avgCob)}">${avgCob > 0 ? avgCob.toFixed(DEC)+'d' : '—'}</div>
+        <div class="pinv-kcard-sub">Rango: ${minCob<99999?minCob.toFixed(DEC)+'d':'—'} – ${maxCob>0?maxCob.toFixed(DEC)+'d':'—'}</div>
       </div>
       <div class="pinv-kcard">
         <div class="pinv-kcard-lbl">Reposición programada</div>
@@ -24172,7 +24179,7 @@ function getCapacidad(planta, producto) {
         <td>${r.planta}</td>
         <td>${fmt(r.inv)}</td>
         <td>${r.vf > 0 ? fmt(r.vf) : '—'}</td>
-        <td class="${cobCls}">${r.cob > 0 ? r.cob.toFixed(2)+'d' : '—'}</td>
+        <td class="${cobCls}">${r.cob > 0 ? r.cob.toFixed(DEC)+'d' : '—'}</td>
         <td>${repStr}</td>
       </tr>`;
     }).join('');
@@ -24339,7 +24346,7 @@ function getCapacidad(planta, producto) {
                 const r = rows[ctx.dataIndex];
                 if (ctx.datasetIndex === 0) {
                   const lines = [`  📦 Inventario: ${fmt(ctx.parsed.x)} MB`];
-                  if (r.cob > 0) lines.push(`  📅 Cobertura: ${r.cob.toFixed(2)} días`);
+                  if (r.cob > 0) lines.push(`  📅 Cobertura: ${r.cob.toFixed(DEC)} días`);
                   if (r.vf > 0)  lines.push(`  📊 V. Factible: ${fmt(r.vf)} MBDC`);
                   return lines;
                 }
@@ -24392,7 +24399,7 @@ function getCapacidad(planta, producto) {
             });
             const labelX = rightEdge + 8;  // 8px fuera de la barra
             const invTotal = invVals[i] + (marVals[i]||0) + (terrVals[i]||0);
-            const invLbl = invVals[i].toFixed(2) + ' MB';
+            const invLbl = invVals[i].toFixed(DEC) + ' MB';
             ctx.save();
             ctx.fillStyle = txtColor;
             ctx.font = '700 12px Sora, sans-serif';
@@ -24425,7 +24432,7 @@ function getCapacidad(planta, producto) {
               // Medir el ancho del label MB para posicionar el texto de reposición después
               ctx.save();
               ctx.font = '700 12px Sora, sans-serif';
-              const mbW = ctx.measureText(invVals[i].toFixed(2) + ' MB').width;
+              const mbW = ctx.measureText(invVals[i].toFixed(DEC) + ' MB').width;
               ctx.restore();
               const repX = rEdge + 8 + Math.max(mbW, 42) + 16;
               const hasProj = r.repProj > 0;
@@ -24604,7 +24611,7 @@ function getCapacidad(planta, producto) {
                   volCell = `
                     <span style="display:inline-flex;align-items:center;gap:4px;font-family:var(--mono)">
                       ${exceedFlag}+
-                      <input type="number" step="0.1" min="0" value="${(b.vol||0).toFixed(2)}"
+                      <input type="number" step="0.1" min="0" value="${(b.vol||0).toFixed(DEC)}"
                         style="width:62px;padding:3px 6px;background:rgba(96,165,250,.08);border:1.5px dashed rgba(96,165,250,.5);border-radius:5px;color:#60a5fa;font-family:var(--mono);font-weight:700;font-size:11.5px;text-align:right;font-style:italic"
                         title="Editar volumen proyectado (en MB)"
                         onchange="window._pInvEditProjectedVol('${plantaSafe}','${prodSafe}','${shipNameSafe}',this.value)">
@@ -24757,7 +24764,7 @@ function getCapacidad(planta, producto) {
             titleColor: '#8BAED4',
             bodyColor: '#e8edf5',
             callbacks: {
-              label: ctx => `  ${ctx.dataset.label}: ${ctx.parsed.y.toFixed(2)} MB`
+              label: ctx => `  ${ctx.dataset.label}: ${ctx.parsed.y.toFixed(DEC)} MB`
             }
           },
           annotation: {}
