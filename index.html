@@ -22223,9 +22223,17 @@ function renderVistaEjecutivaSimple() {
 
     // ── Logo + encabezado (filas 1-3, con la imagen a la izquierda) ──
     try {
-      var imgId = wb.addImage({ base64: EXEC_LOGO_PETRO_B64, extension: 'jpeg' });
+      // ⚠️ CORREGIDO — bug real confirmado: ExcelJS.addImage({base64:...})
+      // espera el base64 CRUDO, sin el prefijo "data:image/jpeg;base64,"
+      // (ese prefijo sí hace falta para el <img src="..."> del PDF, que
+      // usa la misma variable — pero rompe a ExcelJS). El try/catch de
+      // acá abajo ya existía "por si acaso" y estaba tragándose este
+      // error específico en silencio: el Excel se generaba igual, pero
+      // siempre sin el logo, sin ningún aviso de que algo había fallado.
+      var logoBase64Crudo = EXEC_LOGO_PETRO_B64.replace(/^data:image\/\w+;base64,/, '');
+      var imgId = wb.addImage({ base64: logoBase64Crudo, extension: 'jpeg' });
       ws.addImage(imgId, { tl: { col: 0.15, row: 0.15 }, ext: { width: 54, height: 54 } });
-    } catch (eImg) { /* si el logo falla, el resto del reporte se genera igual */ }
+    } catch (eImg) { console.warn('[Excel] logo no se pudo insertar:', eImg.message); }
     ws.mergeCells('B1:G1');
     ws.getCell('B1').value = 'PETRÓLEOS DEL PERÚ S.A. — PETROPERÚ';
     ws.getCell('B1').font = { bold: true, size: 14, color: { argb: AZUL } };
