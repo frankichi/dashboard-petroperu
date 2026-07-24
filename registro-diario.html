@@ -1470,7 +1470,7 @@ function rdRecalc(prod) {
   // Badge de cobertura (header) — misma fórmula canónica que "Coberturas"
   // del index, recalculada en vivo según lo que se está escribiendo.
   // No aplica a refinerías (no tienen despacho/demanda, solo almacenan).
-  var esRefineriaLive = (RD.refinerias || []).indexOf(RD.planta) !== -1;
+  var esRefineriaLive = (RD.refinerias || []).indexOf(RD.plantaAdminVista || RD.planta) !== -1;
   var badgeEl = document.querySelector('[data-cobbadge="' + prod + '"]');
   if (badgeEl && uc && !esRefineriaLive) {
     // uc.pron_mes viene de PRONOSTICO_MBDC — ya es una tasa diaria, no se divide.
@@ -1525,16 +1525,16 @@ function rdToggleMinCheck(chk) {
 function rdRenderProdRows(productos, valores, detalle, yaReportado) {
   valores = valores || {};
   RD.detalle = detalle || {};
-  var esRefineria = (RD.refinerias || []).indexOf(RD.planta) !== -1;
+  var esRefineria = (RD.refinerias || []).indexOf(RD.plantaAdminVista || RD.planta) !== -1;
   // Talara, Conchan e Iquitos tienen una refinería hermana que puede
   // abastecerlas directamente — para esas plantas se ofrece "Reposición
   // de Refinería" como origen de reposición, además de cabotaje/cisternas.
-  var esRefineriaHermana = ['Talara', 'Conchan', 'Iquitos'].indexOf(RD.planta) !== -1;
+  var esRefineriaHermana = ['Talara', 'Conchan', 'Iquitos'].indexOf(RD.plantaAdminVista || RD.planta) !== -1;
   // Iquitos se abastece por vía FLUVIAL (barcazas por el río, ej. ruta
   // Conchán → LPO Pucallpa → Refinería Iquitos), no por cabotaje
   // marítimo — el botón de origen debe decir "Barcaza"/"Fluvial", no
   // "Buque"/"Marítimo".
-  var esIquitosRD = RD.planta === 'Iquitos';
+  var esIquitosRD = (RD.plantaAdminVista || RD.planta) === 'Iquitos';
   var wrap = document.getElementById('prodRows');
   wrap.innerHTML = productos.map(function(p) {
     var v   = valores[p] || {};
@@ -3025,13 +3025,19 @@ var _pronData = [];
 window._pronLoaded = false;
 
 function rdLoadPronostico() {
-  if (!RD.token || !RD.planta) return;
+  // ⚠️ CORREGIDO — mismo criterio ya aplicado en rdLoadHistorico y
+  // cargarCabotajes: usar la planta EFECTIVA (la que el admin eligió
+  // "ver como", si aplica) en vez de RD.planta directo, por consistencia
+  // y para blindar contra cualquier caso donde la sincronización al
+  // recargar la página no llegue a completarse a tiempo.
+  var plantaEfectiva = RD.plantaAdminVista || RD.planta;
+  if (!RD.token || !plantaEfectiva) return;
   var sub = document.getElementById('pronSub');
-  if (sub) sub.textContent = 'Planta: ' + plantaLabel(RD.planta);
+  if (sub) sub.textContent = 'Planta: ' + plantaLabel(plantaEfectiva);
   var content = document.getElementById('pronContent');
   if (content) content.innerHTML = '<div class="rd-loading">\u23f3 Cargando pron\u00f3stico\u2026</div>';
 
-  rdGet('rdGetPronosticoPlanta', { token: RD.token, planta: RD.planta })
+  rdGet('rdGetPronosticoPlanta', { token: RD.token, planta: plantaEfectiva })
     .then(function(res) {
       if (res && res.success === false && !res.pronostico) throw new Error('endpoint_not_found');
       var datos = Array.isArray(res) ? res : (res.pronostico || res.data || []);
@@ -3044,8 +3050,8 @@ function rdLoadPronostico() {
       return rdGet('getPronostico', {})
         .then(function(res2) {
           var filas = Array.isArray(res2) ? res2 : (res2.data || res2.pronostico || []);
-          var plantaLeg  = rdPlantaLegacyFront(RD.planta);
-          var plantaNorm = RD.planta;
+          var plantaLeg  = rdPlantaLegacyFront(plantaEfectiva);
+          var plantaNorm = plantaEfectiva;
           return filas.filter(function(p) {
             var pl = (p.planta || '').trim();
             return pl === plantaLeg || pl === plantaNorm;
@@ -3062,7 +3068,7 @@ function rdLoadPronostico() {
     .then(function(datos) {
       window._pronLoaded = true;
       if (!datos || !datos.length) {
-        if (content) content.innerHTML = '<div class="rd-empty">\u2139\ufe0f Sin pron\u00f3stico aprobado para ' + plantaLabel(RD.planta) + '.<br>'
+        if (content) content.innerHTML = '<div class="rd-empty">\u2139\ufe0f Sin pron\u00f3stico aprobado para ' + plantaLabel(plantaEfectiva) + '.<br>'
           + '<small style="color:var(--txt3)">El pron\u00f3stico es definido desde el Dashboard Nacional.</small></div>';
         return;
       }
