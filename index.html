@@ -423,7 +423,7 @@ var _mapLibsLoaded=false;
     if (raw) {
       var s = JSON.parse(raw);
       if (s && s.email && s.exp && Date.now() < s.exp && s.token
-          && s.email.trim().toLowerCase() === 'furcia@petroperu.com.pe') sess = s;
+          && ['furcia@petroperu.com.pe','crobles@petroperu.com.pe','jvitonerao@petroperu.com.pe'].indexOf(s.email.trim().toLowerCase()) !== -1) sess = s;
       else sessionStorage.removeItem('pp_dash_session');
     }
   } catch(e) { sessionStorage.removeItem('pp_dash_session'); }
@@ -482,8 +482,8 @@ var _mapLibsLoaded=false;
         // de control nacional (index.html). Cualquier otra cuenta válida
         // (ej. una planta) se autentica correctamente contra el sistema
         // pero se le niega el acceso a ESTE dashboard específicamente.
-        var ALLOWED_EMAIL = 'furcia@petroperu.com.pe';
-        if (em.trim().toLowerCase() !== ALLOWED_EMAIL) {
+        var ALLOWED_EMAILS = ['furcia@petroperu.com.pe','crobles@petroperu.com.pe','jvitonerao@petroperu.com.pe'];
+        if (ALLOWED_EMAILS.indexOf(em.trim().toLowerCase()) === -1) {
           showMsg('Este panel es de acceso restringido. Si necesitas registrar el reporte de tu planta, usa el sistema de Registro Diario.', false);
           if (passEl) { passEl.value = ''; }
           return;
@@ -2979,7 +2979,7 @@ if (!_dashSession) {
     if (_ss) {
       var _sd = JSON.parse(_ss);
       if (_sd && _sd.email && _sd.exp && Date.now() < _sd.exp && _sd.token
-          && _sd.email.trim().toLowerCase() === 'furcia@petroperu.com.pe') {
+          && ['furcia@petroperu.com.pe','crobles@petroperu.com.pe','jvitonerao@petroperu.com.pe'].indexOf(_sd.email.trim().toLowerCase()) !== -1) {
         _dashSession = _sd;
         window._dashSession = _sd;
       } else {
@@ -3155,10 +3155,11 @@ function _authShowLogin() {
       .then(function(r) { return r.json(); })
       .then(function(res) {
         if (btnEl) { btnEl.disabled = false; btnEl.textContent = 'Ingresar'; }
-        console.log('[AUTH] login response:', JSON.stringify(res));
+        var _resParaLog2 = res ? Object.assign({}, res, { token: res.token ? '[REDACTADO]' : undefined }) : res;
+        console.log('[AUTH] login response:', JSON.stringify(_resParaLog2));
         if (res && res.success) {
-          var ALLOWED_EMAIL2 = 'furcia@petroperu.com.pe';
-          if (em.trim().toLowerCase() !== ALLOWED_EMAIL2) {
+          var ALLOWED_EMAILS2 = ['furcia@petroperu.com.pe','crobles@petroperu.com.pe','jvitonerao@petroperu.com.pe'];
+          if (ALLOWED_EMAILS2.indexOf(em.trim().toLowerCase()) === -1) {
             showMsg('Este panel es de acceso restringido. Si necesitas registrar el reporte de tu planta, usa el sistema de Registro Diario.', false);
             if (passEl) { passEl.value = ''; }
             return;
