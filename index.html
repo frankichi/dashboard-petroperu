@@ -3430,6 +3430,8 @@ let DATES = [];
 // provista por el usuario, incrustada en base64 para que el PDF no
 // dependa de ninguna carga de red externa al generarse.
 var EXEC_LOGO_PETRO_B64 = 'data:image/jpeg;base64,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';
+var EXEC_ICON_XLS_B64 = 'data:image/png;base64,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';
+var EXEC_ICON_PDF_B64 = 'data:image/png;base64,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';
 let currentDate = null;
 // ⚠️ Helper a prueba de fallos: construir `new Date(currentDate +
 // 'T12:00:00')` directamente, sin validar, causaba un crash NO
@@ -22096,6 +22098,22 @@ function renderVistaEjecutivaSimple() {
     }
     return rawPlanta;
   }
+  // ⚠️ AGREGADO — bug real confirmado con un Excel exportado real:
+  // Iquitos desaparecía por completo del reporte. Causa: _comboCanonico
+  // devuelve el nombre a MOSTRAR ("Iquitos"), pero sumFecha()/filaAplica()
+  // necesitan la CLAVE real del combo para saber que deben sumar
+  // "Refinería Iquitos" — y esa clave NO es "Iquitos" sino
+  // '__COMBO_IQUITOS__' (a diferencia de Talara, cuya clave de combo SÍ
+  // es su propio nombre). Al pedirle el dato a sumFecha con "Iquitos"
+  // directo, esta no reconocía ningún combo y buscaba una planta llamada
+  // literalmente "Iquitos" en los datos — que no existe con ese nombre
+  // exacto — así que el resultado siempre era 0 y la fila se omitía.
+  function _comboKeyParaCalculo(rawPlanta) {
+    for (var key in COMBO_PLANTAS) {
+      if (COMBO_PLANTAS[key].plantasInv.indexOf(rawPlanta) !== -1) return key;
+    }
+    return rawPlanta;
+  }
   function _execReporteFilasNacional(fechasOverride) {
     var fechas = fechasOverride || _execReporteFechas();
     if (!fechas.length) return [];
@@ -22122,24 +22140,77 @@ function renderVistaEjecutivaSimple() {
       if (typeof SKIP_COMBOS !== 'undefined' && SKIP_COMBOS.has((r.planta||'')+'|'+(r.producto||''))) return;
       if (typeof PLANTAS_DUPLICADAS_EN_REFINERIA !== 'undefined' && PLANTAS_DUPLICADAS_EN_REFINERIA.indexOf(r.planta) !== -1) return;
       var plantaCanon = _comboCanonico(r.planta);
-      combosMap[plantaCanon + '|' + r.producto] = { planta: plantaCanon, producto: r.producto };
+      // ⚠️ AGREGADO — bug real confirmado (regresión): el respaldo de
+      // "último dato real conocido" agregado para rescatar plantas que
+      // llevan tiempo sin cerrar (Eten, Ilo, etc.) no cruzaba contra el
+      // catálogo oficial de productos por planta — así que también podía
+      // rescatar datos residuales viejos que nunca debieron existir (El
+      // Milagro con G. 84, que esa planta no maneja). El catálogo oficial
+      // ya se aplica en el mapa, el desplegable y varias otras vistas —
+      // acá faltaba aplicarlo también.
+      if (typeof PRODUCTOS_POR_PLANTA_EXEC !== 'undefined' && PRODUCTOS_POR_PLANTA_EXEC[plantaCanon] && PRODUCTOS_POR_PLANTA_EXEC[plantaCanon].indexOf(r.producto) === -1) return;
+      var keyCalculo = _comboKeyParaCalculo(r.planta);
+      combosMap[plantaCanon + '|' + r.producto] = { planta: plantaCanon, producto: r.producto, keyCalculo: keyCalculo };
     });
     var combos = Object.keys(combosMap).map(function(k){ return combosMap[k]; }).sort(function(a, b) {
       if (a.planta !== b.planta) return a.planta < b.planta ? -1 : 1;
       return a.producto < b.producto ? -1 : (a.producto > b.producto ? 1 : 0);
     });
+    // Índice de respaldo (último valor REAL conocido por planta+producto,
+    // sin proyección) — construido fresco de RAW en cada llamada, sin
+    // depender de ninguna caché externa (mismo patrón ya probado y
+    // confiable que usa _execMapaDatos, para evitar el mismo problema de
+    // caché desactualizada que ya se identificó y corrigió ahí). Se
+    // indexa por el nombre RAW real (el que aparece tal cual en los
+    // datos), no por el nombre a mostrar — para plantas combinadas
+    // (Iquitos/Conchán) el nombre real es "Refinería X", no "Iquitos".
+    var _idxRespaldo = {};
+    RAW.forEach(function(r) {
+      if (!r.fecha || r.inv == null) return;
+      var k = r.planta + '|' + r.producto;
+      (_idxRespaldo[k] = _idxRespaldo[k] || []).push(r);
+    });
+    Object.keys(_idxRespaldo).forEach(function(k) {
+      _idxRespaldo[k].sort(function(a, b) { return a.fecha < b.fecha ? -1 : (a.fecha > b.fecha ? 1 : 0); });
+    });
+    function _ultimoRealRespaldo(keyCalculo, producto, fechaLimite) {
+      var combo = COMBO_PLANTAS[keyCalculo];
+      var nombresRaw = combo ? combo.plantasInv : [keyCalculo];
+      var mejor = 0;
+      nombresRaw.forEach(function(nombreRaw) {
+        var arr = _idxRespaldo[nombreRaw + '|' + producto];
+        if (!arr || !arr.length) return;
+        var candidatos = arr.filter(function(r){ return r.fecha <= fechaLimite; });
+        if (candidatos.length) mejor += (candidatos[candidatos.length - 1].inv || 0);
+      });
+      return mejor;
+    }
+
     var filas = [];
     fechas.forEach(function(d) {
       combos.forEach(function(cp) {
-        var inv = sumFecha(d, 'inv', cp.planta, cp.producto);
-        if (inv <= 0) return; // sin dato real ese día para esa planta+producto — no se inventa una fila
-        var desp = RAW.filter(function(r){ return r.fecha===d && filaAplica(r, cp.planta, cp.producto); })
+        var inv = sumFecha(d, 'inv', cp.keyCalculo, cp.producto);
+        // ⚠️ AGREGADO — bug real confirmado con un Excel exportado real:
+        // faltaban plantas (Eten, Ilo, Mollendo, Pucallpa) y productos de
+        // plantas que sí reportan (Conchán sin G. Premium/G. Regular HS,
+        // Piura sin G. Premium). Causa: sumFecha() arrastra CON
+        // proyección de consumo (resta el pronóstico día a día desde el
+        // último reporte real) — si una planta/producto lleva muchos
+        // días sin cerrar, esa proyección puede llegar a 0 y la fila se
+        // excluía por completo del reporte, aunque sí exista un último
+        // dato real conocido. Para un reporte formal de exportación esto
+        // no es aceptable — se usa el último valor REAL reportado (sin
+        // decaer por proyección) como respaldo, para que ninguna planta
+        // con historial real quede fuera solo por no haber cerrado hoy.
+        if (inv <= 0) inv = _ultimoRealRespaldo(cp.keyCalculo, cp.producto, d);
+        if (inv <= 0) return; // ni con el último dato real hay algo que mostrar — recién ahí se omite
+        var desp = RAW.filter(function(r){ return r.fecha===d && filaAplica(r, cp.keyCalculo, cp.producto); })
                       .reduce(function(s,r){ return s+despRow(r); }, 0);
-        var pronVal = pronParaFechaExec(d, cp.planta, cp.producto);
+        var pronVal = pronParaFechaExec(d, cp.keyCalculo, cp.producto);
         var cobDias = (pronVal > 0 && inv > 0) ? Math.floor(inv / pronVal) : null;
         var comentarios = [];
         RAW.forEach(function(r) {
-          if (r.fecha !== d || !filaAplica(r, cp.planta, cp.producto)) return;
+          if (r.fecha !== d || !filaAplica(r, cp.keyCalculo, cp.producto)) return;
           if (r.comentario_prod) comentarios.push(r.comentario_prod);
         });
         filas.push({ fecha: d, planta: cp.planta, producto: cp.producto, inv: inv, desp: desp, pron: pronVal, cob: cobDias, comentario: comentarios.join(' · ') });
@@ -22162,7 +22233,7 @@ function renderVistaEjecutivaSimple() {
     d.setDate(d.getDate() + dias);
     return String(d.getDate()).padStart(2,'0') + '/' + String(d.getMonth()+1).padStart(2,'0') + '/' + d.getFullYear();
   }
-  function _execResumenNacionalPorProducto() {
+  function _execResumenNacionalPorProducto(plantaFiltro) {
     // ⚠️ Usa `fechaHoy` (la fecha que el usuario tiene elegida en el
     // selector de fecha de Vista Ejecutiva), NO `currentDate` a secas —
     // currentDate es una variable global compartida con otras vistas del
@@ -22172,10 +22243,35 @@ function renderVistaEjecutivaSimple() {
     var PO = ['Diesel','G. Regular','G. Premium','G. 84','TA1','GLP'];
     var PL = {'Diesel':'Diésel','G. Regular':'Gasolina Regular','G. Premium':'Gasolina Premium','G. 84':'G. 84','TA1':'Turbo A-1','GLP':'GLP'};
     var PLO = ['Talara','Piura','Eten','Salaverry','Chimbote','Supe','Callao','Conchán','Pisco','Mollendo','Ilo','Cusco','Juliaca','Iquitos','Pucallpa','Tarapoto','Yurimaguas','El Milagro'];
+    if (plantaFiltro) PLO = PLO.filter(function(p){ return p === plantaFiltro; });
     var recMap = {};
+    // ⚠️ CORREGIDO — bug real confirmado: Iquitos desaparecía de esta
+    // tabla (y por eso el PDF seguía sin mostrarla, aunque ya se había
+    // corregido en la otra tabla del reporte) porque acá se buscaba el
+    // registro con el nombre "Iquitos" directo, pero el dato real vive
+    // bajo "Refinería Iquitos" en los registros crudos (mismo patrón que
+    // ya se corrigió antes para el detalle nacional). Además, esto
+    // explica que los totales no cuadraran entre el PDF, el Excel y las
+    // gráficas: cada tabla resolvía los nombres de forma distinta. Ahora
+    // se usa el mismo nombre CANÓNICO en todos lados, y se SUMAN los
+    // valores cuando hay más de una fuente cruda para el mismo nombre
+    // (ej. Talara terminal + Refinería Talara), en vez de que la más
+    // reciente sobrescriba silenciosamente a la anterior.
     today.forEach(function(r) {
       if (!invFilaValida(r)) return;
-      recMap[(r.planta||'') + '|' + (r.producto||'')] = r;
+      var plantaCanon = (typeof _comboCanonico === 'function') ? _comboCanonico(r.planta) : r.planta;
+      var k = (plantaCanon||'') + '|' + (r.producto||'');
+      if (recMap[k]) {
+        var acumulado = Object.assign({}, recMap[k]);
+        acumulado.inv = (acumulado.inv || 0) + (r.inv || 0);
+        acumulado.vreal = (acumulado.vreal || 0) + (r.vreal || 0);
+        acumulado.dem = (acumulado.dem || 0) + (r.dem || 0);
+        acumulado.pron = (acumulado.pron || 0) + (r.pron || 0);
+        acumulado.planta = plantaCanon;
+        recMap[k] = acumulado;
+      } else {
+        recMap[k] = Object.assign({}, r, { planta: plantaCanon });
+      }
     });
     var productos = [];
     PO.forEach(function(p) {
@@ -22202,7 +22298,55 @@ function renderVistaEjecutivaSimple() {
     return productos;
   }
 
-  window._execExportExcel = async function() {
+  // ⚠️ AGREGADO — abre/cierra el menú de alcance del reporte (Nacional
+  // vs. planta seleccionada). Cierra cualquier otro menú abierto y se
+  // cierra solo si se hace clic fuera.
+  window._execToggleExportMenu = function(tipo) {
+    ['excel', 'pdf'].forEach(function(t) {
+      var el = document.getElementById('exec-export-menu-' + t);
+      if (el) el.style.display = (t === tipo && el.style.display !== 'block') ? 'block' : 'none';
+    });
+    var menuPeriodo = document.getElementById('exec-export-menu-periodo');
+    if (menuPeriodo) menuPeriodo.style.display = 'none';
+  };
+  if (!window._execExportMenuOutsideHandlerInstalado) {
+    window._execExportMenuOutsideHandlerInstalado = true;
+    document.addEventListener('click', function(e) {
+      if (e.target.closest && e.target.closest('[id^="exec-export-menu-"]')) return;
+      if (e.target.closest && e.target.closest('button[onclick*="_execToggleExportMenu"]')) return;
+      ['excel', 'pdf', 'periodo'].forEach(function(t) {
+        var el = document.getElementById('exec-export-menu-' + t);
+        if (el) el.style.display = 'none';
+      });
+    });
+  }
+
+  // ⚠️ AGREGADO — paso 2 del flujo de exportar: una vez elegido el
+  // alcance (nacional/planta), se muestra el período a exportar — un
+  // paso independiente de lo que el usuario tenga elegido en las
+  // gráficas de pantalla (window._execPeriod), tal como se pidió.
+  window._execExportPasoAlcance = function(tipo, alcance) {
+    ['excel', 'pdf'].forEach(function(t) {
+      var el = document.getElementById('exec-export-menu-' + t);
+      if (el) el.style.display = 'none';
+    });
+    var menu = document.getElementById('exec-export-menu-periodo');
+    if (!menu) return;
+    var opciones = [
+      { val: 'hoy', label: '📅 Solo hoy', sub: 'Foto del cierre más reciente' },
+      { val: '7',   label: '📆 Últimos 7 días', sub: 'Resumen + detalle día por día' },
+      { val: '15',  label: '📆 Últimos 15 días', sub: 'Resumen + detalle día por día' },
+      { val: '30',  label: '📆 Últimos 30 días', sub: 'Resumen + detalle día por día' }
+    ];
+    menu.innerHTML = opciones.map(function(o, i) {
+      return '<button onclick="window._execToggleExportMenu(\'\');document.getElementById(\'exec-export-menu-periodo\').style.display=\'none\';window._exec' + (tipo==='excel'?'ExportExcel':'ExportPDF') + '(\'' + alcance + '\',\'' + o.val + '\')" '
+        + 'style="display:block;width:100%;text-align:left;padding:9px 14px;background:none;border:none;cursor:pointer;font-size:12px;font-weight:600;color:var(--txt)' + (i>0?';border-top:1px solid var(--bdr)':'') + '">'
+        + o.label + '<br><span style="font-size:9.5px;font-weight:400;color:var(--txt3)">' + o.sub + '</span></button>';
+    }).join('');
+    menu.style.display = 'block';
+  };
+
+  window._execExportExcel = async function(scope, periodo) {
     // ⚠️ CAMBIADO A ExcelJS — SheetJS (usado en el resto del dashboard)
     // no soporta escribir imágenes ni estilos de celda reales en el
     // .xlsx (solo la versión de pago lo permite). ExcelJS sí lo hace,
@@ -22242,16 +22386,36 @@ function renderVistaEjecutivaSimple() {
       }
       if (btnExcel) { btnExcel.disabled = false; btnExcel.innerHTML = txtOriginal; }
     }
-    var filasNac = _execReporteFilasNacional([fechaHoy]);
-    if (!filasNac.length) { alert('No hay datos de inventario para el día ' + fechaHoy + '.'); return; }
+    var _plantaScopeXls = (window._execPlanta && window._execPlanta !== 'Nacional') ? window._execPlanta : null;
+    // ⚠️ AGREGADO — período de exportación: paso independiente del
+    // selector de 7/15/30 días de las gráficas de pantalla. 'hoy' = un
+    // solo día (fechaHoy); en otro caso, los últimos N días con datos
+    // disponibles.
+    var _diasExport = (!periodo || periodo === 'hoy') ? [fechaHoy] : (DATES || []).slice(-(parseInt(periodo, 10) || 1));
+    var filasNac = _execReporteFilasNacional(_diasExport);
+    // ⚠️ AGREGADO — alcance del reporte: si el usuario eligió "solo la
+    // planta seleccionada", se filtra sobre el mismo conjunto de datos
+    // ya armado (con el combo Talara+Refinería y el arrastre ya
+    // aplicados) — no se recalcula nada aparte, solo se recorta. Se
+    // incluyen TODOS los productos de esa planta (no solo el que
+    // estuviera elegido en pantalla) — un reporte de "solo un
+    // producto" no tendría sentido como reporte de planta.
+    if (scope === 'planta' && _plantaScopeXls) {
+      filasNac = filasNac.filter(function(r) { return r.planta === _plantaScopeXls; });
+    }
+    if (!filasNac.length) { alert('No hay datos de inventario para el período elegido' + (scope === 'planta' ? (' en ' + (_plantaScopeXls||'')) : '') + '.'); return; }
 
     var AZUL = 'FF0A3A5C', AZUL2 = 'FF1E3A8A', NARANJA = 'FFC2410C', ROJO_CRIT = 'FFFCA5A5', GRIS_ALT = 'FFF8FAFC';
     var wb = new ExcelJS.Workbook();
     wb.creator = 'Petroperú S.A. — Planificación de Suministro';
     wb.created = new Date();
-    var ws = wb.addWorksheet('Detalle Nacional', { views: [{ state: 'frozen', ySplit: 8 }] });
+    var ws = wb.addWorksheet('Detalle Nacional', { views: [{ state: 'frozen', ySplit: 6 }] });
+    // ⚠️ AGREGADO — columna de Fecha al inicio (siempre presente, incluso
+    // para "solo hoy") — así el reporte queda consistente sin importar
+    // el período elegido, y sirve para ordenar/filtrar por fecha cuando
+    // son varios días.
     ws.columns = [
-      { width: 22 }, { width: 16 }, { width: 16 }, { width: 16 }, { width: 18 }, { width: 16 }, { width: 44 }
+      { width: 13 }, { width: 22 }, { width: 16 }, { width: 16 }, { width: 16 }, { width: 18 }, { width: 16 }, { width: 44 }
     ];
 
     // ── Logo + encabezado (filas 1-3, con la imagen a la izquierda) ──
@@ -22267,82 +22431,138 @@ function renderVistaEjecutivaSimple() {
       var imgId = wb.addImage({ base64: logoBase64Crudo, extension: 'jpeg' });
       ws.addImage(imgId, { tl: { col: 0.15, row: 0.15 }, ext: { width: 54, height: 54 } });
     } catch (eImg) { console.warn('[Excel] logo no se pudo insertar:', eImg.message); }
-    ws.mergeCells('B1:G1');
+    ws.mergeCells('B1:H1');
     ws.getCell('B1').value = 'PETRÓLEOS DEL PERÚ S.A. — PETROPERÚ';
     ws.getCell('B1').font = { bold: true, size: 14, color: { argb: AZUL } };
-    ws.mergeCells('B2:G2');
+    ws.mergeCells('B2:H2');
     ws.getCell('B2').value = 'Planificación de Suministro · Detalle Nacional de Inventarios y Despachos';
     ws.getCell('B2').font = { size: 11, color: { argb: 'FF475569' } };
-    ws.mergeCells('B3:G3');
-    ws.getCell('B3').value = 'Al cierre del ' + fechaHoy.slice(8,10) + '.' + fechaHoy.slice(5,7) + '.' + fechaHoy.slice(0,4) + '   ·   Generado: ' + new Date().toLocaleString('es-PE');
+    ws.mergeCells('B3:H3');
+    ws.getCell('B3').value = (_diasExport.length > 1
+        ? ('Del ' + _diasExport[0].slice(8,10)+'.'+_diasExport[0].slice(5,7)+'.'+_diasExport[0].slice(0,4) + ' al ' + fechaHoy.slice(8,10)+'.'+fechaHoy.slice(5,7)+'.'+fechaHoy.slice(0,4))
+        : ('Al cierre del ' + fechaHoy.slice(8,10) + '.' + fechaHoy.slice(5,7) + '.' + fechaHoy.slice(0,4)))
+      + '   ·   Generado: ' + new Date().toLocaleString('es-PE');
     ws.getCell('B3').font = { size: 10, italic: true, color: { argb: 'FF64748B' } };
     for (var rr = 1; rr <= 3; rr++) ws.getRow(rr).height = 20;
 
     // ── Franja de acento naranja (fila 4) — mismo detalle de marca que
     // usa el resto del dashboard (borde inferior naranja del banner).
-    ws.mergeCells('A4:G4');
+    ws.mergeCells('A4:H4');
     ws.getCell('A4').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: NARANJA } };
     ws.getRow(4).height = 4;
 
     // ── Cabecera de la tabla (fila 6, con una fila 5 en blanco de aire) ──
     var headerRowIdx = 6;
     var headerRow = ws.getRow(headerRowIdx);
-    ['Planta', 'Producto', 'Inventario (MB)', 'Despacho (MB/d)', 'Pronóstico (MBDC)', 'Cobertura (días)', 'Comentarios'].forEach(function(t, i) {
+    ['Fecha', 'Planta', 'Producto', 'Inventario (MB)', 'Despacho (MB/d)', 'Pronóstico (MBDC)', 'Cobertura (días)', 'Comentarios'].forEach(function(t, i) {
       var cell = headerRow.getCell(i + 1);
       cell.value = t;
       cell.font = { bold: true, color: { argb: 'FFFFFFFF' } };
       cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: AZUL2 } };
-      cell.alignment = { vertical: 'middle', horizontal: i >= 2 && i <= 5 ? 'right' : 'left' };
+      cell.alignment = { vertical: 'middle', horizontal: i >= 3 && i <= 6 ? 'right' : 'left' };
       cell.border = { bottom: { style: 'thin', color: { argb: 'FFFFFFFF' } } };
     });
     headerRow.height = 20;
 
     // ── Filas de datos, con fila alternada y resaltado rojo en cobertura
     // crítica — MISMO criterio que Vista Ejecutiva (cobColor()): ≤7 días.
+    // Ordenadas por fecha y luego por planta/producto, para que un
+    // reporte de varios días se lea de forma natural.
+    filasNac.sort(function(a, b) {
+      if (a.fecha !== b.fecha) return a.fecha < b.fecha ? -1 : 1;
+      if (a.planta !== b.planta) return a.planta < b.planta ? -1 : 1;
+      return a.producto < b.producto ? -1 : (a.producto > b.producto ? 1 : 0);
+    });
     filasNac.forEach(function(f, i) {
       var row = ws.getRow(headerRowIdx + 1 + i);
       var critico = f.cob !== null && f.cob !== undefined && f.cob <= 7;
-      var vals = [f.planta, f.producto, parseFloat(f.inv.toFixed(DEC)), f.desp > 0 ? parseFloat(f.desp.toFixed(DEC)) : null, f.pron > 0 ? parseFloat(f.pron.toFixed(DEC)) : null, f.cob !== null ? f.cob : null, f.comentario || ''];
+      var vals = [f.fecha, f.planta, f.producto, parseFloat(f.inv.toFixed(DEC)), f.desp > 0 ? parseFloat(f.desp.toFixed(DEC)) : null, f.pron > 0 ? parseFloat(f.pron.toFixed(DEC)) : null, f.cob !== null ? f.cob : null, f.comentario || ''];
       vals.forEach(function(v, ci) {
         var cell = row.getCell(ci + 1);
         cell.value = v;
-        cell.alignment = { horizontal: ci >= 2 && ci <= 5 ? 'right' : 'left', vertical: 'middle' };
+        cell.alignment = { horizontal: ci >= 3 && ci <= 6 ? 'right' : 'left', vertical: 'middle' };
         cell.border = { bottom: { style: 'hair', color: { argb: 'FFE2E8F0' } } };
         if (!critico) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: i % 2 ? GRIS_ALT : 'FFFFFFFF' } };
       });
       if (critico) {
         row.eachCell(function(cell) { cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: ROJO_CRIT } }; });
-        row.getCell(6).font = { bold: true };
+        row.getCell(7).font = { bold: true };
       }
     });
 
-    ws.autoFilter = { from: { row: headerRowIdx, column: 1 }, to: { row: headerRowIdx, column: 7 } };
+    ws.autoFilter = { from: { row: headerRowIdx, column: 1 }, to: { row: headerRowIdx, column: 8 } };
 
     var buffer = await wb.xlsx.writeBuffer();
     var blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
     var url = URL.createObjectURL(blob);
-    var nombre = ('Reporte_Suministro_Nacional_' + fechaHoy).replace(/[^a-zA-Z0-9._-]/g, '_');
+    var nombre = ('Reporte_Suministro_' + (scope === 'planta' && _plantaScopeXls ? _plantaScopeXls : 'Nacional') + '_' + (periodo && periodo !== 'hoy' ? periodo+'d_' : '') + fechaHoy).replace(/[^a-zA-Z0-9._-]/g, '_');
     var a = document.createElement('a');
     a.href = url; a.download = nombre + '.xlsx';
     document.body.appendChild(a); a.click(); document.body.removeChild(a);
     URL.revokeObjectURL(url);
   };
-  window._execExportPDF = function() {
-    // ⚠️ SIMPLIFICADO — antes el reporte cubría todo el rango de fechas
-    // del selector de período (7/15/30 días o el mes completo), lo cual
-    // mezclaba días proyectados/no cerrados con días reales y hacía el
-    // documento muy largo. Ahora el reporte es SIEMPRE una foto del
-    // "día elegido" (fechaHoy — por defecto el último día con cierre
-    // real, ver corrección de fecha por defecto) — la información de
-    // los demás días no se incluye.
-    var filasNacPdf = _execReporteFilasNacional([fechaHoy]);
-    if (!filasNacPdf.length) { alert('No hay datos de inventario para el día ' + fechaHoy + '.'); return; }
+  window._execExportPDF = function(scope, periodo) {
+    // ⚠️ AGREGADO — período de exportación: paso independiente del
+    // selector de 7/15/30 días de las gráficas de pantalla.
+    var _diasExportPdf = (!periodo || periodo === 'hoy') ? [fechaHoy] : (DATES || []).slice(-(parseInt(periodo, 10) || 1));
+    var _esMultiDia = _diasExportPdf.length > 1;
+    var _plantaScope = (window._execPlanta && window._execPlanta !== 'Nacional') ? window._execPlanta : null;
+    var filasNacPdf = _execReporteFilasNacional(_diasExportPdf);
+    if (scope === 'planta' && _plantaScope) {
+      filasNacPdf = filasNacPdf.filter(function(r) { return r.planta === _plantaScope; });
+    }
+    if (!filasNacPdf.length) { alert('No hay datos de inventario para el período elegido' + (scope === 'planta' ? (' en ' + (_plantaScope||'')) : '') + '.'); return; }
+
+    // ── Resumen del Período — SOLO cuando se exportan varios días.
+    // Mín/máx/promedio de inventario y cobertura mínima por
+    // planta+producto durante todo el rango — para leer la tendencia
+    // sin tener que revisar el detalle día por día.
+    var resumenPeriodoHTML = '';
+    if (_esMultiDia) {
+      var porCombo = {};
+      filasNacPdf.forEach(function(f) {
+        var k = f.planta + '|' + f.producto;
+        (porCombo[k] = porCombo[k] || []).push(f);
+      });
+      var combosPeriodo = Object.keys(porCombo).sort();
+      var filasPeriodoHTML = combosPeriodo.map(function(k, i) {
+        var arr = porCombo[k];
+        var invs = arr.map(function(f){ return f.inv; });
+        var cobs = arr.filter(function(f){ return f.cob !== null && f.cob !== undefined; }).map(function(f){ return f.cob; });
+        var invMin = Math.min.apply(null, invs), invMax = Math.max.apply(null, invs);
+        var invProm = invs.reduce(function(s,v){ return s+v; }, 0) / invs.length;
+        var cobMin = cobs.length ? Math.min.apply(null, cobs) : null;
+        var critico = cobMin !== null && cobMin <= 7;
+        var partes = k.split('|');
+        return '<tr style="background:' + (critico ? '#fca5a5' : (i % 2 ? '#f8fafc' : '#fff')) + '">'
+          + '<td style="padding:5px 10px;font-weight:700;color:#0a3a5c">' + partes[0] + '</td>'
+          + '<td style="padding:5px 10px;color:#334155">' + partes[1] + '</td>'
+          + '<td style="padding:5px 10px;text-align:right">' + invMin.toFixed(DEC) + '</td>'
+          + '<td style="padding:5px 10px;text-align:right">' + invMax.toFixed(DEC) + '</td>'
+          + '<td style="padding:5px 10px;text-align:right">' + invProm.toFixed(DEC) + '</td>'
+          + '<td style="padding:5px 10px;text-align:right;font-weight:800;color:' + (critico?'#dc2626':'#334155') + '">' + (cobMin !== null ? cobMin + 'd' : '—') + '</td>'
+          + '</tr>';
+      }).join('');
+      resumenPeriodoHTML =
+        '<div style="margin:22px 0 14px">'
+        +   '<div style="font-size:15px;font-weight:800;color:#0a3a5c;margin-bottom:2px">📈 Resumen del Período — ' + _diasExportPdf[0].slice(8,10)+'.'+_diasExportPdf[0].slice(5,7) + ' al ' + fechaHoy.slice(8,10)+'.'+fechaHoy.slice(5,7) + '</div>'
+        +   '<div style="font-size:10.5px;color:#64748b;margin-bottom:10px">Inventario mínimo/máximo/promedio y cobertura mínima observada durante el período · <span style="background:#fca5a5;padding:1px 8px;border-radius:3px;font-weight:700">Cobertura Crítico ≤ 7 días</span></div>'
+        +   '<table><thead><tr style="background:#3b5f8a;color:#fff">'
+        +     '<th style="padding:7px 10px;text-align:left">Planta</th>'
+        +     '<th style="padding:7px 10px;text-align:left">Producto</th>'
+        +     '<th style="padding:7px 10px;text-align:right">Inv. Mín (MB)</th>'
+        +     '<th style="padding:7px 10px;text-align:right">Inv. Máx (MB)</th>'
+        +     '<th style="padding:7px 10px;text-align:right">Inv. Prom (MB)</th>'
+        +     '<th style="padding:7px 10px;text-align:right">Cob. Mín</th>'
+        +   '</tr></thead><tbody>' + filasPeriodoHTML + '</tbody></table>'
+        + '</div>';
+    }
 
     // ── Resumen Nacional por Producto — tabla principal, formato
     // "Terminal x Producto" (Inventario, Despacho Reportado, Pronóstico,
     // Cobertura, Fecha Cobertura), una tabla por producto, con la fila
     // resaltada en rojo cuando la cobertura es crítica (≤5 días).
-    var resumenProductos = _execResumenNacionalPorProducto();
+    var resumenProductos = _execResumenNacionalPorProducto(scope === 'planta' ? _plantaScope : null);
     var resumenNacionalHTML = '';
     if (resumenProductos.length) {
       var tablasProductoHTML = resumenProductos.map(function(pd) {
@@ -22378,49 +22598,59 @@ function renderVistaEjecutivaSimple() {
         + tablasProductoHTML;
     }
 
-    // ── Detalle Nacional por Planta y Producto — SOLO el día elegido,
-    // agrupado por planta (con su subtotal), sin la vuelta de fecha en
-    // fecha del anexo anterior.
-    var porPlantaNac = {};
-    filasNacPdf.forEach(function(f) { (porPlantaNac[f.planta] = porPlantaNac[f.planta] || []).push(f); });
-    var plantasNac = Object.keys(porPlantaNac).sort();
-    var filasDetalleHTML = plantasNac.map(function(plNombre) {
-      var prods = porPlantaNac[plNombre];
-      var totalPlanta = prods.reduce(function(s,f){ return s+f.inv; }, 0);
-      var filasProdHTML = prods.map(function(f, i) {
-        var cobColor = f.cob === null ? '#64748b' : (f.cob <= 7 ? '#dc2626' : (f.cob <= 14 ? '#e8a000' : '#16a34a'));
-        return '<tr style="background:' + (i % 2 ? '#f8fafc' : '#fff') + '">'
-          + '<td style="padding:5px 10px 5px 26px;color:#334155">' + f.producto + '</td>'
-          + '<td style="padding:5px 10px;text-align:right">' + f.inv.toFixed(DEC) + '</td>'
-          + '<td style="padding:5px 10px;text-align:right">' + (f.desp > 0 ? f.desp.toFixed(DEC) : '—') + '</td>'
-          + '<td style="padding:5px 10px;text-align:right">' + (f.pron > 0 ? f.pron.toFixed(DEC) : '—') + '</td>'
-          + '<td style="padding:5px 10px;text-align:right;font-weight:700;color:' + cobColor + '">' + (f.cob !== null ? f.cob + 'd' : '—') + '</td>'
-          // ⚠️ CORREGIDO — vulnerabilidad XSS almacenado real: f.comentario
-          // es texto libre escrito por el operador de la planta (via
-          // comentario_prod) — se insertaba directo en el HTML sin
-          // escapar. Cualquiera con acceso a Registro Diario podía
-          // escribir código HTML/JavaScript en su comentario, que se
-          // ejecutaría en el navegador de quien viera este reporte
-          // (incluyendo administradores). escapeHtml() ya existe en el
-          // código (se usa en otros formularios) — solo faltaba
-          // aplicarlo acá.
-          + '<td style="padding:5px 10px;color:#64748b;font-size:9.5px">' + escapeHtml(f.comentario || '—') + '</td>'
-          + '</tr>';
+    // ── Detalle Nacional por Planta y Producto — agrupado por FECHA
+    // primero (cuando son varios días) y luego por planta dentro de
+    // cada fecha, con su subtotal.
+    var porFechaNac = {};
+    filasNacPdf.forEach(function(f) { (porFechaNac[f.fecha] = porFechaNac[f.fecha] || []).push(f); });
+    var fechasDetalle = Object.keys(porFechaNac).sort();
+    var bloquesFechaHTML = fechasDetalle.map(function(fch, idxFecha) {
+      var porPlantaNac = {};
+      porFechaNac[fch].forEach(function(f) { (porPlantaNac[f.planta] = porPlantaNac[f.planta] || []).push(f); });
+      var plantasNac = Object.keys(porPlantaNac).sort();
+      var filasDetalleHTML = plantasNac.map(function(plNombre) {
+        var prods = porPlantaNac[plNombre];
+        var totalPlanta = prods.reduce(function(s,f){ return s+f.inv; }, 0);
+        var filasProdHTML = prods.map(function(f, i) {
+          var cobColor = f.cob === null ? '#64748b' : (f.cob <= 7 ? '#dc2626' : (f.cob <= 14 ? '#e8a000' : '#16a34a'));
+          return '<tr style="background:' + (i % 2 ? '#f8fafc' : '#fff') + '">'
+            + '<td style="padding:5px 10px 5px 26px;color:#334155">' + f.producto + '</td>'
+            + '<td style="padding:5px 10px;text-align:right">' + f.inv.toFixed(DEC) + '</td>'
+            + '<td style="padding:5px 10px;text-align:right">' + (f.desp > 0 ? f.desp.toFixed(DEC) : '—') + '</td>'
+            + '<td style="padding:5px 10px;text-align:right">' + (f.pron > 0 ? f.pron.toFixed(DEC) : '—') + '</td>'
+            + '<td style="padding:5px 10px;text-align:right;font-weight:700;color:' + cobColor + '">' + (f.cob !== null ? f.cob + 'd' : '—') + '</td>'
+            // ⚠️ CORREGIDO — vulnerabilidad XSS almacenado real: f.comentario
+            // es texto libre escrito por el operador de la planta (via
+            // comentario_prod) — se insertaba directo en el HTML sin
+            // escapar. Cualquiera con acceso a Registro Diario podía
+            // escribir código HTML/JavaScript en su comentario, que se
+            // ejecutaría en el navegador de quien viera este reporte
+            // (incluyendo administradores). escapeHtml() ya existe en el
+            // código (se usa en otros formularios) — solo faltaba
+            // aplicarlo acá.
+            + '<td style="padding:5px 10px;color:#64748b;font-size:9.5px">' + escapeHtml(f.comentario || '—') + '</td>'
+            + '</tr>';
+        }).join('');
+        return '<tr><td colspan="6" style="padding:6px 10px;font-weight:800;color:#0a3a5c;background:#eef2f7;font-size:10.5px">🏭 ' + plNombre + ' <span style="font-weight:600;color:#64748b">— ' + totalPlanta.toFixed(DEC) + ' MB total</span></td></tr>' + filasProdHTML;
       }).join('');
-      return '<tr><td colspan="6" style="padding:6px 10px;font-weight:800;color:#0a3a5c;background:#eef2f7;font-size:10.5px">🏭 ' + plNombre + ' <span style="font-weight:600;color:#64748b">— ' + totalPlanta.toFixed(DEC) + ' MB total</span></td></tr>' + filasProdHTML;
+      var encabezadoFecha = _esMultiDia
+        ? '<div style="font-size:12.5px;font-weight:800;color:#fff;background:#0a3a5c;padding:6px 12px;margin-top:' + (idxFecha>0?'18':'0') + 'px;border-radius:5px">📅 ' + fch.slice(8,10)+'.'+fch.slice(5,7)+'.'+fch.slice(0,4) + '</div>'
+        : '';
+      return encabezadoFecha
+        + '<table style="margin-top:6px"><thead><tr style="background:#c7d2e0;color:#0a3a5c">'
+        +     '<th style="padding:5px 10px 5px 26px;text-align:left;font-size:9.5px">Producto</th>'
+        +     '<th style="padding:5px 10px;text-align:right;font-size:9.5px">Inventario (MB)</th>'
+        +     '<th style="padding:5px 10px;text-align:right;font-size:9.5px">Despacho (MB/d)</th>'
+        +     '<th style="padding:5px 10px;text-align:right;font-size:9.5px">Pronóstico (MBDC)</th>'
+        +     '<th style="padding:5px 10px;text-align:right;font-size:9.5px">Cobertura</th>'
+        +     '<th style="padding:5px 10px;text-align:left;font-size:9.5px">Comentarios</th>'
+        +   '</tr></thead><tbody>' + filasDetalleHTML + '</tbody></table>';
     }).join('');
     var detalleNacionalHTML =
       '<div style="page-break-before:always;padding-top:6px">'
       +   '<div style="font-size:15px;font-weight:800;color:#0a3a5c;margin-bottom:4px">📋 Detalle Nacional por Planta y Producto</div>'
-      +   '<div style="font-size:11px;color:#64748b;margin-bottom:10px">Cierre del ' + fechaHoy + '</div>'
-      +   '<table><thead><tr style="background:#c7d2e0;color:#0a3a5c">'
-      +     '<th style="padding:5px 10px 5px 26px;text-align:left;font-size:9.5px">Producto</th>'
-      +     '<th style="padding:5px 10px;text-align:right;font-size:9.5px">Inventario (MB)</th>'
-      +     '<th style="padding:5px 10px;text-align:right;font-size:9.5px">Despacho (MB/d)</th>'
-      +     '<th style="padding:5px 10px;text-align:right;font-size:9.5px">Pronóstico (MBDC)</th>'
-      +     '<th style="padding:5px 10px;text-align:right;font-size:9.5px">Cobertura</th>'
-      +     '<th style="padding:5px 10px;text-align:left;font-size:9.5px">Comentarios</th>'
-      +   '</tr></thead><tbody>' + filasDetalleHTML + '</tbody></table>'
+      +   '<div style="font-size:11px;color:#64748b;margin-bottom:10px">' + (_esMultiDia ? ('Del ' + _diasExportPdf[0] + ' al ' + fechaHoy) : ('Cierre del ' + fechaHoy)) + '</div>'
+      +   bloquesFechaHTML
       + '</div>';
 
     var invTotalDia = filasNacPdf.reduce(function(s,f){ return s+f.inv; }, 0);
@@ -22472,8 +22702,8 @@ function renderVistaEjecutivaSimple() {
       +     '<div style="text-align:right;font-size:11px;opacity:.9">Generado: ' + new Date().toLocaleString('es-PE') + '</div>'
       +   '</div>'
       +   '<div style="display:flex;justify-content:space-between;align-items:baseline;margin:16px 2px 16px;flex-wrap:wrap;gap:6px">'
-      +     '<div style="font-size:15px;font-weight:800;color:#0a3a5c">Al cierre del ' + fechaHoy.slice(8,10) + '.' + fechaHoy.slice(5,7) + '.' + fechaHoy.slice(0,4) + '</div>'
-      +     '<div style="font-size:11.5px;color:#64748b">Última fecha de cierre con datos reportados</div>'
+      +     '<div style="font-size:15px;font-weight:800;color:#0a3a5c">' + (_esMultiDia ? ('Período: ' + _diasExportPdf[0].slice(8,10)+'.'+_diasExportPdf[0].slice(5,7)+'.'+_diasExportPdf[0].slice(0,4) + ' al ' + fechaHoy.slice(8,10)+'.'+fechaHoy.slice(5,7)+'.'+fechaHoy.slice(0,4) + ' (' + _diasExportPdf.length + ' días)') : ('Al cierre del ' + fechaHoy.slice(8,10) + '.' + fechaHoy.slice(5,7) + '.' + fechaHoy.slice(0,4))) + '</div>'
+      +     '<div style="font-size:11.5px;color:#64748b">' + (_esMultiDia ? 'Última fecha del rango: fecha de cierre más reciente con datos reportados' : 'Última fecha de cierre con datos reportados') + '</div>'
       +   '</div>'
       +   '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:22px">'
       +     '<div style="background:#f0f4fb;border:1px solid #dbe4f3;border-radius:10px;padding:14px 16px">'
@@ -22489,11 +22719,21 @@ function renderVistaEjecutivaSimple() {
       +       '<div style="font-size:22px;font-weight:800;color:#0a3a5c;font-family:ui-monospace,monospace;margin-top:4px">' + (cobPromDia !== null ? cobPromDia + ' días' : '—') + '</div>'
       +     '</div>'
       +   '</div>'
+      +   resumenPeriodoHTML
       +   resumenNacionalHTML
       +   detalleNacionalHTML
       +   '<div style="margin-top:24px;padding-top:14px;border-top:1px solid #e2e8f0;font-size:9.5px;color:#94a3b8;text-align:center">Documento de uso interno · Petroperú S.A. · Planificación de Suministro</div>'
       + '</div>';
     document.body.appendChild(overlay);
+    // ⚠️ AGREGADO — el navegador sugiere el <title> del documento como
+    // nombre de archivo al "Guardar como PDF" — se cambia temporalmente
+    // para incluir la planta cuando el alcance es específico, y se
+    // restaura solo después de imprimir (mismo patrón ya usado en el
+    // reporte de inventario individual, más arriba en este archivo).
+    var _tituloOriginalPdf = document.title;
+    document.title = 'Reporte_Suministro_' + (scope === 'planta' && _plantaScope ? _plantaScope : 'Nacional') + '_' + (_esMultiDia ? (periodo+'d_') : '') + fechaHoy;
+    var _restaurarTituloPdf = function() { document.title = _tituloOriginalPdf; window.removeEventListener('afterprint', _restaurarTituloPdf); };
+    window.addEventListener('afterprint', _restaurarTituloPdf);
   };
 
   var plantaSelector = '<select id="exec-planta-select" onchange="window._execPlanta=this.value;renderVistaEjecutivaSimple();" '
@@ -22681,7 +22921,35 @@ function renderVistaEjecutivaSimple() {
         '<div class="exec-select-row" style="display:flex;gap:10px;flex-wrap:wrap">' + plantaSelector + productoSelector + '</div>' +
       '</div>' +
       volverBtn +
-      '<div class="exec-datebar-wrap" style="position:relative;z-index:500;margin-bottom:12px">' + buildDateBar('dateBarExec') + '</div>' +
+      '<div class="exec-datebar-wrap" style="position:relative;z-index:500;margin-bottom:12px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">' +
+        '<div style="flex:1;min-width:0">' + buildDateBar('dateBarExec') + '</div>' +
+        // ⚠️ AGREGADO — a pedido: los botones de exportar vivían dentro de
+        // la tarjeta "Inventario · [planta]", dando a entender que
+        // exportaban solo lo seleccionado — pero SIEMPRE exportaban el
+        // reporte nacional completo. Se movieron acá, integrados en la
+        // MISMA fila de la fecha (sin franja nueva que ocupe espacio
+        // vertical extra en celular) — 2 íconos simples, sin texto de
+        // más. Flujo de 2 pasos: primero alcance (Nacional/Planta),
+        // luego período (Hoy/7/15/30 días) — independiente de lo que
+        // el usuario tenga elegido en las gráficas de pantalla.
+        '<div style="position:relative;display:inline-block;flex-shrink:0">' +
+          '<button onclick="window._execToggleExportMenu(\'excel\')" title="Exportar a Excel" style="width:36px;height:36px;padding:6px;border-radius:8px;cursor:pointer;border:1.5px solid #1a7a44;background:#f0faf3;display:flex;align-items:center;justify-content:center"><img src="' + EXEC_ICON_XLS_B64 + '" alt="Excel" style="width:100%;height:100%;object-fit:contain"></button>' +
+          '<div id="exec-export-menu-excel" style="display:none;position:absolute;top:calc(100% + 4px);right:0;z-index:600;background:var(--card);border:1px solid var(--bdr);border-radius:8px;box-shadow:0 6px 20px rgba(0,0,0,.18);min-width:230px;overflow:hidden">' +
+            '<button onclick="window._execExportPasoAlcance(\'excel\',\'nacional\')" style="display:block;width:100%;text-align:left;padding:10px 14px;background:none;border:none;cursor:pointer;font-size:12px;font-weight:600;color:var(--txt)">🌎 Reporte Nacional<br><span style="font-size:10px;font-weight:400;color:var(--txt3)">Todas las plantas y productos</span></button>' +
+            '<button onclick="window._execExportPasoAlcance(\'excel\',\'planta\')" style="display:block;width:100%;text-align:left;padding:10px 14px;background:none;border:none;cursor:pointer;font-size:12px;font-weight:600;color:var(--txt);border-top:1px solid var(--bdr)">📍 Solo ' + (pl==='Nacional'?'la planta seleccionada':_plLabel(pl)) + '<br><span style="font-size:10px;font-weight:400;color:var(--txt3)">' + (pl==='Nacional' ? 'Elige una planta primero en el mapa o el selector' : 'Todos los productos de la planta') + '</span></button>' +
+          '</div>' +
+        '</div>' +
+        '<div style="position:relative;display:inline-block;flex-shrink:0">' +
+          '<button onclick="window._execToggleExportMenu(\'pdf\')" title="Exportar a PDF" style="width:36px;height:36px;padding:6px;border-radius:8px;cursor:pointer;border:1.5px solid #b91c1c;background:#fef2f2;display:flex;align-items:center;justify-content:center"><img src="' + EXEC_ICON_PDF_B64 + '" alt="PDF" style="width:100%;height:100%;object-fit:contain"></button>' +
+          '<div id="exec-export-menu-pdf" style="display:none;position:absolute;top:calc(100% + 4px);right:0;z-index:600;background:var(--card);border:1px solid var(--bdr);border-radius:8px;box-shadow:0 6px 20px rgba(0,0,0,.18);min-width:230px;overflow:hidden">' +
+            '<button onclick="window._execExportPasoAlcance(\'pdf\',\'nacional\')" style="display:block;width:100%;text-align:left;padding:10px 14px;background:none;border:none;cursor:pointer;font-size:12px;font-weight:600;color:var(--txt)">🌎 Reporte Nacional<br><span style="font-size:10px;font-weight:400;color:var(--txt3)">Todas las plantas y productos</span></button>' +
+            '<button onclick="window._execExportPasoAlcance(\'pdf\',\'planta\')" style="display:block;width:100%;text-align:left;padding:10px 14px;background:none;border:none;cursor:pointer;font-size:12px;font-weight:600;color:var(--txt);border-top:1px solid var(--bdr)">📍 Solo ' + (pl==='Nacional'?'la planta seleccionada':_plLabel(pl)) + '<br><span style="font-size:10px;font-weight:400;color:var(--txt3)">' + (pl==='Nacional' ? 'Elige una planta primero en el mapa o el selector' : 'Todos los productos de la planta') + '</span></button>' +
+          '</div>' +
+        '</div>' +
+        // Paso 2 (período) — oculto por defecto, se rellena y muestra
+        // desde _execExportPasoAlcance() una vez elegido el alcance.
+        '<div id="exec-export-menu-periodo" style="display:none;position:absolute;top:calc(100% + 4px);right:0;z-index:601;background:var(--card);border:1px solid var(--bdr);border-radius:8px;box-shadow:0 6px 20px rgba(0,0,0,.18);min-width:200px;overflow:hidden"></div>' +
+      '</div>' +
       // ── KPIs de Inventario/Despacho — antes vivían debajo del header y
       // desaparecían al hacer scroll; ahora quedan DENTRO del bloque
       // sticky (visibles todo el tiempo), en versión compacta para no
@@ -22766,10 +23034,6 @@ function renderVistaEjecutivaSimple() {
       '</div>' +
       mesesSelectorBar +
       '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:10px">' +
-        '<span style="font-size:10px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.4px">📊 Reporte del período:</span>' +
-        '<button onclick="window._execExportExcel()" style="padding:6px 14px;border-radius:7px;font-size:11.5px;font-weight:700;cursor:pointer;border:1.5px solid #1a7a44;background:#f0faf3;color:#1a7a44">📗 Excel</button>' +
-        '<button onclick="window._execExportPDF()" style="padding:6px 14px;border-radius:7px;font-size:11.5px;font-weight:700;cursor:pointer;border:1.5px solid #b91c1c;background:#fef2f2;color:#b91c1c">📕 PDF</button>' +
-      '</div>' +
       '<div class="exec-chart-wrap" style="position:relative;height:220px"><canvas id="exec-chart-inv"></canvas></div>' +
     '</div>' +
     (esRefineriaExec ? '' :
