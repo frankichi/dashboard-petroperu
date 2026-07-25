@@ -22082,6 +22082,20 @@ function renderVistaEjecutivaSimple() {
   // función SIEMPRE recorre el universo completo — necesario porque el
   // reporte gerencial debe reflejar el detalle de todas las
   // instalaciones, no solo la que se esté viendo en ese momento.
+  // ⚠️ AGREGADO — mapear cada planta "cruda" de un registro a su nombre
+  // CANÓNICO de combo (ej. "Refinería Talara" → "Talara") antes de armar
+  // el universo de combos — sin esto, la exportación mostraba "Talara" y
+  // "Refinería Talara" como dos filas separadas, en vez de una sola fila
+  // combinada (el criterio oficial que ya usa el resto de Vista
+  // Ejecutiva vía COMBO_PLANTAS/filaAplica/sumFecha).
+  function _comboCanonico(rawPlanta) {
+    for (var key in COMBO_PLANTAS) {
+      if (COMBO_PLANTAS[key].plantasInv.indexOf(rawPlanta) !== -1) {
+        return key.indexOf('__COMBO_') === 0 ? COMBO_PLANTAS[key].plantaDespacho : key;
+      }
+    }
+    return rawPlanta;
+  }
   function _execReporteFilasNacional(fechasOverride) {
     var fechas = fechasOverride || _execReporteFechas();
     if (!fechas.length) return [];
@@ -22097,7 +22111,8 @@ function renderVistaEjecutivaSimple() {
       if (!r.fecha || !fechaSet[r.fecha]) return;
       if (typeof SKIP_COMBOS !== 'undefined' && SKIP_COMBOS.has((r.planta||'')+'|'+(r.producto||''))) return;
       if (typeof PLANTAS_DUPLICADAS_EN_REFINERIA !== 'undefined' && PLANTAS_DUPLICADAS_EN_REFINERIA.indexOf(r.planta) !== -1) return;
-      combosMap[r.planta + '|' + r.producto] = { planta: r.planta, producto: r.producto };
+      var plantaCanon = _comboCanonico(r.planta);
+      combosMap[plantaCanon + '|' + r.producto] = { planta: plantaCanon, producto: r.producto };
     });
     var combos = Object.keys(combosMap).map(function(k){ return combosMap[k]; }).sort(function(a, b) {
       if (a.planta !== b.planta) return a.planta < b.planta ? -1 : 1;
