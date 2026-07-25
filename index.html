@@ -22106,9 +22106,19 @@ function renderVistaEjecutivaSimple() {
     // datos (no de una lista fija a mano) para no desactualizarse nunca,
     // y respeta las mismas exclusiones de combos que ya usa el resto del
     // sistema (plantas duplicadas de refinería, combos inválidos, etc.).
+    // ⚠️ CORREGIDO — bug real confirmado con un PDF exportado real:
+    // faltaban Callao, Conchán, Piura, Eten, Salaverry, Chimbote, Supe y
+    // Mollendo en el detalle nacional. Causa: este universo de combos
+    // solo se armaba con filas que tuvieran fecha EXACTA dentro del
+    // rango pedido — cualquier planta que no hubiera cerrado justo esos
+    // días quedaba totalmente afuera, aunque sumFecha() sí sepa arrastrar
+    // su último dato real (ver más arriba). Ahora el universo se arma
+    // con TODA la historia disponible en RAW, sin filtrar por fecha —
+    // sumFecha() ya se encarga de traer el valor correcto (real o
+    // arrastrado) para la fecha específica que se está exportando.
     var combosMap = {};
     RAW.forEach(function(r) {
-      if (!r.fecha || !fechaSet[r.fecha]) return;
+      if (!r.fecha) return;
       if (typeof SKIP_COMBOS !== 'undefined' && SKIP_COMBOS.has((r.planta||'')+'|'+(r.producto||''))) return;
       if (typeof PLANTAS_DUPLICADAS_EN_REFINERIA !== 'undefined' && PLANTAS_DUPLICADAS_EN_REFINERIA.indexOf(r.planta) !== -1) return;
       var plantaCanon = _comboCanonico(r.planta);
