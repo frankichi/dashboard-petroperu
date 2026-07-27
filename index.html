@@ -22862,7 +22862,7 @@ function renderVistaEjecutivaSimple() {
           ? '<span style="font-size:8.5px;font-weight:800;color:#2563eb;font-style:italic;display:inline-flex;align-items:center;gap:3px" title="Planta aún no reporta hoy — inventario estimado con el último real menos consumo por demanda pronóstico">≈ proyectado</span>'
           : '<span style="font-size:8.5px;font-weight:800;color:var(--ora);display:inline-flex;align-items:center;gap:3px" title="Planta aún no reporta hoy y no hay demanda pronóstico cargada para proyectar — se muestra el último dato real, sin actualizar">⚠ sin cierre ni proyección</span>';
       return '<button onclick="window._execPlanta=\'' + p + '\';renderVistaEjecutivaSimple();" '
-        + 'style="text-align:left;padding:12px 14px;border-radius:10px;border:1px solid var(--bdr);background:var(--card);cursor:pointer;transition:border-color .15s" '
+        + 'style="flex:1 1 150px;min-width:150px;text-align:left;padding:12px 14px;border-radius:10px;border:1px solid var(--bdr);background:var(--card);cursor:pointer;transition:border-color .15s" '
         + 'onmouseover="this.style.borderColor=\'#0a3a5c\'" onmouseout="this.style.borderColor=\'var(--bdr)\'">'
         + '<div style="font-size:11.5px;font-weight:800;color:var(--txt);margin-bottom:3px">' + (esRef?'🛢️':'🏭') + ' ' + p + '</div>'
         + '<div style="font-size:15px;font-weight:800;font-family:var(--mono);color:var(--acc2)">' + fmtMB(invP) + '</div>'
@@ -22890,10 +22890,17 @@ function renderVistaEjecutivaSimple() {
       + (nSinProy > 0 ? '<span style="color:var(--ora)">\u26a0 ' + nSinProy + ' sin cierre ni proyecci\u00f3n</span>' : '')
       + '</div>';
     plantasGridHTML =
-      '<div style="margin:8px 0 28px">' +
+      '<div style="margin:8px 0 28px;width:100%;box-sizing:border-box">' +
         '<div style="font-size:11px;font-weight:800;color:var(--txt3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">Ver detalle por planta / terminal / refinería</div>' +
         resumenCierreHTML +
-        '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px">' + cards + '</div>' +
+        // ⚠️ CAMBIADO — de CSS Grid (auto-fit) a Flexbox: en pantallas
+        // anchas, la grilla dejaba un espacio vacío a la derecha en vez
+        // de estirar las tarjetas existentes para llenarlo (caso real
+        // confirmado con captura de pantalla). Flexbox con flex-grow es
+        // un mecanismo más directo para "llenar el espacio restante" —
+        // cada tarjeta crece proporcionalmente hasta ocupar todo el
+        // ancho disponible, sin dejar ninguna columna vacía.
+        '<div style="display:flex;flex-wrap:wrap;gap:10px;width:100%">' + cards + '</div>' +
       '</div>';
   }
 
