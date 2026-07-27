@@ -3491,14 +3491,16 @@ function selectDate(fecha) {
   if (typeof updateEventTicker === 'function') updateEventTicker();
 }
 function navDate(dir) {
-  const idx = DATES.indexOf(currentDate);
+  var idx = DATES.indexOf(currentDate);
+  if (idx === -1 && currentDate && currentDate > (DATES[DATES.length-1]||'')) idx = DATES.length; // "hoy" sin cierre todavía
   const newIdx = idx + dir;
   if (newIdx < 0 || newIdx >= DATES.length) return;
   selectDate(DATES[newIdx]);
 }
 function onDateInputChange(val) {
   if (!val) return;
-  if (DATES.includes(val)) { selectDate(val); return; }
+  var _hoyReal = new Date().toISOString().slice(0, 10);
+  if (DATES.includes(val) || val === _hoyReal) { selectDate(val); return; }
   var earlier = DATES.filter(function(d) { return d <= val; }).pop();
   var later = DATES.find(function(d) { return d > val; });
   var closest = earlier || later;
@@ -3519,11 +3521,14 @@ function onDateInputChange(val) {
 }
 function buildDateBar(containerId) {
   if (!DATES.length) return '';
-  const curIdx = DATES.indexOf(currentDate);
+  const curIdx = currentDate && !DATES.includes(currentDate) && currentDate > (DATES[DATES.length-1]||'')
+    ? DATES.length // "hoy" sin cierre todavía — se trata como una posición después de la última fecha cerrada
+    : DATES.indexOf(currentDate);
   const prevDisabled = curIdx <= 0 ? 'disabled' : '';
-  const nextDisabled = curIdx >= DATES.length - 1 ? 'disabled' : '';
+  const nextDisabled = curIdx >= DATES.length ? 'disabled' : '';
   const minDate = DATES[0];
-  const maxDate = DATES[DATES.length - 1];
+  const _hoyReal = new Date().toISOString().slice(0, 10);
+  const maxDate = DATES[DATES.length - 1] > _hoyReal ? DATES[DATES.length - 1] : _hoyReal;
   const curLabel = (currentDate && /^\d{4}-\d{2}-\d{2}$/.test(currentDate))
     ? _fechaCurrenteSegura().toLocaleDateString('es-PE', {weekday:'short', day:'2-digit', month:'short', year:'numeric'})
     : '—';
@@ -3536,8 +3541,10 @@ function buildDateBar(containerId) {
           class="date-input"
           id="dateInput_${containerId}"
           value="${currentDate || ''}"
+          min="${minDate || ''}"
+          max="${maxDate || ''}"
           onchange="onDateInputChange(this.value)"
-          title="Seleccionar fecha">
+          title="Seleccionar fecha (limitado a fechas con datos subidos por las plantas)">
         <button class="date-nav-btn" onclick="navDate(1)" ${nextDisabled} title="Día siguiente">›</button>
       </div>
       <div class="date-badge">📊 ${curLabel}</div>
@@ -3551,10 +3558,12 @@ function syncAllDateBars() {
     if (input) input.value = currentDate || '';
     const bar = document.getElementById(id);
     if (!bar) return;
-    const curIdx = DATES.indexOf(currentDate);
+    const curIdx = currentDate && !DATES.includes(currentDate) && currentDate > (DATES[DATES.length-1]||'')
+      ? DATES.length
+      : DATES.indexOf(currentDate);
     const btns = bar.querySelectorAll('.date-nav-btn');
     if (btns[0]) btns[0].disabled = curIdx <= 0;
-    if (btns[1]) btns[1].disabled = curIdx >= DATES.length - 1;
+    if (btns[1]) btns[1].disabled = curIdx >= DATES.length;
     const badge = bar.querySelector('.date-badge');
     if (badge) {
       const curLabel = (currentDate && /^\d{4}-\d{2}-\d{2}$/.test(currentDate))
@@ -23321,6 +23330,32 @@ function _execMapaDatos(fecha) {
     idx[k].sort(function(a, b) { return a.fecha < b.fecha ? -1 : (a.fecha > b.fecha ? 1 : 0); });
   });
 
+  // ⚠️ AGREGADO — a pedido: la proyección no debe limitarse solo a
+  // "hoy" — si una planta lleva 2-3 días sin cerrar, también conviene
+  // mostrar un estimado (no simplemente el último dato congelado),
+  // hasta que logre cerrar y se establezca el inventario definitivo.
+  // Más allá de esa ventana, dejar de proyectar (evita el mismo
+  // problema de decaimiento indefinido que causó el caso Salaverry).
+  var VENTANA_PROYECCION_DIAS = 3;
+  function _diasHabilesEntre(fechaDesde, fechaHasta) {
+    // Cuenta los días de consumo real entre dos fechas (exclusivo del
+    // primero, inclusive del segundo) — los feriados/domingos NO restan
+    // consumo, ya que normalmente no hay despacho esos días.
+    var p1 = fechaDesde.split('-').map(Number), p2 = fechaHasta.split('-').map(Number);
+    var d1 = Date.UTC(p1[0], p1[1] - 1, p1[2]), d2 = Date.UTC(p2[0], p2[1] - 1, p2[2]);
+    var totalDias = Math.round((d2 - d1) / 86400000);
+    if (totalDias <= 0) return 0;
+    var habiles = 0;
+    for (var i = 1; i <= totalDias; i++) {
+      var dt = new Date(d1 + i * 86400000);
+      var fechaIter = dt.toISOString().slice(0, 10);
+      var esDomingo = dt.getUTCDay() === 0;
+      var esFeriado = (typeof _execEsFeriado === 'function') && !!_execEsFeriado(fechaIter);
+      if (!esDomingo && !esFeriado) habiles++;
+    }
+    return habiles;
+  }
+  var _hoyCalendario = new Date().toISOString().slice(0, 10);
   function arrastrarLocal(planta, producto, fechaObjetivo) {
     var arr = idx[planta + '|' + producto];
     if (!arr || !arr.length) return null;
@@ -23332,15 +23367,18 @@ function _execMapaDatos(fecha) {
     if (best < 0) return null;
     var r = arr[best];
     if (r.fecha === fechaObjetivo) return r;
-    // ⚠️ CORREGIDO — bug real confirmado (caso Salaverry): antes se
-    // proyectaba el consumo día a día desde el último reporte real
-    // (restando el pronóstico por cada día sin cerrar), y esa proyección
-    // podía llegar hasta 0 — mostrando "0.0" en TODOS los productos de
-    // una planta que en realidad sí tenía inventario, solo que
-    // desactualizado. Ahora se muestra el último dato REAL tal cual
-    // (sin proyectar), marcado con `_fechaDatoReal` para que el popup
-    // avise claramente que es un dato de una fecha anterior, no
-    // inventado ni calculado.
+    // Días corridos (calendario) entre el último cierre real y la fecha
+    // consultada — determina si entra dentro de la ventana de proyección.
+    var p1c = r.fecha.split('-').map(Number), p2c = fechaObjetivo.split('-').map(Number);
+    var diasCorridos = Math.round((Date.UTC(p2c[0],p2c[1]-1,p2c[2]) - Date.UTC(p1c[0],p1c[1]-1,p1c[2])) / 86400000);
+    if (diasCorridos > 0 && diasCorridos <= VENTANA_PROYECCION_DIAS) {
+      var pronVal = r.pron_mes || r.pron || 0;
+      if (pronVal > 0) {
+        var diasHabiles = _diasHabilesEntre(r.fecha, fechaObjetivo);
+        var invProy = Math.max(0, (r.inv || 0) - diasHabiles * pronVal);
+        return Object.assign({}, r, { inv: invProy, _proyectadoConsumo: true, _fechaDatoReal: r.fecha });
+      }
+    }
     return Object.assign({}, r, { _fechaDatoReal: r.fecha });
   }
 
@@ -23364,7 +23402,7 @@ function _execMapaDatos(fecha) {
       if (cobDias > 90) cobDias = 0; // outlier — mismo guard que el resto del sistema
     }
     var rep = _execReposicionInfo(r, fecha, arrastrarLocal);
-    porInstalacion[planta].productos.push({ producto: producto, existencia: r.inv || 0, despReal: despReal, pron: pronVal, cob: cobDias, repos: rep, fechaDatoReal: r._fechaDatoReal || null });
+    porInstalacion[planta].productos.push({ producto: producto, existencia: r.inv || 0, despReal: despReal, pron: pronVal, cob: cobDias, repos: rep, fechaDatoReal: r._fechaDatoReal || null, proyectado: !!r._proyectadoConsumo });
     if (!esRef && cobDias > 0 && cobDias < porInstalacion[planta].minCob) porInstalacion[planta].minCob = cobDias;
   });
 
@@ -23406,7 +23444,9 @@ function _execFichaTabla(planta, info, esRef) {
       var cobTxt = esRef ? '—' : (p.cob > 0 ? p.cob + 'd' : '—');
       var cobCol = esRef ? '#94a3b8' : _execCobColor(p.cob);
       var faded = p.sinDato ? 'opacity:.45' : '';
-      var etiquetaFecha = p.fechaDatoReal ? ('<span title="Último dato reportado: ' + p.fechaDatoReal.slice(8,10)+'.'+p.fechaDatoReal.slice(5,7) + ' — la planta no ha cerrado un reporte más reciente" style="font-size:8px;font-weight:700;color:#b45309;background:#fef3c7;padding:1px 4px;border-radius:3px;margin-left:5px;white-space:nowrap">⏱ ' + p.fechaDatoReal.slice(8,10)+'.'+p.fechaDatoReal.slice(5,7) + '</span>') : '';
+      var etiquetaFecha = p.proyectado
+        ? '<span title="Estimado: último cierre real (' + (p.fechaDatoReal?p.fechaDatoReal.slice(8,10)+'.'+p.fechaDatoReal.slice(5,7):'') + ') menos el consumo pronosticado hasta hoy — la planta aún no cierra el día de hoy" style="font-size:8px;font-weight:700;color:#1e40af;background:#dbeafe;padding:1px 4px;border-radius:3px;margin-left:5px;white-space:nowrap">≈ proyectado</span>'
+        : (p.fechaDatoReal ? ('<span title="Último dato reportado: ' + p.fechaDatoReal.slice(8,10)+'.'+p.fechaDatoReal.slice(5,7) + ' — la planta no ha cerrado un reporte más reciente" style="font-size:8px;font-weight:700;color:#b45309;background:#fef3c7;padding:1px 4px;border-radius:3px;margin-left:5px;white-space:nowrap">⏱ ' + p.fechaDatoReal.slice(8,10)+'.'+p.fechaDatoReal.slice(5,7) + '</span>') : '');
       return '<div style="display:flex;align-items:center;padding:4px 8px;border-bottom:1px solid #f1f5f9;' + faded + '">' +
         '<div style="flex:1.3;font-weight:700;color:#0f1e3c;display:flex;align-items:center;flex-wrap:wrap">' + p.producto + etiquetaFecha + '</div>' +
         '<div style="flex:1;text-align:right;font-family:ui-monospace,monospace">' + (p.sinDato?'—':p.existencia.toFixed(DEC)) + '</div>' +
