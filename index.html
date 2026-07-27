@@ -23332,14 +23332,16 @@ function _execMapaDatos(fecha) {
     if (best < 0) return null;
     var r = arr[best];
     if (r.fecha === fechaObjetivo) return r;
-    var pronVal = r.pron_mes || r.pron || 0;
-    if (pronVal <= 0) return r;
-    var p1 = r.fecha.split('-').map(Number), p2 = fechaObjetivo.split('-').map(Number);
-    var d1 = Date.UTC(p1[0], p1[1] - 1, p1[2]), d2 = Date.UTC(p2[0], p2[1] - 1, p2[2]);
-    var dias = Math.round((d2 - d1) / 86400000);
-    if (dias <= 0) return r;
-    var invProy = Math.max(0, (r.inv || 0) - dias * pronVal);
-    return Object.assign({}, r, { inv: invProy, _proyectadoConsumo: true });
+    // ⚠️ CORREGIDO — bug real confirmado (caso Salaverry): antes se
+    // proyectaba el consumo día a día desde el último reporte real
+    // (restando el pronóstico por cada día sin cerrar), y esa proyección
+    // podía llegar hasta 0 — mostrando "0.0" en TODOS los productos de
+    // una planta que en realidad sí tenía inventario, solo que
+    // desactualizado. Ahora se muestra el último dato REAL tal cual
+    // (sin proyectar), marcado con `_fechaDatoReal` para que el popup
+    // avise claramente que es un dato de una fecha anterior, no
+    // inventado ni calculado.
+    return Object.assign({}, r, { _fechaDatoReal: r.fecha });
   }
 
   Object.keys(idx).forEach(function(key) {
@@ -23362,7 +23364,7 @@ function _execMapaDatos(fecha) {
       if (cobDias > 90) cobDias = 0; // outlier — mismo guard que el resto del sistema
     }
     var rep = _execReposicionInfo(r, fecha, arrastrarLocal);
-    porInstalacion[planta].productos.push({ producto: producto, existencia: r.inv || 0, despReal: despReal, pron: pronVal, cob: cobDias, repos: rep });
+    porInstalacion[planta].productos.push({ producto: producto, existencia: r.inv || 0, despReal: despReal, pron: pronVal, cob: cobDias, repos: rep, fechaDatoReal: r._fechaDatoReal || null });
     if (!esRef && cobDias > 0 && cobDias < porInstalacion[planta].minCob) porInstalacion[planta].minCob = cobDias;
   });
 
@@ -23404,8 +23406,9 @@ function _execFichaTabla(planta, info, esRef) {
       var cobTxt = esRef ? '—' : (p.cob > 0 ? p.cob + 'd' : '—');
       var cobCol = esRef ? '#94a3b8' : _execCobColor(p.cob);
       var faded = p.sinDato ? 'opacity:.45' : '';
+      var etiquetaFecha = p.fechaDatoReal ? ('<span title="Último dato reportado: ' + p.fechaDatoReal.slice(8,10)+'.'+p.fechaDatoReal.slice(5,7) + ' — la planta no ha cerrado un reporte más reciente" style="font-size:8px;font-weight:700;color:#b45309;background:#fef3c7;padding:1px 4px;border-radius:3px;margin-left:5px;white-space:nowrap">⏱ ' + p.fechaDatoReal.slice(8,10)+'.'+p.fechaDatoReal.slice(5,7) + '</span>') : '';
       return '<div style="display:flex;align-items:center;padding:4px 8px;border-bottom:1px solid #f1f5f9;' + faded + '">' +
-        '<div style="flex:1.3;font-weight:700;color:#0f1e3c">' + p.producto + '</div>' +
+        '<div style="flex:1.3;font-weight:700;color:#0f1e3c;display:flex;align-items:center;flex-wrap:wrap">' + p.producto + etiquetaFecha + '</div>' +
         '<div style="flex:1;text-align:right;font-family:ui-monospace,monospace">' + (p.sinDato?'—':p.existencia.toFixed(DEC)) + '</div>' +
         '<div style="flex:1;text-align:right;font-family:ui-monospace,monospace;color:#0891b2">' + (p.despReal>0?p.despReal.toFixed(DEC):'—') + '</div>' +
         '<div style="flex:1;text-align:right;font-family:ui-monospace,monospace;color:#7c3aed">' + (p.pron>0?p.pron.toFixed(DEC):'—') + '</div>' +
