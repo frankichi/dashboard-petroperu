@@ -3459,7 +3459,8 @@ function setGsStatus(state, text) {
   if (txt) txt.textContent = text;
 }
 function selectDate(fecha) {
-  if (!DATES.includes(fecha)) return;
+  var _hoyReal = new Date().toISOString().slice(0, 10);
+  if (!DATES.includes(fecha) && fecha !== _hoyReal) return;
   if (fecha === currentDate) return;  // mismo día, no hacer nada
   var pendientes = 0;
   try {
@@ -3486,6 +3487,12 @@ function selectDate(fecha) {
   }
   currentDate = fecha;
   window._fechaActual = fecha;
+  // ⚠️ AGREGADO — a pedido: el selector de fecha principal y el del mapa
+  // deben trabajar sobre la misma fecha, sin importar cuál de los dos se
+  // use para cambiarla. Antes el mapa tenía su propio estado
+  // (window._execMapaFecha) completamente independiente — cambiar la
+  // fecha principal nunca se reflejaba ahí.
+  window._execMapaFecha = fecha;
   rerenderActivePage();
   syncAllDateBars();
   if (typeof updateEventTicker === 'function') updateEventTicker();
@@ -23014,7 +23021,7 @@ function renderVistaEjecutivaSimple() {
         '</div>' +
         '<div style="display:flex;align-items:center;gap:8px">' +
           '<label style="font-size:10.5px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.4px">📅 Ver fecha</label>' +
-          '<input type="date" id="exec-mapa-fecha-input" value="' + (window._execMapaFecha || fechaHoy) + '" min="' + ((DATES&&DATES[0])||'') + '" max="' + ((DATES&&DATES[DATES.length-1])||'') + '" onchange="window._execMapaSetFecha(this.value)" style="padding:6px 10px;border-radius:7px;border:1px solid var(--bdr);background:var(--card2);color:var(--txt);font-family:var(--mono);font-size:12px;font-weight:600">' +
+          '<input type="date" id="exec-mapa-fecha-input" value="' + (currentDate || window._execMapaFecha || fechaHoy) + '" min="' + ((DATES&&DATES[0])||'') + '" max="' + (((DATES&&DATES[DATES.length-1])||'') > new Date().toISOString().slice(0,10) ? (DATES[DATES.length-1]) : new Date().toISOString().slice(0,10)) + '" onchange="window._execMapaSetFecha(this.value)" style="padding:6px 10px;border-radius:7px;border:1px solid var(--bdr);background:var(--card2);color:var(--txt);font-family:var(--mono);font-size:12px;font-weight:600">' +
           '<button id="exec-mapa-toggle-btn" onclick="toggleExecMapa()" style="padding:6px 12px;border-radius:7px;border:1px solid var(--bdr);background:var(--card2);color:var(--txt2);font-size:11.5px;font-weight:700;cursor:pointer;white-space:nowrap">' + (window._execMapaOculto ? '👁️ Mostrar mapa' : '🙈 Ocultar mapa') + '</button>' +
           '<div id="exec-mapa-kpis"></div>' +
         '</div>' +
@@ -23532,6 +23539,15 @@ window._execMapaSwitchTab = function(id, tab) {
 };
 window._execMapaSetFecha = function(fecha) {
   if (!fecha) return;
+  // ⚠️ CORREGIDO — bug real confirmado: antes esto solo actualizaba
+  // window._execMapaFecha y volvía a pintar el mapa mismo, dejando el
+  // resto del panel (KPIs, gráficas, selector de fecha principal) en la
+  // fecha vieja — las dos fechas quedaban completamente desincronizadas.
+  // Ahora usa selectDate(), el mismo mecanismo central que ya sincroniza
+  // currentDate + window._execMapaFecha + vuelve a pintar todo el panel
+  // — así, sin importar cuál de los dos selectores se use, ambos quedan
+  // trabajando sobre la misma fecha.
+  if (typeof selectDate === 'function') { selectDate(fecha); return; }
   window._execMapaFecha = fecha;
   if (typeof renderExecMapa === 'function') {
     var pl = (typeof window._execPlanta !== 'undefined') ? window._execPlanta : 'Nacional';
@@ -23613,7 +23629,7 @@ function renderExecMapa(plantaSeleccionada) {
   if (!el || typeof L === 'undefined') return;
   if (_execLeafletMap) { try { _execLeafletMap.remove(); } catch(e) {} _execLeafletMap = null; }
 
-  var fechaMapa = window._execMapaFecha || (DATES && DATES.length ? DATES[DATES.length-1] : '');
+  var fechaMapa = currentDate || window._execMapaFecha || (DATES && DATES.length ? DATES[DATES.length-1] : '');
   window._execMapaFecha = fechaMapa;
   var tituloFechaEl = document.getElementById('exec-mapa-fecha-titulo');
   if (tituloFechaEl && fechaMapa) {
