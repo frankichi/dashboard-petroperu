@@ -21749,6 +21749,25 @@ function renderVistaEjecutivaSimple() {
     if (isNaN(a) || isNaN(b)) return 0;
     return Math.round((b - a) / 86400000);
   }
+  function _diasHabilesEntreInv(fechaDesde, fechaHasta) {
+    // Cuenta los días de consumo real entre dos fechas (exclusivo del
+    // primero, inclusive del segundo) — los feriados/domingos NO restan
+    // consumo, ya que normalmente no hay despacho esos días (salvo que
+    // la planta reporte explícitamente que sí hubo movimiento).
+    var p1 = fechaDesde.split('-').map(Number), p2 = fechaHasta.split('-').map(Number);
+    var d1 = Date.UTC(p1[0], p1[1] - 1, p1[2]), d2 = Date.UTC(p2[0], p2[1] - 1, p2[2]);
+    var totalDias = Math.round((d2 - d1) / 86400000);
+    if (totalDias <= 0) return 0;
+    var habiles = 0;
+    for (var i = 1; i <= totalDias; i++) {
+      var dt = new Date(d1 + i * 86400000);
+      var fechaIter = dt.toISOString().slice(0, 10);
+      var esDomingo = dt.getUTCDay() === 0;
+      var esFeriado = (typeof _execEsFeriado === 'function') && !!_execEsFeriado(fechaIter);
+      if (!esDomingo && !esFeriado) habiles++;
+    }
+    return habiles;
+  }
   function _invArrastrado(planta, producto, fecha) {
     var idx = _getInvHistIdx();
     var arr = idx[planta + '|' + producto];
@@ -21761,19 +21780,21 @@ function renderVistaEjecutivaSimple() {
     if (best < 0) return null;
     var r = arr[best];
     if (r.fecha === fecha) return r; // hay reporte real exacto para esta fecha, se usa tal cual
-    // ⚠️ Proyección por consumo: en vez de simplemente repetir el mismo
-    // número del último reporte real como si el tiempo no hubiera
-    // pasado, se le resta la demanda pronóstico diaria por cada día
-    // transcurrido desde ese reporte — una estimación realista de "lo
-    // que probablemente queda" mientras la planta no cierra su día. En
-    // cuanto la planta reporta de verdad, ese dato real reemplaza esta
-    // proyección automáticamente (deja de ser el "best" en el arreglo).
+    // ⚠️ CORREGIDO — bug real confirmado (Eten/Diesel, feriado de
+    // Fiestas Patrias): antes se restaba consumo por CADA día corrido
+    // desde el último reporte real, incluyendo feriados y domingos —
+    // días en los que normalmente no hay despacho. Eso hacía que el
+    // inventario proyectado cayera a 0 aunque la planta simplemente no
+    // había tenido movimiento por ser feriado, no porque se hubiera
+    // quedado sin producto de verdad. Ahora solo se resta consumo por
+    // los días HÁBILES reales dentro del rango — los feriados/domingos
+    // se saltan, manteniendo el inventario del día anterior tal cual.
     var pronVal = r.pron_mes || r.pron || 0;
     if (pronVal <= 0) return r; // sin demanda pronóstico cargada, no se puede proyectar consumo — se mantiene el arrastre simple
-    var dias = _diasEntreFechas(r.fecha, fecha);
-    if (dias <= 0) return r;
-    var invProy = Math.max(0, (r.inv || 0) - dias * pronVal);
-    return Object.assign({}, r, { inv: invProy, _proyectadoConsumo: true, _proyectadoBaseFecha: r.fecha, _proyectadoDias: dias });
+    var diasHabiles = _diasHabilesEntreInv(r.fecha, fecha);
+    if (diasHabiles <= 0) return Object.assign({}, r, { _proyectadoConsumo: false }); // solo feriados/domingos de por medio — mismo dato, sin marcar como proyectado
+    var invProy = Math.max(0, (r.inv || 0) - diasHabiles * pronVal);
+    return Object.assign({}, r, { inv: invProy, _proyectadoConsumo: true, _proyectadoBaseFecha: r.fecha, _proyectadoDias: diasHabiles });
   }
   // ⚠️ AGREGADO — el mapa de Vista Ejecutiva (_execMapaDatos) vive FUERA
   // de esta función, en un scope aparte, así que no podía llamar a
