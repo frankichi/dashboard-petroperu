@@ -1979,6 +1979,26 @@ function rdAbrirConfirmacionFinal() {
 function rdCerrarConfirmacion() { document.getElementById('confirmModal').classList.remove('open'); }
 
 function rdConfirmarGuardar() {
+  // ⚠️ AGREGADO — bug real confirmado: el panel de aviso de reposición
+  // le decía al operador "obligatorio para poder guardar", pero el
+  // guardado nunca revisaba si de verdad se había respondido — se podía
+  // guardar igual con el aviso abierto y sin contestar. Caso real: una
+  // planta pasó de 0 a 3.44 MB de existencia de un día a otro sin que
+  // quedara ningún registro de cómo llegó el producto (imposible
+  // físicamente sin una reposición de por medio). Ahora si queda algún
+  // panel de reposición visible sin responder, se bloquea el guardado
+  // con un aviso claro — el operador puede descartar explícitamente con
+  // el botón correspondiente si de verdad no hubo reposición (ventas
+  // casi nulas con variación mínima), pero no puede simplemente
+  // ignorarlo.
+  var panelesSinResponder = Array.from(document.querySelectorAll('.repos-panel')).filter(function(p) {
+    return p.style.display !== 'none';
+  });
+  if (panelesSinResponder.length > 0) {
+    rdToast('⚠️ Hay ' + panelesSinResponder.length + ' producto(s) con aumento de existencia sin explicar cómo llegó — responde el aviso azul o descártalo antes de guardar.', 'error');
+    panelesSinResponder[0].scrollIntoView({ behavior: 'smooth', block: 'center' });
+    return;
+  }
   var btn = document.getElementById('btnConfirmarGuardar');
   btn.disabled = true; btn.textContent = 'Guardando\u2026';
 
