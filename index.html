@@ -22006,7 +22006,17 @@ function renderVistaEjecutivaSimple() {
     despSerie = datesN.map(function(d){
       var v = RAW.filter(function(r){ return r.fecha===d && filaAplica(r, pl, prod); })
                  .reduce(function(s,r){ return s+despRow(r); }, 0);
-      return v>0 ? parseFloat(v.toFixed(DEC)) : null;
+      // ⚠️ CORREGIDO — a pedido: cuando no hubo despacho ese día (0, o
+      // sin reporte — es lo mismo para un FLUJO como despacho, a
+      // diferencia de un STOCK como inventario), antes se mandaba
+      // `null`, y Chart.js conecta la línea SALTÁNDOSE ese punto,
+      // dibujando una curva suave entre el día anterior y el
+      // siguiente — dando la impresión visual de que sí hubo algo de
+      // despacho ese día (caso real: Tarapoto, domingo 26.07, sin
+      // despacho real, pero la curva pasaba por ahí como si lo
+      // hubiera). Ahora se manda el valor real (0 cuando corresponde),
+      // así la línea cae hasta el eje ese día, mostrando la realidad.
+      return parseFloat(v.toFixed(DEC));
     });
     reposSerie = datesN.map(function(d){
       var tot = 0;
@@ -22047,7 +22057,17 @@ function renderVistaEjecutivaSimple() {
     despSerie = datesN.map(function(d){
       var v = RAW.filter(function(r){ return r.fecha===d && filaAplica(r, pl, prod); })
                  .reduce(function(s,r){ return s+despRow(r); }, 0);
-      return v>0 ? parseFloat(v.toFixed(DEC)) : null;
+      // ⚠️ CORREGIDO — a pedido: cuando no hubo despacho ese día (0, o
+      // sin reporte — es lo mismo para un FLUJO como despacho, a
+      // diferencia de un STOCK como inventario), antes se mandaba
+      // `null`, y Chart.js conecta la línea SALTÁNDOSE ese punto,
+      // dibujando una curva suave entre el día anterior y el
+      // siguiente — dando la impresión visual de que sí hubo algo de
+      // despacho ese día (caso real: Tarapoto, domingo 26.07, sin
+      // despacho real, pero la curva pasaba por ahí como si lo
+      // hubiera). Ahora se manda el valor real (0 cuando corresponde),
+      // así la línea cae hasta el eje ese día, mostrando la realidad.
+      return parseFloat(v.toFixed(DEC));
     });
     // Volumen de reposición "pintado" en la barra de inventario — leído
     // de la etiqueta estructurada que deja Registro Diario al marcar
