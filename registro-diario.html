@@ -2270,9 +2270,9 @@ function rdRenderHistChart(registros, filtProd) {
     var col = prodColor(prod), byFec = {};
     rows.filter(function(r){ return r.producto===prod; }).forEach(function(r){ byFec[r.fecha]=r; });
     datasetsExist.push({ label:prod, data:fechas.map(function(f){ return byFec[f]?(byFec[f].existencia||0):null; }),
-      borderColor:col, backgroundColor:col+'22', tension:.3, pointRadius:3, pointHoverRadius:5, fill:prods.length===1, spanGaps:true });
-    datasetsDem.push({ label:prod, data:fechas.map(function(f){ return byFec[f]?(byFec[f].vreal||byFec[f].dem||byFec[f].dem_prom||null):null; }),
-      borderColor:col, backgroundColor:col+'33', tension:.2, pointRadius:3, pointHoverRadius:5, fill:false, spanGaps:true });
+      borderColor:col, backgroundColor:col, tension:.3, pointRadius:3, pointHoverRadius:5, fill:prods.length===1, spanGaps:true });
+    datasetsDem.push({ label:prod, data:fechas.map(function(f){ return byFec[f]?(byFec[f].vreal||byFec[f].dem||byFec[f].dem_prom||0):0; }),
+      borderColor:col, backgroundColor:col+'33', tension:.2, pointRadius:3, pointHoverRadius:5, fill:false, spanGaps:false });
   });
   var lbls = fechas.map(function(f){ return fmtFecha(f); });
   var commonOpts = {
@@ -2286,13 +2286,13 @@ function rdRenderHistChart(registros, filtProd) {
   var c1 = document.getElementById('histChartExist');
   var c2 = document.getElementById('histChartDemanda');
   if (c1 && typeof Chart !== 'undefined') {
-    _histChartExist = new Chart(c1, { type:'line', data:{ labels:lbls, datasets:datasetsExist }, options:JSON.parse(JSON.stringify(commonOpts)) });
+    _histChartExist = new Chart(c1, { type:'bar', data:{ labels:lbls, datasets:datasetsExist }, options:JSON.parse(JSON.stringify(commonOpts)) });
     var e1 = document.getElementById('histChartExistEmpty'); if(e1) e1.style.display='none';
   }
   if (c2 && typeof Chart !== 'undefined') {
     var anyDem = datasetsDem.some(function(ds){ return ds.data.some(function(v){ return v!=null&&v>0; }); });
     if (anyDem) {
-      _histChartDemanda = new Chart(c2, { type:'bar', data:{ labels:lbls, datasets:datasetsDem }, options:JSON.parse(JSON.stringify(commonOpts)) });
+      _histChartDemanda = new Chart(c2, { type:'line', data:{ labels:lbls, datasets:datasetsDem }, options:JSON.parse(JSON.stringify(commonOpts)) });
       var e2 = document.getElementById('histChartDemandaEmpty'); if(e2) e2.style.display='none';
     } else {
       var e2b = document.getElementById('histChartDemandaEmpty');
