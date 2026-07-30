@@ -26,7 +26,7 @@
 // Los DATOS del dashboard (Google Apps Script) NUNCA se cachean acá —
 // eso ya lo maneja el propio backend (Code.gs, caché de 10 min) y debe
 // seguir viniendo de la red cada vez para no mostrar información vieja.
-const CACHE_NAME = 'pp-suministro-shell-v2'; // ⚠️ versión subida a propósito — esto borra cualquier caché viejo (v1) apenas se active este service worker nuevo
+const CACHE_NAME = 'pp-suministro-shell-v3'; // ⚠️ versión subida a propósito — esto borra cualquier caché vieja (v1, v2) apenas se active este service worker nuevo. Necesario porque el navegador de cada usuario tenía guardadas direcciones de CDN (Chart.js, SheetJS, fuentes) de ANTES de que esas librerías se embebieran directamente en la app — el Service Worker seguía intentando "refrescarlas" en segundo plano sin que hicieran falta, generando errores de CSP inofensivos pero ruidosos en la consola.
 
 self.addEventListener('install', function(event) {
   self.skipWaiting();
