@@ -9893,6 +9893,11 @@ function renderPA() {
       attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors © <a href="https://carto.com/attributions">CARTO</a>',
       subdomains: 'abcd', maxZoom: 19
     }).addTo(_leafletMap);
+    // ⚠️ AGREGADO — a pedido: capa independiente para los puntos de
+    // planta, con su propio interruptor (igual que ya existía para
+    // marítimo/fluvial) — para poder ocultarlos y ver solo las rutas
+    // de cabotaje sin que los puntos tapen la vista.
+    var plantsLayer = L.layerGroup();
     Object.entries(plantaMap).forEach(([planta, d]) => {
       const meta = PLANT_META[planta];
       if (!meta) return;
@@ -10053,7 +10058,7 @@ function renderPA() {
         </div>`
       L.marker([meta.lat, meta.lng], {icon})
         .bindPopup(popupHTML, {maxWidth:300, className:'custom-popup', autoPan:true})
-        .addTo(_leafletMap);
+        .addTo(plantsLayer);
     });
     var SHIP_COLORS = ['#2563eb','#7c3aed','#0891b2','#059669','#d97706'];
     var btShips = {};
@@ -10667,8 +10672,10 @@ function renderPA() {
     })();
     if (typeof window._mapShowMaritime === 'undefined') window._mapShowMaritime = true;
     if (typeof window._mapShowFluvial  === 'undefined') window._mapShowFluvial  = true;
+    if (typeof window._mapShowPlants   === 'undefined') window._mapShowPlants   = true;
     if (window._mapShowMaritime) maritimeLayer.addTo(_leafletMap);
     if (window._mapShowFluvial)  fluvialLayer.addTo(_leafletMap);
+    if (window._mapShowPlants)   plantsLayer.addTo(_leafletMap);
     var LayerControl = L.Control.extend({
       options: {position: 'topright'},
       onAdd: function() {
@@ -10678,6 +10685,12 @@ function renderPA() {
         + 'border-radius:8px;padding:8px;font-family:\'Inter\',system-ui;box-shadow:0 4px 16px rgba(0,0,0,.4);'
         + 'min-width:170px">'
         +   '<div style="font-size:9px;font-weight:800;color:#94a3b8;text-transform:uppercase;letter-spacing:.08em;margin-bottom:7px;padding:0 4px">Capas de transporte</div>'
+        +   '<label class="map-toggle-label" style="display:flex;align-items:center;gap:7px;padding:5px 6px;border-radius:5px;cursor:pointer;transition:background .12s" '
+        +     'onmouseover="this.style.background=\'rgba(255,255,255,.06)\'" onmouseout="this.style.background=\'transparent\'">'
+        +     '<input type="checkbox" id="toggle-plants" ' + (window._mapShowPlants ? 'checked' : '') + ' '
+        +       'style="accent-color:#f59e0b;width:14px;height:14px;cursor:pointer">'
+        +     '<span style="color:#e2e8f0;font-size:11.5px;font-weight:600;flex:1">📍 Puntos de planta</span>'
+        +   '</label>'
         +   '<label class="map-toggle-label" style="display:flex;align-items:center;gap:7px;padding:5px 6px;border-radius:5px;cursor:pointer;transition:background .12s" '
         +     'onmouseover="this.style.background=\'rgba(255,255,255,.06)\'" onmouseout="this.style.background=\'transparent\'">'
         +     '<input type="checkbox" id="toggle-maritime" ' + (window._mapShowMaritime ? 'checked' : '') + ' '
@@ -10699,8 +10712,14 @@ function renderPA() {
         L.DomEvent.disableClickPropagation(div);
         L.DomEvent.disableScrollPropagation(div);
         setTimeout(function() {
+          var pt = document.getElementById('toggle-plants');
           var mt = document.getElementById('toggle-maritime');
           var ft = document.getElementById('toggle-fluvial');
+          if (pt) pt.addEventListener('change', function() {
+            window._mapShowPlants = pt.checked;
+            if (pt.checked) plantsLayer.addTo(_leafletMap);
+            else            _leafletMap.removeLayer(plantsLayer);
+          });
           if (mt) mt.addEventListener('change', function() {
             window._mapShowMaritime = mt.checked;
             if (mt.checked) maritimeLayer.addTo(_leafletMap);
