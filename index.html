@@ -4576,21 +4576,62 @@ async function fetchData(forceRefresh) {
         .then(function(r) { return r.json(); })
         .then(function(arr) {
           if (Array.isArray(arr)) {
-            // Mapear desde formato IquiViajesFluv al formato _fluvialBarges
+            // ⚠️ CORREGIDO — 3 bugs reales confirmados comparando este
+            // mapeo contra lo que handleGetIquiViajesFluv() realmente
+            // devuelve:
+            //  (1) DESAJUSTE DE NOMBRES: acá se leía r.vol_mb,
+            //      r.fecha_zarpe, r.eta y r.empujador — ninguno de esos
+            //      campos existe en la respuesta del backend (envía
+            //      vol_plan_mb/vol_real_mb, zarpe_cargado/zarpe_plan,
+            //      arribo_iquitos/eta_yurimaguas). Resultado: volumen,
+            //      fecha de zarpe y ETA llegaban SIEMPRE vacíos/en 0
+            //      para todas las barcazas.
+            //  (2) DESTINO Y DIRECCIÓN FIJOS: destino estaba clavado en
+            //      'Refinería Iquitos' y dirección en 'RETORNO' — así
+            //      que las barcazas que van HACIA Pucallpa o Yurimaguas
+            //      (no de vuelta) se dibujaban con la ruta invertida.
+            //      Ahora ambos se derivan de la ruta real.
+            //  (3) RUTA POR DEFECTO: caía siempre en 'Yurimaguas-Iquitos'
+            //      ignorando el campo tipo_ruta, que el backend sí envía
+            //      y distingue la ruta Pucallpa de la de Yurimaguas.
+            function _fluvNormPlanta(txt) {
+              var t = (txt||'').trim().toUpperCase()
+                .replace(/Í/g,'I').replace(/Á/g,'A').replace(/É/g,'E').replace(/Ó/g,'O').replace(/Ú/g,'U');
+              if (t.indexOf('IQUITOS') >= 0)    return 'Iquitos';
+              if (t.indexOf('PUCALLPA') >= 0)   return 'Pucallpa';
+              if (t.indexOf('YURIMAGUAS') >= 0) return 'Yurimaguas';
+              if (t.indexOf('SARAMURO') >= 0)   return 'Saramuro';
+              return '';
+            }
             window._fluvialBarges = arr.map(function(r){
+              // Ruta real: se usa r.ruta si viene; si no, se arma desde
+              // tipo_ruta (ej. "PUCALLPA" → "Pucallpa-Iquitos", que es
+              // el sentido de retorno cargado hacia la refinería).
+              var rutaStr = (r.ruta||'').trim();
+              if (!rutaStr) {
+                var tipoN = _fluvNormPlanta(r.tipo_ruta);
+                rutaStr = tipoN ? (tipoN + '-Iquitos') : 'Yurimaguas-Iquitos';
+              }
+              // Destino real = último tramo de la ruta (no siempre Iquitos)
+              var partes = rutaStr.split('-').map(function(p){ return _fluvNormPlanta(p); }).filter(Boolean);
+              var destinoReal = partes.length ? partes[partes.length-1] : 'Iquitos';
               return {
                 id:        r.id||'',
-                af:        r.barcaza||r.empujador||'',
+                af:        r.barcaza||'',
                 empujador: r.barcaza||'',
-                ruta:      r.ruta||'Yurimaguas-Iquitos',
+                ruta:      rutaStr,
+                tipo_ruta: r.tipo_ruta||'',
                 producto:  r.producto||'',
-                volMB:     parseFloat(r.vol_mb)||0,
-                capMB:     parseFloat(r.vol_mb)||0,
+                // Volumen real si ya se cargó; si no, el planificado
+                volMB:     parseFloat(r.vol_real_mb)||parseFloat(r.vol_plan_mb)||0,
+                capMB:     parseFloat(r.vol_plan_mb)||parseFloat(r.vol_real_mb)||0,
                 estado:    r.estado||'PROGRAMADO',
-                zarpe:     r.fecha_zarpe||'',
-                eta_arribo:r.eta||'',
-                destino:   'Refinería Iquitos',
-                direccion: 'RETORNO'
+                // Fecha de zarpe: la real (cargado) si existe, si no la planificada
+                zarpe:     r.zarpe_cargado||r.zarpe_plan||r.zarpe_vacio||'',
+                // ETA: arribo a Iquitos si ya está, si no el ETA intermedio o el plan
+                eta_arribo:r.arribo_iquitos||r.eta_yurimaguas||r.arribo_plan||'',
+                destino:   destinoReal,
+                direccion: (destinoReal === 'Iquitos') ? 'RETORNO' : 'IDA'
               };
             });
             console.log('[BOOT] Barcazas fluviales:', arr.length);
@@ -10087,8 +10128,14 @@ function renderPA() {
     if (typeof window._fluvialBarges !== 'undefined' && Array.isArray(window._fluvialBarges)) {
       window._fluvialBarges.forEach(function(bz) {
         if (!bz.af) return;
-        var name = bz.af;
-        if (btShips[name]) return;   // ya existe
+        // ⚠️ CORREGIDO — antes la clave era solo el nombre de la barcaza,
+        // así que si la misma barcaza tenía más de un viaje registrado
+        // (ej. una ida a Pucallpa y un retorno a Iquitos, o dos viajes
+        // en fechas distintas), el segundo se descartaba en silencio y
+        // solo se dibujaba UNA ruta en el mapa. Ahora la clave incluye
+        // la ruta, así cada viaje distinto se dibuja por separado.
+        var name = bz.af + (bz.ruta ? (' \u00b7 ' + bz.ruta) : '');
+        if (btShips[name]) return;   // mismo viaje en la misma ruta — ese sí se omite
         var routeStops = [];
         if (bz.ruta) {
           var parts = bz.ruta.split('-');
