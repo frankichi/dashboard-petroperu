@@ -10473,10 +10473,22 @@ function renderPA() {
     var maritimeLayer = L.layerGroup();
     var fluvialLayer  = L.layerGroup();
     var maritimeCount = 0, fluvialCount = 0;
-    var SHIP_COLORS_MARITIME = ['#2563eb','#7c3aed','#0891b2','#1e40af','#5b21b6']; // azules/morados
-    var SHIP_COLORS_FLUVIAL  = ['#059669','#0d9488','#15803d','#047857','#065f46']; // verdes/teal
+    var SHIP_COLORS_IMPORTACION = ['#2563eb','#7c3aed','#0891b2','#1e40af','#5b21b6']; // azules/morados — buques de importación
+    var SHIP_COLORS_CABOTAJE    = ['#ea580c','#c2410c','#f97316','#9a3412','#dc2626']; // naranjas/rojos — flota propia de cabotaje
+    var SHIP_COLORS_FLUVIAL     = ['#059669','#0d9488','#15803d','#047857','#065f46']; // verdes/teal
+    // ⚠️ AGREGADO — a pedido: diferenciar por color la flota PROPIA de
+    // cabotaje (MOCHE, UCAYALI, URUBAMBA y demás) de los buques de
+    // IMPORTACIÓN — antes todos los buques marítimos usaban la misma
+    // paleta azul/morada sin distinción. Esta lista ya existía más
+    // abajo en el código (sección de Posicionamiento de Naves), pero
+    // no estaba disponible acá, donde se decide el color de cada buque.
+    var FLOTA_PP_CABOTAJE = ['UCAYALI','MOCHE','URUBAMBA','TROMPETEROS','PARIÑAS','HUMBOLDT'];
+    function _esFlotaCabotaje(nombreBuque) {
+      var n = (nombreBuque||'').toUpperCase();
+      return FLOTA_PP_CABOTAJE.some(function(f) { return n.indexOf(f) >= 0; });
+    }
     var SKIP_SHIP_NAMES = ['CISTERNAS','CISTERNA','SIM','TEST','PRUEBA','DEMO','-','?',''];
-    var mIdx = 0, fIdx = 0;
+    var mIdx = 0, fIdx = 0, cIdx = 0;
     // ⚠️ AGREGADO — a pedido: cuando varias barcazas/buques terminan con
     // su etiqueta muy cerca entre sí, se ven superpuestas y difíciles de
     // tocar. En vez de agregarlas directo al mapa una por una, se
@@ -10489,9 +10501,12 @@ function renderPA() {
       if (ship.stops.length < 2) return;
       if (SKIP_SHIP_NAMES.indexOf((name||'').toUpperCase().trim()) >= 0) return;
       var isFluvial = ship.isFluvialFromReport || isFluvialShip(name, ship.stops);
+      var esCabotaje = !isFluvial && _esFlotaCabotaje(name);
       var color = isFluvial
         ? SHIP_COLORS_FLUVIAL[fIdx++ % SHIP_COLORS_FLUVIAL.length]
-        : SHIP_COLORS_MARITIME[mIdx++ % SHIP_COLORS_MARITIME.length];
+        : esCabotaje
+          ? SHIP_COLORS_CABOTAJE[cIdx++ % SHIP_COLORS_CABOTAJE.length]
+          : SHIP_COLORS_IMPORTACION[mIdx++ % SHIP_COLORS_IMPORTACION.length];
       var fullRoute = [];
       var validSegments = 0;
       var skippedSegments = 0;
@@ -10548,7 +10563,7 @@ function renderPA() {
         ? {color: color, weight: 3.5, opacity: 0.9, dashArray: '10,6'}
         : {color: color, weight: 3.5, opacity: 0.85, dashArray: ''};
       var icon = isFluvial ? '\uD83D\uDEE5' : '\uD83D\uDEA2';  // 🛥 vs 🚢
-      var typeLbl = isFluvial ? 'Barcaza fluvial' : 'Buque cabotaje';
+      var typeLbl = isFluvial ? 'Barcaza fluvial' : (esCabotaje ? '🇵🇪 Buque cabotaje (flota propia)' : 'Buque importación');
       var stopsList = ship.stops.map(function(s) { return s.planta; }).join(' → ');
       var estadoBadge = '';
       if (ship.estado) {
@@ -10775,15 +10790,27 @@ function renderPA() {
           icon: L.divIcon({className:'', html: clusterHtml, iconSize:[30,30], iconAnchor:[15,15]}),
           zIndexOffset: 1000
         }).addTo(capa);
-        // Abanico: un marcador pequeño por cada item, en un arco
-        // alrededor del centro, ocultos hasta que se toque el número.
-        var radio = 0.09;
-        var anguloBase = -90; // hacia arriba
-        var paso = g.items.length > 1 ? 140 / (g.items.length - 1) : 0;
+        // Abanico: un marcador pequeño por cada item, distribuido en
+        // círculo completo alrededor del centro, ocultos hasta que se
+        // toque el número.
+        // ⚠️ CORREGIDO — bug real confirmado (las etiquetas del abanico
+        // seguían superpuestas): el radio estaba en GRADOS de mapa fijos
+        // (0.09), que a ciertos niveles de zoom no alcanza para separar
+        // etiquetas anchas — y además todo se apretaba en un arco de
+        // solo 140°, sin importar cuántos elementos hubiera. Ahora se
+        // calculan las posiciones en PÍXELES de pantalla (consistente
+        // sin importar el zoom) y se reparte en un círculo COMPLETO,
+        // con un radio que crece según cuántos elementos hay y qué tan
+        // anchas son sus etiquetas — para garantizar separación real.
+        var centroPx = _leafletMap.latLngToContainerPoint(L.latLng(g.centro));
+        var anchoPromedio = g.items.reduce(function(s, lbl){ return s + lbl.anchoEstimado; }, 0) / g.items.length;
+        var circunferenciaNecesaria = g.items.length * (anchoPromedio + 14);
+        var radioPx = Math.max(70, circunferenciaNecesaria / (2 * Math.PI));
         var marcadoresAbanico = [];
         g.items.forEach(function(lbl, i) {
-          var angulo = (anguloBase - 70 + paso * i) * Math.PI / 180;
-          var pos = [g.centro[0] + Math.sin(angulo) * radio, g.centro[1] + Math.cos(angulo) * radio];
+          var angulo = (i / g.items.length) * 2 * Math.PI - Math.PI / 2; // empieza hacia arriba
+          var posPx = { x: centroPx.x + Math.cos(angulo) * radioPx, y: centroPx.y + Math.sin(angulo) * radioPx };
+          var pos = _leafletMap.containerPointToLatLng(posPx);
           var markerHtml = '<div title="'+lbl.name.replace(/"/g,'&quot;')+'" style="background:'+lbl.color+';color:#fff;padding:3px 8px;border-radius:12px;'
                          + 'font-size:9px;font-weight:800;white-space:nowrap;cursor:pointer;'
                          + 'box-shadow:0 2px 8px rgba(0,0,0,.4);border:2px solid #fff;display:inline-block">'
@@ -10879,6 +10906,10 @@ function renderPA() {
         +     '<span style="color:#e2e8f0;font-size:11.5px;font-weight:600;flex:1">🛥️ Barcazas fluviales</span>'
         +     '<span style="color:#94a3b8;font-size:10px;font-family:\'JetBrains Mono\',monospace;font-weight:700">' + fluvialCount + '</span>'
         +   '</label>'
+        +   '<div style="margin-top:6px;padding-top:6px;border-top:1px solid rgba(255,255,255,.08);font-size:9px;color:#94a3b8;line-height:1.6">'
+        +     '<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#ea580c;margin-right:4px"></span>Cabotaje (flota propia)<br>'
+        +     '<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#2563eb;margin-right:4px"></span>Importación'
+        +   '</div>'
         +   '<div style="margin-top:6px;padding-top:6px;border-top:1px solid rgba(255,255,255,.08);font-size:9px;color:#64748b;text-align:center;letter-spacing:.02em">'
         +     'Rutas en tránsito · día actual'
         +   '</div>'
