@@ -3522,7 +3522,7 @@ const PRODUCTOS_POR_PLANTA_EXEC = {
   'Callao':      ['Diesel', 'G. Regular', 'G. Premium', 'TA1'],
   'Conchán':     ['Diesel', 'G. Regular', 'G. Regular HS', 'G. Premium'],
   'Pisco':       ['Diesel', 'G. Regular', 'G. Premium'],
-  'Mollendo':    ['Diesel', 'G. Regular', 'G. Premium'],
+  'Mollendo':    ['Diesel', 'G. Regular', 'G. Premium', 'ULSD Nacionalizado'],
   'Ilo':         ['Diesel', 'G. Premium'],
   'Juliaca':     ['Diesel', 'G. Regular'],
   'Cusco':       ['Diesel', 'G. Regular'],
@@ -3597,7 +3597,7 @@ function invFilaValida(r) {
 // cuando un operador marca una reposición recibida (botón "¿Cómo llegó el
 // producto?"): "[REPOS|MARITIMO|12.45] texto libre..." — así el dashboard
 // puede mostrarla en gráficas/listas, no solo como texto suelto.
-const REPOS_TIPO_LABEL = { MARITIMO: '⛴️ Cabotaje Marítimo', TERRESTRE: '🚛 Cisternas', REFINERIA: '🏭 Vía Refinería' };
+const REPOS_TIPO_LABEL = { MARITIMO: '⛴️ Cabotaje Marítimo', TERRESTRE: '🚛 Cisternas', REFINERIA: '🏭 Vía Refinería', FONDOS: '💰 Solicitud de Fondos', ULSD: '🔄 Uso de ULSD Nacionalizado' };
 function parseReposicionTag(comentario) {
   if (!comentario) return null;
   var m = /^\[REPOS\|(\w+)\|([\d.]+)\]/.exec(comentario);
@@ -22430,7 +22430,7 @@ function renderVistaEjecutivaSimple() {
     var plantasIter = combo ? combo.plantasInv
       : (!planta || planta === 'Nacional') ? PLANTAS_18_OFICIALES.concat(REFINERIAS) : [planta];
     var productosIter = (producto && producto !== 'Todos') ? [producto]
-      : (typeof PRODUCTO_ORDEN !== 'undefined' ? PRODUCTO_ORDEN : ['Diesel','D2S50-H','G. Regular','G. Premium','G. 84','TA1','GLP','G. Regular HS','PI6']);
+      : (typeof PRODUCTO_ORDEN !== 'undefined' ? PRODUCTO_ORDEN : ['Diesel','D2S50-H','G. Regular','G. Premium','G. 84','TA1','GLP','G. Regular HS','PI6','ULSD Nacionalizado']);
     if (combo && combo.productosRestrict) {
       productosIter = productosIter.filter(function(pr){ return combo.productosRestrict.indexOf(pr) !== -1; });
     }
@@ -22458,7 +22458,7 @@ function renderVistaEjecutivaSimple() {
       var plantasIter = combo ? combo.plantasInv
         : (!planta || planta === 'Nacional') ? PLANTAS_18_OFICIALES.concat(REFINERIAS) : [planta];
       var productosIter = (producto && producto !== 'Todos') ? [producto]
-        : (typeof PRODUCTO_ORDEN !== 'undefined' ? PRODUCTO_ORDEN : ['Diesel','D2S50-H','G. Regular','G. Premium','G. 84','TA1','GLP','G. Regular HS','PI6']);
+        : (typeof PRODUCTO_ORDEN !== 'undefined' ? PRODUCTO_ORDEN : ['Diesel','D2S50-H','G. Regular','G. Premium','G. 84','TA1','GLP','G. Regular HS','PI6','ULSD Nacionalizado']);
       if (combo && combo.productosRestrict) {
         productosIter = productosIter.filter(function(pr){ return combo.productosRestrict.indexOf(pr) !== -1; });
       }
@@ -24082,7 +24082,7 @@ function renderVistaEjecutivaSimple() {
     + plantasDisp.map(function(p){ return '<option value="'+p+'"'+(pl===p?' selected':'')+'>'+(REFINERIAS.indexOf(p)!==-1?'🛢️':'🏭')+' '+p+'</option>'; }).join('')
     + '</select>';
 
-  var PRODUCTO_ORDEN = ['Diesel','D2S50-H','G. Regular','G. Premium','G. 84','TA1','GLP','PI6'];
+  var PRODUCTO_ORDEN = ['Diesel','D2S50-H','G. Regular','G. Premium','G. 84','TA1','GLP','PI6','ULSD Nacionalizado'];
   // Si hay una planta específica seleccionada, solo mostrar los productos
   // que ESA planta/terminal realmente atiende (con datos en el Sheets) —
   // no todos los productos a nivel nacional. Con "Nacional" se ven todos.
