@@ -13220,6 +13220,15 @@ function simDelShip(id) {
   simShips=simShips.filter(s=>s.id!==id);
   if(simActiveId===id) simActiveId=simShips.length?simShips[0].id:null;
   renderPE();
+  // ⚠️ AGREGADO — bug real confirmado: antes esto solo quitaba el buque
+  // de la lista en el navegador, sin avisar al backend — así que la
+  // próxima vez que la página cargaba la última simulación guardada
+  // (ver "[SIM] Auto-cargando última simulación GS" en la consola), el
+  // buque "eliminado" volvía a aparecer, porque nunca se había borrado
+  // de verdad en la hoja de cálculo. Requería un paso manual aparte
+  // ("💾 Guardar en GS") que era fácil pasar por alto — ahora el
+  // borrado se guarda de inmediato, sin depender de ese segundo paso.
+  if (typeof simSaveToGS === 'function') simSaveToGS();
 }
 function simSelect(id) { simActiveId=id; renderPE(); }
 function simAddProd(id) {
