@@ -10138,9 +10138,21 @@ function renderPA() {
         if (btShips[name]) return;   // mismo viaje en la misma ruta — ese sí se omite
         var routeStops = [];
         if (bz.ruta) {
-          var parts = bz.ruta.split('-');
+          // Acepta guion ("Yurimaguas-Iquitos") o flecha ("Pucallpa →
+          // Iquitos" / "Pucallpa -> Iquitos"), según cómo se haya
+          // cargado ese registro en la hoja — antes solo se reconocía
+          // el guion, y una ruta con flecha no encontraba ninguna
+          // parada válida, descartando la barcaza completa del mapa.
+          var parts = bz.ruta.split(/\s*(?:->|\u2192|-)\s*/).filter(Boolean);
           parts.forEach(function(p) {
-            var planta = p.trim().charAt(0) + p.trim().slice(1).toLowerCase();   // 'IQUITOS' → 'Iquitos'
+            var norm = p.trim().toUpperCase()
+              .replace(/\u00cd/g,'I').replace(/\u00c1/g,'A').replace(/\u00c9/g,'E').replace(/\u00d3/g,'O').replace(/\u00da/g,'U');
+            var planta = '';
+            if (norm.indexOf('IQUITOS') >= 0)    planta = 'Iquitos';
+            else if (norm.indexOf('PUCALLPA') >= 0)   planta = 'Pucallpa';
+            else if (norm.indexOf('YURIMAGUAS') >= 0) planta = 'Yurimaguas';
+            else if (norm.indexOf('SARAMURO') >= 0)   planta = 'Saramuro';
+            else planta = p.trim().charAt(0) + p.trim().slice(1).toLowerCase(); // respaldo: 'IQUITOS' → 'Iquitos'
             var pmKey = planta;
             var pm = PLANT_META[pmKey];
             if (pm && !routeStops.some(function(s) { return s.planta === pmKey; })) {
