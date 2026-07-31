@@ -10666,8 +10666,18 @@ function renderPA() {
       // si está disponible; si no, usar el primer stop pendiente; último como fallback.
       var lastStop = ship.stops[ship.stops.length - 1];
       var labelPos;
-      var _navForLabel = _navPosData ? _navPosData[name.toUpperCase()] : null;
-      if (!_navForLabel && _navPosData) {
+      // ⚠️ CORREGIDO — bug real confirmado con captura de pantalla: las
+      // barcazas fluviales terminaban con su etiqueta lejos de la ruta
+      // real (cerca de Ecuador, cerca de Brasil) porque este bloque
+      // intentaba cruzarlas contra _navPosData — datos de
+      // Posicionamiento de Naves, que es un sistema para buques
+      // MARÍTIMOS, no fluviales. Peor aún, la coincidencia de respaldo
+      // solo comparaba la PRIMERA PALABRA del nombre (ej. "EF"), que es
+      // tan genérica que enganchaba con cualquier entrada no
+      // relacionada. Las barcazas fluviales ahora usan directamente la
+      // posición de sus paradas (stops), sin pasar por este cruce.
+      var _navForLabel = (!isFluvial && _navPosData) ? _navPosData[name.toUpperCase()] : null;
+      if (!isFluvial && !_navForLabel && _navPosData) {
         Object.keys(_navPosData).some(function(k){
           if (k.indexOf(name.toUpperCase().split(' ')[0]) >= 0) { _navForLabel = _navPosData[k]; return true; }
           return false;
@@ -10695,12 +10705,22 @@ function renderPA() {
           labelPos = [lastStop.lat, lastStop.lng];
         }
       }
-      var markerHtml = '<div style="background:'+color+';color:#fff;padding:3px 8px;border-radius:12px;'
+      // ⚠️ CORREGIDO — la etiqueta tenía un ancho fijo (110px) sin
+      // acortar el texto: un nombre largo se desbordaba fuera de esa
+      // caja, y como el "ancla" del ícono se calculaba asumiendo ese
+      // ancho fijo, la etiqueta quedaba visualmente descuadrada
+      // respecto a su posición real en el mapa. Ahora el nombre se
+      // acorta con "…" si pasa de 26 caracteres (el nombre completo
+      // sigue visible al pasar el mouse, vía el atributo title), y el
+      // ancho del ícono se ajusta al texto real en vez de ser fijo.
+      var nameCorto = name.length > 26 ? (name.slice(0, 24) + '…') : name;
+      var anchoEstimado = Math.min(200, Math.max(70, nameCorto.length * 6.2 + 34));
+      var markerHtml = '<div title="'+name.replace(/"/g,'&quot;')+'" style="background:'+color+';color:#fff;padding:3px 8px;border-radius:12px;'
                      + 'font-size:9px;font-weight:800;white-space:nowrap;cursor:pointer;'
-                     + 'box-shadow:0 2px 8px rgba(0,0,0,.4);border:2px solid #fff">'
-                     + icon + ' ' + name + '</div>';
+                     + 'box-shadow:0 2px 8px rgba(0,0,0,.4);border:2px solid #fff;display:inline-block">'
+                     + icon + ' ' + nameCorto + '</div>';
       var labelMarker = L.marker(labelPos, {
-        icon: L.divIcon({className:'', html: markerHtml, iconSize:[110, 22], iconAnchor:[55, 11]})
+        icon: L.divIcon({className:'', html: markerHtml, iconSize:[anchoEstimado, 22], iconAnchor:[anchoEstimado/2, 11]})
       }).bindPopup(popupHTML, {className:'ship-popup', maxWidth: 320, autoPan: true});
       if (isFluvial) labelMarker.addTo(fluvialLayer);
       else           labelMarker.addTo(maritimeLayer);
