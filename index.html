@@ -4631,7 +4631,12 @@ async function fetchData(forceRefresh) {
                 // ETA: arribo a Iquitos si ya está, si no el ETA intermedio o el plan
                 eta_arribo:r.arribo_iquitos||r.eta_yurimaguas||r.arribo_plan||'',
                 destino:   destinoReal,
-                direccion: (destinoReal === 'Iquitos') ? 'RETORNO' : 'IDA'
+                direccion: (destinoReal === 'Iquitos') ? 'RETORNO' : 'IDA',
+                // ⚠️ AGREGADO — a pedido: el reporte PDF trae comentarios
+                // importantes (estado de navegación, averías, etc.) que
+                // el backend ya envía (campo obs), pero se estaban
+                // descartando por completo antes de llegar al mapa.
+                obs:       r.obs||''
               };
             });
             console.log('[BOOT] Barcazas fluviales:', arr.length);
@@ -10196,7 +10201,8 @@ function renderPA() {
             direccion:direccion,
             prods:    bz.producto ? [bz.producto + (bz.volMB ? ' ' + bz.volMB + ' MB' : '')] : [],
             isFluvialFromReport: true,
-            estado:   bz.estado || ''
+            estado:   bz.estado || '',
+            obs:      bz.obs || ''
           };
         }
       });
@@ -10577,6 +10583,16 @@ function renderPA() {
           + ship.prods.slice(0,8).map(function(p) { return '<div style="font-size:10.5px;color:#e2e8f0;padding:2px 0">• ' + p + '</div>'; }).join('')
           + '</div>';
       }
+      // ⚠️ AGREGADO — a pedido: el reporte PDF trae comentarios/avisos
+      // importantes (estado de navegación, averías, etc.) que antes se
+      // descartaban por completo antes de llegar al mapa.
+      var obsHtml = '';
+      if (ship.obs) {
+        obsHtml = '<div style="margin-top:8px;padding-top:8px;border-top:1px solid rgba(255,255,255,.12)">'
+          + '<div style="font-size:9px;color:#94a3b8;text-transform:uppercase;letter-spacing:.05em;font-weight:700;margin-bottom:4px">📝 Comentario</div>'
+          + '<div style="font-size:10.5px;color:#e2e8f0;line-height:1.4">' + escapeHtml(ship.obs) + '</div>'
+          + '</div>';
+      }
       var popupHTML =
         '<div style="background:#0f172a;color:#e2e8f0;padding:0;min-width:280px;max-width:340px;border-radius:8px;overflow:hidden;font-family:Inter,system-ui;box-shadow:0 12px 32px rgba(0,0,0,.5)">'
         + '<div style="background:linear-gradient(135deg,'+color+',rgba(0,0,0,.4));padding:11px 14px 12px">'
@@ -10595,6 +10611,7 @@ function renderPA() {
         +     _popupRow('ETA',       ship.eta ? fmtDate(ship.eta) : '', '#fbbf24')
         +   '</table>'
         +   cargaHtml
+        +   obsHtml
         + '</div>'
         + '</div>';
       // Tramos terrestres del convoy multimodal (carretera)
@@ -15125,23 +15142,78 @@ async function sendFluvialToGS() {
   if (btn) btn.disabled = true;
   if (statusEl) { statusEl.textContent = '⏳ Enviando a Google Sheets...'; statusEl.style.color = 'var(--txt3)'; }
   try {
-    await fetch(CONFIG.API_URL, {
-      method: 'POST', mode: 'no-cors',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({
-        action: 'uploadFluvial',
-        fecha: uploadFluvialData.fecha,
-        barcazas: uploadFluvialData.barcazas,
-        empujadores: uploadFluvialData.empujadores,
-        niveles: uploadFluvialData.niveles
-      })
+    // ⚠️ CORREGIDO — bug real confirmado y grave: esto mandaba los
+    // datos a una acción ('uploadFluvial') que NUNCA existió en el
+    // backend, y con mode:'no-cors' — que bloquea la respuesta —
+    // así que el navegador nunca podía saber que había fallado.
+    // Siempre mostraba "✅ Enviado", pero nada se guardaba de verdad.
+    // Además, aunque hubiera funcionado, apuntaba a la hoja
+    // flota_fluvial_diaria — una hoja que nunca se conectó al mapa;
+    // el mapa lee de iqui_viajes_fluviales.
+    //
+    // Ahora se agrupan las barcazas por empujador+ruta (cada grupo =
+    // un convoy) y se manda cada uno al mismo endpoint que ya usa
+    // Plan Iquitos (saveIquiViaje, tipo:'fluvial') — el que sí existe
+    // y sí escribe en la hoja correcta.
+    var porConvoy = {};
+    (uploadFluvialData.barcazas || []).forEach(function(b) {
+      var key = (b.empujador || '?') + '|' + (b.ruta || '?');
+      (porConvoy[key] = porConvoy[key] || []).push(b);
     });
-    if (statusEl) { statusEl.textContent = '✅ Enviado a Google Sheets (hoja flota_fluvial_diaria)'; statusEl.style.color = 'var(--grn)'; }
+    function _rutaLegible(rutaCodigo) {
+      if (rutaCodigo === 'IQUITOS-PUCALLPA')   return 'Pucallpa-Iquitos';
+      if (rutaCodigo === 'IQUITOS-YURIMAGUAS') return 'Yurimaguas-Iquitos';
+      if (rutaCodigo === 'IQUITOS-SARAMURO')   return 'Saramuro-Iquitos';
+      return 'Yurimaguas-Iquitos';
+    }
+    function _capitalizar(s) { return s ? (s.charAt(0) + s.slice(1).toLowerCase()) : ''; }
+    var convoyes = Object.keys(porConvoy).map(function(key, idx) {
+      var afs = porConvoy[key];
+      var primero = afs[0];
+      var tipoRuta = (primero.ruta === 'IQUITOS-YURIMAGUAS') ? 'YU' : 'LPO';
+      var volTotal = afs.reduce(function(s, a) { return s + (parseFloat(a.volMB) || 0); }, 0);
+      var capTotal = afs.reduce(function(s, a) { return s + (parseFloat(a.capMB) || 0); }, 0);
+      var productos = Array.from(new Set(afs.map(function(a) { return a.producto; }).filter(Boolean)));
+      var destinoRaw = afs.map(function(a) { return a.destino; }).filter(Boolean)[0] || 'IQUITOS';
+      var destino = _capitalizar(destinoRaw);
+      var rutaFinal = (destino === 'Iquitos') ? _rutaLegible(primero.ruta) : ('Iquitos-' + destino);
+      var nombreConvoy = (primero.empujador || 'EF') + ' / ' + afs.map(function(a) { return _capitalizar((a.af || '').replace(/^AF\s+/, '')); }).join(' - ');
+      return {
+        id: 'fluv-' + uploadFluvialData.fecha + '-' + idx,
+        tipo_ruta: tipoRuta,
+        barcaza: nombreConvoy,
+        ruta: rutaFinal,
+        producto: productos.join(' / '),
+        zarpe_plan: afs.map(function(a){return a.zarpe;}).filter(Boolean)[0] || '',
+        arribo_plan: afs.map(function(a){return a.eta_arribo;}).filter(Boolean)[0] || '',
+        vol_plan_mb: Math.round(volTotal * 100) / 100,
+        estado: afs.map(function(a){return a.estado;}).filter(Boolean)[0] || 'PENDIENTE',
+        status_embarque: 'COMPLETADO'
+      };
+    });
+    var okCount = 0, errCount = 0;
+    for (var i = 0; i < convoyes.length; i++) {
+      try {
+        var r = await fetch(CONFIG.API_URL, {
+          method: 'POST', headers: {'Content-Type': 'text/plain'},
+          body: JSON.stringify({ action: 'saveIquiViaje', tipo: 'fluvial', viaje: convoyes[i] })
+        });
+        var j = await r.json();
+        if (j && j.success !== false) okCount++; else errCount++;
+      } catch (e) { errCount++; }
+    }
+    if (errCount > 0) {
+      if (statusEl) { statusEl.textContent = '⚠️ ' + okCount + ' guardados, ' + errCount + ' con error'; statusEl.style.color = 'var(--yel)'; }
+    } else {
+      if (statusEl) { statusEl.textContent = '✅ ' + okCount + ' convoy(es) guardados en iqui_viajes_fluviales'; statusEl.style.color = 'var(--grn)'; }
+    }
     if (btn) btn.disabled = false;
-    addUploadLog(true, 'Fluvial → GS: ' + uploadFluvialData.barcazas.length + ' barcazas');
+    addUploadLog(okCount > 0, 'Fluvial → GS: ' + okCount + ' convoy(es) guardados' + (errCount ? (', ' + errCount + ' con error') : ''));
     _uplSetBadge('acc-fluvial', uploadFluvialData ? uploadFluvialData.fecha : currentDate);
     setTimeout(function() {
       if (typeof fetchData === 'function') fetchData(true);
+      var activePage = document.querySelector('.page.active');
+      if (activePage && activePage.id === 'pA' && typeof renderPA === 'function') renderPA();
     }, 2500);
   } catch (err) {
     if (statusEl) { statusEl.textContent = '❌ ' + err.message; statusEl.style.color = 'var(--red)'; }
@@ -20333,7 +20405,11 @@ function _iquiTabFluvial(plan, viajesReales) {
     + '<td style="padding:7px 8px;text-align:center;font-family:var(--mono);font-weight:800;color:var(--acc2)">'+mbPlanTotal.toFixed(0)+'</td>'
     + '</tr>';
 
-  return _iquiKpiRow([
+  return '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:10px">'
+  +   '<div style="font-size:13px;font-weight:700;color:var(--txt3)">🚢 Transporte Fluvial</div>'
+  +   '<span style="font-size:11px;color:var(--txt3)">📄 Para cargar el reporte diario: <b>Carga de Datos → Reporte Fluvial Diario</b></span>'
+  + '</div>'
+  + _iquiKpiRow([
       ['Barcazas operativas', operativas.length+'/'+barcazas.length, 'en servicio',     '#1a9e50'],
       ['Capacidad total',     capTotal+' MB',       'flota completa',                    '#0891b2'],
       ['Capacidad operativa', capOp+' MB',          'disponible mes',                    '#7c3aed'],
@@ -20747,6 +20823,315 @@ window._iquiGenerarInforme = function(){
   .then(function(r){ return r.json(); })
   .then(function(){ _iquiViajesTerr=null; renderPIqui(); })
   .catch(function(e){ console.error(e); });
+};
+
+// ═══════════════════════════════════════════════════════════════════════
+// CARGA AUTOMÁTICA DE REPORTE FLUVIAL (PDF) — "REPORTE DIARIO
+// COORDINACIÓN TRANSPORTE FLUVIAL SELVA"
+// ═══════════════════════════════════════════════════════════════════════
+// ⚠️ IMPORTANTE — este reconocedor de patrones se calibró contra UN solo
+// reporte de ejemplo. Si otro reporte viene con un diseño distinto,
+// puede no reconocer todo bien — por eso SIEMPRE se muestra una pantalla
+// de revisión editable antes de guardar nada; nunca se guarda
+// directamente a la base de datos sin que la persona lo confirme.
+window._iquiAbrirCargaReporteFluv = function() {
+  var existing = document.getElementById('iqui-carga-fluv-overlay');
+  if (existing) { existing.remove(); return; }
+  var overlay = document.createElement('div');
+  overlay.id = 'iqui-carga-fluv-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:9998;display:flex;align-items:center;justify-content:center;padding:20px';
+  overlay.innerHTML =
+    '<div style="background:var(--card);border-radius:14px;max-width:420px;width:100%;padding:24px;box-shadow:0 20px 60px rgba(0,0,0,.4)">'
+    + '<div style="font-size:16px;font-weight:800;color:var(--txt);margin-bottom:6px">📄 Subir Reporte Fluvial (PDF)</div>'
+    + '<div style="font-size:12px;color:var(--txt3);margin-bottom:16px">Sube el "Reporte Diario Coordinación Transporte Fluvial Selva" — el sistema va a leer los convoyes automáticamente y te los va a mostrar para que los revises antes de guardar.</div>'
+    + '<input type="file" id="iqui-fluv-file-input" accept="application/pdf" style="width:100%;padding:10px;border:1.5px dashed var(--bdr);border-radius:8px;margin-bottom:14px;background:var(--card2);color:var(--txt)">'
+    + '<div id="iqui-fluv-carga-status" style="font-size:11.5px;color:var(--txt3);margin-bottom:10px"></div>'
+    + '<div style="display:flex;gap:8px;justify-content:flex-end">'
+    + '  <button onclick="document.getElementById(\'iqui-carga-fluv-overlay\').remove()" style="padding:8px 14px;background:var(--card2);color:var(--txt2);border:1px solid var(--bdr);border-radius:7px;font-size:12px;font-weight:700;cursor:pointer">Cancelar</button>'
+    + '</div>'
+    + '</div>';
+  document.body.appendChild(overlay);
+  overlay.addEventListener('click', function(e) { if (e.target === overlay) overlay.remove(); });
+  document.getElementById('iqui-fluv-file-input').addEventListener('change', function(e) {
+    var file = e.target.files[0];
+    if (file) window._iquiProcesarReporteFluv(file);
+  });
+};
+
+window._iquiProcesarReporteFluv = async function(file) {
+  var statusEl = document.getElementById('iqui-fluv-carga-status');
+  function setStatus(txt, isError) {
+    if (statusEl) { statusEl.textContent = txt; statusEl.style.color = isError ? '#dc2626' : 'var(--txt3)'; }
+  }
+  try {
+    setStatus('⏳ Leyendo el PDF…');
+    await _loadPdfJs(); // ya usada por el otro cargador de reportes (Cargas de Naves) — se reutiliza tal cual
+    var ab = await new Promise(function(res, rej) {
+      var reader = new FileReader();
+      reader.onload  = function() { res(reader.result); };
+      reader.onerror = rej;
+      reader.readAsArrayBuffer(file);
+    });
+    var pdf = await pdfjsLib.getDocument({ data: ab }).promise;
+    var lineas = [];
+    for (var p = 1; p <= pdf.numPages; p++) {
+      var page = await pdf.getPage(p);
+      var tc = await page.getTextContent();
+      var items = tc.items.sort(function(a, b) {
+        var dy = Math.round((b.transform[5] - a.transform[5]) / 3);
+        return dy !== 0 ? dy : a.transform[4] - b.transform[4];
+      });
+      var lineMap = {};
+      items.forEach(function(it) {
+        var y = Math.round(it.transform[5] / 3);
+        (lineMap[y] = lineMap[y] || []).push(it.str);
+      });
+      Object.keys(lineMap).sort(function(a, b) { return b - a; }).forEach(function(y) {
+        var linea = lineMap[y].join(' ').replace(/\s+/g, ' ').trim();
+        if (linea) lineas.push(linea);
+      });
+    }
+    setStatus('⏳ Reconociendo convoyes…');
+    var convoyes = _iquiParsearReporteFluvial(lineas);
+    if (!convoyes.length) {
+      setStatus('⚠️ No se reconoció ningún convoy en este PDF — el diseño puede ser distinto al esperado. Revisa el archivo o cárgalos a mano.', true);
+      return;
+    }
+    document.getElementById('iqui-carga-fluv-overlay').remove();
+    window._iquiMostrarRevisionFluv(convoyes);
+  } catch (err) {
+    console.error('[Carga Fluvial]', err);
+    setStatus('⚠️ Error al leer el PDF: ' + (err.message || err), true);
+  }
+};
+
+// Reconocedor de patrones — busca marcas de texto conocidas del reporte
+// (RUTA:, EF REY N, AF <nombre>, fechas DD/MM/YYYY, palabras de estado)
+// para armar los convoyes. Best-effort: siempre revisar antes de guardar.
+function _iquiParsearReporteFluvial(lineas) {
+  var texto = lineas.join('\n');
+  var convoyes = [];
+  var tipoRutaActual = '';
+  var idx = 0;
+
+  function esFechaDDMMYYYY(s) { return /^\d{2}\/\d{2}\/\d{4}$/.test(s); }
+  function aISO(ddmmyyyy) {
+    var m = ddmmyyyy.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+    return m ? (m[3] + '-' + m[2] + '-' + m[1]) : '';
+  }
+
+  var i = 0;
+  while (i < lineas.length) {
+    var linea = lineas[i];
+
+    // Detectar cambio de sección de ruta
+    var mRuta = linea.match(/RUTA:\s*IQUITOS\s*-\s*(PUCALLPA|YURIMAGUAS)/i);
+    if (mRuta) {
+      tipoRutaActual = mRuta[1].toUpperCase() === 'PUCALLPA' ? 'LPO' : 'YU';
+      i++; continue;
+    }
+
+    // Detectar inicio de bloque de empujador (EF ...)
+    var mEF = linea.match(/\b(EF\s+[A-ZÁÉÍÓÚÑ0-9\s]+?(?:\d+\s*HP)?)\b/i);
+    if (mEF && /EF\s/i.test(linea) && !/EF\s*'?S\b/i.test(linea)) {
+      var empujador = mEF[1].trim().replace(/\s+/g, ' ');
+      // Recolectar las líneas del bloque hasta el próximo "EF " o "RUTA:" o fin
+      var bloque = [linea];
+      var j = i + 1;
+      while (j < lineas.length && !/\bEF\s+[A-ZÁÉÍÓÚÑ0-9]/i.test(lineas[j]) && !/RUTA:|BAHIA|BAHÍA/i.test(lineas[j])) {
+        bloque.push(lineas[j]);
+        j++;
+      }
+      var bloqueTxt = bloque.join('\n');
+
+      // Nombres de barcazas (AF ...)
+      var afs = [];
+      var reAF = /AF\s+([A-ZÁÉÍÓÚÑ0-9\s]+?)\s*(?:\(([\d.]+)\s*MB\))?(?=\s*[\d.]+\s*MB|\s*$|\n)/gi;
+      var mAf;
+      var afRegexSimple = /\bAF\s+([A-ZÁÉÍÓÚÑ]+(?:\s+[A-ZÁÉÍÓÚÑ]+)*)/g;
+      while ((mAf = afRegexSimple.exec(bloqueTxt)) !== null) {
+        var nombreAf = mAf[1].trim();
+        if (nombreAf && afs.indexOf(nombreAf) === -1) afs.push(nombreAf);
+      }
+
+      // Volumen: se quitan primero los paréntesis de capacidad
+      // (ej. "(20.0 MB)") por completo del texto, para no confundirlos
+      // con el volumen realmente embarcado.
+      var bloqueSinCapacidad = bloqueTxt.replace(/\([^)]*\)/g, ' ');
+      var vols = bloqueSinCapacidad.match(/\b(\d{1,3}(?:\.\d{1,2})?)\s*MB\b/g) || [];
+      var volTotal = 0;
+      vols.forEach(function(v) {
+        var n = parseFloat(v);
+        if (!isNaN(n)) volTotal += n;
+      });
+
+      // Producto: palabras clave conocidas
+      var prodMatch = bloqueTxt.match(/\b(PI6|DIESEL\s*2|DIESEL\s*B5|GASOLINA\s*90\s*INSUMO|GASOLINA\s*90)\b/gi);
+      var productos = prodMatch ? Array.from(new Set(prodMatch.map(function(p){ return p.replace(/\s+/g,' ').trim(); }))) : [];
+
+      // Fechas: buscar todas las DD/MM/YYYY del bloque — típicamente
+      // zarpe = primera, ETA/arribo = segunda
+      var fechas = (bloqueTxt.match(/\d{2}\/\d{2}\/\d{4}/g) || []);
+      var zarpe = fechas[0] ? aISO(fechas[0]) : '';
+      var eta   = fechas[1] ? aISO(fechas[1]) : '';
+
+      // Destino: primera planta reconocida que NO sea Iquitos-origen
+      var destMatch = bloqueTxt.match(/\b(IQUITOS|PUCALLPA|YURIMAGUAS)\b/g);
+      var destino = 'Iquitos';
+      if (destMatch) {
+        // el destino suele repetirse junto a ZARPÓ/ARRIBO — se toma la
+        // que más aparece que no sea el origen típico
+        var conteo = {};
+        destMatch.forEach(function(d) { conteo[d] = (conteo[d]||0) + 1; });
+        var candidatos = Object.keys(conteo).filter(function(d) { return d !== 'IQUITOS'; });
+        if (candidatos.length) destino = candidatos[0].charAt(0) + candidatos[0].slice(1).toLowerCase();
+      }
+
+      // Estado: palabras clave conocidas
+      var estMatch = bloqueTxt.match(/\b(NAVEGANDO|EMBARCANDO|ACODERADO|DESCARGANDO)\b/i);
+      var estado = estMatch ? estMatch[1].toUpperCase() : 'PENDIENTE';
+
+      // Comentario: líneas que no son parte del encabezado de tabla ni
+      // ya capturadas como fecha/estado — un resumen best-effort, se
+      // revisa igual en pantalla antes de guardar.
+      var comentarioLineas = bloque.filter(function(l) {
+        return !/^(EMPRESA|A\/F|VOLUMEN|PRODUCTO|DESTINO|ZARPE|ARRIBO|ESTADO|COMENTARIOS)\s*$/i.test(l)
+          && !esFechaDDMMYYYY(l.trim());
+      });
+      var comentario = comentarioLineas.join(' ').replace(/\s+/g, ' ').trim().slice(0, 500);
+
+      var rutaStr = (destino === 'Iquitos')
+        ? ((tipoRutaActual === 'LPO' ? 'Pucallpa' : 'Yurimaguas') + '-Iquitos')
+        : ('Iquitos-' + destino);
+
+      var nombreConvoy = empujador.replace(/\s+\d+\s*HP\s*$/i, '').trim()
+        + (afs.length ? (' / ' + afs.map(function(a){ return a.charAt(0)+a.slice(1).toLowerCase(); }).join(' - ')) : '');
+
+      idx++;
+      convoyes.push({
+        id: 'fluv-carga-' + Date.now() + '-' + idx,
+        tipo_ruta: tipoRutaActual || 'LPO',
+        barcaza: nombreConvoy,
+        ruta: rutaStr,
+        producto: productos.join(' / '),
+        zarpe_plan: zarpe,
+        arribo_plan: eta,
+        vol_plan_mb: Math.round(volTotal * 100) / 100,
+        estado: estado,
+        status_embarque: 'COMPLETADO',
+        obs: comentario
+      });
+
+      i = j; continue;
+    }
+    i++;
+  }
+  return convoyes;
+}
+
+// Pantalla de revisión — SIEMPRE se muestra antes de guardar. Cada campo
+// es editable, para corregir cualquier cosa que el reconocedor de
+// patrones haya interpretado mal.
+window._iquiMostrarRevisionFluv = function(convoyes) {
+  var overlay = document.createElement('div');
+  overlay.id = 'iqui-revision-fluv-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;overflow-y:auto';
+  var filasHTML = convoyes.map(function(c, i) {
+    return '<div style="border:1.5px solid var(--bdr);border-radius:10px;padding:14px;margin-bottom:12px;background:var(--card2)" data-idx="' + i + '">'
+      + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:8px">'
+      +   '<div><label style="font-size:9.5px;font-weight:700;color:var(--txt3);text-transform:uppercase">Convoy / Barcaza(s)</label><input type="text" class="fv-barcaza" value="' + (c.barcaza||'').replace(/"/g,'&quot;') + '" style="width:100%;padding:6px 8px;border:1px solid var(--bdr);border-radius:6px;background:var(--card);color:var(--txt);font-size:12px"></div>'
+      +   '<div><label style="font-size:9.5px;font-weight:700;color:var(--txt3);text-transform:uppercase">Ruta</label>'
+      +     '<select class="fv-ruta" style="width:100%;padding:6px 8px;border:1px solid var(--bdr);border-radius:6px;background:var(--card);color:var(--txt);font-size:12px">'
+      +       ['Pucallpa-Iquitos','Yurimaguas-Iquitos','Iquitos-Pucallpa','Iquitos-Yurimaguas'].map(function(r){ return '<option value="'+r+'"'+(c.ruta===r?' selected':'')+'>'+r+'</option>'; }).join('')
+      +     '</select></div>'
+      + '</div>'
+      + '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:8px">'
+      +   '<div><label style="font-size:9.5px;font-weight:700;color:var(--txt3);text-transform:uppercase">Producto</label><input type="text" class="fv-producto" value="' + (c.producto||'').replace(/"/g,'&quot;') + '" style="width:100%;padding:6px 8px;border:1px solid var(--bdr);border-radius:6px;background:var(--card);color:var(--txt);font-size:12px"></div>'
+      +   '<div><label style="font-size:9.5px;font-weight:700;color:var(--txt3);text-transform:uppercase">Volumen (MB)</label><input type="number" step="0.01" class="fv-vol" value="' + (c.vol_plan_mb||0) + '" style="width:100%;padding:6px 8px;border:1px solid var(--bdr);border-radius:6px;background:var(--card);color:var(--txt);font-size:12px"></div>'
+      +   '<div><label style="font-size:9.5px;font-weight:700;color:var(--txt3);text-transform:uppercase">Estado</label>'
+      +     '<select class="fv-estado" style="width:100%;padding:6px 8px;border:1px solid var(--bdr);border-radius:6px;background:var(--card);color:var(--txt);font-size:12px">'
+      +       ['NAVEGANDO','EMBARCANDO','ACODERADO','DESCARGANDO','PENDIENTE'].map(function(e){ return '<option value="'+e+'"'+(c.estado===e?' selected':'')+'>'+e+'</option>'; }).join('')
+      +     '</select></div>'
+      + '</div>'
+      + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:8px">'
+      +   '<div><label style="font-size:9.5px;font-weight:700;color:var(--txt3);text-transform:uppercase">Zarpe</label><input type="date" class="fv-zarpe" value="' + (c.zarpe_plan||'') + '" style="width:100%;padding:6px 8px;border:1px solid var(--bdr);border-radius:6px;background:var(--card);color:var(--txt);font-size:12px"></div>'
+      +   '<div><label style="font-size:9.5px;font-weight:700;color:var(--txt3);text-transform:uppercase">ETA / Arribo</label><input type="date" class="fv-eta" value="' + (c.arribo_plan||'') + '" style="width:100%;padding:6px 8px;border:1px solid var(--bdr);border-radius:6px;background:var(--card);color:var(--txt);font-size:12px"></div>'
+      + '</div>'
+      + '<div><label style="font-size:9.5px;font-weight:700;color:var(--txt3);text-transform:uppercase">Comentario / Detalle</label><textarea class="fv-obs" rows="2" style="width:100%;padding:6px 8px;border:1px solid var(--bdr);border-radius:6px;background:var(--card);color:var(--txt);font-size:11.5px;resize:vertical">' + (c.obs||'').replace(/</g,'&lt;') + '</textarea></div>'
+      + '<label style="display:flex;align-items:center;gap:6px;margin-top:8px;font-size:11px;color:var(--txt3);cursor:pointer"><input type="checkbox" class="fv-incluir" checked> Incluir este convoy al guardar</label>'
+      + '</div>';
+  }).join('');
+  overlay.innerHTML =
+    '<div style="background:var(--card);border-radius:14px;max-width:640px;width:100%;padding:22px;max-height:88vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.5)">'
+    + '<div style="font-size:16px;font-weight:800;color:var(--txt);margin-bottom:4px">📋 Revisa antes de guardar</div>'
+    + '<div style="font-size:11.5px;color:var(--txt3);margin-bottom:16px">Se reconocieron ' + convoyes.length + ' convoy(es). Revisa y corrige lo que haga falta — nada se guarda hasta que confirmes.</div>'
+    + '<div id="iqui-revision-fluv-lista">' + filasHTML + '</div>'
+    + '<div id="iqui-revision-fluv-status" style="font-size:11.5px;color:var(--txt3);margin:10px 0"></div>'
+    + '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px">'
+    + '  <button onclick="document.getElementById(\'iqui-revision-fluv-overlay\').remove()" style="padding:9px 16px;background:var(--card2);color:var(--txt2);border:1px solid var(--bdr);border-radius:7px;font-size:12.5px;font-weight:700;cursor:pointer">Cancelar</button>'
+    + '  <button id="iqui-revision-fluv-guardar" onclick="window._iquiGuardarRevisionFluv()" style="padding:9px 18px;background:#1a7a44;color:#fff;border:none;border-radius:7px;font-size:12.5px;font-weight:700;cursor:pointer">✅ Guardar convoyes confirmados</button>'
+    + '</div>'
+    + '</div>';
+  document.body.appendChild(overlay);
+  window._iquiConvoyesParaGuardar = convoyes;
+};
+
+window._iquiGuardarRevisionFluv = async function() {
+  var lista = document.getElementById('iqui-revision-fluv-lista');
+  var bloques = lista.querySelectorAll('[data-idx]');
+  var statusEl = document.getElementById('iqui-revision-fluv-status');
+  var btn = document.getElementById('iqui-revision-fluv-guardar');
+  var paraGuardar = [];
+  bloques.forEach(function(b) {
+    if (!b.querySelector('.fv-incluir').checked) return;
+    var idx = +b.dataset.idx;
+    var original = window._iquiConvoyesParaGuardar[idx];
+    paraGuardar.push({
+      id: original.id,
+      tipo_ruta: original.tipo_ruta,
+      barcaza: b.querySelector('.fv-barcaza').value.trim(),
+      ruta: b.querySelector('.fv-ruta').value,
+      producto: b.querySelector('.fv-producto').value.trim(),
+      zarpe_plan: b.querySelector('.fv-zarpe').value,
+      arribo_plan: b.querySelector('.fv-eta').value,
+      vol_plan_mb: parseFloat(b.querySelector('.fv-vol').value) || 0,
+      estado: b.querySelector('.fv-estado').value,
+      status_embarque: 'COMPLETADO',
+      obs: b.querySelector('.fv-obs').value.trim()
+    });
+  });
+  if (!paraGuardar.length) {
+    statusEl.textContent = '⚠️ No hay ningún convoy marcado para guardar.';
+    statusEl.style.color = '#dc2626';
+    return;
+  }
+  btn.disabled = true; btn.textContent = 'Guardando…';
+  var url = (typeof CONFIG !== 'undefined' ? CONFIG.API_URL : '');
+  var okCount = 0, errCount = 0;
+  for (var i = 0; i < paraGuardar.length; i++) {
+    try {
+      var r = await fetch(url, {
+        method: 'POST', headers: {'Content-Type':'text/plain'},
+        body: JSON.stringify({ action: 'saveIquiViaje', tipo: 'fluvial', viaje: paraGuardar[i] })
+      });
+      var j = await r.json();
+      if (j && j.success !== false) okCount++; else errCount++;
+    } catch (e) { errCount++; }
+  }
+  statusEl.textContent = '✅ Guardados: ' + okCount + (errCount ? (' · ⚠️ Con error: ' + errCount) : '');
+  statusEl.style.color = errCount ? '#d97706' : '#1a7a44';
+  btn.textContent = '✅ Guardar convoyes confirmados';
+  btn.disabled = false;
+  if (okCount > 0) {
+    setTimeout(function() {
+      var ov = document.getElementById('iqui-revision-fluv-overlay');
+      if (ov) ov.remove();
+      _iquiViajesFluv = null;
+      if (typeof renderPIqui === 'function') renderPIqui();
+      var activePage = document.querySelector('.page.active');
+      if (activePage && activePage.id === 'pA' && typeof renderPA === 'function') renderPA();
+    }, 1200);
+  }
 };
 window._openPuertosModal = function() {
   var existing = document.getElementById('puertos-modal-overlay');
