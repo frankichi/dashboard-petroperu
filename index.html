@@ -10804,19 +10804,26 @@ function renderPA() {
         // anchas son sus etiquetas — para garantizar separación real.
         var centroPx = _leafletMap.latLngToContainerPoint(L.latLng(g.centro));
         var anchoPromedio = g.items.reduce(function(s, lbl){ return s + lbl.anchoEstimado; }, 0) / g.items.length;
-        var circunferenciaNecesaria = g.items.length * (anchoPromedio + 14);
-        var radioPx = Math.max(70, circunferenciaNecesaria / (2 * Math.PI));
+        var circunferenciaNecesaria = g.items.length * (anchoPromedio + 10);
+        var radioPx = Math.min(190, Math.max(65, circunferenciaNecesaria / (2 * Math.PI)));
+        // Si el grupo es grande y el tope de radio no alcanza para que
+        // todas las etiquetas quepan sin superponerse, se reduce un poco
+        // su tamaño en vez de seguir alejándolas cada vez más lejos.
+        var circunferenciaDisponible = 2 * Math.PI * radioPx;
+        var escalaEtiqueta = Math.min(1, circunferenciaDisponible / circunferenciaNecesaria);
         var marcadoresAbanico = [];
         g.items.forEach(function(lbl, i) {
           var angulo = (i / g.items.length) * 2 * Math.PI - Math.PI / 2; // empieza hacia arriba
           var posPx = { x: centroPx.x + Math.cos(angulo) * radioPx, y: centroPx.y + Math.sin(angulo) * radioPx };
           var pos = _leafletMap.containerPointToLatLng(posPx);
-          var markerHtml = '<div title="'+lbl.name.replace(/"/g,'&quot;')+'" style="background:'+lbl.color+';color:#fff;padding:3px 8px;border-radius:12px;'
-                         + 'font-size:9px;font-weight:800;white-space:nowrap;cursor:pointer;'
+          var anchoFinal = Math.round(lbl.anchoEstimado * escalaEtiqueta);
+          var fuenteFinal = Math.max(7, Math.round(9 * escalaEtiqueta));
+          var markerHtml = '<div title="'+lbl.name.replace(/"/g,'&quot;')+'" style="background:'+lbl.color+';color:#fff;padding:2px 6px;border-radius:12px;'
+                         + 'font-size:'+fuenteFinal+'px;font-weight:800;white-space:nowrap;cursor:pointer;'
                          + 'box-shadow:0 2px 8px rgba(0,0,0,.4);border:2px solid #fff;display:inline-block">'
                          + lbl.icon + ' ' + lbl.nameCorto + '</div>';
           var m = L.marker(pos, {
-            icon: L.divIcon({className: grupoId+'-item', html: markerHtml, iconSize:[lbl.anchoEstimado, 22], iconAnchor:[lbl.anchoEstimado/2, 11]}),
+            icon: L.divIcon({className: grupoId+'-item', html: markerHtml, iconSize:[anchoFinal, 20], iconAnchor:[anchoFinal/2, 10]}),
             opacity: 0
           }).bindPopup(lbl.popupHTML, {className:'ship-popup', maxWidth: 320, autoPan: true});
           m.addTo(capa);
