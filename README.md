@@ -114,6 +114,27 @@ La **primera vez** que abras el sistema te pedirá crear la cuenta del **adminis
 
 **Seguridad**: las contraseñas se guardan encriptadas (scrypt + salt) en la pestaña `Usuarios` de tu hoja; nadie puede leerlas, ni siquiera abriendo el Sheets. Las sesiones duran 12 horas y van firmadas en una cookie httpOnly.
 
+## Conectar con SUNAT (consulta de clientes por RUC/DNI)
+
+SUNAT no ofrece una API pública gratuita para consultas individuales de RUC, así que el sistema usa un proveedor intermedio gratuito (el más usado en Perú para esto):
+
+1. Entra a [apis.net.pe](https://apis.net.pe) y regístrate gratis.
+2. Genera tu token (aparece como `apis-token-1.xxxxxxxxxx...`).
+3. En Vercel, agrega la variable `RUC_API_TOKEN` con ese valor.
+4. Redeploy. Listo: en el Punto de venta, al escribir un RUC (11 dígitos) o DNI (8 dígitos) y presionar "Buscar", el sistema:
+   - Primero busca en tus **clientes ya guardados** (pestaña `Clientes` de tu hoja).
+   - Si no lo encuentra, consulta **SUNAT** (para RUC) o **RENIEC** (para DNI) y autocompleta razón social/nombre y dirección.
+   - Puedes guardar ese cliente con un clic para que la próxima venta sea instantánea, sin volver a consultar.
+
+Sin este token configurado, el sistema sigue funcionando normalmente: solo no autocompleta, y sigues escribiendo los datos del cliente a mano como antes.
+
+## Corrección de códigos con ceros a la izquierda
+
+Si registraste productos antes de esta versión y notas que un código como `038753319544` se guardó sin el cero inicial (`38753319544`), fue porque Google Sheets convertía automáticamente los códigos numéricos en números. Esto ya está corregido de raíz (las columnas se fuerzan a formato de texto), pero:
+
+1. **Actualiza tu Apps Script** con la versión más reciente de `google-apps-script/Code.gs` (ver instrucciones de esa carpeta: Extensiones → Apps Script → reemplazar código → Implementar → Gestionar implementaciones → Nueva versión).
+2. Los productos que **ya** perdieron su cero deben corregirse una vez a mano: en **Inventario**, edítalos y vuelve a escribir el código completo con el cero — ya no se volverá a perder.
+
 ## Cómo se usa en el día a día
 
 **Registrar productos** (Inventario): escanea el código del producto con la pistola. Si no existe, se abre el formulario con el código ya cargado: completas nombre, voltaje, amperaje, peso, medidas, stock, costo, precio, etc. Si ya existe, se abre para editar.

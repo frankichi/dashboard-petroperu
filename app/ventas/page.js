@@ -9,11 +9,82 @@ export default function PuntoDeVenta() {
   const [carrito, setCarrito] = useState([]);
   const [tipo, setTipo] = useState("BOLETA");
   const [cliente, setCliente] = useState({ doc: "", nombre: "", direccion: "" });
+  const [buscandoCliente, setBuscandoCliente] = useState(false);
+  const [clienteEncontrado, setClienteEncontrado] = useState(null); // "local" | "sunat" | null
+  const [msjCliente, setMsjCliente] = useState(null);
   const [metodoPago, setMetodoPago] = useState("EFECTIVO");
   const [buscando, setBuscando] = useState(false);
   const [procesando, setProcesando] = useState(false);
   const [msj, setMsj] = useState(null);
   const [comprobante, setComprobante] = useState(null); // venta emitida
+
+  async function buscarCliente() {
+    const doc = cliente.doc.trim();
+    setMsjCliente(null);
+    setClienteEncontrado(null);
+    if (!doc) return;
+
+    const esRuc = /^\d{11}$/.test(doc);
+    const esDni = /^\d{8}$/.test(doc);
+    if (!esRuc && !esDni) {
+      setMsjCliente({ tipo: "error", texto: "El documento debe tener 8 dígitos (DNI) u 11 dígitos (RUC)." });
+      return;
+    }
+
+    setBuscandoCliente(true);
+    try {
+      // 1) Buscar primero en los clientes ya guardados
+      const local = await fetch(`/api/clientes?doc=${encodeURIComponent(doc)}`).then((r) => r.json());
+      if (local.cliente) {
+        setCliente({ doc, nombre: local.cliente.nombre, direccion: local.cliente.direccion || "" });
+        setClienteEncontrado("local");
+        setMsjCliente({ tipo: "ok", texto: "Cliente encontrado en tu registro." });
+        setBuscandoCliente(false);
+        return;
+      }
+
+      // 2) Si no está guardado y parece RUC/DNI válido, consultar SUNAT/RENIEC
+      const tipoDoc = esRuc ? "ruc" : "dni";
+      const r = await fetch(`/api/sunat?tipo=${tipoDoc}&numero=${doc}`);
+      const data = await r.json();
+      if (!r.ok) {
+        setMsjCliente({ tipo: "error", texto: data.error || "No se pudo consultar SUNAT." });
+        setBuscandoCliente(false);
+        return;
+      }
+      setCliente({ doc, nombre: data.resultado.nombre, direccion: data.resultado.direccion });
+      setClienteEncontrado("sunat");
+      setMsjCliente({
+        tipo: "ok",
+        texto: esRuc
+          ? `Datos obtenidos de SUNAT (estado: ${data.resultado.estado_sunat || "—"}).`
+          : "Datos obtenidos de RENIEC.",
+      });
+    } catch (e) {
+      setMsjCliente({ tipo: "error", texto: "No se pudo completar la búsqueda." });
+    }
+    setBuscandoCliente(false);
+  }
+
+  async function guardarCliente() {
+    if (!cliente.doc || !cliente.nombre) return;
+    setBuscandoCliente(true);
+    const r = await fetch("/api/clientes", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        doc: cliente.doc,
+        tipo_doc: cliente.doc.length === 11 ? "RUC" : "DNI",
+        nombre: cliente.nombre,
+        direccion: cliente.direccion,
+      }),
+    });
+    setBuscandoCliente(false);
+    if (r.ok) {
+      setClienteEncontrado("local");
+      setMsjCliente({ tipo: "ok", texto: "Cliente guardado. La próxima vez se autocompleta al instante." });
+    }
+  }
 
   async function agregarPorCodigo(codigo) {
     setMsj(null);
@@ -95,6 +166,8 @@ export default function PuntoDeVenta() {
     setComprobante(data.venta);
     setCarrito([]);
     setCliente({ doc: "", nombre: "", direccion: "" });
+    setClienteEncontrado(null);
+    setMsjCliente(null);
   }
 
   // ── Vista de comprobante emitido ─────────────────────────
@@ -212,23 +285,55 @@ export default function PuntoDeVenta() {
             <label className="label" htmlFor="c-doc">
               {tipo === "FACTURA" ? "RUC del cliente *" : "DNI (opcional)"}
             </label>
-            <input id="c-doc" className="input font-mono" inputMode="numeric"
-              maxLength={11} value={cliente.doc}
-              onChange={(e) => setCliente((c) => ({ ...c, doc: e.target.value.replace(/\D/g, "") }))} />
+            <div className="flex gap-2">
+              <input id="c-doc" className="input font-mono" inputMode="numeric"
+                maxLength={11} value={cliente.doc}
+                onChange={(e) => {
+                  setCliente((c) => ({ ...c, doc: e.target.value.replace(/\D/g, "") }));
+                  setClienteEncontrado(null);
+                  setMsjCliente(null);
+                }}
+                onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), buscarCliente())}
+              />
+              <button type="button" className="btn-ghost shrink-0" onClick={buscarCliente}
+                disabled={buscandoCliente || !cliente.doc}>
+                {buscandoCliente ? "..." : "Buscar"}
+              </button>
+            </div>
+            <p className="text-[11px] text-neutral-400 mt-1">
+              Busca primero en tus clientes guardados y, si no lo encuentra, consulta SUNAT (RUC) o RENIEC (DNI).
+            </p>
           </div>
+
+          {msjCliente && (
+            <div className={`rounded-md px-3 py-2 text-xs font-medium ${
+              msjCliente.tipo === "error"
+                ? "bg-red-50 text-alerta border border-red-200"
+                : "bg-green-50 text-ok border border-green-200"
+            }`}>
+              {msjCliente.texto}
+            </div>
+          )}
+
           <div>
             <label className="label" htmlFor="c-nombre">
               {tipo === "FACTURA" ? "Razón social *" : "Nombre del cliente"}
             </label>
             <input id="c-nombre" className="input" value={cliente.nombre}
-              onChange={(e) => setCliente((c) => ({ ...c, nombre: e.target.value }))} />
+              onChange={(e) => { setCliente((c) => ({ ...c, nombre: e.target.value })); setClienteEncontrado(null); }} />
           </div>
           {tipo === "FACTURA" && (
             <div>
               <label className="label" htmlFor="c-dir">Dirección fiscal</label>
               <input id="c-dir" className="input" value={cliente.direccion}
-                onChange={(e) => setCliente((c) => ({ ...c, direccion: e.target.value }))} />
+                onChange={(e) => { setCliente((c) => ({ ...c, direccion: e.target.value })); setClienteEncontrado(null); }} />
             </div>
+          )}
+          {cliente.doc && cliente.nombre && clienteEncontrado !== "local" && (
+            <button type="button" className="btn-ghost w-full !py-2 text-xs" onClick={guardarCliente}
+              disabled={buscandoCliente}>
+              + Guardar como cliente frecuente
+            </button>
           )}
           <div>
             <label className="label" htmlFor="c-pago">Método de pago</label>
