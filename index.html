@@ -23023,7 +23023,7 @@ function renderVistaEjecutivaSimple() {
       var acc = porPlantaFila[p];
       var rep = reposicionInfoPlanta(p, prod);
       var diasDirecto = acc.pronSumCob > 0 ? Math.floor(acc.invSumCob / acc.pronSumCob) : null;
-      return { label: p, dias: diasDirecto, invMB: acc.invSum, pronMB: acc.pronSum, diasRepos: rep.diasRepos, volReposMB: rep.volMB, tipoRepos: rep.tipo, reposDetalle: rep.detalle, reposBt: rep.bt, reposFecha: rep.fecha, reposEstado: rep.estado, reposNaves: rep.naves, sinCob: diasDirecto === null, proyectado: acc.proyectado };
+      return { label: p, dias: diasDirecto, invMB: acc.invSum, pronMB: acc.pronSum, denomMB: acc.pronSumCob, diasRepos: rep.diasRepos, volReposMB: rep.volMB, tipoRepos: rep.tipo, reposDetalle: rep.detalle, reposBt: rep.bt, reposFecha: rep.fecha, reposEstado: rep.estado, reposNaves: rep.naves, sinCob: diasDirecto === null, proyectado: acc.proyectado };
     });
   } else if (!esRefineriaExec) {
     var plantaCobertura = COMBO_PLANTAS[pl] ? COMBO_PLANTAS[pl].plantaDespacho : pl;
@@ -23200,7 +23200,16 @@ function renderVistaEjecutivaSimple() {
             + (reposEsPendiente ? '<br>D\u00edas equivalentes: +' + d.diasRepos + 'd' : '')
             + (reposLejana && d.reposEstado !== 'DESCARGANDO' ? '<br><span style="color:#93c5fd">\u26a0\ufe0f A\u00fan a ' + diasHastaETA + ' d\u00edas \u2014 no confirmado, no cuenta como inventario todav\u00eda</span>' : ''))
       : '';
-    var pronHTML = '<div style="color:#93c5fd">Demanda pron\u00f3stico' + (prod!=='Todos'?(' ('+prod+')'):'') + ': ' + (d.pronMB||0).toFixed(DEC) + ' MB/d\u00eda</div>';
+    // ⚠️ CORREGIDO — bug real confirmado: el popup siempre decía "Demanda
+    // pronóstico" y mostraba d.pronMB (el pronóstico crudo), sin importar
+    // si el usuario había elegido "Despacho real" con el botón de arriba
+    // — daba la impresión de que el modo no tenía ningún efecto en el
+    // detalle, aunque el número de días de cobertura sí se recalculaba
+    // bien. Ahora usa d.denomMB (el mismo dato que ya alimenta el
+    // cálculo de días) y cambia la etiqueta según el modo activo.
+    var esModoReal = window._execCobModo === 'real';
+    var etiquetaDemanda = esModoReal ? 'Despacho real' : 'Demanda pronóstico';
+    var pronHTML = '<div style="color:#93c5fd">' + etiquetaDemanda + (prod!=='Todos'?(' ('+prod+')'):'') + ': ' + (d.denomMB||0).toFixed(DEC) + ' MB/d\u00eda</div>';
     // ⚠️ CORREGIDO — bug real confirmado: antes AMBOS segmentos de la
     // barra (el sólido de inventario Y el rayado de reposición/cabotaje)
     // compartían el mismo popup combinado (reposición + pronóstico) —
