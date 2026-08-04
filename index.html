@@ -23087,8 +23087,17 @@ function renderVistaEjecutivaSimple() {
       // planta. Se muestra como "sin cobertura calculable" (barra
       // neutra, sin días), no se elimina del todo.
       var esTalaraTA1Vista = plantaCobertura === 'Talara' && r.producto === 'TA1';
-      if (c === null && !esTalaraTA1Vista) return;
-      datosCob.push({ label: r.producto, dias: esTalaraTA1Vista ? null : c, invMB: invCombinado, pronMB: pronVal2, diasRepos: rep.diasRepos, volReposMB: rep.volMB, tipoRepos: rep.tipo, reposBt: rep.bt, reposFecha: rep.fecha, reposEstado: rep.estado, reposNaves: rep.naves, sinCob: esTalaraTA1Vista ? true : (c === null), proyectado: !!r._proyectadoConsumo });
+      // ⚠️ AGREGADO — mismo criterio que TA1 en Talara: ULSD
+      // Nacionalizado en Mollendo es un insumo interno para mezclar y
+      // generar Diesel, nunca se despacha directo a clientes — no tiene
+      // demanda/pronóstico propio, así que "días de cobertura" no tiene
+      // sentido para este producto. Antes esto hacía que se descartara
+      // del todo (c === null); ahora se muestra igual, con su volumen,
+      // pero sin un cálculo de días.
+      var esMollendoULSDVista = plantaCobertura === 'Mollendo' && r.producto === 'ULSD Nacionalizado';
+      var esExcepcionSinDias = esTalaraTA1Vista || esMollendoULSDVista;
+      if (c === null && !esExcepcionSinDias) return;
+      datosCob.push({ label: r.producto, dias: esExcepcionSinDias ? null : c, invMB: invCombinado, pronMB: pronVal2, diasRepos: rep.diasRepos, volReposMB: rep.volMB, tipoRepos: rep.tipo, reposBt: rep.bt, reposFecha: rep.fecha, reposEstado: rep.estado, reposNaves: rep.naves, sinCob: esExcepcionSinDias ? true : (c === null), proyectado: !!r._proyectadoConsumo });
     });
   }
   datosCob.sort(function(a,b){
