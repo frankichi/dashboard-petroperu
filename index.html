@@ -1335,7 +1335,7 @@ textarea.pd-inp{resize:vertical;min-height:44px;font-family:var(--sans)}
       <span style="width:7px;height:7px;border-radius:50%;background:#2563eb;display:inline-block;animation:splashDot 1.4s ease-in-out infinite .22s"></span>
       <span style="width:7px;height:7px;border-radius:50%;background:#16a34a;display:inline-block;animation:splashDot 1.4s ease-in-out infinite .44s"></span>
     </div>
-    <div class="loading-text" style="font-size:12px;color:#64748b" id="splashMsg">Conectando con Google Sheets...</div>
+    <div class="loading-text" style="font-size:12px;color:#64748b" id="splashMsg">Conectando...</div>
   </div>
 </div>
 <!-- TOPBAR -->
@@ -4298,7 +4298,7 @@ async function fetchData(forceRefresh) {
   setGsStatus('connecting', 'Conectando...');
   // Splash: mensajes animados mientras carga
   var _sm = document.getElementById('splashMsg');
-  var _msgs = ['Conectando con Google Sheets...','Descargando inventarios...','Procesando coberturas...','Preparando dashboard...'];
+  var _msgs = ['Conectando...','Descargando inventarios...','Procesando coberturas...','Preparando dashboard...'];
   var _mi = 0;
   if (_sm) _sm.textContent = _msgs[0];
   var _st = setInterval(function() {
