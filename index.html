@@ -9930,7 +9930,11 @@ function renderPA() {
   `;
   var _pAEl=document.getElementById('peruLeafletMap'); if(_pAEl)_pAEl.innerHTML='';
   setTimeout(() => {
-    if (_leafletMap) { try{_leafletMap.remove();}catch(e){} _leafletMap = null; }
+    if (_leafletMap) {
+      try { if (typeof _leafletMap.stop === 'function') _leafletMap.stop(); } catch(eStop) {}
+      try { _leafletMap.remove(); } catch(e) {}
+      _leafletMap = null;
+    }
     if (typeof L === 'undefined') { var _el=document.getElementById('peruLeafletMap'); if(_el)_el.innerHTML='<div style="padding:20px;color:var(--txt3);text-align:center">Mapa no disponible</div>'; return; }
     _leafletMap = L.map('peruLeafletMap', {
       center: [-9.5, -75.5], zoom: 6, minZoom: 5, maxZoom: 14,
@@ -10970,7 +10974,19 @@ function renderPA() {
       document.head.appendChild(st);
     }
     _leafletMap.invalidateSize();
-    _leafletMap.fitBounds([[-18.35,-81.33],[-0.014,-68.64]], {padding:[10,10]});
+    // ⚠️ CORREGIDO — bug real confirmado: fitBounds() con animación
+    // (por defecto) podía chocar con el mapa siendo destruido/recreado
+    // si el usuario salía y volvía a entrar a esta página rápido —
+    // la animación de zoom del mapa viejo intentaba completarse sobre
+    // un mapa ya removido, causando un error de "_leaflet_pos"
+    // indefinido que rompía la carga del mapa. Se desactiva la
+    // animación para este encuadre inicial (no hace falta que se vea
+    // animado) y se protege con try/catch por si acaso.
+    try {
+      _leafletMap.fitBounds([[-18.35,-81.33],[-0.014,-68.64]], {padding:[10,10], animate:false});
+    } catch (eFitBounds) {
+      console.warn('[Mapa Operaciones] fitBounds falló, reintentando sin animación:', eFitBounds.message);
+    }
   }, 300);
 }
 var _cisMap = null;
