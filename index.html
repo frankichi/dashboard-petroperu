@@ -16645,11 +16645,6 @@ function handlePronFile(file) {
       var sheetName = wb.SheetNames.indexOf('PLANTAS') >= 0 ? 'PLANTAS' : wb.SheetNames[0];
       var ws = wb.Sheets[sheetName];
       var json = XLSX.utils.sheet_to_json(ws, {header:1, defval:''});
-      // ⚠️ AGREGADO TEMPORALMENTE — diagnóstico: mostrar en consola
-      // exactamente qué lee el sistema del archivo, para encontrar por
-      // qué no reconoce un formato que debería ser válido.
-      console.log('[Pron DEBUG] Hoja usada:', sheetName, '| Hojas disponibles:', wb.SheetNames);
-      console.log('[Pron DEBUG] Primeras 5 filas crudas:', JSON.stringify(json.slice(0,5)));
       // Buscar la fila de encabezado: debe tener 'Planta', 'Producto', 'UN'
       // y una columna con formato de mes YYYY-MM
       var headerRowIdx = -1, colPlanta=-1, colProducto=-1, colUN=-1, colMes=-1, mesDetectado='';
@@ -16662,6 +16657,20 @@ function handlePronFile(file) {
       // como texto tipo "Ago-26" en vez de "2026-08".
       var MESES_ABREV_ES = {ENE:'01',FEB:'02',MAR:'03',ABR:'04',MAY:'05',JUN:'06',JUL:'07',AGO:'08',SEP:'09',SET:'09',OCT:'10',NOV:'11',DIC:'12'};
       function _mesTextoAISO(txt) {
+        // ⚠️ CORREGIDO — causa real confirmada por consola: cuando Excel
+        // reconoce la celda como fecha (aunque el usuario vea el texto
+        // "Ago-26"), la entrega como NÚMERO de serie de fecha de Excel
+        // (ej. 46235), no como texto — la conversión de texto de abajo
+        // nunca podía funcionar con un número. Se convierte primero ese
+        // número al año/mes real usando la época de Excel (día 1 =
+        // 1899-12-30).
+        if (typeof txt === 'number' && txt > 0) {
+          var msExcel = Math.round((txt - 25569) * 86400 * 1000);
+          var fechaExcel = new Date(msExcel);
+          var anioNum = fechaExcel.getUTCFullYear();
+          var mesNum = String(fechaExcel.getUTCMonth() + 1).padStart(2, '0');
+          return anioNum + '-' + mesNum;
+        }
         var t = String(txt||'').trim();
         var m = t.match(/^([A-Za-zÁáÉéÍíÓóÚú]{3,})[\-\/\s]+'?(\d{2,4})$/);
         if (!m) return null;
