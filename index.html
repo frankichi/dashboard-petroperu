@@ -12864,6 +12864,22 @@ function _pTendEnsurePronMeses(meses) {
 function _pTendPronParaFecha(fecha, planta, prod) {
   var mes = fecha.slice(0,7);
   var map = _pronByMonthCache[mes];
+  // ⚠️ AGREGADO — a pedido: en los primeros días de un mes nuevo, es
+  // normal que el pronóstico recién aprobado todavía no se haya
+  // subido. En vez de mostrar 0 (como si no hubiera demanda), se usa
+  // el pronóstico del mes disponible más reciente hacia atrás como
+  // aproximación — son los últimos valores aprobados que se tienen.
+  // Se deja registro de si esto pasó, para poder avisarlo en pantalla.
+  var mesUsado = mes;
+  if (!map) {
+    var mesesDisponibles = Object.keys(_pronByMonthCache).filter(function(m) { return m < mes; }).sort();
+    if (mesesDisponibles.length) {
+      mesUsado = mesesDisponibles[mesesDisponibles.length - 1];
+      map = _pronByMonthCache[mesUsado];
+    }
+  }
+  window._pTendUltimoMesUsado = mesUsado;
+  window._pTendUsandoMesRespaldo = (mesUsado !== mes);
   if (!map) return 0;
   // map[...] viene de la columna PRONOSTICO_MBDC del Sheets — MBDC = Miles
   // de Barriles Día Calendario, YA es una tasa diaria. No se divide.
@@ -23418,6 +23434,14 @@ function renderVistaEjecutivaSimple() {
     var esModoReal = window._execCobModo === 'real';
     var etiquetaDemanda = esModoReal ? 'Despacho real' : 'Demanda pronóstico';
     var pronHTML = '<div style="color:#93c5fd">' + etiquetaDemanda + (prod!=='Todos'?(' ('+prod+')'):'') + ': ' + (d.denomMB||0).toFixed(DEC) + ' MB/d\u00eda</div>';
+    // ⚠️ AGREGADO — a pedido: en los primeros días de un mes nuevo, si
+    // el pronóstico recién aprobado todavía no se subió, se usa el del
+    // mes anterior como aproximación (ver _pTendPronParaFecha) — este
+    // aviso deja claro que eso está pasando, para que no se confunda
+    // con el pronóstico real del mes que se está viendo.
+    if (!esModoReal && window._pTendUsandoMesRespaldo && window._pTendUltimoMesUsado) {
+      pronHTML += '<div style="color:#fbbf24;font-size:10px;margin-top:2px">\u26a0\ufe0f Pron\u00f3stico de ' + window._pTendUltimoMesUsado + ' (\u00faltimo aprobado disponible) \u2014 el del mes actual a\u00fan no se ha subido</div>';
+    }
     // ⚠️ CORREGIDO — bug real confirmado: antes AMBOS segmentos de la
     // barra (el sólido de inventario Y el rayado de reposición/cabotaje)
     // compartían el mismo popup combinado (reposición + pronóstico) —
