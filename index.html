@@ -16716,15 +16716,11 @@ function handlePronFile(file) {
           if (!plantaRawS || !productoRawS || isNaN(valS) || valS <= 0) continue;
           if (!mesIsoS) { omitidasS.push('(mes no reconocido: "' + mesRawS + '") ' + plantaRawS + ' / ' + productoRawS); continue; }
           if (!mesDetectadoS) mesDetectadoS = mesIsoS;
-          // ⚠️ AGREGADO — protección real: el sistema sube UN mes a la
-          // vez. Si el archivo trae varios meses mezclados (caso real
-          // confirmado: un archivo con 5 meses juntos), antes se
-          // mezclaban todos bajo la etiqueta del primer mes detectado,
-          // corrompiendo los datos en silencio. Ahora solo se toma el
-          // primer mes que aparece, y las filas de otros meses se
-          // omiten con aviso claro — en vez de mezclarse sin que nadie
-          // lo note.
-          if (mesIsoS !== mesDetectadoS) { omitidasS.push('(mes distinto al principal ' + mesDetectadoS + ': "' + mesIsoS + '") ' + plantaRawS + ' / ' + productoRawS); continue; }
+          // ⚠️ CAMBIADO — a pedido: ya no se restringe a un solo mes por
+          // archivo. Ahora se aceptan TODOS los meses presentes, y se
+          // agrupan más abajo — así se puede subir un archivo con
+          // varios meses de una sola vez, en vez de tener que repetir
+          // la carga mes por mes.
           var plantaS = PLANTA_MAP_PRONOSTICO[plantaRawS.toUpperCase()];
           var productoS = PRODUCTO_MAP_PRONOSTICO[productoRawS.toUpperCase()];
           if (!plantaS || !productoS) { omitidasS.push(plantaRawS + ' / ' + productoRawS); continue; }
@@ -16733,27 +16729,36 @@ function handlePronFile(file) {
           // que el resto del flujo (que sí espera un total mensual y
           // divide entre días) siga funcionando sin más cambios.
           var diasDelMesS = new Date(parseInt(mesIsoS.slice(0,4),10), parseInt(mesIsoS.slice(5,7),10), 0).getDate();
-          registrosS.push({planta_raw: plantaRawS, producto_raw: productoRawS, planta: plantaS, producto: productoS, valor_mensual_mb: Math.round(valS * diasDelMesS * 1000) / 1000});
+          registrosS.push({planta_raw: plantaRawS, producto_raw: productoRawS, planta: plantaS, producto: productoS, mes: mesIsoS, valor_mensual_mb: Math.round(valS * diasDelMesS * 1000) / 1000});
         }
         if (registrosS.length) {
-          var mesInputS = document.getElementById('pron-mes-input') || document.getElementById('pron-month-input');
-          var mesS = mesDetectadoS || (mesInputS && mesInputS.value) || new Date().toISOString().slice(0,7);
-          if (mesInputS) mesInputS.value = mesS;
-          uploadPronData = {mes: mesS, registros: registrosS, omitidas: omitidasS};
-          var diasDelMesFinalS = new Date(parseInt(mesS.slice(0,4),10), parseInt(mesS.slice(5,7),10), 0).getDate();
+          // Agrupar por mes — así se puede subir un archivo con varios
+          // meses de una sola vez, en vez de repetir la carga mes por
+          // mes.
+          var gruposPorMes = {};
+          registrosS.forEach(function(r) {
+            (gruposPorMes[r.mes] = gruposPorMes[r.mes] || []).push(r);
+          });
+          var mesesOrdenados = Object.keys(gruposPorMes).sort();
+          uploadPronData = {multiMes: true, gruposPorMes: gruposPorMes, mesesOrdenados: mesesOrdenados, omitidas: omitidasS};
           var htmlS = '<div class="upload-summary">'
             + '<div class="upload-sum-card"><div class="upload-sum-val">' + registrosS.length + '</div><div class="upload-sum-lbl">Registros a migrar</div></div>'
-            + '<div class="upload-sum-card"><div class="upload-sum-val">' + mesS + '</div><div class="upload-sum-lbl">Mes (' + diasDelMesFinalS + ' d\u00edas)</div></div>'
+            + '<div class="upload-sum-card"><div class="upload-sum-val">' + mesesOrdenados.length + '</div><div class="upload-sum-lbl">Mes(es) detectado(s)</div></div>'
             + '<div class="upload-sum-card"><div class="upload-sum-val">' + new Set(registrosS.map(function(r){return r.planta})).size + '</div><div class="upload-sum-lbl">Plantas</div></div>'
             + '<div class="upload-sum-card" style="' + (omitidasS.length?'color:#a86a00':'') + '"><div class="upload-sum-val">' + omitidasS.length + '</div><div class="upload-sum-lbl">Omitidas (no migradas a\u00fan)</div></div></div>';
-          htmlS += '<div class="upload-preview"><table><thead><tr><th>Planta (Excel \u2192 interno)</th><th>Producto (Excel \u2192 interno)</th><th class="r">MBDC</th></tr></thead><tbody>';
-          registrosS.forEach(function(r) {
-            var mbdc = r.valor_mensual_mb / diasDelMesFinalS;
-            htmlS += '<tr><td>' + r.planta_raw + ' <span style="color:var(--acc)">\u2192</span> <b>' + r.planta + '</b></td>'
-              + '<td>' + r.producto_raw + ' <span style="color:var(--acc)">\u2192</span> <b>' + r.producto + '</b></td>'
-              + '<td class="r" style="font-weight:700">' + mbdc.toFixed(3) + '</td></tr>';
+          mesesOrdenados.forEach(function(mesG) {
+            var regsMes = gruposPorMes[mesG];
+            var diasMesG = new Date(parseInt(mesG.slice(0,4),10), parseInt(mesG.slice(5,7),10), 0).getDate();
+            htmlS += '<div style="margin-top:14px;font-size:12px;font-weight:800;color:var(--txt2)">\ud83d\udcc5 ' + mesG + ' (' + diasMesG + ' d\u00edas) \u2014 ' + regsMes.length + ' registro(s)</div>';
+            htmlS += '<div class="upload-preview"><table><thead><tr><th>Planta (Excel \u2192 interno)</th><th>Producto (Excel \u2192 interno)</th><th class="r">MBDC</th></tr></thead><tbody>';
+            regsMes.forEach(function(r) {
+              var mbdc = r.valor_mensual_mb / diasMesG;
+              htmlS += '<tr><td>' + r.planta_raw + ' <span style="color:var(--acc)">\u2192</span> <b>' + r.planta + '</b></td>'
+                + '<td>' + r.producto_raw + ' <span style="color:var(--acc)">\u2192</span> <b>' + r.producto + '</b></td>'
+                + '<td class="r" style="font-weight:700">' + mbdc.toFixed(3) + '</td></tr>';
+            });
+            htmlS += '</tbody></table></div>';
           });
-          htmlS += '</tbody></table></div>';
           if (omitidasS.length) {
             htmlS += '<div style="margin-top:10px;padding:10px 12px;background:#fdf3e0;border:1px solid #e8a00050;border-radius:8px;font-size:11px;color:#7a5200">'
               + '\u26a0 <b>' + omitidasS.length + ' fila(s) omitida(s)</b> — planta/producto aún no está en el mapeo de migración, o mes no reconocido: '
@@ -16764,7 +16769,7 @@ function handlePronFile(file) {
           if (prevS) prevS.innerHTML = htmlS;
           var actionsS = document.getElementById('pron-upload-actions');
           if (actionsS) actionsS.style.display = 'flex';
-          addUploadLog(true, 'Pron\u00f3stico (formato simple): ' + registrosS.length + ' registros para ' + mesS + (omitidasS.length ? ' (' + omitidasS.length + ' omitidos)' : ''));
+          addUploadLog(true, 'Pron\u00f3stico (formato simple): ' + registrosS.length + ' registros en ' + mesesOrdenados.length + ' mes(es): ' + mesesOrdenados.join(', ') + (omitidasS.length ? ' (' + omitidasS.length + ' omitidos)' : ''));
           return;
         }
       }
@@ -16859,23 +16864,43 @@ async function sendPronToGS() {
   if (status) { status.className = 'upload-status'; status.textContent = '\u23F3 Guardando...'; }
   try {
     var sess = window._dashSession || {};
-    var res = await fetch(CONFIG.API_URL, {
-      method: 'POST', redirect: 'follow',
-      headers: {'Content-Type': 'text/plain;charset=utf-8'},
-      body: JSON.stringify({
-        action: 'uploadPronosticoMBDC',
-        token: sess.token,
-        mes: uploadPronData.mes,
-        rows: uploadPronData.registros
-      })
-    }).then(function(r){ return r.json(); });
-    if (res && res.success) {
-      if (status) { status.className = 'upload-status success'; status.textContent = '\u2705 ' + res.message; }
-      addUploadLog(true, res.message);
-      setTimeout(function() { if (typeof fetchData === 'function') fetchData(true); }, 2000);
-    } else {
-      throw new Error((res && res.message) || 'Respuesta inv\u00e1lida del servidor');
+    // ⚠️ CAMBIADO — a pedido: ahora se pueden subir varios meses de una
+    // sola vez (uploadPronData.multiMes) — se sube cada mes por
+    // separado, en secuencia, reutilizando el mismo endpoint del
+    // backend, que ya guarda de forma acumulativa por mes (no borra
+    // los demás). Se mantiene compatibilidad con el formato de un solo
+    // mes (formato ancho original), que sigue funcionando igual.
+    var lotes = uploadPronData.multiMes
+      ? uploadPronData.mesesOrdenados.map(function(m) { return { mes: m, rows: uploadPronData.gruposPorMes[m] }; })
+      : [{ mes: uploadPronData.mes, rows: uploadPronData.registros }];
+    var totalOk = 0, totalErr = 0, mensajes = [];
+    for (var i = 0; i < lotes.length; i++) {
+      if (status) status.textContent = '\u23F3 Guardando ' + lotes[i].mes + ' (' + (i+1) + '/' + lotes.length + ')...';
+      try {
+        var res = await fetch(CONFIG.API_URL, {
+          method: 'POST', redirect: 'follow',
+          headers: {'Content-Type': 'text/plain;charset=utf-8'},
+          body: JSON.stringify({
+            action: 'uploadPronosticoMBDC',
+            token: sess.token,
+            mes: lotes[i].mes,
+            rows: lotes[i].rows
+          })
+        }).then(function(r){ return r.json(); });
+        if (res && res.success) { totalOk++; mensajes.push(lotes[i].mes + ': ' + res.message); }
+        else { totalErr++; mensajes.push(lotes[i].mes + ': ERROR \u2014 ' + ((res && res.message) || 'respuesta inv\u00e1lida')); }
+      } catch (errLote) {
+        totalErr++; mensajes.push(lotes[i].mes + ': ERROR \u2014 ' + errLote.message);
+      }
     }
+    if (totalErr === 0) {
+      if (status) { status.className = 'upload-status success'; status.textContent = '\u2705 ' + totalOk + ' mes(es) guardado(s) correctamente'; }
+      addUploadLog(true, 'Pron\u00f3stico: ' + mensajes.join(' | '));
+    } else {
+      if (status) { status.className = 'upload-status error'; status.textContent = '\u26A0 ' + totalOk + ' ok, ' + totalErr + ' con error \u2014 revisa el registro'; }
+      addUploadLog(totalErr === 0, 'Pron\u00f3stico: ' + mensajes.join(' | '));
+    }
+    setTimeout(function() { if (typeof fetchData === 'function') fetchData(true); }, 2000);
   } catch (err) {
     console.error('[Pron Send]', err);
     if (status) { status.className = 'upload-status error'; status.textContent = '\u274C ' + err.message; }
