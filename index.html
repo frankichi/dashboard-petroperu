@@ -16585,7 +16585,31 @@ var PLANTA_MAP_PRONOSTICO = {
   'PLANTA JULIACA':                           'Juliaca',
   'PLANTA CUSCO':                             'Cusco',
   'PLANTA VENTA IQUITOS':                     'Iquitos',
-  'Oficina de Facturación Puerto Maldonado':  'Pto. Maldonado'
+  'Oficina de Facturación Puerto Maldonado':  'Pto. Maldonado',
+  // ⚠️ AGREGADO — el formato "simple" ya usa los nombres cortos/internos
+  // del sistema directamente, en vez de los nombres institucionales
+  // largos del formato ancho original.
+  'TALARA':          'Talara',
+  'PIURA':           'Piura',
+  'CONCHÁN':         'Conchán',
+  'CONCHAN':         'Conchán',
+  'CALLAO':          'Callao',
+  'CHIMBOTE':        'Chimbote',
+  'ETEN':            'Eten',
+  'ILO':             'Ilo',
+  'MOLLENDO':        'Mollendo',
+  'PISCO':           'Pisco',
+  'SALAVERRY':       'Salaverry',
+  'SUPE':            'Supe',
+  'PUCALLPA':        'Pucallpa',
+  'TARAPOTO':        'Tarapoto',
+  'YURIMAGUAS':      'Yurimaguas',
+  'EL MILAGRO':      'El Milagro',
+  'JULIACA':         'Juliaca',
+  'CUSCO':           'Cusco',
+  'IQUITOS':         'Iquitos',
+  'PTO. MALDONADO':  'Pto. Maldonado',
+  'PUERTO MALDONADO':'Pto. Maldonado'
 };
 var PRODUCTO_MAP_PRONOSTICO = {
   'DIESEL-B5 50PPM':   'Diesel',
@@ -16594,7 +16618,21 @@ var PRODUCTO_MAP_PRONOSTICO = {
   'GASOLINA PREMIUM':  'G. Premium',
   'GASOLINA 84':       'G. 84',
   'TURBO JET A-1':     'TA1',
-  'GLP':               'GLP'
+  'GLP':               'GLP',
+  // ⚠️ AGREGADO — el formato "simple" (MES/PLANTA/PRODUCTO/PRONOSTICO_MBDC)
+  // ya usa los nombres cortos/internos del sistema directamente, en vez
+  // de los nombres largos/formales del formato ancho original. Sin
+  // estas entradas, todas las filas del usuario se hubieran descartado
+  // por no encontrar coincidencia en el mapeo.
+  'DIESEL':            'Diesel',
+  'G. REGULAR':        'G. Regular',
+  'G. REGULAR HS':     'G. Regular HS',
+  'G. PREMIUM':        'G. Premium',
+  'G. 84':             'G. 84',
+  'TA1':               'TA1',
+  'PI6':               'PI6',
+  'ULSD NACIONALIZADO':'ULSD Nacionalizado',
+  'ULSD EXPO':         'ULSD Expo'
 };
 function handlePronFile(file) {
   if (!file || typeof XLSX === 'undefined') return;
@@ -16610,6 +16648,89 @@ function handlePronFile(file) {
       // Buscar la fila de encabezado: debe tener 'Planta', 'Producto', 'UN'
       // y una columna con formato de mes YYYY-MM
       var headerRowIdx = -1, colPlanta=-1, colProducto=-1, colUN=-1, colMes=-1, mesDetectado='';
+      // ⚠️ AGREGADO — segundo formato reconocido: archivo "simple", una
+      // fila por registro con columnas MES/PLANTA/PRODUCTO/PRONOSTICO_MBDC
+      // — distinto al formato ancho "PRONÓSTICO COLABORATIVO DE VENTAS"
+      // (Planta/Producto/UN + columna de mes tipo "2026-08" con el total
+      // mensual). En este formato simple el valor YA viene en MBDC diario
+      // (no hay que dividirlo entre los días del mes), y el mes viene
+      // como texto tipo "Ago-26" en vez de "2026-08".
+      var MESES_ABREV_ES = {ENE:'01',FEB:'02',MAR:'03',ABR:'04',MAY:'05',JUN:'06',JUL:'07',AGO:'08',SEP:'09',SET:'09',OCT:'10',NOV:'11',DIC:'12'};
+      function _mesTextoAISO(txt) {
+        var t = String(txt||'').trim();
+        var m = t.match(/^([A-Za-zÁáÉéÍíÓóÚú]{3,})[\-\/\s]+'?(\d{2,4})$/);
+        if (!m) return null;
+        var abrev = m[1].slice(0,3).toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+        var num = MESES_ABREV_ES[abrev];
+        if (!num) return null;
+        var anio = m[2].length === 2 ? ('20'+m[2]) : m[2];
+        return anio + '-' + num;
+      }
+      var headerRowIdxSimple = -1, colMesSimple=-1, colPlantaSimple=-1, colProductoSimple=-1, colValSimple=-1;
+      for (var iS = 0; iS < Math.min(json.length, 10); iS++) {
+        var rowS = (json[iS] || []).map(function(c){ return String(c||'').trim().toUpperCase(); });
+        var iMes = rowS.indexOf('MES'), iPl = rowS.indexOf('PLANTA'), iPr = rowS.indexOf('PRODUCTO');
+        var iVal = rowS.findIndex(function(c){ return c.indexOf('PRONOSTICO') === 0 || c.indexOf('PRONÓSTICO') === 0; });
+        if (iMes >= 0 && iPl >= 0 && iPr >= 0 && iVal >= 0) {
+          headerRowIdxSimple = iS; colMesSimple = iMes; colPlantaSimple = iPl; colProductoSimple = iPr; colValSimple = iVal;
+          break;
+        }
+      }
+      if (headerRowIdxSimple >= 0) {
+        var registrosS = [], omitidasS = [], mesDetectadoS = '';
+        for (var rS = headerRowIdxSimple + 1; rS < json.length; rS++) {
+          var rowD = json[rS] || [];
+          var plantaRawS = String(rowD[colPlantaSimple] || '').trim();
+          var productoRawS = String(rowD[colProductoSimple] || '').trim();
+          var valS = parseFloat(rowD[colValSimple]);
+          var mesRawS = rowD[colMesSimple];
+          var mesIsoS = _mesTextoAISO(mesRawS);
+          if (!plantaRawS || !productoRawS || isNaN(valS) || valS <= 0) continue;
+          if (!mesIsoS) { omitidasS.push('(mes no reconocido: "' + mesRawS + '") ' + plantaRawS + ' / ' + productoRawS); continue; }
+          if (!mesDetectadoS) mesDetectadoS = mesIsoS;
+          var plantaS = PLANTA_MAP_PRONOSTICO[plantaRawS.toUpperCase()];
+          var productoS = PRODUCTO_MAP_PRONOSTICO[productoRawS.toUpperCase()];
+          if (!plantaS || !productoS) { omitidasS.push(plantaRawS + ' / ' + productoRawS); continue; }
+          // El valor ya viene en MBDC diario — se guarda tal cual como
+          // "valor_mensual_mb" multiplicado por los días del mes, para
+          // que el resto del flujo (que sí espera un total mensual y
+          // divide entre días) siga funcionando sin más cambios.
+          var diasDelMesS = new Date(parseInt(mesIsoS.slice(0,4),10), parseInt(mesIsoS.slice(5,7),10), 0).getDate();
+          registrosS.push({planta_raw: plantaRawS, producto_raw: productoRawS, planta: plantaS, producto: productoS, valor_mensual_mb: Math.round(valS * diasDelMesS * 1000) / 1000});
+        }
+        if (registrosS.length) {
+          var mesInputS = document.getElementById('pron-mes-input') || document.getElementById('pron-month-input');
+          var mesS = mesDetectadoS || (mesInputS && mesInputS.value) || new Date().toISOString().slice(0,7);
+          if (mesInputS) mesInputS.value = mesS;
+          uploadPronData = {mes: mesS, registros: registrosS, omitidas: omitidasS};
+          var diasDelMesFinalS = new Date(parseInt(mesS.slice(0,4),10), parseInt(mesS.slice(5,7),10), 0).getDate();
+          var htmlS = '<div class="upload-summary">'
+            + '<div class="upload-sum-card"><div class="upload-sum-val">' + registrosS.length + '</div><div class="upload-sum-lbl">Registros a migrar</div></div>'
+            + '<div class="upload-sum-card"><div class="upload-sum-val">' + mesS + '</div><div class="upload-sum-lbl">Mes (' + diasDelMesFinalS + ' d\u00edas)</div></div>'
+            + '<div class="upload-sum-card"><div class="upload-sum-val">' + new Set(registrosS.map(function(r){return r.planta})).size + '</div><div class="upload-sum-lbl">Plantas</div></div>'
+            + '<div class="upload-sum-card" style="' + (omitidasS.length?'color:#a86a00':'') + '"><div class="upload-sum-val">' + omitidasS.length + '</div><div class="upload-sum-lbl">Omitidas (no migradas a\u00fan)</div></div></div>';
+          htmlS += '<div class="upload-preview"><table><thead><tr><th>Planta (Excel \u2192 interno)</th><th>Producto (Excel \u2192 interno)</th><th class="r">MBDC</th></tr></thead><tbody>';
+          registrosS.forEach(function(r) {
+            var mbdc = r.valor_mensual_mb / diasDelMesFinalS;
+            htmlS += '<tr><td>' + r.planta_raw + ' <span style="color:var(--acc)">\u2192</span> <b>' + r.planta + '</b></td>'
+              + '<td>' + r.producto_raw + ' <span style="color:var(--acc)">\u2192</span> <b>' + r.producto + '</b></td>'
+              + '<td class="r" style="font-weight:700">' + mbdc.toFixed(3) + '</td></tr>';
+          });
+          htmlS += '</tbody></table></div>';
+          if (omitidasS.length) {
+            htmlS += '<div style="margin-top:10px;padding:10px 12px;background:#fdf3e0;border:1px solid #e8a00050;border-radius:8px;font-size:11px;color:#7a5200">'
+              + '\u26a0 <b>' + omitidasS.length + ' fila(s) omitida(s)</b> — planta/producto aún no está en el mapeo de migración, o mes no reconocido: '
+              + [...new Set(omitidasS)].slice(0,15).join(', ') + (omitidasS.length>15?'…':'') + '</div>';
+          }
+          uploadPronPreviewHTML = htmlS;
+          var prevS = document.getElementById('pron-upload-preview');
+          if (prevS) prevS.innerHTML = htmlS;
+          var actionsS = document.getElementById('pron-upload-actions');
+          if (actionsS) actionsS.style.display = 'flex';
+          addUploadLog(true, 'Pron\u00f3stico (formato simple): ' + registrosS.length + ' registros para ' + mesS + (omitidasS.length ? ' (' + omitidasS.length + ' omitidos)' : ''));
+          return;
+        }
+      }
       for (var i = 0; i < Math.min(json.length, 20); i++) {
         var row = json[i] || [];
         var iPlanta = row.findIndex(function(c){ return String(c).trim().toLowerCase() === 'planta'; });
