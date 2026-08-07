@@ -16645,6 +16645,11 @@ function handlePronFile(file) {
       var sheetName = wb.SheetNames.indexOf('PLANTAS') >= 0 ? 'PLANTAS' : wb.SheetNames[0];
       var ws = wb.Sheets[sheetName];
       var json = XLSX.utils.sheet_to_json(ws, {header:1, defval:''});
+      // ⚠️ AGREGADO TEMPORALMENTE — diagnóstico: mostrar en consola
+      // exactamente qué lee el sistema del archivo, para encontrar por
+      // qué no reconoce un formato que debería ser válido.
+      console.log('[Pron DEBUG] Hoja usada:', sheetName, '| Hojas disponibles:', wb.SheetNames);
+      console.log('[Pron DEBUG] Primeras 5 filas crudas:', JSON.stringify(json.slice(0,5)));
       // Buscar la fila de encabezado: debe tener 'Planta', 'Producto', 'UN'
       // y una columna con formato de mes YYYY-MM
       var headerRowIdx = -1, colPlanta=-1, colProducto=-1, colUN=-1, colMes=-1, mesDetectado='';
