@@ -16657,6 +16657,12 @@ function handlePronFile(file) {
       // como texto tipo "Ago-26" en vez de "2026-08".
       var MESES_ABREV_ES = {ENE:'01',FEB:'02',MAR:'03',ABR:'04',MAY:'05',JUN:'06',JUL:'07',AGO:'08',SEP:'09',SET:'09',OCT:'10',NOV:'11',DIC:'12'};
       function _mesTextoAISO(txt) {
+        // ⚠️ AGREGADO — tercer formato de mes reconocido: ya viene
+        // directamente en AAAA-MM (ej. "2026-03"), sin necesitar
+        // ninguna conversión.
+        if (typeof txt === 'string' && /^\d{4}-\d{2}$/.test(txt.trim())) {
+          return txt.trim();
+        }
         // ⚠️ CORREGIDO — causa real confirmada por consola: cuando Excel
         // reconoce la celda como fecha (aunque el usuario vea el texto
         // "Ago-26"), la entrega como NÚMERO de serie de fecha de Excel
@@ -16696,12 +16702,29 @@ function handlePronFile(file) {
           var rowD = json[rS] || [];
           var plantaRawS = String(rowD[colPlantaSimple] || '').trim();
           var productoRawS = String(rowD[colProductoSimple] || '').trim();
-          var valS = parseFloat(rowD[colValSimple]);
+          // ⚠️ CORREGIDO — bug real confirmado con los datos del
+          // usuario: los decimales venían con coma ("10,8666"), y
+          // parseFloat en JavaScript solo entiende punto como separador
+          // decimal — sin esto, "10,8666" se leía como "10" nada más,
+          // truncando el valor real. Solo se reemplaza la coma cuando
+          // el valor llega como texto (si Excel ya lo entregó como
+          // número, no hace falta ni corresponde tocarlo).
+          var rawValS = rowD[colValSimple];
+          var valS = typeof rawValS === 'string' ? parseFloat(rawValS.replace(',', '.')) : parseFloat(rawValS);
           var mesRawS = rowD[colMesSimple];
           var mesIsoS = _mesTextoAISO(mesRawS);
           if (!plantaRawS || !productoRawS || isNaN(valS) || valS <= 0) continue;
           if (!mesIsoS) { omitidasS.push('(mes no reconocido: "' + mesRawS + '") ' + plantaRawS + ' / ' + productoRawS); continue; }
           if (!mesDetectadoS) mesDetectadoS = mesIsoS;
+          // ⚠️ AGREGADO — protección real: el sistema sube UN mes a la
+          // vez. Si el archivo trae varios meses mezclados (caso real
+          // confirmado: un archivo con 5 meses juntos), antes se
+          // mezclaban todos bajo la etiqueta del primer mes detectado,
+          // corrompiendo los datos en silencio. Ahora solo se toma el
+          // primer mes que aparece, y las filas de otros meses se
+          // omiten con aviso claro — en vez de mezclarse sin que nadie
+          // lo note.
+          if (mesIsoS !== mesDetectadoS) { omitidasS.push('(mes distinto al principal ' + mesDetectadoS + ': "' + mesIsoS + '") ' + plantaRawS + ' / ' + productoRawS); continue; }
           var plantaS = PLANTA_MAP_PRONOSTICO[plantaRawS.toUpperCase()];
           var productoS = PRODUCTO_MAP_PRONOSTICO[productoRawS.toUpperCase()];
           if (!plantaS || !productoS) { omitidasS.push(plantaRawS + ' / ' + productoRawS); continue; }
