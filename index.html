@@ -25007,7 +25007,11 @@ window._execHideTip = _execHideTip;
 function renderExecMapa(plantaSeleccionada) {
   var el = document.getElementById('exec-mapa-container');
   if (!el || typeof L === 'undefined') return;
-  if (_execLeafletMap) { try { _execLeafletMap.remove(); } catch(e) {} _execLeafletMap = null; }
+  if (_execLeafletMap) {
+    try { if (typeof _execLeafletMap.stop === 'function') _execLeafletMap.stop(); } catch(eStop) {}
+    try { _execLeafletMap.remove(); } catch(e) {}
+    _execLeafletMap = null;
+  }
 
   var fechaMapa = currentDate || window._execMapaFecha || (DATES && DATES.length ? DATES[DATES.length-1] : '');
   window._execMapaFecha = fechaMapa;
@@ -25117,7 +25121,7 @@ function renderExecMapa(plantaSeleccionada) {
   var infoSel = plantaSeleccionada && plantaSeleccionada !== 'Nacional' ? markersPorNombre[plantaSeleccionada] : null;
   if (infoSel) {
     var latlngSel = infoSel.marker.getLatLng();
-    _execLeafletMap.setView(latlngSel, 8);
+    _execLeafletMap.setView(latlngSel, 8, {animate:false});
     setTimeout(function() {
       infoSel.marker.openPopup();
       if (infoSel.esTabRef && typeof _execMapaSwitchTab === 'function') {
