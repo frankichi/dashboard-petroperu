@@ -6808,7 +6808,7 @@ function renderP1() {
           </div>`;
         }).join('');
         const navP     = (_navPosData||{})[bt.nombre.toUpperCase()] || null;
-        const navPrsed = navP ? _parseNavEvents(navP.estado, navP.rotacion, navP.ubicacion, navP.fecha) : null;
+        const navPrsed = navP ? _parseNavEvents(((navP.estado_nav?navP.estado_nav+' ':'')+(navP.estado||'')), navP.rotacion, navP.ubicacion, navP.fecha) : null;
         const posLine  = navPrsed ? navPrsed.currentPos : null;
         const etaLine  = navPrsed ? navPrsed.etaNext : null;
         const cierres  = navPrsed ? (navPrsed.cierres||[]) : [];
@@ -7291,6 +7291,11 @@ function _parseNavEvents(estado, rotacion, ubicacion, refFecha) {
     {re:new RegExp('LLEG[O\u00D3]\\s+A\\s+'+PLANTA+'(?:\\s*\\([^)]+\\))?\\s*[:\\-]\\s*'+DT,'gi'), type:'ARRIBO', label:'🏁 Llegó a', hp:true},
     {re:new RegExp('ARRIB[O\u00D3]\\s+A\\s+'+PLANTA+'(?:\\s*\\([^)]+\\))?\\s*[:\\-]\\s*'+DT,'gi'),type:'ARRIBO', label:'🏁 Arribó a',hp:true},
     {re:new RegExp('AMARRO[:\\s]+'+DT,'gi'),                                     type:'AMARRO',   label:'🔗 Amarro',       hp:false},
+    // ⚠️ AGREGADO — FONDEÓ (ancló en la bahía, esperando muelle) no
+    // tenía ningún patrón acá — por eso nunca aparecía como evento
+    // aunque el texto sí lo trajera, y el estado visible caía siempre
+    // al último patrón que sí calzaba (típicamente ETA).
+    {re:new RegExp('FONDE[O\u00D3][:\\s]+'+DT,'gi'),                                 type:'FONDEO',   label:'⚓ Fonde\u00f3',        hp:false},
     {re:new RegExp('I\\.\\s*(?:DESCARGA|CARGA|FAENA)[:\\s]+'+DT,'gi'),           type:'IC',       label:'🔄 Inicio desc.',  hp:false},
     {re:new RegExp('I\\.C\\.[:\\s]+'+DT,'gi'),                                   type:'IC',       label:'📥 I.C.',          hp:false},
     {re:new RegExp('E\\.T\\.C\\.[:\\s]+'+DT,'gi'),                               type:'ETC',      label:'📤 E.T.C.',        hp:false},
@@ -7351,7 +7356,7 @@ async function openBTModal(buqueName) {
     const allCargas = Array.isArray(_cargasNavesCache) ? _cargasNavesCache : [];
     const cargas    = allCargas.filter(r => r.buque && r.buque.toUpperCase() === buqueName.toUpperCase());
     const navPos    = (_navPosData||{})[buqueName.toUpperCase()] || null;
-    const navParsed = navPos ? _parseNavEvents(navPos.estado, navPos.rotacion, navPos.ubicacion, navPos.fecha)
+    const navParsed = navPos ? _parseNavEvents(((navPos.estado_nav?navPos.estado_nav+' ':'')+(navPos.estado||'')), navPos.rotacion, navPos.ubicacion, navPos.fecha)
                              : {events:[], currentPos:'—', etaNext:''};
     const today   = byLatest();
     const invRows = today.filter(r => (r.bt===buqueName && (r.vol_rep||0)>0)
@@ -7915,7 +7920,15 @@ function _updateShipOpsBar(){
   var hoy=(typeof currentDate!=='undefined'&&currentDate)?currentDate:new Date().toISOString().slice(0,10);
   _PP_BUQUES_SHOW.forEach(function(nombre){
     var nav=navPos[nombre]||navPos[nombre+' 2']||null;
-    var navParsed=(nav&&typeof _parseNavEvents==='function')?_parseNavEvents(nav.estado,nav.rotacion,nav.ubicacion,nav.fecha):null;
+    // ⚠️ CORREGIDO — nav.estado es el fragmento crudo de 150 caracteres
+    // de la hoja vieja (mov_naves); nav.estado_nav es el texto rico que
+    // ahora también llega desde posicionamiento_naves (ver
+    // handleGetNavesPositioning en Code.gs). Se concatenan los dos para
+    // que _parseNavEvents encuentre eventos sin importar cuál de las
+    // dos fuentes los trae — nav.estado_nav va primero porque suele
+    // tener el texto completo, sin el corte de 150 caracteres.
+    var navTexto=((nav&&nav.estado_nav)?nav.estado_nav+' ':'')+((nav&&nav.estado)?nav.estado:'');
+    var navParsed=(nav&&typeof _parseNavEvents==='function')?_parseNavEvents(navTexto,nav.rotacion,nav.ubicacion,nav.fecha):null;
     var pos=(navParsed&&navParsed.currentPos&&navParsed.currentPos!=='—'&&navParsed.currentPos!=='-')?navParsed.currentPos:'';
     var misCargas=cargas.filter(function(c){return c.buque&&c.buque.toUpperCase().replace(/\s*\d+$/,'')===nombre;});
     var stops=misCargas.filter(function(c){var e=(c.estado||'').toUpperCase();return e!=='DESCARGADO'&&e!=='COMPLETADO'&&(!c.fecha_hasta||c.fecha_hasta>=hoy);})
@@ -9486,7 +9499,7 @@ async function _renderP5Async() {
     const vesselSections = BUQUES.map(buqueName => {
       const cargas    = allCargas.filter(r=>r.buque.toUpperCase()===buqueName);
       const navPos    = navData[buqueName]||null;
-      const navParsed = navPos?_parseNavEvents(navPos.estado||'',navPos.rotacion||'',navPos.ubicacion||'',navPos.fecha||''):{events:[],currentPos:'—',etaNext:'',cierres:[]};
+      const navParsed = navPos?_parseNavEvents(((navPos.estado_nav?navPos.estado_nav+' ':'')+(navPos.estado||'')),navPos.rotacion||'',navPos.ubicacion||'',navPos.fecha||''):{events:[],currentPos:'—',etaNext:'',cierres:[]};
       const navEntries= buildNavEntries(navPos, navParsed);
       const cierres   = buildDedupeCierres(navEntries, navPos);
       const viajeLatest={};
@@ -16155,15 +16168,22 @@ function parseNavesText() {
       var mArribo = chunk.match(/ARRIB[OÓ]\s+A\s+([A-ZÁÉÍÓÚÑ\s]+?):\s*(\d{1,2}(?:\.\d{1,2})?\/\d{1,2}:\d{2})\s*HRS/i);
       var puertoUltimo = mArribo ? mArribo[1].trim() : '';
       var fechaArribo  = mArribo ? _posNavesParseDT(mArribo[2], fecha) : '';
-      // FONDEÓ = ancló en la bahía (no necesariamente amarrado a un
-      // muelle todavía) — se usa como respaldo cuando no hay "ARRIBÓ A
-      // [puerto]:" explícito, tomando el puerto ya detectado por otro
-      // lado (ubicacion/rotación) si existe.
-      if (!fechaArribo) {
-        var mFondeo = chunk.match(/FONDE[OÓ]:?\s*(\d{1,2}(?:\.\d{1,2})?\/\d{1,2}:\d{2})\s*HRS/i);
-        if (mFondeo) fechaArribo = _posNavesParseDT(mFondeo[1], fecha);
-      }
-      var mAmarro = chunk.match(/AMARR[OÓ](?:\s+EN\s+[A-Z0-9\-]+)?:\s*(\d{1,2}(?:\.\d{1,2})?\/\d{1,2}:\d{2})\s*HRS/i);
+      // ⚠️ CORREGIDO — bug real confirmado: FONDEÓ (ancló en la bahía,
+      // esperando muelle) es un evento DISTINTO de ARRIBÓ (llegó a la
+      // zona del puerto) — un buque puede tener AMBOS el mismo día con
+      // horas distintas (caso real: UCAYALI con "ARRIBÓ A MATARANI:
+      // 09/03:42" y "FONDEÓ: 09/04:36"). Antes se leía FONDEÓ solo
+      // como respaldo cuando NO había ARRIBÓ — así que en cuanto el
+      // reporte traía los dos, el dato de fondeo se perdía sin dejar
+      // rastro (ni siquiera existía un campo separado para guardarlo).
+      // Ahora se captura SIEMPRE, de forma independiente.
+      var mFondeo = chunk.match(/FONDE[OÓ]:?\s*(\d{1,2}(?:\.\d{1,2})?\/\d{1,2}:\d{2})\s*HRS/i);
+      var fechaFondeo = mFondeo ? _posNavesParseDT(mFondeo[1], fecha) : '';
+      // Si no hubo "ARRIBÓ A [puerto]:" explícito, FONDEÓ es la mejor
+      // referencia disponible de que el buque ya está en el puerto —
+      // se sigue usando como respaldo de fechaArribo en ese caso.
+      if (!fechaArribo && fechaFondeo) fechaArribo = fechaFondeo;
+var mAmarro = chunk.match(/AMARR[OÓ](?:\s+EN\s+[A-Z0-9\-]+)?:\s*(\d{1,2}(?:\.\d{1,2})?\/\d{1,2}:\d{2})\s*HRS/i);
       var fechaAmarro = mAmarro ? _posNavesParseDT(mAmarro[1], fecha) : '';
       var mID = chunk.match(/I\.D\.:\s*(\d{1,2}(?:\.\d{1,2})?\/\d{1,2}:\d{2})\s*HRS/i);
       var fechaID = mID ? _posNavesParseDT(mID[1], fecha) : '';
@@ -16201,7 +16221,8 @@ function parseNavesText() {
         fecha_inicio_carga: fechaIC, fecha_et_operaciones: fechaETOp,
         fecha_zarpe: fechaZarpe,
         puerto_eta: puertoEta, fecha_eta: fechaEta,
-        rotacion_raw: rotacion
+        rotacion_raw: rotacion,
+        fecha_fondeo: fechaFondeo
       });
     });
     if (!naves.length) throw new Error('No se detectaron naves. Verifica que el texto contiene nombres como URUBAMBA, MOCHE, etc.');
@@ -16220,6 +16241,7 @@ function _navesTimestampsHTML(n) {
   var chips = [];
   if (n.rotacion_raw) chips.push('<b>Rotaci\u00f3n:</b> ' + n.rotacion_raw);
   if (n.fecha_arribo) chips.push('Arrib\u00f3 a ' + n.puerto_ultimo + ': ' + n.fecha_arribo.replace('T',' '));
+  if (n.fecha_fondeo) chips.push('\u2693 Fonde\u00f3: ' + n.fecha_fondeo.replace('T',' '));
   if (n.fecha_amarro) chips.push('Amarr\u00f3: ' + n.fecha_amarro.replace('T',' '));
   if (n.fecha_inicio_descarga) chips.push('I.D.: ' + n.fecha_inicio_descarga.replace('T',' '));
   if (n.fecha_termino_descarga) chips.push('<b style="color:#16a34a">T.D. (descarga terminada): ' + n.fecha_termino_descarga.replace('T',' ') + '</b>');
@@ -16421,7 +16443,8 @@ async function sendNavesToGS() {
           fecha_inicio_descarga: n.fecha_inicio_descarga || '', fecha_termino_descarga: n.fecha_termino_descarga || '',
           fecha_inicio_carga: n.fecha_inicio_carga || '', fecha_et_operaciones: n.fecha_et_operaciones || '',
           fecha_zarpe: n.fecha_zarpe || '', rotacion_raw: n.rotacion_raw || '',
-          puerto_eta: n.puerto_eta || '', fecha_eta: n.fecha_eta || ''
+          puerto_eta: n.puerto_eta || '', fecha_eta: n.fecha_eta || '',
+          fecha_fondeo: n.fecha_fondeo || ''
         };
       });
     if (posRecords.length) {
