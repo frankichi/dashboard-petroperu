@@ -7299,17 +7299,37 @@ function _parseNavEvents(estado, rotacion, ubicacion, refFecha) {
     {re:new RegExp('ZARP[O\u00D3](?:\\s*:)?\\s+'+DT+'\\s*HRS','gi'),           type:'ZARPE',    label:'⚓ Zarpó',        hp:false},
     {re:new RegExp('LLEG[O\u00D3]\\s+A\\s+'+PLANTA+'(?:\\s*\\([^)]+\\))?\\s*[:\\-]\\s*'+DT,'gi'), type:'ARRIBO', label:'🏁 Llegó a', hp:true},
     {re:new RegExp('ARRIB[O\u00D3]\\s+A\\s+'+PLANTA+'(?:\\s*\\([^)]+\\))?\\s*[:\\-]\\s*'+DT,'gi'),type:'ARRIBO', label:'🏁 Arribó a',hp:true},
-    {re:new RegExp('AMARRO[:\\s]+'+DT,'gi'),                                     type:'AMARRO',   label:'🔗 Amarro',       hp:false},
+    // ⚠️ CORREGIDO — el formato real trae "AMARRÓ EN [terminal]:", con
+    // el nombre del terminal entre el verbo y la hora (ej. "AMARRÓ EN
+    // MU2: 05/16:36 HRS."). El patrón viejo solo reconocía "AMARRO:"
+    // pegado a la hora, sin ese terminal en medio — así que este
+    // formato (el que realmente usa el reporte) nunca calzaba.
+    {re:new RegExp('AMARR[O\u00D3](?:\\s+EN\\s+[A-Z0-9\\-]+)?[:\\s]+'+DT,'gi'),      type:'AMARRO',   label:'🔗 Amarró',       hp:false},
     // ⚠️ AGREGADO — FONDEÓ (ancló en la bahía, esperando muelle) no
     // tenía ningún patrón acá — por eso nunca aparecía como evento
     // aunque el texto sí lo trajera, y el estado visible caía siempre
     // al último patrón que sí calzaba (típicamente ETA).
-    {re:new RegExp('FONDE[O\u00D3][:\\s]+'+DT,'gi'),                                 type:'FONDEO',   label:'⚓ Fonde\u00f3',        hp:false},
+    {re:new RegExp('FONDE[O\u00D3][:\\s]+'+DT,'gi'),                                 type:'FONDEO',   label:'⚓ Fondeó',        hp:false},
     {re:new RegExp('I\\.\\s*(?:DESCARGA|CARGA|FAENA)[:\\s]+'+DT,'gi'),           type:'IC',       label:'🔄 Inicio desc.',  hp:false},
     {re:new RegExp('I\\.C\\.[:\\s]+'+DT,'gi'),                                   type:'IC',       label:'📥 I.C.',          hp:false},
+    // ⚠️ AGREGADO — bug real confirmado: T.C. (Término de Carga, fin de
+    // la carga en el puerto de origen) no tenía NINGÚN patrón — es un
+    // evento DISTINTO de T.D. (Término de Descarga). Sin este patrón,
+    // una nave que ya terminó de cargar y zarpó (T.C. + ZARPÓ, ambos
+    // eventos reales) se seguía mostrando con el estado de I.C.
+    // ("cargando"), el último evento que sí se reconocía — dando a
+    // entender que seguía cargando cuando en realidad ya había
+    // zarpado hace días.
+    {re:new RegExp('T\\.C\\.[:\\s]+'+DT,'gi'),                                   type:'TC',       label:'📦 T.C.',          hp:false},
     {re:new RegExp('E\\.T\\.C\\.[:\\s]+'+DT,'gi'),                               type:'ETC',      label:'📤 E.T.C.',        hp:false},
     {re:new RegExp('T\\.D\\.\\s*EN\\s+'+PLANTA+'[:\\s]+'+DT,'gi'),              type:'TD',       label:'✅ T.D. en',        hp:true},
-    {re:new RegExp('ETA\\s+'+PLANTA+'[:\\s.]+'+DT+'(?:\\s*HRS)?','gi'),         type:'ETA',      label:'🕐 ETA',            hp:true}
+    // ⚠️ CORREGIDO — el formato real trae "E.T.A. [terminal]:" (con
+    // puntos entre cada letra), no "ETA [terminal]:" sin puntos. El
+    // patrón viejo exigía "ETA" literal sin puntos, así que este
+    // formato (el que realmente usa el reporte) nunca calzaba —
+    // "E.T.A. CALLAO: 10/23:00 HRS." pasaba completamente
+    // desapercibido.
+    {re:new RegExp('E\\.?\\s*T\\.?\\s*A\\.?\\s+'+PLANTA+'[:\\s.]+'+DT+'(?:\\s*HRS)?','gi'), type:'ETA', label:'🕐 ETA', hp:true}
   ];
   pats.forEach(function(p) {
     var re = p.re; re.lastIndex = 0; var m;
@@ -7357,7 +7377,7 @@ function _navEstadoActualTexto(buqueName) {
   if (!reales.length) return '';
   var ultimo = reales[reales.length-1];
   if (!ultimo.time || !ultimo.datetime) return '';
-  var VERBOS = {ZARPE:'Zarp\u00f3', ARRIBO:'En puerto', AMARRO:'Amarrado', FONDEO:'Fondeado', IC:'Cargando', ETC:'Termin\u00f3 carga', TD:'Descarg\u00f3'};
+  var VERBOS = {ZARPE:'Zarp\u00f3', ARRIBO:'En puerto', AMARRO:'Amarrado', FONDEO:'Fondeado', IC:'Cargando', TC:'Termin\u00f3 de cargar', ETC:'Termin\u00f3 carga', TD:'Descarg\u00f3'};
   var verbo = VERBOS[ultimo.type] || ultimo.label;
   var fechaEvento = ultimo.datetime.slice(0, 10); // 'YYYY-MM-DD'
   var hoyReal = new Date().toISOString().slice(0, 10);
@@ -16261,6 +16281,16 @@ var mAmarro = chunk.match(/AMARR[OÓ](?:\s+EN\s+[A-Z0-9\-]+)?:\s*(\d{1,2}(?:\.\d
         volumen: volumen,
         destino: '', proveedor: '',
         notas: chunk.substring(0, 250),
+        // ⚠️ AGREGADO — a pedido: el texto completo del bloque de esta
+        // nave, SIN RECORTAR. "estado" de arriba se corta a 150
+        // caracteres desde el nombre — para naves con varios eventos
+        // (amarró + I.C. + T.C. + zarpó + ETA) eso se queda corto y
+        // pierde los eventos más tardíos (ej. el ZARPÓ real quedaba
+        // fuera del corte, haciendo que el sistema pensara que la nave
+        // seguía "cargando" cuando ya había zarpado hace días). Este
+        // campo se usa para armar estado_nav más abajo, que si viaja
+        // completo.
+        chunkCompleto: chunk,
         // Timestamps reales — ver comentario arriba.
         agencia: agencia,
         puerto_ultimo: puertoUltimo, fecha_arribo: fechaArribo,
@@ -16486,7 +16516,15 @@ async function sendNavesToGS() {
       .map(function(n) {
         return {
           fecha_reporte: fechaFinal, buque: n.nombre, agencia: n.agencia || '',
-          estado_nav: n.ubicacion || '', puerto_ultimo: n.puerto_ultimo,
+          // ⚠️ CORREGIDO — bug real confirmado: acá solo se mandaba
+          // n.ubicacion (ej. "NAVEGANDO A CONCHÁN"), NUNCA el texto con
+          // los horarios reales (amarró, I.C., T.C., zarpó). Por eso el
+          // sistema no tenía forma de saber que una nave YA HABÍA
+          // ZARPADO — el evento más reciente disponible terminaba
+          // siendo uno de varios días atrás (ej. "inicio de carga"),
+          // mostrando "Cargando desde..." cuando en realidad la nave ya
+          // había zarpado y estaba navegando hacia el siguiente puerto.
+          estado_nav: n.chunkCompleto || n.ubicacion || '', puerto_ultimo: n.puerto_ultimo,
           fecha_arribo: n.fecha_arribo || '', fecha_amarro: n.fecha_amarro || '',
           fecha_inicio_descarga: n.fecha_inicio_descarga || '', fecha_termino_descarga: n.fecha_termino_descarga || '',
           fecha_inicio_carga: n.fecha_inicio_carga || '', fecha_et_operaciones: n.fecha_et_operaciones || '',
