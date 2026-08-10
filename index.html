@@ -7377,19 +7377,62 @@ function _navEstadoActualTexto(buqueName) {
   if (!reales.length) return '';
   var ultimo = reales[reales.length-1];
   if (!ultimo.time || !ultimo.datetime) return '';
-  var VERBOS = {ZARPE:'Zarp\u00f3', ARRIBO:'En puerto', AMARRO:'Amarrado', FONDEO:'Fondeado', IC:'Cargando', TC:'Termin\u00f3 de cargar', ETC:'Termin\u00f3 carga', TD:'Descarg\u00f3'};
+  var VERBOS = {ZARPE:'Zarp\u00f3', ARRIBO:'Lleg\u00f3', AMARRO:'Amarr\u00f3', FONDEO:'Fonde\u00f3', IC:'Empez\u00f3 a cargar', TC:'Termin\u00f3 de cargar', ETC:'Termin\u00f3 carga', TD:'Descarg\u00f3'};
   var verbo = VERBOS[ultimo.type] || ultimo.label;
+  // ⚠️ AGREGADO — a pedido: decir solo "Zarpó desde el 08/08..." sin
+  // indicar el puerto no basta para entender la situación real de la
+  // nave. El reporte casi nunca escribe el puerto junto al evento
+  // ("ZARPÓ: 08/23:00 HRS." a secas) — pero SÍ trae la ROTACIÓN
+  // completa (ej. "CALLAO(D)-TALARA(C)-CONCHÁN(D)-SALAVERRY(D)") y la
+  // ubicación actual ("NAVEGANDO A CONCHÁN"). Se infiere el puerto de
+  // origen tomando, dentro de esa secuencia, el tramo INMEDIATAMENTE
+  // ANTERIOR al destino actual — así sabemos que si va navegando A
+  // Conchán y el tramo previo en la rotación es Talara, zarpó DESDE
+  // Talara. Para ARRIBO/T.D. el puerto ya viene capturado directo del
+  // texto ("ARRIBÓ A [puerto]:"), no hace falta inferirlo. Para
+  // FONDEO, el puerto es la ubicación ACTUAL ("EN BAHÍA [puerto]"), no
+  // uno inferido por rotación.
+  function _extraerDestino(ubic) {
+    var u = (ubic || '').toUpperCase();
+    var m = u.match(/(?:NAVEGANDO\s+A|EN\s+BAH[IÍ]A?|EN)\s+([A-ZÀ-Ü\s]+?)(?:\s{2,}|$)/);
+    return m ? m[1].trim() : '';
+  }
+  function _normPuerto(t) {
+    return (t||'').trim().toUpperCase()
+      .replace(/Í/g,'I').replace(/Á/g,'A').replace(/É/g,'E').replace(/Ó/g,'O').replace(/Ú/g,'U');
+  }
+  function _puertoOrigenPorRotacion(rotacionRaw, destino) {
+    if (!rotacionRaw || !destino) return '';
+    var secuencia = rotacionRaw.split(/[-–]/).map(function(t){ return t.replace(/\([^)]*\)/g,'').trim(); }).filter(Boolean);
+    var destNorm = _normPuerto(destino);
+    var idx = secuencia.findIndex(function(p){ var pn=_normPuerto(p); return pn.indexOf(destNorm)>=0 || destNorm.indexOf(pn)>=0; });
+    return idx > 0 ? secuencia[idx-1] : '';
+  }
+  function _capitalizar(t) {
+    return (t||'').split(/\s+/).map(function(p){ return p.charAt(0)+p.slice(1).toLowerCase(); }).join(' ');
+  }
+  var puertoTxt = '';
+  if (ultimo.planta) {
+    puertoTxt = ultimo.planta; // ARRIBO/T.D. ya lo traen capturado directo
+  } else if (ultimo.type === 'FONDEO') {
+    puertoTxt = _extraerDestino(nav.ubicacion); // fondeó EN la ubicación actual
+  } else if (['ZARPE','AMARRO','IC','TC','ETC'].indexOf(ultimo.type) >= 0) {
+    puertoTxt = _puertoOrigenPorRotacion(nav.rotacion, _extraerDestino(nav.ubicacion));
+  }
+  var PREP = {ZARPE:'de', AMARRO:'en', FONDEO:'en', ARRIBO:'a', IC:'en', TC:'en', ETC:'en', TD:'en'};
+  var conPuerto = puertoTxt ? (' ' + (PREP[ultimo.type]||'en') + ' ' + _capitalizar(puertoTxt)) : '';
   var fechaEvento = ultimo.datetime.slice(0, 10); // 'YYYY-MM-DD'
   var hoyReal = new Date().toISOString().slice(0, 10);
-  if (fechaEvento === hoyReal) return verbo + ' desde ' + ultimo.time + ' hrs';
+  if (fechaEvento === hoyReal) return verbo + conPuerto + ' a las ' + ultimo.time + ' hrs';
   var msPorDia = 86400000;
   var dEvento = new Date(fechaEvento + 'T00:00:00Z').getTime();
   var dHoy = new Date(hoyReal + 'T00:00:00Z').getTime();
   var diasTranscurridos = Math.round((dHoy - dEvento) / msPorDia);
   var fechaCorta = fechaEvento.slice(8, 10) + '/' + fechaEvento.slice(5, 7); // DD/MM
-  var sufijoDias = diasTranscurridos === 1 ? ' (hace 1 d\u00eda)' : diasTranscurridos > 1 ? (' (hace ' + diasTranscurridos + ' d\u00edas)') : '';
-  return verbo + ' desde el ' + fechaCorta + ' ' + ultimo.time + ' hrs' + sufijoDias;
+  var sufijoDias = diasTranscurridos === 1 ? ' (hace 1 día)' : diasTranscurridos > 1 ? (' (hace ' + diasTranscurridos + ' días)') : '';
+  return verbo + conPuerto + ' el ' + fechaCorta + ' ' + ultimo.time + ' hrs' + sufijoDias;
 }
+
 async function openBTModal(buqueName) {
   var m = document.getElementById('whatif-modal');
   document.getElementById('whatif-content').innerHTML =
