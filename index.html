@@ -4367,6 +4367,25 @@ async function fetchData(forceRefresh) {
     var fetchOpts = { method: 'GET', redirect: 'follow' };
     var mainPromise = _fetchConReintentos(url, fetchOpts, 3);
     var pronPromise = _fetchConReintentos(pronUrl, fetchOpts, 3);
+    // ⚠️ AGREGADO — a pedido: el movimiento de barcazas fluviales
+    // (Mapa Plantas) se pide recién varios pasos después de que el splash
+    // ya se había ocultado — por eso el usuario veía el dashboard
+    // "listo" y recién después aparecía de golpe el movimiento de naves,
+    // sensación de carga lenta/entrecortada. Se dispara YA, en paralelo
+    // con los datos principales, para que esté lista (o casi) para
+    // cuando el splash se oculte.
+    // ⚠️ AGREGADO — a pedido: Vista Ejecutiva (panel gerencial) no usa
+    // barcazas fluviales en ningún punto — ese dato solo lo pinta
+    // renderPA() ("Mapa Plantas"), una página exclusiva del panel de
+    // administración que ni siquiera existe en executive.html (se vacía
+    // al construirlo). Pedirlo en modo ejecutivo era tiempo de red y de
+    // splash gastado en un dato que nunca se iba a pintar. Se salta por
+    // completo ahí; en el panel de administración sigue igual que antes.
+    var fluvialPromise = (typeof EXECUTIVE_MODE !== 'undefined' && EXECUTIVE_MODE)
+      ? Promise.resolve(null)
+      : fetch(CONFIG.API_URL + '?action=getIquiViajesFluv')
+          .then(function(r) { return r.json(); })
+          .catch(function(err) { console.warn('[BOOT] No se pudo cargar barcazas fluviales:', err && err.message); return null; });
     var response = await mainPromise;
     // GAS a veces retorna 404 en el primer intento por redirección — reintentar
     if (response.status === 404) {
@@ -4508,6 +4527,26 @@ async function fetchData(forceRefresh) {
       currentDate = (fechasConCierreReal.length ? fechasConCierreReal[fechasConCierreReal.length - 1] : DATES[DATES.length - 1]) || '';
       window._fechaActual = currentDate;
     }
+    // ⚠️ AGREGADO — a pedido: esperar (con un límite de 2.5s) a que las
+    // barcazas fluviales lleguen ANTES de ocultar el splash, en vez de
+    // dejarlas aparecer de golpe varios segundos después con el
+    // dashboard ya visible. Si el fetch tarda más que el límite, no se
+    // bloquea el splash indefinidamente — se sigue esperando en segundo
+    // plano y el mapa se actualiza solo cuando llegue (mismo
+    // comportamiento de respaldo que ya existía antes de este cambio).
+    try {
+      var _fluvialArr = await Promise.race([
+        fluvialPromise,
+        new Promise(function(resolve){ setTimeout(function(){ resolve('__TIMEOUT__'); }, 2500); })
+      ]);
+      if (_fluvialArr === '__TIMEOUT__') {
+        fluvialPromise.then(function(arr){ _procesarBarcazasFluviales(arr); });
+      } else {
+        _procesarBarcazasFluviales(_fluvialArr);
+      }
+    } catch (eFluvial) {
+      window._fluvialBarges = window._fluvialBarges || [];
+    }
     _splashDone();
     document.getElementById('loadingOverlay').style.display = 'none';
     if (!data.length || !currentDate) {
@@ -4528,7 +4567,11 @@ async function fetchData(forceRefresh) {
       if (_ap && _ap.id === 'pDec' && typeof renderPDec === 'function') renderPDec();
     }, 300);
     _pTendEnsureCargas();  // pre-cargar cargas de naves para ticker/KPIs/mapa
-    if (!_navPosData) {
+    // ⚠️ AGREGADO — a pedido: _navPosData solo lo consumen
+    // parseClosedPorts()/renderP1() (admin-only, vacías en Vista
+    // Ejecutiva) y el ticker (oculto por CSS ahí) — se salta la
+    // petición completa en modo ejecutivo.
+    if (!_navPosData && !(typeof EXECUTIVE_MODE !== 'undefined' && EXECUTIVE_MODE)) {
       fetch(CONFIG.API_URL + '?action=getNavesPositioning', {method:'GET', redirect:'follow'})
         .then(r => r.ok ? r.json() : [])
         .then(nd => {
@@ -4570,88 +4613,83 @@ async function fetchData(forceRefresh) {
         console.warn('[BOOT] No se pudo cargar simShips:', err && err.message);
       });
     }
-    (function loadFluvialBarges() {
-      var fechaQ = currentDate || new Date().toISOString().slice(0,10);
-      fetch(CONFIG.API_URL + '?action=getIquiViajesFluv')
-        .then(function(r) { return r.json(); })
-        .then(function(arr) {
-          if (Array.isArray(arr)) {
-            // ⚠️ CORREGIDO — 3 bugs reales confirmados comparando este
-            // mapeo contra lo que handleGetIquiViajesFluv() realmente
-            // devuelve:
-            //  (1) DESAJUSTE DE NOMBRES: acá se leía r.vol_mb,
-            //      r.fecha_zarpe, r.eta y r.empujador — ninguno de esos
-            //      campos existe en la respuesta del backend (envía
-            //      vol_plan_mb/vol_real_mb, zarpe_cargado/zarpe_plan,
-            //      arribo_iquitos/eta_yurimaguas). Resultado: volumen,
-            //      fecha de zarpe y ETA llegaban SIEMPRE vacíos/en 0
-            //      para todas las barcazas.
-            //  (2) DESTINO Y DIRECCIÓN FIJOS: destino estaba clavado en
-            //      'Refinería Iquitos' y dirección en 'RETORNO' — así
-            //      que las barcazas que van HACIA Pucallpa o Yurimaguas
-            //      (no de vuelta) se dibujaban con la ruta invertida.
-            //      Ahora ambos se derivan de la ruta real.
-            //  (3) RUTA POR DEFECTO: caía siempre en 'Yurimaguas-Iquitos'
-            //      ignorando el campo tipo_ruta, que el backend sí envía
-            //      y distingue la ruta Pucallpa de la de Yurimaguas.
-            function _fluvNormPlanta(txt) {
-              var t = (txt||'').trim().toUpperCase()
-                .replace(/Í/g,'I').replace(/Á/g,'A').replace(/É/g,'E').replace(/Ó/g,'O').replace(/Ú/g,'U');
-              if (t.indexOf('IQUITOS') >= 0)    return 'Iquitos';
-              if (t.indexOf('PUCALLPA') >= 0)   return 'Pucallpa';
-              if (t.indexOf('YURIMAGUAS') >= 0) return 'Yurimaguas';
-              if (t.indexOf('SARAMURO') >= 0)   return 'Saramuro';
-              return '';
-            }
-            window._fluvialBarges = arr.map(function(r){
-              // Ruta real: se usa r.ruta si viene; si no, se arma desde
-              // tipo_ruta (ej. "PUCALLPA" → "Pucallpa-Iquitos", que es
-              // el sentido de retorno cargado hacia la refinería).
-              var rutaStr = (r.ruta||'').trim();
-              if (!rutaStr) {
-                var tipoN = _fluvNormPlanta(r.tipo_ruta);
-                rutaStr = tipoN ? (tipoN + '-Iquitos') : 'Yurimaguas-Iquitos';
-              }
-              // Destino real = último tramo de la ruta (no siempre Iquitos)
-              var partes = rutaStr.split('-').map(function(p){ return _fluvNormPlanta(p); }).filter(Boolean);
-              var destinoReal = partes.length ? partes[partes.length-1] : 'Iquitos';
-              return {
-                id:        r.id||'',
-                af:        r.barcaza||'',
-                empujador: r.barcaza||'',
-                ruta:      rutaStr,
-                tipo_ruta: r.tipo_ruta||'',
-                producto:  r.producto||'',
-                // Volumen real si ya se cargó; si no, el planificado
-                volMB:     parseFloat(r.vol_real_mb)||parseFloat(r.vol_plan_mb)||0,
-                capMB:     parseFloat(r.vol_plan_mb)||parseFloat(r.vol_real_mb)||0,
-                estado:    r.estado||'PROGRAMADO',
-                // Fecha de zarpe: la real (cargado) si existe, si no la planificada
-                zarpe:     r.zarpe_cargado||r.zarpe_plan||r.zarpe_vacio||'',
-                // ETA: arribo a Iquitos si ya está, si no el ETA intermedio o el plan
-                eta_arribo:r.arribo_iquitos||r.eta_yurimaguas||r.arribo_plan||'',
-                destino:   destinoReal,
-                direccion: (destinoReal === 'Iquitos') ? 'RETORNO' : 'IDA',
-                // ⚠️ AGREGADO — a pedido: el reporte PDF trae comentarios
-                // importantes (estado de navegación, averías, etc.) que
-                // el backend ya envía (campo obs), pero se estaban
-                // descartando por completo antes de llegar al mapa.
-                obs:       r.obs||''
-              };
-            });
-            console.log('[BOOT] Barcazas fluviales:', arr.length);
-            var activePage = document.querySelector('.page.active');
-            if (activePage && activePage.id === 'pA' && typeof renderPA === 'function') _loadMapLibs(function(){ renderPA(); });
-          } else {
-            window._fluvialBarges = [];
-            console.log('[BOOT] Respuesta fluvial no es array, usando []');
+    function _procesarBarcazasFluviales(arr) {
+      if (typeof EXECUTIVE_MODE !== 'undefined' && EXECUTIVE_MODE) {
+        window._fluvialBarges = window._fluvialBarges || [];
+        return; // Vista Ejecutiva no usa este dato — ver nota en fluvialPromise
+      }
+      if (Array.isArray(arr)) {
+        // ⚠️ CORREGIDO — 3 bugs reales confirmados comparando este
+        // mapeo contra lo que handleGetIquiViajesFluv() realmente
+        // devuelve:
+        //  (1) DESAJUSTE DE NOMBRES: acá se leía r.vol_mb,
+        //      r.fecha_zarpe, r.eta y r.empujador — ninguno de esos
+        //      campos existe en la respuesta del backend (envía
+        //      vol_plan_mb/vol_real_mb, zarpe_cargado/zarpe_plan,
+        //      arribo_iquitos/eta_yurimaguas). Resultado: volumen,
+        //      fecha de zarpe y ETA llegaban SIEMPRE vacíos/en 0
+        //      para todas las barcazas.
+        //  (2) DESTINO Y DIRECCIÓN FIJOS: destino estaba clavado en
+        //      'Refinería Iquitos' y dirección en 'RETORNO' — así
+        //      que las barcazas que van HACIA Pucallpa o Yurimaguas
+        //      (no de vuelta) se dibujaban con la ruta invertida.
+        //      Ahora ambos se derivan de la ruta real.
+        //  (3) RUTA POR DEFECTO: caía siempre en 'Yurimaguas-Iquitos'
+        //      ignorando el campo tipo_ruta, que el backend sí envía
+        //      y distingue la ruta Pucallpa de la de Yurimaguas.
+        function _fluvNormPlanta(txt) {
+          var t = (txt||'').trim().toUpperCase()
+            .replace(/Í/g,'I').replace(/Á/g,'A').replace(/É/g,'E').replace(/Ó/g,'O').replace(/Ú/g,'U');
+          if (t.indexOf('IQUITOS') >= 0)    return 'Iquitos';
+          if (t.indexOf('PUCALLPA') >= 0)   return 'Pucallpa';
+          if (t.indexOf('YURIMAGUAS') >= 0) return 'Yurimaguas';
+          if (t.indexOf('SARAMURO') >= 0)   return 'Saramuro';
+          return '';
+        }
+        window._fluvialBarges = arr.map(function(r){
+          // Ruta real: se usa r.ruta si viene; si no, se arma desde
+          // tipo_ruta (ej. "PUCALLPA" → "Pucallpa-Iquitos", que es
+          // el sentido de retorno cargado hacia la refinería).
+          var rutaStr = (r.ruta||'').trim();
+          if (!rutaStr) {
+            var tipoN = _fluvNormPlanta(r.tipo_ruta);
+            rutaStr = tipoN ? (tipoN + '-Iquitos') : 'Yurimaguas-Iquitos';
           }
-        })
-        .catch(function(err) {
-          window._fluvialBarges = [];
-          console.warn('[BOOT] No se pudo cargar barcazas fluviales:', err.message);
+          // Destino real = último tramo de la ruta (no siempre Iquitos)
+          var partes = rutaStr.split('-').map(function(p){ return _fluvNormPlanta(p); }).filter(Boolean);
+          var destinoReal = partes.length ? partes[partes.length-1] : 'Iquitos';
+          return {
+            id:        r.id||'',
+            af:        r.barcaza||'',
+            empujador: r.barcaza||'',
+            ruta:      rutaStr,
+            tipo_ruta: r.tipo_ruta||'',
+            producto:  r.producto||'',
+            // Volumen real si ya se cargó; si no, el planificado
+            volMB:     parseFloat(r.vol_real_mb)||parseFloat(r.vol_plan_mb)||0,
+            capMB:     parseFloat(r.vol_plan_mb)||parseFloat(r.vol_real_mb)||0,
+            estado:    r.estado||'PROGRAMADO',
+            // Fecha de zarpe: la real (cargado) si existe, si no la planificada
+            zarpe:     r.zarpe_cargado||r.zarpe_plan||r.zarpe_vacio||'',
+            // ETA: arribo a Iquitos si ya está, si no el ETA intermedio o el plan
+            eta_arribo:r.arribo_iquitos||r.eta_yurimaguas||r.arribo_plan||'',
+            destino:   destinoReal,
+            direccion: (destinoReal === 'Iquitos') ? 'RETORNO' : 'IDA',
+            // ⚠️ AGREGADO — el reporte PDF trae comentarios
+            // importantes (estado de navegación, averías, etc.) que
+            // el backend ya envía (campo obs), pero se estaban
+            // descartando por completo antes de llegar al mapa.
+            obs:       r.obs||''
+          };
         });
-    })();
+        console.log('[BOOT] Barcazas fluviales:', arr.length);
+        var activePage = document.querySelector('.page.active');
+        if (activePage && activePage.id === 'pA' && typeof renderPA === 'function') _loadMapLibs(function(){ renderPA(); });
+      } else {
+        window._fluvialBarges = [];
+        console.log('[BOOT] Respuesta fluvial no es array, usando []');
+      }
+    }
     // Pron\u00f3stico llega en paralelo — actualiza sin bloquear el UI
     pronPromise
       .then(function(r){ return r.ok ? r.json() : null; })
@@ -5729,6 +5767,12 @@ function parseClosedPorts() {
 // ── Control Tower: banda superior de eventos ──
 function updateEventTicker() {
   if (window.IQUI_INFORME_MODE) return; // no mostrar en modo informe
+  // ⚠️ AGREGADO — a pedido: Vista Ejecutiva oculta #event-ticker por
+  // CSS (body.exec-mode #event-ticker{display:none!important}) — sin
+  // este guard la función igual reconstruía todo su contenido varias
+  // veces durante el arranque (300ms, y cada vez que llegan datos
+  // nuevos) para un elemento que nunca se muestra ahí.
+  if (typeof EXECUTIVE_MODE !== 'undefined' && EXECUTIVE_MODE) return;
   var el = document.getElementById('event-ticker');
   if (!el) return;
   var items = [];
@@ -7853,6 +7897,11 @@ var _PP_BUQUES_SHOW=['UCAYALI','MOCHE','URUBAMBA'];
 var _PP_BUQUES_COLOR={UCAYALI:'#2d8cf0',MOCHE:'#22c55e',URUBAMBA:'#f97316'};
 function _updateShipOpsBar(){
   if(window.IQUI_INFORME_MODE) return; // no mostrar en modo informe
+  // ⚠️ AGREGADO — a pedido: mismo criterio que updateEventTicker() —
+  // Vista Ejecutiva oculta #ship-ops-bar por CSS, y esta función se
+  // llamaba varias veces durante el arranque (400ms, 3500ms, al cargar
+  // simShips, etc.) reconstruyendo la barra completa para nada.
+  if (typeof EXECUTIVE_MODE !== 'undefined' && EXECUTIVE_MODE) return;
   var bar=document.getElementById('ship-ops-bar'),summary=document.getElementById('ship-ops-summary'),vessels=document.getElementById('ship-ops-vessels');
   if(!bar||!summary||!vessels) return;
   var navPos=window._navPosData||{},cargas=Array.isArray(window._cargasNavesCache)?window._cargasNavesCache:[];
@@ -12782,6 +12831,12 @@ function renderPTend() {
 }
 // Carga lazy de cargas de naves para el cabotaje en tránsito de pTend
 function _pTendEnsureCargas() {
+  // ⚠️ AGREGADO — a pedido: en Vista Ejecutiva, _cargasNavesCache solo
+  // lo consumen páginas admin-only (renderPTend/renderPA/renderPB) y el
+  // ticker de eventos — todas vacías u ocultas en modo ejecutivo. Pedir
+  // getCargasNaves ahí es un viaje completo a Apps Script para un dato
+  // que nunca llega a pintarse en pantalla.
+  if (typeof EXECUTIVE_MODE !== 'undefined' && EXECUTIVE_MODE) return;
   if (_cargasNavesCache !== null) return;
   _cargasNavesCache = [];  // evitar fetches duplicados
   fetch(CONFIG.API_URL + '?action=getCargasNaves', {method:'GET', redirect:'follow'})
@@ -13685,6 +13740,11 @@ function simResetToLive() {
 }
 window.simResetToLive = simResetToLive;
 async function _simAutoLoadFromGS() {
+  // ⚠️ AGREGADO — a pedido: simShips solo llega a usarse a través de
+  // getBTsForRow(), que está vacía (stub) en Vista Ejecutiva — el dato
+  // se pedía, procesaba y guardaba en memoria sin que nada lo llegara
+  // a leer nunca en modo ejecutivo. Se salta la petición completa.
+  if (typeof EXECUTIVE_MODE !== 'undefined' && EXECUTIVE_MODE) return;
   try {
     const url = CONFIG.API_URL + '?action=getSimData';
     const resp = await fetch(url, {method:'GET', redirect:'follow'});
