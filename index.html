@@ -23058,24 +23058,7 @@ function renderVistaEjecutivaSimple() {
       _fetchReposicionHistorica(fechaHoy); // no-op si ya está en caché o pendiente
       var cacheHist = window._reposHistoricaCache[fechaHoy];
       if (cacheHist) {
-        var _keyBuscada = r.planta.toUpperCase() + '|' + r.producto;
-        var navesHist = cacheHist[_keyBuscada] || [];
-        // ⚠️ DIAGNÓSTICO TEMPORAL — a pedido: si el backend SÍ trajo
-        // claves (ver [ReposHist DEBUG] arriba) pero acá no se encuentra
-        // ninguna coincidencia para esta planta+producto, imprime la
-        // clave exacta que se buscó junto a las claves reales que trajo
-        // el backend — para detectar un desface de mayúsculas/tildes/
-        // espacios entre el nombre de planta del reporte diario y el
-        // nombre de terminal tal como quedó guardado en cargas_naves.
-        // Quitar una vez encontrada la causa (buscar "DIAGNÓSTICO TEMPORAL").
-        if (!navesHist.length && Object.keys(cacheHist).length && !window._reposHistDebugLoggedFor) window._reposHistDebugLoggedFor = {};
-        if (!navesHist.length && Object.keys(cacheHist).length) {
-          var _dk = fechaHoy + '|' + _keyBuscada;
-          if (!window._reposHistDebugLoggedFor[_dk]) {
-            window._reposHistDebugLoggedFor[_dk] = true;
-            console.log('[ReposHist DEBUG] sin match para', _keyBuscada, '| fecha:', fechaHoy, '| claves disponibles del backend:', Object.keys(cacheHist));
-          }
-        }
+        var navesHist = cacheHist[r.planta.toUpperCase() + '|' + r.producto] || [];
         var volTotalHist = navesHist.reduce(function(s, n){ return s + (n.vol || 0); }, 0);
         if (volTotalHist <= 0 || denom <= 0) return { diasRepos: 0, volMB: 0, tipo: '', naves: [], historico: true };
         return {
@@ -25278,19 +25261,6 @@ function _fetchReposicionHistorica(fecha) {
     .then(function(r) { return r.json(); })
     .then(function(res) {
       window._reposHistoricaCache[fecha] = (res && res.success && res.reposicion) || {};
-      // ⚠️ DIAGNÓSTICO TEMPORAL — a pedido: ver por qué "Cobertura por
-      // planta" no muestra reposición marítima en fechas históricas. Reporta
-      // qué devolvió el backend para esa fecha: si vino vacío (no hay datos
-      // en cargas_naves hasta esa fecha — esperable) o si vino CON claves
-      // pero el frontend no las encuentra después (bug de cruce). Quitar
-      // una vez encontrada la causa (buscar "DIAGNÓSTICO TEMPORAL").
-      console.log('[ReposHist DEBUG]', fecha, '→ success:', res && res.success, '| claves recibidas:', Object.keys(window._reposHistoricaCache[fecha]));
-      // ⚠️ DIAGNÓSTICO TEMPORAL (2/2) — imprime lo que devolvió
-      // _debugCargasNavesRango() del backend: cuántas filas tiene
-      // realmente cargas_naves y qué rango de fechas cubre — para saber
-      // si el histórico existe de verdad o si la hoja solo conserva el
-      // último día subido. Quitar junto con el resto del diagnóstico.
-      if (res && res._debugCargasNaves) console.log('[ReposHist DEBUG] cargas_naves ->', res._debugCargasNaves);
       delete window._reposHistoricaPendiente[fecha];
       // Volver a dibujar la vista actual ahora que ya llegó el dato
       // histórico — sin esto, el usuario vería el estado "actual" hasta
