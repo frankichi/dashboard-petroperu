@@ -22946,8 +22946,31 @@ function renderVistaEjecutivaSimple() {
   var COB_REAL_FALLBACK_UMBRAL_EXEC = 80; // si la cobertura con despacho real
                                // supera este umbral, se recalcula esa fila
                                // con la demanda pronóstico en su lugar.
+  // ⚠️ AGREGADO — registro del denominador REALMENTE usado para
+  // calcular los días de cobertura de la última fila procesada.
+  // {val: número, base: 'pron'|'real'|'vfact'}. Lo llenan cobPron/
+  // cobReal/cobFactible justo antes de devolver un valor válido, así
+  // que siempre corresponde a la base que de verdad ganó la cascada
+  // (no a una suposición hecha desde afuera). Se usa para el popup de
+  // "Cobertura por producto", que antes mostraba 0.0 MB/día en la vista
+  // por planta porque nunca recibía este dato.
+  var _execDenomUltimo = null;
+  // Pronóstico de la fila para la FECHA que se está viendo (no el mes
+  // actual): misma cascada que ya usan la Vista Nacional y el valor
+  // mostrado en el popup, centralizada acá para que días y popup no
+  // puedan volver a desincronizarse.
+  // ⚠️ CORREGIDO — bug real: cobPron() leía Únicamente pronSheet, que
+  // es un mapa PLANO sin mes (solo guarda el último cargado). Al
+  // revisar una fecha histórica (ej. julio) los días de cobertura se
+  // calculaban contra el pronóstico del mes ACTUAL — mientras la Vista
+  // Nacional, ya corregida, usaba el del mes correcto. Dos números
+  // distintos para lo mismo según dónde se mirara.
+  function _pronFilaExec(r) {
+    return (typeof _pTendPronParaFecha === 'function' ? _pTendPronParaFecha(fechaHoy, r.planta, r.producto) : 0)
+      || (typeof pronSheet !== 'undefined' && pronSheet[r.planta+'|'+r.producto]) || r.pron_mes || r.pron || 0;
+  }
   function cobPron(r) {
-    var pronVal = (typeof pronSheet !== 'undefined' && pronSheet[r.planta+'|'+r.producto]) || r.pron_mes || r.pron || 0;
+    var pronVal = _pronFilaExec(r);
     // ⚠️ CORREGIDO: antes exigía inv > 0, tratando un inventario en 0
     // (real o proyectado por consumo) como "no se puede calcular" — pero
     // 0 MB de inventario con demanda pronóstico válida SÍ es un dato
@@ -22957,7 +22980,9 @@ function renderVistaEjecutivaSimple() {
     // pronóstico o el inventario mismo nunca se conoció.
     if (pronVal <= 0 || r.inv == null) return null;
     var c = Math.round(Math.max(0, r.inv) / pronVal);
-    return c > COB_SANO_MAX_EXEC ? null : c;
+    if (c > COB_SANO_MAX_EXEC) return null;
+    _execDenomUltimo = { val: pronVal, base: 'pron' };
+    return c;
   }
   function cobReal(r) {
     var desp = r.vreal || r.dem || 0;
@@ -22968,9 +22993,11 @@ function renderVistaEjecutivaSimple() {
     // disparado por un dato puntual casi en cero.
     if (c > COB_REAL_FALLBACK_UMBRAL_EXEC) {
       var cPron = cobPron(r);
-      if (cPron != null) return cPron;
+      if (cPron != null) return cPron; // cobPron ya registró su propio denominador
     }
-    return c > COB_SANO_MAX_EXEC ? null : c;
+    if (c > COB_SANO_MAX_EXEC) return null;
+    _execDenomUltimo = { val: desp, base: 'real' };
+    return c;
   }
   // V.Factible es la base "canónica" del sistema — la misma que usa
   // Coberturas para calcular sus alertas de QUIEBRE/CRÍTICO/ALERTA (ver
@@ -22983,7 +23010,9 @@ function renderVistaEjecutivaSimple() {
     var vf = r.vfact || 0;
     if (vf <= 0 || r.inv == null) return null;
     var c = Math.round(Math.max(0, r.inv) / vf);
-    return c > COB_SANO_MAX_EXEC ? null : c;
+    if (c > COB_SANO_MAX_EXEC) return null;
+    _execDenomUltimo = { val: vf, base: 'vfact' };
+    return c;
   }
   function calcCob(r) {
     // Se prueban las 3 bases posibles en orden de prioridad y se usa la
@@ -22993,6 +23022,7 @@ function renderVistaEjecutivaSimple() {
     // literalmente no tiene con qué calcular (divisor faltante o
     // inventario nunca conocido).
     var c;
+    _execDenomUltimo = null; // se limpia siempre: la cascada de abajo lo vuelve a llenar
     if (r._proyectadoConsumo) {
       // Fila proyectada por consumo (planta aún no cierra el día): el
       // despacho real de "modo real" no aplica — sería mezclar un
@@ -23340,23 +23370,26 @@ function renderVistaEjecutivaSimple() {
       // día puede tener anomalías puntuales (muy bajo o alto) que, una
       // vez el inventario ya está combinado entre planta y refinería,
       // producen días sin sentido (ej. "0d" con 99 MB disponibles).
+      _execDenomUltimo = null; // la rama de combo llama a cobPron/cobFactible directo (sin pasar por calcCob), así que se limpia acá
       var c = comboActivo ? cobPron(rParaCob) : calcCob(rParaCob);
       if (c == null && comboActivo) c = cobFactible(rParaCob);
       var rep = reposicionInfo(r);
-      var pronVal2 = (typeof _pTendPronParaFecha === 'function' ? _pTendPronParaFecha(fechaHoy, r.planta, r.producto) : 0)
-        || (typeof pronSheet !== 'undefined' && pronSheet[r.planta+'|'+r.producto]) || r.pron_mes || r.pron || 0;
-      // ⚠️ DIAGNÓSTICO TEMPORAL — ahora reporta específicamente los casos
-      // en 0.0 (el límite anterior de 8 registros solo alcanzaba a
-      // capturar los primeros, que no eran necesariamente el caso real
-      // que se está reportando).
-      if (pronVal2 === 0 && !window._pronVal2ZeroLoggedFor) window._pronVal2ZeroLoggedFor = {};
-      if (pronVal2 === 0) {
-        var _zkey = r.planta + '|' + r.producto;
-        if (!window._pronVal2ZeroLoggedFor[_zkey]) {
-          window._pronVal2ZeroLoggedFor[_zkey] = true;
-          console.log('[Pron DEBUG CERO]', r.planta, '/', r.producto, '-> pronVal2 es 0. _pTendPronParaFecha:', (typeof _pTendPronParaFecha === 'function' ? _pTendPronParaFecha(fechaHoy, r.planta, r.producto) : 'N/A'), '| pronSheet[key]:', (typeof pronSheet !== 'undefined' ? pronSheet[r.planta+'|'+r.producto] : 'N/A'), '| r.pron_mes:', r.pron_mes, '| r.pron:', r.pron, '| fechaHoy:', fechaHoy);
-        }
-      }
+      var pronVal2 = _pronFilaExec(r);
+      // ⚠️ CORREGIDO — bug real confirmado (Pucallpa · Diesel y toda
+      // planta individual, en agosto y en cualquier mes histórico): el
+      // popup de la barra muestra d.denomMB, pero denomMB SOLO se
+      // llenaba en la rama "Nacional". En la vista por planta la fila
+      // nunca lo traía, así que (d.denomMB||0).toFixed(1) daba
+      // literalmente "0.0 MB/día" siempre — sin importar el mes, el
+      // producto ni el modo elegido. No era un problema del pronóstico
+      // (el cálculo de días sí usaba el valor correcto): era el dato
+      // que faltaba en el objeto de la fila. Ahora se toma el
+      // denominador REAL que usó la cascada de cobertura, con la base
+      // que ganó (pronóstico / despacho real / V.Factible), para que el
+      // popup y los días mostrados nunca puedan contradecirse.
+      var _denomInfo = _execDenomUltimo;
+      var _denomMB   = _denomInfo ? _denomInfo.val : pronVal2;
+      var _denomBase = _denomInfo ? _denomInfo.base : 'pron';
       // ⚠️ A diferencia de la vista "Nacional" (donde sí interesa saber
       // qué planta le falta cerrar el día), aquí — mirando una sola
       // planta — un producto sin despacho real, pronóstico NI
@@ -23382,7 +23415,7 @@ function renderVistaEjecutivaSimple() {
       var esMollendoULSDVista = plantaCobertura === 'Mollendo' && r.producto === 'ULSD Nacionalizado';
       var esExcepcionSinDias = esTalaraTA1Vista || esMollendoULSDVista;
       if (c === null && !esExcepcionSinDias) return;
-      datosCob.push({ label: r.producto, dias: esExcepcionSinDias ? null : c, invMB: invCombinado, pronMB: pronVal2, diasRepos: rep.diasRepos, volReposMB: rep.volMB, tipoRepos: rep.tipo, reposBt: rep.bt, reposFecha: rep.fecha, reposEstado: rep.estado, reposNaves: rep.naves, reposHistorico: rep.historico, reposCargando: rep.cargando, sinCob: esExcepcionSinDias ? true : (c === null), proyectado: !!r._proyectadoConsumo });
+      datosCob.push({ label: r.producto, dias: esExcepcionSinDias ? null : c, invMB: invCombinado, pronMB: pronVal2, denomMB: _denomMB, denomBase: _denomBase, diasRepos: rep.diasRepos, volReposMB: rep.volMB, tipoRepos: rep.tipo, reposBt: rep.bt, reposFecha: rep.fecha, reposEstado: rep.estado, reposNaves: rep.naves, reposHistorico: rep.historico, reposCargando: rep.cargando, sinCob: esExcepcionSinDias ? true : (c === null), proyectado: !!r._proyectadoConsumo });
     });
   }
   datosCob.sort(function(a,b){
@@ -23509,14 +23542,26 @@ function renderVistaEjecutivaSimple() {
     // bien. Ahora usa d.denomMB (el mismo dato que ya alimenta el
     // cálculo de días) y cambia la etiqueta según el modo activo.
     var esModoReal = window._execCobModo === 'real';
-    var etiquetaDemanda = esModoReal ? 'Despacho real' : 'Demanda pronóstico';
-    var pronHTML = '<div style="color:#93c5fd">' + etiquetaDemanda + (prod!=='Todos'?(' ('+prod+')'):'') + ': ' + (d.denomMB||0).toFixed(DEC) + ' MB/d\u00eda</div>';
+    // ⚠️ AGREGADO — la etiqueta ahora refleja la base que de verdad se
+    // usó en ESA fila, no solo el botón activo. Hay casos legítimos en
+    // que no coinciden: vista combinada (Talara + Refinería) siempre
+    // fuerza pronóstico, una planta que aún no cierra el día también,
+    // y cuando no hay despacho real ni pronóstico se cae a V.Factible.
+    // Antes todas esas filas decían "Despacho real" si ese era el modo,
+    // aunque el número mostrado viniera de otra base.
+    var _BASE_LBL = { pron: 'Demanda pronóstico', real: 'Despacho real', vfact: 'V.Factible' };
+    var etiquetaDemanda = (d.denomBase && _BASE_LBL[d.denomBase]) || (esModoReal ? 'Despacho real' : 'Demanda pronóstico');
+    // Respaldo defensivo: si por cualquier motivo la fila no trajera
+    // denominador, se muestra el pronóstico en vez de un 0.0 engañoso.
+    var demandaMB = (d.denomMB > 0 ? d.denomMB : (d.pronMB || 0));
+    var pronHTML = '<div style="color:#93c5fd">' + etiquetaDemanda + (prod!=='Todos'?(' ('+prod+')'):'') + ': ' + demandaMB.toFixed(DEC) + ' MB/d\u00eda</div>';
     // ⚠️ AGREGADO — a pedido: en los primeros días de un mes nuevo, si
     // el pronóstico recién aprobado todavía no se subió, se usa el del
     // mes anterior como aproximación (ver _pTendPronParaFecha) — este
     // aviso deja claro que eso está pasando, para que no se confunda
     // con el pronóstico real del mes que se está viendo.
-    if (!esModoReal && window._pTendUsandoMesRespaldo && window._pTendUltimoMesUsado) {
+    var _baseEsPron = d.denomBase ? (d.denomBase === 'pron') : !esModoReal;
+    if (_baseEsPron && window._pTendUsandoMesRespaldo && window._pTendUltimoMesUsado) {
       pronHTML += '<div style="color:#fbbf24;font-size:10px;margin-top:2px">\u26a0\ufe0f Pron\u00f3stico de ' + window._pTendUltimoMesUsado + ' (\u00faltimo aprobado disponible) \u2014 el del mes actual a\u00fan no se ha subido</div>';
     }
     // ⚠️ CORREGIDO — bug real confirmado: antes AMBOS segmentos de la
