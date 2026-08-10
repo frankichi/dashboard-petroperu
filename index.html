@@ -25285,6 +25285,12 @@ function _fetchReposicionHistorica(fecha) {
       // pero el frontend no las encuentra después (bug de cruce). Quitar
       // una vez encontrada la causa (buscar "DIAGNÓSTICO TEMPORAL").
       console.log('[ReposHist DEBUG]', fecha, '→ success:', res && res.success, '| claves recibidas:', Object.keys(window._reposHistoricaCache[fecha]));
+      // ⚠️ DIAGNÓSTICO TEMPORAL (2/2) — imprime lo que devolvió
+      // _debugCargasNavesRango() del backend: cuántas filas tiene
+      // realmente cargas_naves y qué rango de fechas cubre — para saber
+      // si el histórico existe de verdad o si la hoja solo conserva el
+      // último día subido. Quitar junto con el resto del diagnóstico.
+      if (res && res._debugCargasNaves) console.log('[ReposHist DEBUG] cargas_naves ->', res._debugCargasNaves);
       delete window._reposHistoricaPendiente[fecha];
       // Volver a dibujar la vista actual ahora que ya llegó el dato
       // histórico — sin esto, el usuario vería el estado "actual" hasta
