@@ -23337,6 +23337,12 @@ function renderVistaEjecutivaSimple() {
       var rep = reposicionInfo(r);
       var pronVal2 = (typeof _pTendPronParaFecha === 'function' ? _pTendPronParaFecha(fechaHoy, r.planta, r.producto) : 0)
         || (typeof pronSheet !== 'undefined' && pronSheet[r.planta+'|'+r.producto]) || r.pron_mes || r.pron || 0;
+      // ⚠️ DIAGNÓSTICO TEMPORAL
+      if (!window._pronVal2DebugCount) window._pronVal2DebugCount = 0;
+      if (window._pronVal2DebugCount < 8) {
+        window._pronVal2DebugCount++;
+        console.log('[Pron DEBUG planta]', r.planta, '/', r.producto, '-> pronVal2:', pronVal2, '| fechaHoy:', fechaHoy, '| _pTendPronParaFecha directo:', (typeof _pTendPronParaFecha === 'function' ? _pTendPronParaFecha(fechaHoy, r.planta, r.producto) : 'N/A'));
+      }
       // ⚠️ A diferencia de la vista "Nacional" (donde sí interesa saber
       // qué planta le falta cerrar el día), aquí — mirando una sola
       // planta — un producto sin despacho real, pronóstico NI
