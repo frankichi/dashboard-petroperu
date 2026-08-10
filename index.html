@@ -23000,6 +23000,37 @@ function renderVistaEjecutivaSimple() {
     // reposición es un volumen futuro que se compara contra la demanda
     // proyectada, no contra lo que se despachó ayer.
     var denom = (typeof pronSheet !== 'undefined' && pronSheet[r.planta+'|'+r.producto]) || r.pron_mes || r.pron || 0;
+    // ⚠️ AGREGADO — a pedido: vista histórica. Si se está viendo una
+    // fecha PASADA (no la de hoy), se usa la reposición reconstruida
+    // para esa fecha específica — cómo se veía el estado de los buques
+    // EN ESE MOMENTO — en vez del estado actual (que es lo que
+    // _btConfirmadoHoy siempre refleja, sin importar qué fecha se esté
+    // mirando en pantalla).
+    var _hoyRealChk = new Date().toISOString().slice(0, 10);
+    if (fechaHoy && fechaHoy < _hoyRealChk) {
+      _fetchReposicionHistorica(fechaHoy); // no-op si ya está en caché o pendiente
+      var cacheHist = window._reposHistoricaCache[fechaHoy];
+      if (cacheHist) {
+        var navesHist = cacheHist[r.planta.toUpperCase() + '|' + r.producto] || [];
+        var volTotalHist = navesHist.reduce(function(s, n){ return s + (n.vol || 0); }, 0);
+        if (volTotalHist <= 0 || denom <= 0) return { diasRepos: 0, volMB: 0, tipo: '', naves: [], historico: true };
+        return {
+          diasRepos: Math.floor(volTotalHist / denom),
+          volMB: volTotalHist,
+          tipo: navesHist.length > 1 ? 'multiple' : 'Cabotaje Marítimo',
+          bt: navesHist[0] ? navesHist[0].buque : '',
+          fecha: navesHist[0] ? navesHist[0].fecha : '',
+          estado: navesHist[0] ? navesHist[0].estado : '',
+          naves: navesHist.map(function(n){ return { buque: n.buque, vol: n.vol, fecha: n.fecha, estado: n.estado }; }),
+          historico: true
+        };
+      }
+      // Todavía no llegó la respuesta histórica — se muestra vacío en
+      // vez del estado actual (que sería engañoso para una revisión
+      // histórica); en cuanto la caché se llene, la vista se vuelve a
+      // dibujar sola.
+      return { diasRepos: 0, volMB: 0, tipo: '', naves: [], historico: true, cargando: true };
+    }
     // ⚠️ AMPLIADO: `bt_lista` (nuevo, desde Code.gs) trae TODOS los
     // buques que reponen esta planta+producto — antes el sistema solo
     // podía distinguir hasta 2 (bt/bt2), y si un tercer buque coincidía
@@ -23173,7 +23204,15 @@ function renderVistaEjecutivaSimple() {
       var invCombProd = r.inv || 0;
       var esTalaraComb = r.planta === 'Talara' && refTalaraInvPorProducto[r.producto] !== undefined;
       if (esTalaraComb) invCombProd = (r.inv||0) + refTalaraInvPorProducto[r.producto];
-      var pronProd = (typeof pronSheet !== 'undefined' && pronSheet[r.planta+'|'+r.producto]) || r.pron_mes || r.pron || 0;
+      // ⚠️ CORREGIDO — bug real confirmado: pronSheet es un mapa plano
+      // que NO distingue por mes (solo guarda el último cargado). Al
+      // ver una fecha histórica (ej. julio) mientras pronSheet tiene
+      // cargado el mes actual (agosto), el pronóstico de julio se
+      // perdía y mostraba 0.0 MB, aunque sí estuviera aprobado y
+      // cargado. Se usa _pTendPronParaFecha en su lugar — la misma
+      // función ya corregida para las gráficas de tendencia, que sí
+      // busca el pronóstico del mes correspondiente a la fecha vista.
+      var pronProd = (typeof _pTendPronParaFecha === 'function' ? _pTendPronParaFecha(fechaHoy, r.planta, r.producto) : 0) || r.pron_mes || r.pron || 0;
       // ⚠️ CORREGIDO: el botón "Calcular con: Despacho real / Pronóstico"
       // no tenía ningún efecto en esta vista — el cálculo estaba fijo
       // en pronóstico sin importar el modo activo. Ahora la razón usa
@@ -23238,7 +23277,7 @@ function renderVistaEjecutivaSimple() {
       var acc = porPlantaFila[p];
       var rep = reposicionInfoPlanta(p, prod);
       var diasDirecto = acc.pronSumCob > 0 ? Math.floor(acc.invSumCob / acc.pronSumCob) : null;
-      return { label: p, dias: diasDirecto, invMB: acc.invSum, pronMB: acc.pronSum, denomMB: acc.pronSumCob, diasRepos: rep.diasRepos, volReposMB: rep.volMB, tipoRepos: rep.tipo, reposDetalle: rep.detalle, reposBt: rep.bt, reposFecha: rep.fecha, reposEstado: rep.estado, reposNaves: rep.naves, sinCob: diasDirecto === null, proyectado: acc.proyectado };
+      return { label: p, dias: diasDirecto, invMB: acc.invSum, pronMB: acc.pronSum, denomMB: acc.pronSumCob, diasRepos: rep.diasRepos, volReposMB: rep.volMB, tipoRepos: rep.tipo, reposDetalle: rep.detalle, reposBt: rep.bt, reposFecha: rep.fecha, reposEstado: rep.estado, reposNaves: rep.naves, reposHistorico: rep.historico, reposCargando: rep.cargando, sinCob: diasDirecto === null, proyectado: acc.proyectado };
     });
   } else if (!esRefineriaExec) {
     var plantaCobertura = COMBO_PLANTAS[pl] ? COMBO_PLANTAS[pl].plantaDespacho : pl;
@@ -23286,7 +23325,7 @@ function renderVistaEjecutivaSimple() {
       var c = comboActivo ? cobPron(rParaCob) : calcCob(rParaCob);
       if (c == null && comboActivo) c = cobFactible(rParaCob);
       var rep = reposicionInfo(r);
-      var pronVal2 = (typeof pronSheet !== 'undefined' && pronSheet[r.planta+'|'+r.producto]) || r.pron_mes || r.pron || 0;
+      var pronVal2 = (typeof _pTendPronParaFecha === 'function' ? _pTendPronParaFecha(fechaHoy, r.planta, r.producto) : 0) || r.pron_mes || r.pron || 0;
       // ⚠️ A diferencia de la vista "Nacional" (donde sí interesa saber
       // qué planta le falta cerrar el día), aquí — mirando una sola
       // planta — un producto sin despacho real, pronóstico NI
@@ -23312,7 +23351,7 @@ function renderVistaEjecutivaSimple() {
       var esMollendoULSDVista = plantaCobertura === 'Mollendo' && r.producto === 'ULSD Nacionalizado';
       var esExcepcionSinDias = esTalaraTA1Vista || esMollendoULSDVista;
       if (c === null && !esExcepcionSinDias) return;
-      datosCob.push({ label: r.producto, dias: esExcepcionSinDias ? null : c, invMB: invCombinado, pronMB: pronVal2, diasRepos: rep.diasRepos, volReposMB: rep.volMB, tipoRepos: rep.tipo, reposBt: rep.bt, reposFecha: rep.fecha, reposEstado: rep.estado, reposNaves: rep.naves, sinCob: esExcepcionSinDias ? true : (c === null), proyectado: !!r._proyectadoConsumo });
+      datosCob.push({ label: r.producto, dias: esExcepcionSinDias ? null : c, invMB: invCombinado, pronMB: pronVal2, diasRepos: rep.diasRepos, volReposMB: rep.volMB, tipoRepos: rep.tipo, reposBt: rep.bt, reposFecha: rep.fecha, reposEstado: rep.estado, reposNaves: rep.naves, reposHistorico: rep.historico, reposCargando: rep.cargando, sinCob: esExcepcionSinDias ? true : (c === null), proyectado: !!r._proyectadoConsumo });
     });
   }
   datosCob.sort(function(a,b){
@@ -23422,7 +23461,14 @@ function renderVistaEjecutivaSimple() {
                 : ((d.reposBt ? '<br>Buque/Barcaza: ' + d.reposBt : '')
                   + (d.reposFecha ? ('<br>' + (d.reposEstado === 'COMPLETADO' ? 'Descarg\u00f3 el: ' : d.reposEstado === 'DESCARGANDO' ? 'Lleg\u00f3 el: ' : 'Fecha de reposici\u00f3n (ETA): ') + d.reposFecha) : '')))
             + (reposEsPendiente ? '<br>D\u00edas equivalentes: +' + d.diasRepos + 'd' : '')
-            + (reposLejana && d.reposEstado !== 'DESCARGANDO' ? '<br><span style="color:#93c5fd">\u26a0\ufe0f A\u00fan a ' + diasHastaETA + ' d\u00edas \u2014 no confirmado, no cuenta como inventario todav\u00eda</span>' : ''))
+            + (reposLejana && d.reposEstado !== 'DESCARGANDO' ? '<br><span style="color:#93c5fd">\u26a0\ufe0f A\u00fan a ' + diasHastaETA + ' d\u00edas \u2014 no confirmado, no cuenta como inventario todav\u00eda</span>' : '')
+            // ⚠️ AGREGADO — a pedido: aviso de vista histórica, para que
+            // quede claro que esto es cómo se veía la reposición EN LA
+            // FECHA que se está revisando (no el estado actual de los
+            // buques) — evita confundir una revisión histórica con la
+            // situación de hoy.
+            + (d.reposHistorico && !d.reposCargando ? '<br><span style="color:#94a3b8;font-size:10px">\ud83d\udcc5 Reposici\u00f3n tal como se ve\u00eda el ' + fechaHoy + ' (vista hist\u00f3rica)</span>' : '')
+            + (d.reposCargando ? '<br><span style="color:#94a3b8;font-size:10px">\u23f3 Cargando reposici\u00f3n hist\u00f3rica de esa fecha\u2026</span>' : ''))
       : '';
     // ⚠️ CORREGIDO — bug real confirmado: el popup siempre decía "Demanda
     // pronóstico" y mostraba d.pronMB (el pronóstico crudo), sin importar
@@ -25123,6 +25169,33 @@ window._toggleGrupoNaves = function(grupoId) {
     l.setStyle({ opacity: g.abierto ? 0.7 : 0 });
   });
 };
+
+// ⚠️ AGREGADO — a pedido: vista histórica de reposición/buques en
+// "Cobertura por producto". Cuando se ve una fecha pasada, se consulta
+// (una sola vez por fecha, con caché) cómo se veía la reposición EN
+// ESE MOMENTO — en vez de mostrar siempre el estado actual de los
+// buques sin importar qué fecha se esté revisando.
+window._reposHistoricaCache = window._reposHistoricaCache || {}; // {fecha: {planta|producto: [naves...]}}
+window._reposHistoricaPendiente = window._reposHistoricaPendiente || {}; // {fecha: true} — evita pedidos duplicados
+function _fetchReposicionHistorica(fecha) {
+  if (window._reposHistoricaCache[fecha] || window._reposHistoricaPendiente[fecha]) return;
+  window._reposHistoricaPendiente[fecha] = true;
+  var url = (typeof CONFIG !== 'undefined' ? CONFIG.API_URL : '') + '?action=getReposicionHistorica&fecha=' + encodeURIComponent(fecha);
+  fetch(url)
+    .then(function(r) { return r.json(); })
+    .then(function(res) {
+      window._reposHistoricaCache[fecha] = (res && res.success && res.reposicion) || {};
+      delete window._reposHistoricaPendiente[fecha];
+      // Volver a dibujar la vista actual ahora que ya llegó el dato
+      // histórico — sin esto, el usuario vería el estado "actual" hasta
+      // la próxima interacción manual.
+      if (typeof renderVistaEjecutivaSimple === 'function') renderVistaEjecutivaSimple();
+    })
+    .catch(function(err) {
+      console.warn('[Reposición histórica] error:', err.message);
+      delete window._reposHistoricaPendiente[fecha];
+    });
+}
 
 window._execMapaSetFecha = function(fecha) {
   if (!fecha) return;
