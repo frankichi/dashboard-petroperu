@@ -4567,16 +4567,25 @@ async function fetchData(forceRefresh) {
       if (_ap && _ap.id === 'pDec' && typeof renderPDec === 'function') renderPDec();
     }, 300);
     _pTendEnsureCargas();  // pre-cargar cargas de naves para ticker/KPIs/mapa
-    // ⚠️ AGREGADO — a pedido: _navPosData solo lo consumen
-    // parseClosedPorts()/renderP1() (admin-only, vacías en Vista
-    // Ejecutiva) y el ticker (oculto por CSS ahí) — se salta la
-    // petición completa en modo ejecutivo.
-    if (!_navPosData && !(typeof EXECUTIVE_MODE !== 'undefined' && EXECUTIVE_MODE)) {
+    // ⚠️ CORREGIDO — a pedido: _navPosData se había dejado de pedir por
+    // completo en Vista Ejecutiva porque en ese momento no lo usaba
+    // nada ahí (solo funciones admin-only). Ahora sí se usa: el popup
+    // de "Cobertura por planta" muestra el estado del buque (ej.
+    // "Fondeado desde 04:36") cuando ese buque trae la reposición de
+    // esa planta. Se sigue evitando el trabajo admin-only
+    // (renderP1/updateEventTicker/_updateShipOpsBar están ocultos o
+    // vacíos en modo ejecutivo de todas formas), pero el fetch en sí
+    // ya no se salta.
+    if (!_navPosData) {
       fetch(CONFIG.API_URL + '?action=getNavesPositioning', {method:'GET', redirect:'follow'})
         .then(r => r.ok ? r.json() : [])
         .then(nd => {
           _navPosData = {};
           (Array.isArray(nd) ? nd : []).forEach(r => { if (r.buque) _navPosData[r.buque.toUpperCase()] = r; });
+          if (typeof EXECUTIVE_MODE !== 'undefined' && EXECUTIVE_MODE) {
+            if (typeof renderVistaEjecutivaSimple === 'function') renderVistaEjecutivaSimple();
+            return;
+          }
           renderP1();
           updateEventTicker();
           if (typeof _updateShipOpsBar === 'function') _updateShipOpsBar();
@@ -7321,6 +7330,29 @@ function _parseNavEvents(estado, rotacion, ubicacion, refFecha) {
     cierres.push({planta: cm[1].toUpperCase(), nivel: nivelM ? 'NIVEL '+nivelM[1] : 'CIERRE', detalle: cm[0].slice(0,80)});
   }
   return {events:events, currentPos:currentPos, etaNext:etaNext, cierres:cierres};
+}
+// ⚠️ AGREGADO — a pedido: estado actual del buque con la hora del
+// último evento real conocido (ej. "Fondeado desde 04:36"), para
+// mostrarlo en el popup de "Cobertura por planta" de Vista Ejecutiva
+// junto a la reposición — sin esto, esa vista no tenía forma de saber
+// si el buque llegó, fondeó, amarró, etc.; solo mostraba la fecha de
+// reposición (ETA) tal como cargas_naves la tiene planeada.
+function _navEstadoActualTexto(buqueName) {
+  if (!buqueName || typeof _navPosData === 'undefined' || !_navPosData) return '';
+  var nav = _navPosData[buqueName.toUpperCase()] || _navPosData[buqueName.toUpperCase()+' 2'];
+  if (!nav || typeof _parseNavEvents !== 'function') return '';
+  var navTexto = ((nav.estado_nav?nav.estado_nav+' ':'')+(nav.estado||''));
+  var parsed = _parseNavEvents(navTexto, nav.rotacion, nav.ubicacion, nav.fecha);
+  // ETA es un evento FUTURO/planeado, no un estado ya ocurrido — se
+  // excluye para quedarse con el último evento REAL (eventos ya vienen
+  // ordenados por fecha/hora ascendente).
+  var reales = (parsed.events||[]).filter(function(e){ return e.type !== 'ETA'; });
+  if (!reales.length) return '';
+  var ultimo = reales[reales.length-1];
+  if (!ultimo.time) return '';
+  var VERBOS = {ZARPE:'Zarp\u00f3', ARRIBO:'En puerto', AMARRO:'Amarrado', FONDEO:'Fondeado', IC:'Cargando', ETC:'Termin\u00f3 carga', TD:'Descarg\u00f3'};
+  var verbo = VERBOS[ultimo.type] || ultimo.label;
+  return verbo + ' desde ' + ultimo.time + ' hrs';
 }
 async function openBTModal(buqueName) {
   var m = document.getElementById('whatif-modal');
@@ -23586,7 +23618,10 @@ function renderVistaEjecutivaSimple() {
       navesHTML = d.reposNaves.map(function(n) {
         var etiquetaFecha = n.fecha ? ((n.estado === 'COMPLETADO' ? 'ya descarg\u00f3 ' : n.estado === 'DESCARGANDO' ? 'lleg\u00f3 (descargando) ' : 'ETA ') + n.fecha) : '';
         var prodTxt = n.producto ? (n.producto + ' \u2014 ') : '';
-        return '<div style="margin-top:3px">\uD83D\uDEA2 <b>' + (n.buque||'\u2014') + '</b> \u00b7 ' + prodTxt + n.vol.toFixed(DEC) + ' MB' + (etiquetaFecha ? ' \u00b7 ' + etiquetaFecha : '') + '</div>';
+        // ⚠️ AGREGADO — a pedido: estado actual del buque (ej.
+        // "Fondeado desde 04:36") junto a cada nave de la reposición.
+        var estadoActualTxt = (typeof _navEstadoActualTexto === 'function') ? _navEstadoActualTexto(n.buque) : '';
+        return '<div style="margin-top:3px">\uD83D\uDEA2 <b>' + (n.buque||'\u2014') + '</b> \u00b7 ' + prodTxt + n.vol.toFixed(DEC) + ' MB' + (etiquetaFecha ? ' \u00b7 ' + etiquetaFecha : '') + (estadoActualTxt ? ' \u00b7 <span style="color:#facc15">' + estadoActualTxt + '</span>' : '') + '</div>';
       }).join('');
     }
     var reposHTML = d.diasRepos > 0
@@ -23606,7 +23641,11 @@ function renderVistaEjecutivaSimple() {
             + (navesHTML
                 ? navesHTML
                 : ((d.reposBt ? '<br>Buque/Barcaza: ' + d.reposBt : '')
-                  + (d.reposFecha ? ('<br>' + (d.reposEstado === 'COMPLETADO' ? 'Descarg\u00f3 el: ' : d.reposEstado === 'DESCARGANDO' ? 'Lleg\u00f3 el: ' : 'Fecha de reposici\u00f3n (ETA): ') + d.reposFecha) : '')))
+                  + (d.reposFecha ? ('<br>' + (d.reposEstado === 'COMPLETADO' ? 'Descarg\u00f3 el: ' : d.reposEstado === 'DESCARGANDO' ? 'Lleg\u00f3 el: ' : 'Fecha de reposici\u00f3n (ETA): ') + d.reposFecha) : '')
+                  // ⚠️ AGREGADO — a pedido: estado actual del buque
+                  // (ej. "Fondeado desde 04:36") cuando se conoce, para
+                  // el caso de una sola nave sin desglose por producto.
+                  + (function(){ var t=(typeof _navEstadoActualTexto==='function')?_navEstadoActualTexto(d.reposBt):''; return t?('<br><span style="color:#facc15">'+t+'</span>'):''; })()))
             + (reposEsPendiente ? '<br>D\u00edas equivalentes: +' + d.diasRepos + 'd' : '')
             + (reposLejana && d.reposEstado !== 'DESCARGANDO' ? '<br><span style="color:#93c5fd">\u26a0\ufe0f A\u00fan a ' + diasHastaETA + ' d\u00edas \u2014 no confirmado, no cuenta como inventario todav\u00eda</span>' : '')
             // ⚠️ AGREGADO — a pedido: aviso de vista histórica, para que

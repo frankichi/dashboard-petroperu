@@ -193,7 +193,6 @@
  "clearED",
  "clearPron",
  "mapEDProduct",
- "_parseNavEvents",
  "parseClosedPorts",
  "_parseCargasFecha",
  "cobApplyRefinery",
