@@ -7337,6 +7337,13 @@ function _parseNavEvents(estado, rotacion, ubicacion, refFecha) {
 // junto a la reposición — sin esto, esa vista no tenía forma de saber
 // si el buque llegó, fondeó, amarró, etc.; solo mostraba la fecha de
 // reposición (ETA) tal como cargas_naves la tiene planeada.
+// ⚠️ CORREGIDO — a pedido: si el buque lleva VARIOS DÍAS en el mismo
+// estado (ej. fondeado 3 días esperando muelle), mostrar solo la hora
+// ("desde 04:36 hrs") es ambiguo — parece que fue hoy. _parseNavEvents
+// ya guarda la fecha completa en cada evento (datetime), simplemente
+// no se estaba usando. Ahora se compara contra la fecha real de hoy:
+// si el evento es de hoy, se muestra solo la hora; si es de un día
+// anterior, se agrega la fecha y cuántos días lleva así.
 function _navEstadoActualTexto(buqueName) {
   if (!buqueName || typeof _navPosData === 'undefined' || !_navPosData) return '';
   var nav = _navPosData[buqueName.toUpperCase()] || _navPosData[buqueName.toUpperCase()+' 2'];
@@ -7349,10 +7356,19 @@ function _navEstadoActualTexto(buqueName) {
   var reales = (parsed.events||[]).filter(function(e){ return e.type !== 'ETA'; });
   if (!reales.length) return '';
   var ultimo = reales[reales.length-1];
-  if (!ultimo.time) return '';
+  if (!ultimo.time || !ultimo.datetime) return '';
   var VERBOS = {ZARPE:'Zarp\u00f3', ARRIBO:'En puerto', AMARRO:'Amarrado', FONDEO:'Fondeado', IC:'Cargando', ETC:'Termin\u00f3 carga', TD:'Descarg\u00f3'};
   var verbo = VERBOS[ultimo.type] || ultimo.label;
-  return verbo + ' desde ' + ultimo.time + ' hrs';
+  var fechaEvento = ultimo.datetime.slice(0, 10); // 'YYYY-MM-DD'
+  var hoyReal = new Date().toISOString().slice(0, 10);
+  if (fechaEvento === hoyReal) return verbo + ' desde ' + ultimo.time + ' hrs';
+  var msPorDia = 86400000;
+  var dEvento = new Date(fechaEvento + 'T00:00:00Z').getTime();
+  var dHoy = new Date(hoyReal + 'T00:00:00Z').getTime();
+  var diasTranscurridos = Math.round((dHoy - dEvento) / msPorDia);
+  var fechaCorta = fechaEvento.slice(8, 10) + '/' + fechaEvento.slice(5, 7); // DD/MM
+  var sufijoDias = diasTranscurridos === 1 ? ' (hace 1 d\u00eda)' : diasTranscurridos > 1 ? (' (hace ' + diasTranscurridos + ' d\u00edas)') : '';
+  return verbo + ' desde el ' + fechaCorta + ' ' + ultimo.time + ' hrs' + sufijoDias;
 }
 async function openBTModal(buqueName) {
   var m = document.getElementById('whatif-modal');
