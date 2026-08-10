@@ -4666,9 +4666,17 @@ async function fetchData(forceRefresh) {
           }
         });
         console.log('[API] Pron\u00f3stico (parallel):', loaded, '| Final:', Object.keys(pronSheet).length);
-        // Pre-poblar _pronByMonthCache con TODOS los meses del pronData para que
-        // renderPTend los encuentre sin fetches adicionales.
+        // ⚠️ CORREGIDO — bug real confirmado con datos en vivo (Pucallpa
+        // pasó de 2.464 a 4.928 MB exactos — el doble — tras una sola
+        // actualización adicional): esta caché nunca se limpiaba antes
+        // de repoblarse, así que cada vez que se refrescaban los datos
+        // (pasa varias veces, ej. al volver a la pestaña), se sumaba
+        // sobre los valores ya acumulados de la vez anterior en vez de
+        // reemplazarlos — duplicando/triplicando el pronóstico con cada
+        // actualización adicional. Se reinicia la caché justo antes de
+        // repoblarla, igual que ya hace pronSheet (que sobreescribe).
         if (typeof _pronByMonthCache !== 'undefined') {
+          _pronByMonthCache = {};
           pronData.forEach(function(p) {
             if (!p.mes || !p.planta || !p.producto || !(p.pron > 0)) return;
             var dp = (typeof VENTAS_DASH_MAP!=='undefined' && VENTAS_DASH_MAP[p.producto]) || p.producto;
@@ -23337,11 +23345,17 @@ function renderVistaEjecutivaSimple() {
       var rep = reposicionInfo(r);
       var pronVal2 = (typeof _pTendPronParaFecha === 'function' ? _pTendPronParaFecha(fechaHoy, r.planta, r.producto) : 0)
         || (typeof pronSheet !== 'undefined' && pronSheet[r.planta+'|'+r.producto]) || r.pron_mes || r.pron || 0;
-      // ⚠️ DIAGNÓSTICO TEMPORAL
-      if (!window._pronVal2DebugCount) window._pronVal2DebugCount = 0;
-      if (window._pronVal2DebugCount < 8) {
-        window._pronVal2DebugCount++;
-        console.log('[Pron DEBUG planta]', r.planta, '/', r.producto, '-> pronVal2:', pronVal2, '| fechaHoy:', fechaHoy, '| _pTendPronParaFecha directo:', (typeof _pTendPronParaFecha === 'function' ? _pTendPronParaFecha(fechaHoy, r.planta, r.producto) : 'N/A'));
+      // ⚠️ DIAGNÓSTICO TEMPORAL — ahora reporta específicamente los casos
+      // en 0.0 (el límite anterior de 8 registros solo alcanzaba a
+      // capturar los primeros, que no eran necesariamente el caso real
+      // que se está reportando).
+      if (pronVal2 === 0 && !window._pronVal2ZeroLoggedFor) window._pronVal2ZeroLoggedFor = {};
+      if (pronVal2 === 0) {
+        var _zkey = r.planta + '|' + r.producto;
+        if (!window._pronVal2ZeroLoggedFor[_zkey]) {
+          window._pronVal2ZeroLoggedFor[_zkey] = true;
+          console.log('[Pron DEBUG CERO]', r.planta, '/', r.producto, '-> pronVal2 es 0. _pTendPronParaFecha:', (typeof _pTendPronParaFecha === 'function' ? _pTendPronParaFecha(fechaHoy, r.planta, r.producto) : 'N/A'), '| pronSheet[key]:', (typeof pronSheet !== 'undefined' ? pronSheet[r.planta+'|'+r.producto] : 'N/A'), '| r.pron_mes:', r.pron_mes, '| r.pron:', r.pron, '| fechaHoy:', fechaHoy);
+        }
       }
       // ⚠️ A diferencia de la vista "Nacional" (donde sí interesa saber
       // qué planta le falta cerrar el día), aquí — mirando una sola
