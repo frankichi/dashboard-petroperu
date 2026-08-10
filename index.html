@@ -23197,6 +23197,15 @@ function renderVistaEjecutivaSimple() {
     }
     var porPlantaFila = {};
     var talaraProductosVistos = {};
+    // ⚠️ AGREGADO TEMPORALMENTE — diagnóstico: confirmar si el problema
+    // es que las fuentes de pronóstico están vacías al momento de
+    // dibujar este panel, o si es otra causa distinta.
+    if (!window._pronDebugHecho) {
+      window._pronDebugHecho = true;
+      console.log('[Pron DEBUG Cobertura] _pronByMonthCache meses:', typeof _pronByMonthCache !== 'undefined' ? Object.keys(_pronByMonthCache) : 'NO DEFINIDA');
+      console.log('[Pron DEBUG Cobertura] pronSheet claves (primeras 5):', typeof pronSheet !== 'undefined' ? Object.keys(pronSheet).slice(0,5) : 'NO DEFINIDA');
+      console.log('[Pron DEBUG Cobertura] fechaHoy:', fechaHoy);
+    }
     latestRows.forEach(function(r) {
       if (REFINERIAS.indexOf(r.planta) !== -1) return;
       if (typeof SKIP_COMBOS !== 'undefined' && SKIP_COMBOS.has((r.planta||'')+'|'+(r.producto||''))) return;
@@ -23212,7 +23221,8 @@ function renderVistaEjecutivaSimple() {
       // cargado. Se usa _pTendPronParaFecha en su lugar — la misma
       // función ya corregida para las gráficas de tendencia, que sí
       // busca el pronóstico del mes correspondiente a la fecha vista.
-      var pronProd = (typeof _pTendPronParaFecha === 'function' ? _pTendPronParaFecha(fechaHoy, r.planta, r.producto) : 0) || r.pron_mes || r.pron || 0;
+      var pronProd = (typeof _pTendPronParaFecha === 'function' ? _pTendPronParaFecha(fechaHoy, r.planta, r.producto) : 0)
+        || (typeof pronSheet !== 'undefined' && pronSheet[r.planta+'|'+r.producto]) || r.pron_mes || r.pron || 0;
       // ⚠️ CORREGIDO: el botón "Calcular con: Despacho real / Pronóstico"
       // no tenía ningún efecto en esta vista — el cálculo estaba fijo
       // en pronóstico sin importar el modo activo. Ahora la razón usa
@@ -23325,7 +23335,8 @@ function renderVistaEjecutivaSimple() {
       var c = comboActivo ? cobPron(rParaCob) : calcCob(rParaCob);
       if (c == null && comboActivo) c = cobFactible(rParaCob);
       var rep = reposicionInfo(r);
-      var pronVal2 = (typeof _pTendPronParaFecha === 'function' ? _pTendPronParaFecha(fechaHoy, r.planta, r.producto) : 0) || r.pron_mes || r.pron || 0;
+      var pronVal2 = (typeof _pTendPronParaFecha === 'function' ? _pTendPronParaFecha(fechaHoy, r.planta, r.producto) : 0)
+        || (typeof pronSheet !== 'undefined' && pronSheet[r.planta+'|'+r.producto]) || r.pron_mes || r.pron || 0;
       // ⚠️ A diferencia de la vista "Nacional" (donde sí interesa saber
       // qué planta le falta cerrar el día), aquí — mirando una sola
       // planta — un producto sin despacho real, pronóstico NI
