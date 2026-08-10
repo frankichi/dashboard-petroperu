@@ -4684,6 +4684,15 @@ async function fetchData(forceRefresh) {
           if (ap.id==='pTend' && typeof renderPTend==='function') try{renderPTend();}catch(e){}
           if (ap.id==='p1'    && typeof renderP1==='function')    try{renderP1();}   catch(e){}
         }
+        // ⚠️ AGREGADO — bug real confirmado: Vista Ejecutiva no estaba en
+        // esta lista de redibujo — "Cobertura por producto" quedaba con
+        // el pronóstico en 0.0 hasta la próxima interacción manual del
+        // usuario, porque _pronByMonthCache llegaba DESPUÉS de que el
+        // panel ya se había dibujado con datos vacíos. rerenderActivePage()
+        // ya sabe manejar Vista Ejecutiva como caso especial (standalone).
+        if (typeof EXECUTIVE_MODE !== 'undefined' && EXECUTIVE_MODE && typeof rerenderActivePage === 'function') {
+          try { rerenderActivePage(); } catch(eRerender) {}
+        }
         cobComputeBadgeQuick();
       })
       .catch(function(e){ console.warn('[API] Pron\u00f3stico paralelo fall\u00f3:', e&&e.message); });
@@ -23197,15 +23206,6 @@ function renderVistaEjecutivaSimple() {
     }
     var porPlantaFila = {};
     var talaraProductosVistos = {};
-    // ⚠️ AGREGADO TEMPORALMENTE — diagnóstico: confirmar si el problema
-    // es que las fuentes de pronóstico están vacías al momento de
-    // dibujar este panel, o si es otra causa distinta.
-    if (!window._pronDebugHecho) {
-      window._pronDebugHecho = true;
-      console.log('[Pron DEBUG Cobertura] _pronByMonthCache meses:', typeof _pronByMonthCache !== 'undefined' ? Object.keys(_pronByMonthCache) : 'NO DEFINIDA');
-      console.log('[Pron DEBUG Cobertura] pronSheet claves (primeras 5):', typeof pronSheet !== 'undefined' ? Object.keys(pronSheet).slice(0,5) : 'NO DEFINIDA');
-      console.log('[Pron DEBUG Cobertura] fechaHoy:', fechaHoy);
-    }
     latestRows.forEach(function(r) {
       if (REFINERIAS.indexOf(r.planta) !== -1) return;
       if (typeof SKIP_COMBOS !== 'undefined' && SKIP_COMBOS.has((r.planta||'')+'|'+(r.producto||''))) return;
