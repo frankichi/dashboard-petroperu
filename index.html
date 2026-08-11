@@ -23841,7 +23841,7 @@ function renderVistaEjecutivaSimple() {
           '<span style="font-family:var(--mono);font-weight:800;color:#2563eb">+' + x.tag.volumenMB.toFixed(DEC) + ' MB</span>' +
         '</div></div>';
     }).join('');
-    reposSectionHTML = '<div style="background:var(--card);border:1px solid var(--bdr);border-radius:14px;padding:22px 24px;margin-bottom:20px">' +
+    reposSectionHTML = '<div style="background:var(--card);border:1px solid var(--bdr);border-radius:14px;padding:22px 24px;margin-bottom:20px;align-self:start;height:fit-content">' +
         '<div style="font-size:13px;font-weight:800;color:var(--txt);margin-bottom:4px">🚢 Reposiciones recibidas</div>' +
         '<div style="font-size:11px;color:var(--txt3);margin-bottom:10px">Marcadas por las plantas en Registro Diario al reportar existencia</div>' +
         '<div>' + reposItemsHTML + '</div>' +
@@ -24763,11 +24763,32 @@ function renderVistaEjecutivaSimple() {
         ? '<span style="font-size:8.5px;font-weight:800;color:var(--grn);display:inline-flex;align-items:center;gap:3px" title="Al menos un producto tiene reporte real de hoy">✓ cerrado</span>'
         : estado === 'proyectado'
           ? '<span style="font-size:8.5px;font-weight:800;color:#2563eb;font-style:italic;display:inline-flex;align-items:center;gap:3px" title="Planta aún no reporta hoy — inventario estimado con el último real menos consumo por demanda pronóstico">≈ proyectado</span>'
-          : '<span style="font-size:8.5px;font-weight:800;color:var(--ora);display:inline-flex;align-items:center;gap:3px" title="Planta aún no reporta hoy y no hay demanda pronóstico cargada para proyectar — se muestra el último dato real, sin actualizar">⚠ sin cierre ni proyección</span>';
+          : '<span style="font-size:8.5px;font-weight:800;color:var(--ora);display:inline-flex;align-items:center;gap:3px" title="Planta aún no reporta hoy y no hay demanda pronóstico cargada para proyectar — se muestra el último dato real, sin actualizar">⚠ sin cierre</span>';
       return '<button onclick="window._execPlanta=\'' + p + '\';renderVistaEjecutivaSimple();" '
-        + 'style="flex:1 1 150px;min-width:150px;text-align:left;padding:12px 14px;border-radius:10px;border:1px solid var(--bdr);background:var(--card);cursor:pointer;transition:border-color .15s" '
+        // ⚠️ CORREGIDO — bug real confirmado con captura: flex:1 1 150px
+        // (con crecimiento activado) hacía que las tarjetas de la
+        // ÚLTIMA fila incompleta (ej. solo 5 de 8 espacios) crecieran
+        // para "rellenar" el espacio sobrante — como el contenido
+        // interno no es idéntico entre tarjetas (largo del nombre,
+        // presencia del badge "proyectado", etc.), el reparto de ese
+        // espacio extra salía deparejo y una tarjeta (Iquitos, en este
+        // caso) terminaba visiblemente más alta/estirada que sus
+        // vecinas. Se quita el crecimiento (flex:0 en vez de 1) — todas
+        // las tarjetas mantienen el mismo tamaño siempre, y si la
+        // última fila no se completa, simplemente queda espacio vacío
+        // a la derecha en vez de una tarjeta deformada.
+        + 'style="flex:0 1 150px;min-width:150px;text-align:left;padding:12px 14px;border-radius:10px;border:1px solid var(--bdr);background:var(--card);cursor:pointer;transition:border-color .15s" '
         + 'onmouseover="this.style.borderColor=\'#0a3a5c\'" onmouseout="this.style.borderColor=\'var(--bdr)\'">'
-        + '<div style="font-size:11.5px;font-weight:800;color:var(--txt);margin-bottom:3px">' + (esRef?'🛢️':'🏭') + ' ' + p + '</div>'
+        // ⚠️ CORREGIDO — bug real confirmado con captura: "Refinería
+        // Conchán" y "Refinería Iquitos" tienen 2 caracteres más que
+        // "Refinería Talara" — a 150px de ancho fijo, eso alcanza para
+        // que el nombre se parta en 2 líneas en esas dos tarjetas
+        // mientras Talara cabe en una sola, haciéndolas más altas que
+        // sus vecinas. Se reserva altura fija para 2 líneas de título
+        // en TODAS las tarjetas (min-height + line-height explícitos),
+        // así da igual si el nombre necesita una línea o dos: la altura
+        // de la tarjeta nunca cambia por eso.
+        + '<div style="font-size:11.5px;font-weight:800;color:var(--txt);margin-bottom:3px;line-height:1.3;min-height:29px">' + (esRef?'🛢️':'🏭') + ' ' + p + '</div>'
         + '<div style="font-size:15px;font-weight:800;font-family:var(--mono);color:var(--acc2)">' + fmtMB(invP) + '</div>'
         + '<div style="margin-top:3px">' + estadoBadge + '</div>'
         + '<div style="font-size:9.5px;color:var(--txt3);margin-top:2px">' + (esRef?'Solo inventario →':'Ver detalle →') + '</div>'
@@ -24793,7 +24814,7 @@ function renderVistaEjecutivaSimple() {
       + (nSinProy > 0 ? '<span style="color:var(--ora)">\u26a0 ' + nSinProy + ' sin cierre ni proyecci\u00f3n</span>' : '')
       + '</div>';
     plantasGridHTML =
-      '<div style="margin:8px 0 28px;width:100%;box-sizing:border-box">' +
+      '<div style="margin:8px 0 28px;width:100%;box-sizing:border-box;align-self:start;height:fit-content">' +
         '<div style="font-size:11px;font-weight:800;color:var(--txt3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">Ver detalle por planta / terminal / refinería</div>' +
         resumenCierreHTML +
         // ⚠️ CAMBIADO — de CSS Grid (auto-fit) a Flexbox: en pantallas
@@ -24803,7 +24824,7 @@ function renderVistaEjecutivaSimple() {
         // un mecanismo más directo para "llenar el espacio restante" —
         // cada tarjeta crece proporcionalmente hasta ocupar todo el
         // ancho disponible, sin dejar ninguna columna vacía.
-        '<div style="display:flex;flex-wrap:wrap;gap:10px;width:100%">' + cards + '</div>' +
+        '<div style="display:flex;flex-wrap:wrap;align-items:flex-start;gap:10px;width:100%">' + cards + '</div>' +
       '</div>';
   }
 
@@ -24961,6 +24982,19 @@ function renderVistaEjecutivaSimple() {
       mesesSelectorBar +
       '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:10px">' +
       '<div class="exec-chart-wrap" style="position:relative;height:220px"><canvas id="exec-chart-inv"></canvas></div>' +
+    '</div>' +
+    // ⚠️ CORREGIDO — bug real confirmado con inspector + conteo de
+    // etiquetas: faltaba ESTE '</div>' para cerrar la tarjeta de
+    // Inventario ANTES de que empezara la de Despachos. Sin él, la
+    // tarjeta de Despachos quedaba anidada DENTRO de la de Inventario
+    // (no como hermana) y — más grave — el cierre final que sigue más
+    // abajo (el que sí cierra exec-charts-row) terminaba cerrando esta
+    // tarjeta por error, dejando exec-charts-row PERMANENTEMENTE
+    // ABIERTO. Como exec-charts-row es display:grid con 2 columnas,
+    // TODO el resto de la página (Reposiciones, Cobertura por planta,
+    // Ver detalle) quedaba atrapado dentro de su segunda columna,
+    // heredando la altura de la primera — de ahí el enorme espacio en
+    // blanco que no se explicaba solo con CSS.
     '</div>' +
     (esRefineriaExec ? '' :
     '<div style="background:var(--card);border:1px solid var(--bdr);border-radius:14px;padding:22px 24px;margin-bottom:24px">' +
@@ -25954,6 +25988,26 @@ function initExecutiveMode() {
     // Despachos— siempre igualen su altura visual entre sí, aunque el
     // título de una envuelva a 2 líneas y el de la otra no.
     '@media (min-width:1200px){' +
+      // ⚠️ CORREGIDO — bug real confirmado con inspector del navegador:
+      // esta regla no solo empareja Inventario/Despacho — es el grid
+      // de 2 columnas que agrupa TODO el bloque izquierdo (Inventario +
+      // Despachos + Cobertura por planta) contra TODO el bloque derecho
+      // (Reposiciones recibidas + Ver detalle por planta). Con
+      // align-items:stretch, la columna corta (derecha) se estiraba
+      // para igualar la altura de la columna larga (izquierda, con la
+      // lista completa de ~20 plantas) — dejando un enorme espacio en
+      // blanco debajo del contenido real de la columna derecha. Se
+      // cambia a "start": cada columna ocupa solo la altura de su
+      // propio contenido, sin estirarse para igualar a la otra.
+      // ⚠️ RESTAURADO — a pedido: ahora que el bug real (el <div> sin
+      // cerrar que hacía que TODA la página quedara atrapada dentro de
+      // este grid) está corregido, exec-charts-row vuelve a contener
+      // ÚNICAMENTE las tarjetas de Inventario y Despacho — nada más se
+      // ve afectado por esta regla. Es seguro devolverle
+      // align-items:stretch, su comportamiento original: ambas
+      // tarjetas igualan su altura entre sí (ej. si "Vista mensual"
+      // agrega una fila extra a Inventario, Despacho crece igual, sin
+      // quedar despareja).
       '.exec-charts-row{display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:stretch}' +
       '.exec-charts-row > div{margin-bottom:0!important;display:flex;flex-direction:column}' +
       // ⚠️ CORREGIDO — bug real confirmado: con align-items:stretch,
