@@ -16099,7 +16099,14 @@ function _parseCargasNavesText(text, fechaRpt) {
           // planta quedaba invisible en el dashboard sin importar la
           // fecha/estado del buque. Ahora todo variante de diesel de
           // descarga se normaliza a 'Diesel' a secas.
-          var prodNorm=prodName;if(/^GASOLINA\s+REG/i.test(prodName))prodNorm='G. Regular';else if(/^GASOLINA\s+PREM/i.test(prodName))prodNorm='G. Premium';else if(/^DIESEL/i.test(prodName))prodNorm='Diesel';else if(/^TURBO\s*A[-.]?1/i.test(prodName))prodNorm='TA1';else if(/^G\.?\s*L\.?P/i.test(prodName)||/^GOP$/i.test(prodName))prodNorm='GLP';
+          // ⚠️ CORREGIDO — bug real confirmado: "D2 S-50" (forma corta,
+          // usada en algunos reportes) no calzaba con /^DIESEL/i (que
+          // solo reconoce la forma larga "DIESEL 2 S-50") — ese
+          // registro quedaba SIN normalizar, así que nunca se contaba
+          // como "Diesel" en ningún cruce del dashboard. Se agrega el
+          // patrón corto explícitamente (D2/D5/DB5 seguido de S-50 o
+          // similar), además de la forma larga que ya funcionaba.
+          var prodNorm=prodName;if(/^GASOLINA\s+REG/i.test(prodName))prodNorm='G. Regular';else if(/^GASOLINA\s+PREM/i.test(prodName))prodNorm='G. Premium';else if(/^DIESEL/i.test(prodName)||/^D\d\s*S[-\s]?\d/i.test(prodName)||/^DB\d\s*S[-\s]?\d/i.test(prodName))prodNorm='Diesel';else if(/^TURBO\s*A[-.]?1/i.test(prodName))prodNorm='TA1';else if(/^G\.?\s*L\.?P/i.test(prodName)||/^GOP$/i.test(prodName))prodNorm='GLP';
           records.push({fecha_reporte:fechaRpt,buque:buque,viaje:viaje,origen:origen,terminal:terminals[vi],fecha_desde:desde||'',fecha_hasta:hasta||'',producto:prodNorm,volumen_mb:vol,estado:estado});
         }
       }
@@ -23393,7 +23400,22 @@ function renderVistaEjecutivaSimple() {
       if (vol1 > 0) naves.push({ buque: r.bt || '', vol: vol1, fecha: r.fecha_reposicion || '', estado: r.bt_estado || '' });
       if (vol2 > 0) naves.push({ buque: r.bt2 || '', vol: vol2, fecha: r.fecha_repos_bt2 || '', estado: r.bt2_estado || '' });
     }
-    var volTotal = naves.reduce(function(s, n){ return s + (n.vol || 0); }, 0);
+    // ⚠️ CORREGIDO — bug real confirmado con datos reales: cuando hay
+    // varias naves/viajes para la misma planta+producto, se sumaban
+    // TODOS los volúmenes sin importar el estado — incluyendo entregas
+    // YA COMPLETADAS hace semanas (ej. UCAYALI/V.016 entregó 54 MB a
+    // Mollendo el 27 de julio, estado COMPLETADO). Por la regla ya
+    // establecida en el sistema ("Confirmada ya no se pinta como
+    // pendiente, ya se refleja en inventario"), ese volumen NO debería
+    // sumarse como si fuera reposición pendiente — inflaba el
+    // "Volumen total" mostrado con algo que ya pasó hace tiempo (caso
+    // real: 54 MB completado + 80 MB pendiente se mostraban como "134
+    // MB por llegar" — ninguno de los dos números reales). Se excluyen
+    // los COMPLETADO del total "pendiente"; si TODO está completado
+    // (nada pendiente de verdad), se cae de vuelta a sumar todo, para
+    // no perder el aviso de "ya descargó" cuando corresponda.
+    var navesPendientes = naves.filter(function(n){ return n.estado !== 'COMPLETADO'; });
+    var volTotal = (navesPendientes.length ? navesPendientes : naves).reduce(function(s, n){ return s + (n.vol || 0); }, 0);
     if (volTotal <= 0 || denom <= 0) return { diasRepos: 0, volMB: 0, tipo: '', naves: [] };
     // ⚠️ CORREGIDO (v4 — fix de raíz, sin depender de fecha_reposicion):
     // las versiones anteriores intentaban invalidar reposiciones viejas
@@ -23437,7 +23459,7 @@ function renderVistaEjecutivaSimple() {
           }
           return n;
         });
-        volTotal = naves.reduce(function(s, n){ return s + (n.vol || 0); }, 0);
+        volTotal = naves.filter(function(n){ return n.estado !== 'COMPLETADO'; }).reduce(function(s, n){ return s + (n.vol || 0); }, 0) || naves.reduce(function(s, n){ return s + (n.vol || 0); }, 0);
       }
     }
     if (volTotal <= 0) return { diasRepos: 0, volMB: 0, tipo: '', naves: [] };
