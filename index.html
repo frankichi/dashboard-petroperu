@@ -14535,8 +14535,21 @@ function parsePPSalesFile(file, callback) {
       var ws = wb.Sheets[wsName];
       if (!ws) { callback('No se encontró la hoja "Total Peru"'); return; }
       var mesRaw = ws['B2'] ? String(ws['B2'].v||'') : '';
-      var MONTHS = {Jan:'01',Feb:'02',Mar:'03',Apr:'04',May:'05',Jun:'06',
-                    Jul:'07',Aug:'08',Sep:'09',Oct:'10',Nov:'11',Dec:'12'};
+      // ⚠️ CORREGIDO — bug real confirmado: el archivo real trae el mes
+      // en ESPAÑOL ("2026/Ago"), pero este mapa solo reconocía
+      // abreviaturas en INGLÉS (Jan, Feb... Aug...). Como "Ago" no
+      // calzaba con ninguna clave, MONTHS['Ago'] daba undefined y el
+      // "|| '01'" de respaldo hacía que TODO el archivo se guardara
+      // como enero, sin importar qué mes se hubiera subido en realidad
+      // — el caso reportado: se subió el reporte de agosto y el
+      // sistema lo procesó como si fuera enero.
+      var MONTHS = {
+        Ene:'01',Feb:'02',Mar:'03',Abr:'04',May:'05',Jun:'06',
+        Jul:'07',Ago:'08',Set:'09',Sep:'09',Oct:'10',Nov:'11',Dic:'12',
+        // Se conservan también las abreviaturas en inglés por si algún
+        // reporte viejo o una variante del archivo las trae así.
+        Jan:'01',Apr:'04',Aug:'08',Dec:'12'
+      };
       var mm = /(\d{4})\/(\w+)/.exec(mesRaw) || [];
       var year  = mm[1] || String(new Date().getFullYear());
       var month = MONTHS[mm[2]] || '01';
