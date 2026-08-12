@@ -15977,6 +15977,26 @@ function _parseCargasNavesText(text, fechaRpt) {
         .replace(/PUERTO DE CARGA/gi,'')
         .replace(/^\s+/,'').trim();
       var termTokens = splitLine(termRaw);
+      // ⚠️ AGREGADO — bug real confirmado con PDF real (B/T MOCHE
+      // V.012-2026): por una diferencia mínima de posición vertical en
+      // el PDF, a veces "PUERTO DE CARGA" y los nombres de los
+      // terminales quedan en LÍNEAS SEPARADAS al extraer el texto (no
+      // en la misma línea, como pasa normalmente) — ej.:
+      //   "PUERTO DE CARGA"          ← línea sola, nada después
+      //   "CONCHÁN     SALAVERRY"    ← los terminales, en la siguiente
+      // Antes, si la línea de "PUERTO DE CARGA" no tenía nada más,
+      // termTokens quedaba vacío y la tabla completa se descartaba en
+      // silencio — Salaverry (y todo lo demás de esa tabla) desaparecía
+      // del reporte sin ningún aviso. Ahora, si no hay nada en la misma
+      // línea, se revisa la línea SIGUIENTE — y el resto de las
+      // referencias (fecha, filas de producto) se corren un renglón
+      // para no desalinearse.
+      var lineOffset = 0;
+      if (!termTokens.length && pcIdx + 1 < blockLines.length) {
+        var termRaw2 = blockLines[pcIdx+1].trim();
+        var termTokens2 = splitLine(termRaw2);
+        if (termTokens2.length) { termTokens = termTokens2; lineOffset = 1; }
+      }
       // ⚠️ CORREGIDO — bug de desalineación de columnas confirmado con
       // datos reales (B/T URUBAMBA V.015-2026, header "- CONCHÁN"): antes
       // se filtraban los tokens inválidos del header (guion "-", o
@@ -16010,7 +16030,7 @@ function _parseCargasNavesText(text, fechaRpt) {
         colMap.push(colIdx);
       });
       if (!terminals.length) return;
-      var dateLine = blockLines[pcIdx+1];
+      var dateLine = blockLines[pcIdx+1+lineOffset];
       var dateTokens = splitLine(dateLine);
       var origen=dateTokens[0]||'';origen=normTerm(origen);
       // dateTokensRaw[0] = fecha propia del ORIGEN (columna de carga, no
@@ -16020,7 +16040,7 @@ function _parseCargasNavesText(text, fechaRpt) {
       // descartaba del arreglo y dependía de que coincidiera "por
       // casualidad" con las columnas inválidas del header).
       var dateTokensRaw = dateTokens.slice(1);
-      for (var li = pcIdx+2; li < blockLines.length; li++) {
+      for (var li = pcIdx+2+lineOffset; li < blockLines.length; li++) {
         var l = blockLines[li];
         if (/^TOTAL\b/i.test(l) || /^PREPARADO/i.test(l) || /^REVISADO/i.test(l)) break;
         if (/PUERTO DE CARGA/i.test(l)) break;
