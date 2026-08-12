@@ -23817,6 +23817,17 @@ function renderVistaEjecutivaSimple() {
     // se junta con normalidad — igual que antes.
     var diasHastaETA = (d.reposFecha && /^\d{4}-\d{2}-\d{2}/.test(d.reposFecha)) ? _diasEntreFechas(fechaHoy, d.reposFecha.slice(0,10)) : null;
     var reposLejana = reposEsPendiente && diasHastaETA !== null && diasHastaETA > 1;
+    // ⚠️ AGREGADO — a pedido: estandarizar el formato de fecha dentro de
+    // este popup. Antes el ETA salía en ISO crudo ("2026-08-13") mientras
+    // que el estado actual del buque (vía _navEstadoActualTexto) usa
+    // "DD/MM" — dos formatos distintos en el mismo tooltip, fácil de
+    // confundir entre sí. Se homologa todo a "DD/MM" aquí.
+    function _fmtEtaCorta(fechaRaw) {
+      if (!fechaRaw) return '';
+      var soloFecha = String(fechaRaw).slice(0, 10);
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(soloFecha)) return fechaRaw;
+      return soloFecha.slice(8, 10) + '/' + soloFecha.slice(5, 7);
+    }
     // Popup con volumen + buque + ETA + demanda pronóstico del producto
     // (o de la planta si es "Todos") — reemplaza el tooltip nativo, que
     // dejó de mostrarse de forma confiable para el usuario.
@@ -23828,7 +23839,7 @@ function renderVistaEjecutivaSimple() {
     var navesHTML = '';
     if (d.reposNaves && d.reposNaves.length > 1) {
       navesHTML = d.reposNaves.map(function(n) {
-        var etiquetaFecha = n.fecha ? ((n.estado === 'COMPLETADO' ? 'ya descarg\u00f3 ' : n.estado === 'DESCARGANDO' ? 'lleg\u00f3 (descargando) ' : 'ETA ') + n.fecha) : '';
+        var etiquetaFecha = n.fecha ? ((n.estado === 'COMPLETADO' ? 'ya descarg\u00f3 ' : n.estado === 'DESCARGANDO' ? 'lleg\u00f3 (descargando) ' : 'ETA ') + _fmtEtaCorta(n.fecha)) : '';
         var prodTxt = n.producto ? (n.producto + ' \u2014 ') : '';
         // ⚠️ AGREGADO — a pedido: estado actual del buque (ej.
         // "Fondeado desde 04:36") junto a cada nave de la reposición.
@@ -23858,19 +23869,19 @@ function renderVistaEjecutivaSimple() {
             + (navesHTML
                 ? navesHTML
                 : ((d.reposBt ? '<br>Buque/Barcaza: ' + d.reposBt : '')
-                  + (d.reposFecha ? ('<br>' + (d.reposEstado === 'COMPLETADO' ? 'Descarg\u00f3 el: ' : d.reposEstado === 'DESCARGANDO' ? 'Lleg\u00f3 el: ' : 'Fecha de reposici\u00f3n (ETA): ') + d.reposFecha) : '')
+                  + (d.reposFecha ? ('<br>' + (d.reposEstado === 'COMPLETADO' ? 'Descarg\u00f3 el: ' : d.reposEstado === 'DESCARGANDO' ? 'Lleg\u00f3 el: ' : 'Fecha de reposici\u00f3n (ETA): ') + _fmtEtaCorta(d.reposFecha)) : '')
                   // ⚠️ AGREGADO — a pedido: estado actual del buque
                   // (ej. "Fondeado desde 04:36") cuando se conoce, para
                   // el caso de una sola nave sin desglose por producto.
                   + (function(){ var t=(typeof _navEstadoActualTexto==='function')?_navEstadoActualTexto(d.reposBt):''; return t?('<br><span style="color:#facc15">\uD83D\uDCE1 Estado actual: '+t+'</span>'):''; })()))
             + (reposEsPendiente ? '<br>D\u00edas equivalentes: +' + d.diasRepos + 'd' : '')
             + (reposLejana && d.reposEstado !== 'DESCARGANDO' ? '<br><span style="color:#93c5fd">\u26a0\ufe0f A\u00fan a ' + diasHastaETA + ' d\u00edas \u2014 no confirmado, no cuenta como inventario todav\u00eda</span>' : '')
-            // ⚠️ AGREGADO — a pedido: aviso de vista histórica, para que
-            // quede claro que esto es cómo se veía la reposición EN LA
-            // FECHA que se está revisando (no el estado actual de los
-            // buques) — evita confundir una revisión histórica con la
-            // situación de hoy.
-            + (d.reposHistorico && !d.reposCargando ? '<br><span style="color:#94a3b8;font-size:10px">\ud83d\udcc5 Reposici\u00f3n tal como se ve\u00eda el ' + fechaHoy + ' (vista hist\u00f3rica)</span>' : '')
+            // ⚠️ QUITADO — a pedido: el aviso "Reposición tal como se veía
+            // el ... (vista histórica)" no aportaba nada útil al usuario
+            // y generaba confusión (se leía como si la fecha mostrada
+            // fuera otra fecha distinta al ETA). El indicador de carga
+            // (reposCargando) sí se mantiene porque comunica un estado
+            // real de la interfaz (todavía no llegó la respuesta).
             + (d.reposCargando ? '<br><span style="color:#94a3b8;font-size:10px">\u23f3 Cargando reposici\u00f3n hist\u00f3rica de esa fecha\u2026</span>' : ''))
       : '';
     // ⚠️ CORREGIDO — bug real confirmado: el popup siempre decía "Demanda
