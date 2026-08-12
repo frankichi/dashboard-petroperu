@@ -1472,7 +1472,18 @@ function rdRecalcDespacho(prod) {
   var despEl = document.querySelector('.rd-despacho[data-prod="' + prod + '"]');
   var existEl = document.querySelector('.rd-existencia[data-prod="' + prod + '"]');
   var autoEl = document.querySelector('[data-auto-calc="' + prod + '"]');
-  if (!despEl || !autoEl) return;
+  if (!despEl) return;
+  // Quita el error visual apenas escribe un valor válido — antes solo la
+  // existencia limpiaba su propio error al escribir (vía rdMarkFilled);
+  // el despacho se quedaba marcado en rojo aunque ya lo hubieran corregido.
+  var pid = prod.replace(/[^a-z0-9]/gi,'_');
+  var okDesp = despEl.value.trim() !== '' && !isNaN(parseFloat(despEl.value));
+  if (okDesp) {
+    despEl.classList.remove('input-error');
+    var errDespEl = document.getElementById('err-desp-' + pid);
+    if (errDespEl) errDespEl.classList.remove('show');
+  }
+  if (!autoEl) return;
   var desp  = rdParseNum(despEl);
   var exist = existEl ? rdParseNum(existEl) : 0;
   if (desp > 0 && exist >= 0) {
@@ -1706,10 +1717,11 @@ function rdRenderProdRows(productos, valores, detalle, yaReportado) {
       // Despacho — no aplica a refinerías (no venden, solo procesan/almacenan)
       +     (esRefineria ? '' :
              '<div class="fld">'
-      +       '<label style="font-size:10px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:5px">Despacho del día (MB/d)</label>'
+      +       '<label style="font-size:10px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:5px">Despacho del día (MB/d) <span style="color:#c8102e">*</span></label>'
       +       '<input type="number" step="0.001" min="0" class="calc-input rd-despacho" data-prod="' + p + '" '
       +         'placeholder="' + (uc && (uc.despacho||uc.dem) > 0 ? 'Ref: ' + rdFmt(uc.despacho||uc.dem) : 'Ej: 0.170') + '" '
       +         (yaReportado ? 'readonly style="background:#f7f8fa;cursor:not-allowed"' : 'data-prod="' + p + '" oninput="rdRecalcDespacho(this.dataset.prod);rdCheckUnidadSospechosa(this.dataset.prod,\'desp\')"') + '>'
+      +       '<div class="fld-validation-err" id="err-desp-' + p.replace(/[^a-z0-9]/gi,'_') + '">⚠ Requerido — ingresa 0 si no hubo despacho ese día</div>'
       +       '<div style="font-size:9px;color:#94a3b8;margin-top:3px">Ventas reales del día</div>'
       +       '<div class="fld-unidad-warn" id="unidad-warn-desp-' + p.replace(/[^a-z0-9]/gi,'_') + '" style="display:none;font-size:10.5px;color:#a86a00;background:#fdf3e0;border:1px solid #e8a00050;border-radius:6px;padding:6px 9px;margin-top:5px;font-weight:600">⚠ Este valor parece muy alto para <b>miles de barriles (MB)</b>. Verifica que no lo hayas escrito en barriles.</div>'
       +     '</div>')
@@ -1963,26 +1975,54 @@ function rdAbrirConfirmacion() {
     return;
   }
   // Validar que TODOS los productos tengan existencia ingresada
-  var errores = [];
+  // ⚠️ AMPLIADO — a pedido: el despacho del día es igual de obligatorio
+  // que la existencia. Antes solo se exigía la existencia y el reporte se
+  // podía guardar con despachos en blanco (llenado parcial) — ahora se
+  // valida cada producto con ambos campos. El campo de despacho no
+  // existe en el DOM para refinerías (no venden, solo almacenan), así
+  // que ahí se detecta la ausencia del input y se omite sin marcar error.
+  var erroresExist = [];
+  var erroresDesp = [];
   (RD.productos || []).forEach(function(p) {
-    var inp = document.querySelector('.rd-existencia[data-prod="' + p + '"]');
-    var errEl = document.getElementById('err-exist-' + p.replace(/[^a-z0-9]/gi,'_'));
-    if (!inp || inp.value.trim() === '' || isNaN(parseFloat(inp.value))) {
-      errores.push(p);
-      if (inp) inp.classList.add('input-error');
-      if (errEl) errEl.classList.add('show');
-      // Abrir el card del producto con error
+    var pid = p.replace(/[^a-z0-9]/gi,'_');
+    var inpExist = document.querySelector('.rd-existencia[data-prod="' + p + '"]');
+    var errExistEl = document.getElementById('err-exist-' + pid);
+    var faltaExist = !inpExist || inpExist.value.trim() === '' || isNaN(parseFloat(inpExist.value));
+    if (faltaExist) {
+      erroresExist.push(p);
+      if (inpExist) inpExist.classList.add('input-error');
+      if (errExistEl) errExistEl.classList.add('show');
+    } else {
+      if (inpExist) inpExist.classList.remove('input-error');
+      if (errExistEl) errExistEl.classList.remove('show');
+    }
+
+    var inpDesp = document.querySelector('.rd-despacho[data-prod="' + p + '"]');
+    var errDespEl = document.getElementById('err-desp-' + pid);
+    // inpDesp === null → producto de refinería, sin campo de despacho: no aplica
+    var faltaDesp = inpDesp && (inpDesp.value.trim() === '' || isNaN(parseFloat(inpDesp.value)));
+    if (faltaDesp) {
+      erroresDesp.push(p);
+      if (inpDesp) inpDesp.classList.add('input-error');
+      if (errDespEl) errDespEl.classList.add('show');
+    } else {
+      if (inpDesp) inpDesp.classList.remove('input-error');
+      if (errDespEl) errDespEl.classList.remove('show');
+    }
+
+    if (faltaExist || faltaDesp) {
       var blk = document.querySelector('.prod-block[data-prod="' + p + '"]');
       if (blk && !blk.classList.contains('open')) blk.classList.add('open');
-    } else {
-      if (inp) inp.classList.remove('input-error');
-      if (errEl) errEl.classList.remove('show');
     }
   });
-  if (errores.length) {
-    rdToast('\u26a0 Completa la existencia de: ' + errores.join(', '), 'error');
-    // Scroll al primero con error
-    var firstErr = document.querySelector('.prod-block[data-prod="' + errores[0] + '"]');
+  if (erroresExist.length || erroresDesp.length) {
+    var partes = [];
+    if (erroresExist.length) partes.push('la existencia de ' + erroresExist.join(', '));
+    if (erroresDesp.length) partes.push('el despacho de ' + erroresDesp.join(', '));
+    rdToast('\u26a0 Completa ' + partes.join(' y ') + ' antes de guardar', 'error');
+    // Scroll al primer producto con error (existencia tiene prioridad visual)
+    var primerConError = erroresExist[0] || erroresDesp[0];
+    var firstErr = document.querySelector('.prod-block[data-prod="' + primerConError + '"]');
     if (firstErr) firstErr.scrollIntoView({ behavior: 'smooth', block: 'center' });
     return;
   }
