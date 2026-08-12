@@ -23357,7 +23357,14 @@ function renderVistaEjecutivaSimple() {
       var cacheHist = window._reposHistoricaCache[fechaHoy];
       if (cacheHist) {
         var navesHist = cacheHist[r.planta.toUpperCase() + '|' + r.producto] || [];
-        var volTotalHist = navesHist.reduce(function(s, n){ return s + (n.vol || 0); }, 0);
+        // ⚠️ CORREGIDO — mismo criterio ya aplicado en la ruta "en vivo":
+        // no sumar entregas ya COMPLETADAS (ya reflejadas en el
+        // inventario) junto con las pendientes en el "Volumen total"
+        // mostrado — esta ruta histórica tenía su propia suma separada
+        // que nunca se corrigió, así que el mismo problema seguía
+        // apareciendo cada vez que se miraba una fecha pasada.
+        var navesHistPendientes = navesHist.filter(function(n){ return n.estado !== 'COMPLETADO'; });
+        var volTotalHist = (navesHistPendientes.length ? navesHistPendientes : navesHist).reduce(function(s, n){ return s + (n.vol || 0); }, 0);
         if (volTotalHist <= 0 || denom <= 0) return { diasRepos: 0, volMB: 0, tipo: '', naves: [], historico: true };
         return {
           diasRepos: Math.floor(volTotalHist / denom),
