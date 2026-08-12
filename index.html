@@ -3522,7 +3522,7 @@ const PRODUCTOS_POR_PLANTA_EXEC = {
   'Callao':      ['Diesel', 'G. Regular', 'G. Premium', 'TA1'],
   'Conchán':     ['Diesel', 'G. Regular', 'G. Regular HS', 'G. Premium'],
   'Pisco':       ['Diesel', 'G. Regular', 'G. Premium'],
-  'Mollendo':    ['Diesel', 'G. Regular', 'G. Premium', 'ULSD Nacionalizado'],
+  'Mollendo':    ['Diesel', 'G. Regular', 'G. Premium', 'ULSD DA'],
   'Ilo':         ['Diesel', 'G. Premium'],
   'Juliaca':     ['Diesel', 'G. Regular'],
   'Cusco':       ['Diesel', 'G. Regular'],
@@ -3597,7 +3597,7 @@ function invFilaValida(r) {
 // cuando un operador marca una reposición recibida (botón "¿Cómo llegó el
 // producto?"): "[REPOS|MARITIMO|12.45] texto libre..." — así el dashboard
 // puede mostrarla en gráficas/listas, no solo como texto suelto.
-const REPOS_TIPO_LABEL = { MARITIMO: '⛴️ Cabotaje Marítimo', TERRESTRE: '🚛 Cisternas', REFINERIA: '🏭 Vía Refinería', FONDOS: '💰 Solicitud de Fondos', ULSD: '🔄 Uso de ULSD Nacionalizado' };
+const REPOS_TIPO_LABEL = { MARITIMO: '⛴️ Cabotaje Marítimo', TERRESTRE: '🚛 Cisternas', REFINERIA: '🏭 Vía Refinería', FONDOS: '💰 Solicitud de Fondos', ULSD: '🔄 Uso de ULSD DA' };
 function parseReposicionTag(comentario) {
   if (!comentario) return null;
   var m = /^\[REPOS\|(\w+)\|([\d.]+)\]/.exec(comentario);
@@ -7310,7 +7310,18 @@ function _parseNavEvents(estado, rotacion, ubicacion, refFecha) {
     // aunque el texto sí lo trajera, y el estado visible caía siempre
     // al último patrón que sí calzaba (típicamente ETA).
     {re:new RegExp('FONDE[O\u00D3][:\\s]+'+DT,'gi'),                                 type:'FONDEO',   label:'⚓ Fondeó',        hp:false},
-    {re:new RegExp('I\\.\\s*(?:DESCARGA|CARGA|FAENA)[:\\s]+'+DT,'gi'),           type:'IC',       label:'🔄 Inicio desc.',  hp:false},
+    // ⚠️ CORREGIDO — bug real confirmado: este patrón capturaba "I.
+    // DESCARGA:" (inicio de DESCARGA) con el mismo tipo 'IC' que "I.C.:"
+    // (inicio de CARGA) — dos eventos opuestos tratados como el mismo,
+    // haciendo que el estado mostrado dijera "Empezó a cargar" incluso
+    // cuando el buque en realidad estaba empezando a DESCARGAR. Se
+    // separa: "I. DESCARGA" ahora es su propio tipo 'ID'.
+    {re:new RegExp('I\\.\\s*DESCARGA[:\\s]+'+DT,'gi'),                            type:'ID',       label:'🔄 Inicio desc.',  hp:false},
+    // ⚠️ AGREGADO — forma abreviada "I.D.:" (como en el reporte real:
+    // "I.D.: 12/03:00 HRS."), que no tenía ningún patrón — solo existía
+    // la forma larga "I. DESCARGA:".
+    {re:new RegExp('I\\.D\\.[:\\s]+'+DT,'gi'),                                    type:'ID',       label:'🔄 I.D.',          hp:false},
+    {re:new RegExp('I\\.\\s*(?:CARGA|FAENA)[:\\s]+'+DT,'gi'),                     type:'IC',       label:'📥 Inicio carga',  hp:false},
     {re:new RegExp('I\\.C\\.[:\\s]+'+DT,'gi'),                                   type:'IC',       label:'📥 I.C.',          hp:false},
     // ⚠️ AGREGADO — bug real confirmado: T.C. (Término de Carga, fin de
     // la carga en el puerto de origen) no tenía NINGÚN patrón — es un
@@ -7377,20 +7388,20 @@ function _navEstadoActualTexto(buqueName) {
   if (!reales.length) return '';
   var ultimo = reales[reales.length-1];
   if (!ultimo.time || !ultimo.datetime) return '';
-  var VERBOS = {ZARPE:'Zarp\u00f3', ARRIBO:'Lleg\u00f3', AMARRO:'Amarr\u00f3', FONDEO:'Fonde\u00f3', IC:'Empez\u00f3 a cargar', TC:'Termin\u00f3 de cargar', ETC:'Termin\u00f3 carga', TD:'Descarg\u00f3'};
+  var VERBOS = {ZARPE:'Zarp\u00f3', ARRIBO:'Lleg\u00f3', AMARRO:'Amarr\u00f3', FONDEO:'Fonde\u00f3', IC:'Empez\u00f3 a cargar', ID:'Empez\u00f3 a descargar', TC:'Termin\u00f3 de cargar', ETC:'Termin\u00f3 carga', TD:'Descarg\u00f3'};
   var verbo = VERBOS[ultimo.type] || ultimo.label;
   function _extraerDestino(ubic) {
     var u = (ubic || '').toUpperCase();
-    var m = u.match(/(?:NAVEGANDO\s+A|EN\s+BAH[IÍ]A?|EN)\s+([A-ZÀ-Ü\s]+?)(?:\s{2,}|$)/);
+    var m = u.match(/(?:NAVEGANDO\s+A|EN\s+BAH[I\u00cd]A?|EN)\s+([A-Z\u00c0-\u00dc\s]+?)(?:\s{2,}|$)/);
     return m ? m[1].trim() : '';
   }
   function _normPuerto(t) {
     return (t||'').trim().toUpperCase()
-      .replace(/Í/g,'I').replace(/Á/g,'A').replace(/É/g,'E').replace(/Ó/g,'O').replace(/Ú/g,'U');
+      .replace(/\u00cd/g,'I').replace(/\u00c1/g,'A').replace(/\u00c9/g,'E').replace(/\u00d3/g,'O').replace(/\u00da/g,'U');
   }
   function _puertoOrigenPorRotacion(rotacionRaw, destino) {
     if (!rotacionRaw || !destino) return '';
-    var secuencia = rotacionRaw.split(/[-–]/).map(function(t){ return t.replace(/\([^)]*\)/g,'').trim(); }).filter(Boolean);
+    var secuencia = rotacionRaw.split(/[-\u2013]/).map(function(t){ return t.replace(/\([^)]*\)/g,'').trim(); }).filter(Boolean);
     var destNorm = _normPuerto(destino);
     var idx = secuencia.findIndex(function(p){ var pn=_normPuerto(p); return pn.indexOf(destNorm)>=0 || destNorm.indexOf(pn)>=0; });
     return idx > 0 ? secuencia[idx-1] : '';
@@ -7398,30 +7409,40 @@ function _navEstadoActualTexto(buqueName) {
   function _capitalizar(t) {
     return (t||'').split(/\s+/).map(function(p){ return p.charAt(0)+p.slice(1).toLowerCase(); }).join(' ');
   }
+  // ⚠️ CORREGIDO — bug real confirmado: "el puerto anterior en la
+  // rotación" SOLO es correcto cuando el buque YA ZARPÓ y está
+  // NAVEGANDO hacia el destino actual — en ese caso, amarre/carga/
+  // zarpe sí ocurrieron en el puerto de origen (el anterior en la
+  // secuencia). Pero si el estado actual dice "DESCARGANDO EN X",
+  // "CARGANDO EN X", "AMARRADO EN X" o "EN BAHÍA X" — el buque YA
+  // ESTÁ en X, así que esos mismos eventos (amarró, I.C., T.C.)
+  // ocurrieron EN X, no en el puerto anterior. Caso real confirmado:
+  // MOCHE "DESCARGANDO EN CONCHÁN" con "AMARRÓ: 11/23:24 HRS." — el
+  // popup decía "Amarró en Talara" (el puerto anterior en la
+  // rotación) cuando en realidad amarró en Conchán, el puerto donde
+  // ya está parado ahora mismo.
+  var destinoActual = _extraerDestino(nav.ubicacion);
+  var yaEnDestino = !/NAVEGANDO\s+A/i.test(nav.ubicacion || '');
   var puertoTxt = '';
   if (ultimo.planta) {
     puertoTxt = ultimo.planta; // ARRIBO/T.D. ya lo traen capturado directo
   } else if (ultimo.type === 'FONDEO') {
-    // ⚠️ CORREGIDO — antes se re-adivinaba el puerto re-parseando
-    // el texto de "ubicación" con regex, cuando ya existe un campo
-    // estructurado y más confiable: puerto_ultimo, calculado al subir
-    // el reporte directo desde "ARRIBÓ A [puerto]:" (ver
-    // handleUploadPosicionamientoNaves en Code.gs). Se prioriza ese
-    // campo y solo se cae al re-parseo de ubicación si no existe.
-    puertoTxt = nav.puerto_ultimo || _extraerDestino(nav.ubicacion);
-  } else if (['ZARPE','AMARRO','IC','TC','ETC'].indexOf(ultimo.type) >= 0) {
-    puertoTxt = _puertoOrigenPorRotacion(nav.rotacion, _extraerDestino(nav.ubicacion));
+    // Fondeó es siempre EN la ubicación actual del reporte (campo
+    // estructurado si existe, si no se re-parsea el texto).
+    puertoTxt = nav.puerto_ultimo || destinoActual;
+  } else if (yaEnDestino && ['ZARPE','AMARRO','IC','ID','TC','ETC'].indexOf(ultimo.type) >= 0) {
+    // El buque ya está EN destinoActual (no está "navegando a" otro
+    // lado) — estos eventos ocurrieron ahí mismo.
+    puertoTxt = destinoActual;
+  } else if (['ZARPE','AMARRO','IC','ID','TC','ETC'].indexOf(ultimo.type) >= 0) {
+    // El buque está "NAVEGANDO A" destinoActual — estos eventos
+    // ocurrieron en el puerto ANTERIOR de la rotación (de donde zarpó).
+    puertoTxt = _puertoOrigenPorRotacion(nav.rotacion, destinoActual);
   }
-  var PREP = {ZARPE:'de', AMARRO:'en', FONDEO:'en', ARRIBO:'a', IC:'en', TC:'en', ETC:'en', TD:'en'};
+  var PREP = {ZARPE:'de', AMARRO:'en', FONDEO:'en', ARRIBO:'a', IC:'en', ID:'en', TC:'en', ETC:'en', TD:'en'};
   var conPuerto = puertoTxt ? (' ' + (PREP[ultimo.type]||'en') + ' ' + _capitalizar(puertoTxt)) : '';
-  // ⚠️ AGREGADO — a pedido: el reporte a veces trae una nota
-  // operativa después de la rotación (ej. "INGRESARÁ A MOLLENDO A LA
-  // APERTURA DE PUERTO") que explica POR QUÉ la nave sigue fondeada —
-  // no es que esté fondeada sin motivo, está esperando que abra el
-  // puerto para poder entrar. Se busca esta nota en el texto completo
-  // (estado_nav + estado) y se agrega al final si existe.
   var notaEspera = '';
-  if (/INGRESAR[AÁ][^.]*APERTURA\s+DE\s+PUERTO/i.test(navTexto)) {
+  if (/INGRESAR[A\u00c1][^.]*APERTURA\s+DE\s+PUERTO/i.test(navTexto)) {
     notaEspera = ' \u2014 esperando apertura de puerto';
   }
   var fechaEvento = ultimo.datetime.slice(0, 10); // 'YYYY-MM-DD'
@@ -7432,7 +7453,7 @@ function _navEstadoActualTexto(buqueName) {
   var dHoy = new Date(hoyReal + 'T00:00:00Z').getTime();
   var diasTranscurridos = Math.round((dHoy - dEvento) / msPorDia);
   var fechaCorta = fechaEvento.slice(8, 10) + '/' + fechaEvento.slice(5, 7); // DD/MM
-  var sufijoDias = diasTranscurridos === 1 ? ' (hace 1 día)' : diasTranscurridos > 1 ? (' (hace ' + diasTranscurridos + ' días)') : '';
+  var sufijoDias = diasTranscurridos === 1 ? ' (hace 1 d\u00eda)' : diasTranscurridos > 1 ? (' (hace ' + diasTranscurridos + ' d\u00edas)') : '';
   return verbo + conPuerto + ' el ' + fechaCorta + ' ' + ultimo.time + ' hrs' + sufijoDias + notaEspera;
 }
 
@@ -16879,7 +16900,7 @@ var PRODUCTO_MAP_PRONOSTICO = {
   'G. 84':             'G. 84',
   'TA1':               'TA1',
   'PI6':               'PI6',
-  'ULSD NACIONALIZADO':'ULSD Nacionalizado',
+  'ULSD NACIONALIZADO':'ULSD DA','ULSD DA':'ULSD DA',
   'ULSD EXPO':         'ULSD Expo'
 };
 function handlePronFile(file) {
@@ -22877,7 +22898,7 @@ function renderVistaEjecutivaSimple() {
     var plantasIter = combo ? combo.plantasInv
       : (!planta || planta === 'Nacional') ? PLANTAS_18_OFICIALES.concat(REFINERIAS) : [planta];
     var productosIter = (producto && producto !== 'Todos') ? [producto]
-      : (typeof PRODUCTO_ORDEN !== 'undefined' ? PRODUCTO_ORDEN : ['Diesel','D2S50-H','G. Regular','G. Premium','G. 84','TA1','GLP','G. Regular HS','PI6','ULSD Nacionalizado']);
+      : (typeof PRODUCTO_ORDEN !== 'undefined' ? PRODUCTO_ORDEN : ['Diesel','D2S50-H','G. Regular','G. Premium','G. 84','TA1','GLP','G. Regular HS','PI6','ULSD DA']);
     if (combo && combo.productosRestrict) {
       productosIter = productosIter.filter(function(pr){ return combo.productosRestrict.indexOf(pr) !== -1; });
     }
@@ -22905,7 +22926,7 @@ function renderVistaEjecutivaSimple() {
       var plantasIter = combo ? combo.plantasInv
         : (!planta || planta === 'Nacional') ? PLANTAS_18_OFICIALES.concat(REFINERIAS) : [planta];
       var productosIter = (producto && producto !== 'Todos') ? [producto]
-        : (typeof PRODUCTO_ORDEN !== 'undefined' ? PRODUCTO_ORDEN : ['Diesel','D2S50-H','G. Regular','G. Premium','G. 84','TA1','GLP','G. Regular HS','PI6','ULSD Nacionalizado']);
+        : (typeof PRODUCTO_ORDEN !== 'undefined' ? PRODUCTO_ORDEN : ['Diesel','D2S50-H','G. Regular','G. Premium','G. 84','TA1','GLP','G. Regular HS','PI6','ULSD DA']);
       if (combo && combo.productosRestrict) {
         productosIter = productosIter.filter(function(pr){ return combo.productosRestrict.indexOf(pr) !== -1; });
       }
@@ -23627,7 +23648,7 @@ function renderVistaEjecutivaSimple() {
       // sentido para este producto. Antes esto hacía que se descartara
       // del todo (c === null); ahora se muestra igual, con su volumen,
       // pero sin un cálculo de días.
-      var esMollendoULSDVista = plantaCobertura === 'Mollendo' && r.producto === 'ULSD Nacionalizado';
+      var esMollendoULSDVista = plantaCobertura === 'Mollendo' && r.producto === 'ULSD DA';
       var esExcepcionSinDias = esTalaraTA1Vista || esMollendoULSDVista;
       if (c === null && !esExcepcionSinDias) return;
       datosCob.push({ label: r.producto, dias: esExcepcionSinDias ? null : c, invMB: invCombinado, pronMB: pronVal2, denomMB: _denomMB, denomBase: _denomBase, diasRepos: rep.diasRepos, volReposMB: rep.volMB, tipoRepos: rep.tipo, reposBt: rep.bt, reposFecha: rep.fecha, reposEstado: rep.estado, reposNaves: rep.naves, reposHistorico: rep.historico, reposCargando: rep.cargando, sinCob: esExcepcionSinDias ? true : (c === null), proyectado: !!r._proyectadoConsumo });
@@ -24667,7 +24688,7 @@ function renderVistaEjecutivaSimple() {
     + plantasDisp.map(function(p){ return '<option value="'+p+'"'+(pl===p?' selected':'')+'>'+(REFINERIAS.indexOf(p)!==-1?'🛢️':'🏭')+' '+p+'</option>'; }).join('')
     + '</select>';
 
-  var PRODUCTO_ORDEN = ['Diesel','D2S50-H','G. Regular','G. Premium','G. 84','TA1','GLP','PI6','ULSD Nacionalizado'];
+  var PRODUCTO_ORDEN = ['Diesel','D2S50-H','G. Regular','G. Premium','G. 84','TA1','GLP','PI6','ULSD DA'];
   // Si hay una planta específica seleccionada, solo mostrar los productos
   // que ESA planta/terminal realmente atiende (con datos en el Sheets) —
   // no todos los productos a nivel nacional. Con "Nacional" se ven todos.
