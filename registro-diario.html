@@ -1122,7 +1122,7 @@ function fmtFecha(f) {
 // "[REPOS|MARITIMO|12.45] texto libre...". Misma lógica que usa el
 // dashboard principal para mostrarla en gráficas — se comparte el
 // formato para que ambos lados siempre lean lo mismo.
-var REPOS_TIPO_LABEL_RD = { MARITIMO: '⛴️ Cabotaje Marítimo', TERRESTRE: '🚛 Cisternas', REFINERIA: '🏭 Vía Refinería', FONDOS: '💰 Solicitud de Fondos', ULSD: '🔄 Uso de ULSD Nacionalizado' };
+var REPOS_TIPO_LABEL_RD = { MARITIMO: '⛴️ Cabotaje Marítimo', TERRESTRE: '🚛 Cisternas', REFINERIA: '🏭 Vía Refinería', FONDOS: '💰 Solicitud de Fondos', ULSD: '🔄 Uso de ULSD DA' };
 function parseReposicionTag(comentario) {
   if (!comentario) return null;
   var m = /^\[REPOS\|(\w+)\|([\d.]+)\]/.exec(comentario);
@@ -1335,19 +1335,19 @@ function rdDescartarReposicion(prod) {
 // manifiesto de descarga) — nunca se sugiere ni se precarga un número
 // calculado, para no sesgar la respuesta ni quitarle tiempo a nadie
 // corrigiendo un valor mal calculado.
-// ⚠️ AGREGADO — a pedido: Mollendo mezcla ULSD Nacionalizado para
+// ⚠️ AGREGADO — a pedido: Mollendo mezcla ULSD DA para
 // generar Diesel cuando se queda sin existencia. Este botón abre el
 // mismo flujo de "pedir volumen" que ya usan los demás tipos de
 // reposición — la resta real del inventario de ULSD se aplica en
 // rdConfirmarVolumenReposicion, al confirmar el volumen.
 function rdUsarUlsdMollendo() {
-  rdMarcarReposicion('Diesel', 'Uso de ULSD Nacionalizado', '🔄');
+  rdMarcarReposicion('Diesel', 'Uso de ULSD DA', '🔄');
 }
 function rdMarcarReposicion(prod, tipo, emoji) {
   var tipoCodigo = (tipo === 'Cabotaje Marítimo' || tipo === 'Cabotaje Fluvial') ? 'MARITIMO'
                   : tipo === 'Cisternas' ? 'TERRESTRE'
                   : tipo === 'Solicitud de Fondos' ? 'FONDOS'
-                  : tipo === 'Uso de ULSD Nacionalizado' ? 'ULSD'
+                  : tipo === 'Uso de ULSD DA' ? 'ULSD'
                   : 'REFINERIA';
   var pid = prod.replace(/[^a-z0-9]/gi,'_');
   var panel = document.getElementById('repos-panel-' + pid);
@@ -1362,7 +1362,7 @@ function rdMarcarReposicion(prod, tipo, emoji) {
   var preguntaVol = tipoCodigo === 'FONDOS'
     ? (emoji + ' ¿Por cuántos MB se solicitó autorización de fondos para cubrir la demanda?')
     : tipoCodigo === 'ULSD'
-    ? (emoji + ' ¿Cuántos MB de ULSD Nacionalizado se usaron en la mezcla? <b>(no es lo mismo que el aumento del Diesel — hay otro insumo que también se agrega, así que el Diesel sube más de lo que baja el ULSD)</b>')
+    ? (emoji + ' ¿Cuántos MB de ULSD DA se usaron en la mezcla? <b>(no es lo mismo que el aumento del Diesel — hay otro insumo que también se agrega, así que el Diesel sube más de lo que baja el ULSD)</b>')
     : (emoji + ' ¿Cuántos MB recibiste por ' + tipo + '?');
   var placeholderVol = tipoCodigo === 'FONDOS' ? 'MB a cubrir'
                       : tipoCodigo === 'ULSD'  ? 'MB de ULSD usados'
@@ -1402,7 +1402,7 @@ function rdConfirmarVolumenReposicion(prod, tipo, tipoCodigo, emoji) {
     // Prefijo estructurado (lo lee el dashboard) + texto legible para
     // cualquiera que abra el Sheets directamente.
     var etiqueta = tipoCodigo === 'ULSD'
-      ? ('[REPOS|' + tipoCodigo + '|' + volumen + '] ' + emoji + ' Generado mezclando ' + rdFmt(volumen) + ' MB de ULSD Nacionalizado + otro insumo (el aumento del Diesel no es igual al ULSD usado). ')
+      ? ('[REPOS|' + tipoCodigo + '|' + volumen + '] ' + emoji + ' Generado mezclando ' + rdFmt(volumen) + ' MB de ULSD DA + otro insumo (el aumento del Diesel no es igual al ULSD usado). ')
       : ('[REPOS|' + tipoCodigo + '|' + volumen + '] ' + emoji + ' Reposición ' + tipo + ' — ' + rdFmt(volumen) + ' MB recibidos. ');
     if (ta.value.indexOf('[REPOS|') !== 0) ta.value = etiqueta + ta.value;
     ta.focus();
@@ -1411,10 +1411,10 @@ function rdConfirmarVolumenReposicion(prod, tipo, tipoCodigo, emoji) {
   // ⚠️ AGREGADO — a pedido: cuando el tipo es "Uso de ULSD
   // Nacionalizado", esto no es solo una explicación en texto — es una
   // transacción real: el volumen usado se descuenta del inventario de
-  // ULSD Nacionalizado en el MISMO formulario, ya que la planta lo
+  // ULSD DA en el MISMO formulario, ya que la planta lo
   // mezcló para generar el Diesel que se está reportando.
   if (tipoCodigo === 'ULSD') {
-    var ulsdInput = document.querySelector('.rd-existencia[data-prod="ULSD Nacionalizado"]');
+    var ulsdInput = document.querySelector('.rd-existencia[data-prod="ULSD DA"]');
     if (ulsdInput) {
       var ulsdActual = rdParseNum(ulsdInput);
       if (volumen > ulsdActual) {
@@ -1422,10 +1422,10 @@ function rdConfirmarVolumenReposicion(prod, tipo, tipoCodigo, emoji) {
       } else {
         var ulsdNuevo = Math.max(0, ulsdActual - volumen);
         ulsdInput.value = ulsdNuevo.toFixed(3);
-        if (typeof rdRecalc === 'function') rdRecalc('ULSD Nacionalizado');
-        var taUlsd = document.querySelector('.rd-coment-prod[data-prod="ULSD Nacionalizado"]');
+        if (typeof rdRecalc === 'function') rdRecalc('ULSD DA');
+        var taUlsd = document.querySelector('.rd-coment-prod[data-prod="ULSD DA"]');
         if (taUlsd) {
-          var etiquetaUlsd = '🔄 ' + rdFmt(volumen) + ' MB usados para generar Diesel (mezcla ULSD Nacionalizado). ';
+          var etiquetaUlsd = '🔄 ' + rdFmt(volumen) + ' MB usados para generar Diesel (mezcla ULSD DA). ';
           if (taUlsd.value.indexOf(etiquetaUlsd) !== 0) taUlsd.value = etiquetaUlsd + taUlsd.value;
         }
         // ⚠️ AGREGADO — a pedido: el volumen de ULSD usado NO es lo
@@ -1442,7 +1442,7 @@ function rdConfirmarVolumenReposicion(prod, tipo, tipoCodigo, emoji) {
         rdToast('✅ ULSD usado en la mezcla: ' + rdFmt(volumen) + ' MB (quedan ' + rdFmt(ulsdNuevo) + ' MB de ULSD)' + mensajeDiesel + '.', 'ok');
       }
     } else {
-      rdToast('⚠️ No se encontró el campo de ULSD Nacionalizado en este formulario — revisa que el producto esté habilitado para Mollendo.', 'error');
+      rdToast('⚠️ No se encontró el campo de ULSD DA en este formulario — revisa que el producto esté habilitado para Mollendo.', 'error');
     }
   }
   var panel = document.getElementById('repos-panel-' + pid);
@@ -1613,7 +1613,7 @@ function rdRenderProdRows(productos, valores, detalle, yaReportado) {
   // marítimo — el botón de origen debe decir "Barcaza"/"Fluvial", no
   // "Buque"/"Marítimo".
   var esIquitosRD = (RD.plantaAdminVista || RD.planta) === 'Iquitos';
-  // ⚠️ AGREGADO — a pedido: Mollendo cuenta con ULSD Nacionalizado, que
+  // ⚠️ AGREGADO — a pedido: Mollendo cuenta con ULSD DA, que
   // mezcla y convierte a Diesel para cubrir demanda cuando se queda sin
   // Diesel. Esta variable habilita el botón especial que hace esa
   // transacción real (baja ULSD, sube Diesel), solo para Mollendo.
@@ -1621,6 +1621,14 @@ function rdRenderProdRows(productos, valores, detalle, yaReportado) {
   var wrap = document.getElementById('prodRows');
   wrap.innerHTML = productos.map(function(p) {
     var v   = valores[p] || {};
+    // ⚠️ AGREGADO — a pedido: ULSD DA (renombrado desde "ULSD
+    // Nacionalizado") en
+    // Mollendo no tiene capacidad ni vacío disponible como concepto —
+    // es un producto de depósito aduanero, no un tanque de
+    // almacenamiento normal con esos parámetros. Se omite esa sección
+    // completa para esta combinación planta+producto en vez de mostrar
+    // campos que no aplican y solo confunden.
+    var esMollendoULSD = esMollendoRD && p === 'ULSD DA';
     var ref = RD.detalle[p] || { capacidad: 0, fondos: 0, fondo_osinergmin: 0, ultimo_calculo: null };
     var uc  = ref.ultimo_calculo;
     var existenciaVal = v.existencia !== undefined ? v.existencia : '';
@@ -1718,7 +1726,7 @@ function rdRenderProdRows(productos, valores, detalle, yaReportado) {
           +   '<textarea class="rd-min-motivo" data-prod="' + p + '" placeholder="Motivo (ej: recepción de BT en curso, corte de suministro, etc.)"></textarea>'
           + '</div>')
       // ── Datos opcionales (siempre visibles, etiquetados) ─────────────────
-      +   (yaReportado ? '' :
+      +   (yaReportado || esMollendoULSD ? '' :
             '<div style="font-size:9px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.5px;margin:8px 0 5px">Capacidad / Fondos / Vacío <span style="font-weight:400;font-style:italic">(opcional)</span></div>'
           + '<div style="margin-bottom:8px">'
           +   '<div class="calc-grid">'
@@ -1761,7 +1769,7 @@ function rdRenderProdRows(productos, valores, detalle, yaReportado) {
                 : '')
            +   '<button type="button" onclick="rdMarcarReposicion(\'' + p + '\',\'Solicitud de Fondos\',\'\ud83d\udcb0\')" style="padding:6px 12px;border-radius:16px;border:1.5px solid #16a34a;background:#fff;color:#16a34a;font-size:11px;font-weight:700;cursor:pointer" title="Cuando la reposici\u00f3n f\u00edsica (mar\u00edtima o terrestre) no lleg\u00f3 a tiempo y se solicit\u00f3 autorizaci\u00f3n de fondos para cubrir la demanda mientras llega">\ud83d\udcb0 Solicitud de Fondos</button>'
            +   (esMollendoRD && p === 'Diesel'
-                ? '<button type="button" onclick="rdUsarUlsdMollendo()" style="padding:6px 12px;border-radius:16px;border:1.5px solid #b45309;background:#fff;color:#b45309;font-size:11px;font-weight:700;cursor:pointer" title="Mezclar ULSD Nacionalizado para generar Diesel — el volumen usado se descuenta autom\u00e1ticamente del inventario de ULSD">\ud83d\udd04 Uso de ULSD Nacionalizado</button>'
+                ? '<button type="button" onclick="rdUsarUlsdMollendo()" style="padding:6px 12px;border-radius:16px;border:1.5px solid #b45309;background:#fff;color:#b45309;font-size:11px;font-weight:700;cursor:pointer" title="Mezclar ULSD DA para generar Diesel — el volumen usado se descuenta autom\u00e1ticamente del inventario de ULSD">\ud83d\udd04 Uso de ULSD DA</button>'
                 : '')
            + '</div>'
            + '</div>')
