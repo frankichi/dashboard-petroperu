@@ -16024,22 +16024,33 @@ function _parseCargasNavesText(text, fechaRpt) {
       // dentro del arreglo ya filtrado — para leer su fecha y su volumen.
       var terminals = [];
       var colMap = []; // colMap[i] = índice de columna original (0-based) del i-ésimo terminal válido
-      termTokens.forEach(function(t, colIdx) {
+      // ⚠️ CORREGIDO — bug real confirmado con datos reales (B/T UCAYALI
+      // V.016-2026): el PDF tiene 2 columnas en la misma página (Cargas
+      // de Naves a la izquierda, Importaciones a la derecha) — cuando
+      // ambas quedan a la misma altura vertical, el nombre de un buque
+      // de IMPORTACIÓN completamente distinto (ej. "NORDIC C", "PRABHU
+      // MIHIKAA") se cuela en la MISMA línea que el encabezado "PUERTO
+      // DE CARGA" de UCAYALI. Antes, cualquier token no reconocido
+      // (terminal inválido) se SALTABA pero su columna se seguía
+      // contando igual — así que todo lo que viniera después (fechas,
+      // volúmenes) quedaba desalineado, y en este caso puntual terminó
+      // leyendo "160" de la frase ajena "IMP. 160 MB DE B100" como si
+      // fuera un volumen real de Diesel para Mollendo. Ahora, en cuanto
+      // aparece un token que NO es un terminal válido, NI "-", NI
+      // "TALARA" (los dos únicos casos legítimos de "columna vacía o
+      // excluida a propósito"), se DEJA DE LEER esa fila por completo —
+      // todo lo que viene después de ese punto es contenido ajeno de la
+      // otra columna del PDF, no datos reales de esta nave.
+      for (var colIdx = 0; colIdx < termTokens.length; colIdx++) {
+        var t = termTokens[colIdx];
         var tUpper = t.trim().toUpperCase();
-        // ⚠️ Talara NUNCA es un terminal que RECIBE reposición por buque
-        // — en las rutas de esta flota siempre es el puerto de CARGA
-        // (origen, se despacha DESDE la refinería Talara). Si aparece
-        // aquí es por una tabla mal formada en el PDF de origen (ej. la
-        // que trae errores "#¡REF!" de Excel) — se descarta a propósito
-        // para no crear una reposición fantasma hacia Talara. Su columna
-        // SIGUE contando para el resto (no se recorre el índice).
-        if (tUpper === 'TALARA') return;
+        if (tUpper === 'TALARA') continue; // ver nota original: nunca es terminal receptor, pero es un token legítimo — su columna cuenta y se sigue leyendo
         var esValido = VALID_TERMINALS.has(tUpper.normalize('NFD').replace(/[\u0300-\u036f]/g,'')) ||
                        VALID_TERMINALS.has(tUpper);
-        if (!esValido) return; // "-" u otro token no reconocido — también excluido, su columna sigue contando
-        terminals.push(normTerm(t));
-        colMap.push(colIdx);
-      });
+        if (esValido) { terminals.push(normTerm(t)); colMap.push(colIdx); continue; }
+        if (tUpper === '-') continue; // columna vacía legítima — su columna cuenta, se sigue leyendo
+        break; // token ajeno (ej. nombre de buque de otra tabla) — todo lo que sigue en esta fila es contaminación de la columna vecina del PDF
+      }
       if (!terminals.length) return;
       var dateLine = blockLines[pcIdx+1+lineOffset];
       var dateTokens = splitLine(dateLine);
