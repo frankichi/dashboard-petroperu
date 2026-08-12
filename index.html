@@ -7445,6 +7445,17 @@ function _navEstadoActualTexto(buqueName) {
   if (/INGRESAR[A\u00c1][^.]*APERTURA\s+DE\s+PUERTO/i.test(navTexto)) {
     notaEspera = ' \u2014 esperando apertura de puerto';
   }
+  // \u26a0\ufe0f AGREGADO \u2014 a pedido: si el buque est\u00e1 ACTUALMENTE cargando o
+  // descargando (\u00faltimo evento real = IC o ID, operaci\u00f3n en curso, sin
+  // T.C./T.D. real todav\u00eda), se agrega cu\u00e1ndo se ESPERA que termine
+  // (\"E.T. Operaciones\" / \"E.T.D.\" del reporte real) \u2014 antes el popup
+  // solo dec\u00eda \"empez\u00f3 a descargar\" sin dar ninguna idea de hasta
+  // cu\u00e1ndo, dejando la informaci\u00f3n incompleta frente al reporte real
+  // (que s\u00ed trae \"E.T.D.: 14/12:00 HRS.\").
+  if ((ultimo.type === 'IC' || ultimo.type === 'ID') && nav.fecha_et_operaciones) {
+    var etOp = nav.fecha_et_operaciones.replace('T', ' ');
+    notaEspera += ' \u2014 estimado hasta el ' + etOp.slice(8,10) + '/' + etOp.slice(5,7) + ' ' + etOp.slice(11) + ' hrs';
+  }
   var fechaEvento = ultimo.datetime.slice(0, 10); // 'YYYY-MM-DD'
   var hoyReal = new Date().toISOString().slice(0, 10);
   if (fechaEvento === hoyReal) return verbo + conPuerto + ' a las ' + ultimo.time + ' hrs' + notaEspera;
