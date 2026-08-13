@@ -23842,114 +23842,135 @@ function renderVistaEjecutivaSimple() {
     // "pendiente" en cuanto está COMPLETADO; el volumen debe reflejarse
     // en el inventario base (vía existencia proyectada), no como una
     // reposición aparte.
-    var reposEsPendiente = d.diasRepos > 0 && d.reposEstado !== 'COMPLETADO';
-    var pctRepos = reposEsPendiente ? Math.max(3, Math.round((d.diasRepos / maxDiasCob) * 100)) : 0;
-    // ⚠️ Separación visual cuando el buque AÚN está lejos: antes la
-    // franja de reposición se pintaba pegada a la barra de inventario
-    // en TODOS los casos, sin importar si el ETA era mañana o en 5-6
-    // días — eso se malinterpretaba como "ya casi llega / ya cuenta",
-    // cuando en realidad todavía puede cambiar. Con más de 1 día de
-    // anticipación se dibuja con un pequeño espacio y algo más tenue
-    // (no oculta, solo se nota que es un valor a futuro); en cuanto el
-    // ETA es hoy/mañana, o el estado pasa a COMPLETADO (ya descargó),
-    // se junta con normalidad — igual que antes.
-    var diasHastaETA = (d.reposFecha && /^\d{4}-\d{2}-\d{2}/.test(d.reposFecha)) ? _diasEntreFechas(fechaHoy, d.reposFecha.slice(0,10)) : null;
-    var reposLejana = reposEsPendiente && diasHastaETA !== null && diasHastaETA > 1;
+    // ⚠️ CORREGIDO — a pedido: cuando la reposición viene de VARIAS naves
+    // distintas para el mismo producto (caso real: Mollendo recibiendo 2
+    // viajes separados del mismo buque UCAYALI — uno ya descargando con
+    // ETA 13-ago, otro programado aparte con ETA 24-ago, 11 días
+    // después) antes se sumaban en un solo bloque azul de 156 MB con un
+    // solo popup — parecía una única reposición cuando en realidad son
+    // DOS cabotajes distintos. Ahora cada nave/viaje es su PROPIO
+    // segmento en la barra (ancho proporcional a sus propios días
+    // equivalentes), ordenados por cercanía — el más próximo pegado al
+    // inventario, los más lejanos separados con un espacio visible — y
+    // cada uno con su propio popup, sin mezclar la información de uno
+    // con la del otro.
+    //
+    // Este desglose por nave solo aplica a la vista de UNA planta/UN
+    // producto (el caso reportado). En Vista Nacional, cuando una fila
+    // combina reposición de VARIOS PRODUCTOS a la vez (d.reposDetalle
+    // con más de un producto), se mantiene el resumen agregado de
+    // siempre — separar por nave ahí mezclaría naves de productos
+    // distintos y sería más confuso, no menos.
+    var esRepMultiProducto = d.reposDetalle && d.reposDetalle.length > 1;
+    var segmentosRepos = [];
+    if (!esRepMultiProducto) {
+      (d.reposNaves || []).forEach(function(n) {
+        if (n.estado === 'COMPLETADO') return; // ya está en el inventario base, no se dibuja aparte
+        var diasNave = d.volReposMB > 0 ? Math.round(d.diasRepos * (n.vol / d.volReposMB)) : 0;
+        if (diasNave <= 0) return;
+        var diasHastaETAn = (n.fecha && /^\d{4}-\d{2}-\d{2}/.test(n.fecha)) ? _diasEntreFechas(fechaHoy, n.fecha.slice(0,10)) : null;
+        var lejanaN = n.estado !== 'DESCARGANDO' && diasHastaETAn !== null && diasHastaETAn > 1;
+        segmentosRepos.push({ nave: n, dias: diasNave, diasHastaETA: diasHastaETAn, lejana: lejanaN });
+      });
+      // Respaldo: si no vino desglose por nave (caso viejo, un solo BT
+      // sin lista), se arma un único segmento con lo que ya había.
+      if (!segmentosRepos.length && d.diasRepos > 0 && d.reposEstado !== 'COMPLETADO') {
+        var diasHastaETAd = (d.reposFecha && /^\d{4}-\d{2}-\d{2}/.test(d.reposFecha)) ? _diasEntreFechas(fechaHoy, d.reposFecha.slice(0,10)) : null;
+        segmentosRepos.push({
+          nave: { buque: d.reposBt, vol: d.volReposMB, fecha: d.reposFecha, estado: d.reposEstado },
+          dias: d.diasRepos, diasHastaETA: diasHastaETAd,
+          lejana: d.reposEstado !== 'DESCARGANDO' && diasHastaETAd !== null && diasHastaETAd > 1
+        });
+      }
+      // Orden: lo que ya está en curso / más próximo primero (pegado al
+      // inventario); lo más lejano al final.
+      segmentosRepos.sort(function(a, b) {
+        var pa = a.nave.estado === 'DESCARGANDO' ? 0 : 1, pb = b.nave.estado === 'DESCARGANDO' ? 0 : 1;
+        if (pa !== pb) return pa - pb;
+        return (a.diasHastaETA == null ? 999 : a.diasHastaETA) - (b.diasHastaETA == null ? 999 : b.diasHastaETA);
+      });
+    }
+    var reposEsPendiente = esRepMultiProducto
+      ? (d.diasRepos > 0 && d.reposEstado !== 'COMPLETADO')
+      : (segmentosRepos.length > 0);
+    var reposLejana = esRepMultiProducto
+      ? false
+      : (segmentosRepos.length > 0 && segmentosRepos[0].lejana);
+    var pctRepos = (esRepMultiProducto && reposEsPendiente)
+      ? Math.max(3, Math.round((d.diasRepos / maxDiasCob) * 100))
+      : 0;
     // Popup con volumen + buque + ETA + demanda pronóstico del producto
     // (o de la planta si es "Todos") — reemplaza el tooltip nativo, que
     // dejó de mostrarse de forma confiable para el usuario.
-    // ⚠️ AMPLIADO: cuando hay más de un buque reponiendo la misma
-    // planta+producto (ej. Conchán recibiendo de UCAYALI y de MOCHE a
-    // la vez), se listan TODOS por separado con su propio volumen y
-    // ETA — antes el popup solo tenía espacio para mostrar un buque
-    // "principal" y los demás quedaban invisibles.
     var navesHTML = '';
-    if (d.reposNaves && d.reposNaves.length > 1) {
+    if (esRepMultiProducto && d.reposNaves && d.reposNaves.length > 1) {
       navesHTML = d.reposNaves.map(function(n) {
         var etiquetaFecha = n.fecha ? ((n.estado === 'COMPLETADO' ? 'ya descarg\u00f3 ' : n.estado === 'DESCARGANDO' ? 'lleg\u00f3 (descargando) ' : 'ETA ') + n.fecha) : '';
         var prodTxt = n.producto ? (n.producto + ' \u2014 ') : '';
-        // ⚠️ AGREGADO — a pedido: estado actual del buque (ej.
-        // "Fondeado desde 04:36") junto a cada nave de la reposición.
         var estadoActualTxt = (typeof _navEstadoActualTexto === 'function') ? _navEstadoActualTexto(n.buque) : '';
-        return '<div style="margin-top:3px">\uD83D\uDEA2 <b>' + (n.buque||'\u2014') + '</b> \u00b7 ' + prodTxt + n.vol.toFixed(DEC) + ' MB' + (etiquetaFecha ? ' \u00b7 ' + etiquetaFecha : '') + (estadoActualTxt ? ' \u00b7 <span style="color:#facc15">' + estadoActualTxt + '</span>' : '') + '</div>';
+        return '<div style="margin-top:5px">\uD83D\uDEA2 <b>' + (n.buque||'\u2014') + '</b> \u00b7 ' + prodTxt + n.vol.toFixed(DEC) + ' MB' + (etiquetaFecha ? ' \u00b7 ' + etiquetaFecha : '') + (estadoActualTxt ? '<div style="margin-left:14px;color:#facc15;font-size:11px">\uD83D\uDCE1 Estado actual: ' + estadoActualTxt + '</div>' : '') + '</div>';
       }).join('');
     }
-    var reposHTML = d.diasRepos > 0
+    var reposHTML = (esRepMultiProducto && d.diasRepos > 0)
       ? (d.reposDetalle && d.reposDetalle.length > 1
           ? '<b>Reposici\u00f3n total (' + d.reposDetalle.length + ' productos)</b><br>' + d.volReposMB.toFixed(DEC) + ' MB \u2192 +' + d.diasRepos + ' d\u00edas equivalentes<br>' + d.reposDetalle.join('<br>')
-          : '<b>Reposici\u00f3n ' + (d.tipoRepos||'') +
-              // ⚠️ AGREGADO — antes solo se distinguía "COMPLETADO" de
-              // todo lo demás; un buque DESCARGANDO ahora mismo (estado
-              // real que ya viene del posicionamiento de naves) se
-              // mostraba igual que uno que ni siquiera ha llegado — con
-              // el mismo texto genérico "ETA: fecha". Ahora se muestra
-              // el estado real tal como se conoce.
-              (d.reposEstado === 'COMPLETADO' ? ' \u2705 ya descarg\u00f3, ya en inventario'
-                : d.reposEstado === 'DESCARGANDO' ? ' \uD83D\uDD34 descargando ahora'
-                : d.reposEstado === 'EN TRANSITO' || d.reposEstado === 'EN_TRANSITO' ? ' \uD83D\uDEA2 en tr\u00e1nsito'
-                : '') + '</b><br>Volumen total: ' + d.volReposMB.toFixed(DEC) + ' MB'
-            + (navesHTML
-                ? navesHTML
-                : ((d.reposBt ? '<br>Buque/Barcaza: ' + d.reposBt : '')
-                  + (d.reposFecha ? ('<br>' + (d.reposEstado === 'COMPLETADO' ? 'Descarg\u00f3 el: ' : d.reposEstado === 'DESCARGANDO' ? 'Lleg\u00f3 el: ' : 'Fecha de reposici\u00f3n (ETA): ') + d.reposFecha) : '')
-                  // ⚠️ AGREGADO — a pedido: estado actual del buque
-                  // (ej. "Fondeado desde 04:36") cuando se conoce, para
-                  // el caso de una sola nave sin desglose por producto.
-                  + (function(){ var t=(typeof _navEstadoActualTexto==='function')?_navEstadoActualTexto(d.reposBt):''; return t?('<br><span style="color:#facc15">'+t+'</span>'):''; })()))
-            + (reposEsPendiente ? '<br>D\u00edas equivalentes: +' + d.diasRepos + 'd' : '')
-            + (reposLejana && d.reposEstado !== 'DESCARGANDO' ? '<br><span style="color:#93c5fd">\u26a0\ufe0f A\u00fan a ' + diasHastaETA + ' d\u00edas \u2014 no confirmado, no cuenta como inventario todav\u00eda</span>' : '')
-            // ⚠️ AGREGADO — a pedido: aviso de vista histórica, para que
-            // quede claro que esto es cómo se veía la reposición EN LA
-            // FECHA que se está revisando (no el estado actual de los
-            // buques) — evita confundir una revisión histórica con la
-            // situación de hoy.
-            + (d.reposHistorico && !d.reposCargando ? '<br><span style="color:#94a3b8;font-size:10px">\ud83d\udcc5 Reposici\u00f3n tal como se ve\u00eda el ' + fechaHoy + ' (vista hist\u00f3rica)</span>' : '')
-            + (d.reposCargando ? '<br><span style="color:#94a3b8;font-size:10px">\u23f3 Cargando reposici\u00f3n hist\u00f3rica de esa fecha\u2026</span>' : ''))
+          : '')
       : '';
-    // ⚠️ CORREGIDO — bug real confirmado: el popup siempre decía "Demanda
-    // pronóstico" y mostraba d.pronMB (el pronóstico crudo), sin importar
-    // si el usuario había elegido "Despacho real" con el botón de arriba
-    // — daba la impresión de que el modo no tenía ningún efecto en el
-    // detalle, aunque el número de días de cobertura sí se recalculaba
-    // bien. Ahora usa d.denomMB (el mismo dato que ya alimenta el
-    // cálculo de días) y cambia la etiqueta según el modo activo.
+    // Tooltip aislado para UN cabotaje/nave — el segmento "principal"
+    // (el más próximo, primero en la barra) sí muestra el estado actual
+    // real del buque; los que vienen después NO, porque el estado
+    // actual describe el viaje EN CURSO del buque (ese nombre puede
+    // repetirse en varias reposiciones futuras del mismo buque) y
+    // pegarlo también en una reposición programada mucho más adelante
+    // es justamente lo que generaba la confusión reportada.
+    function _tipCabotajeNave(seg, esPrincipal) {
+      var n = seg.nave;
+      var etiquetaFecha = n.fecha ? ((n.estado === 'COMPLETADO' ? 'ya descarg\u00f3 ' : n.estado === 'DESCARGANDO' ? 'lleg\u00f3 (descargando) ' : 'ETA ') + n.fecha) : '';
+      var estadoActualTxt = (esPrincipal && typeof _navEstadoActualTexto === 'function') ? _navEstadoActualTexto(n.buque) : '';
+      return '<b>Reposici\u00f3n' + (d.tipoRepos ? (' ' + d.tipoRepos) : '') + '</b>'
+        + (!esPrincipal ? '<br><span style="color:#93c5fd;font-size:10px">\uD83D\uDCE6 Cabotaje distinto \u2014 reposici\u00f3n programada aparte</span>' : '')
+        + '<br>\uD83D\uDEA2 <b>' + (n.buque||'\u2014') + '</b> \u00b7 ' + n.vol.toFixed(DEC) + ' MB'
+        + (etiquetaFecha ? (' \u00b7 ' + etiquetaFecha) : '')
+        + (estadoActualTxt ? ('<br><span style="color:#facc15">\uD83D\uDCE1 Estado actual: ' + estadoActualTxt + '</span>') : '')
+        + '<br>D\u00edas equivalentes: +' + seg.dias + 'd'
+        + (seg.lejana ? ('<br><span style="color:#93c5fd">\u26a0\ufe0f A\u00fan a ' + seg.diasHastaETA + ' d\u00edas \u2014 no confirmado, no cuenta como inventario todav\u00eda</span>') : '')
+        + (d.reposHistorico && !d.reposCargando ? ('<br><span style="color:#94a3b8;font-size:10px">\uD83D\uDCC5 Reposici\u00f3n tal como se ve\u00eda el ' + fechaHoy + ' (vista hist\u00f3rica)</span>') : '')
+        + (d.reposCargando ? '<br><span style="color:#94a3b8;font-size:10px">\u23f3 Cargando reposici\u00f3n hist\u00f3rica de esa fecha\u2026</span>' : '');
+    }
     var esModoReal = window._execCobModo === 'real';
-    // ⚠️ AGREGADO — la etiqueta ahora refleja la base que de verdad se
-    // usó en ESA fila, no solo el botón activo. Hay casos legítimos en
-    // que no coinciden: vista combinada (Talara + Refinería) siempre
-    // fuerza pronóstico, una planta que aún no cierra el día también,
-    // y cuando no hay despacho real ni pronóstico se cae a V.Factible.
-    // Antes todas esas filas decían "Despacho real" si ese era el modo,
-    // aunque el número mostrado viniera de otra base.
-    var _BASE_LBL = { pron: 'Demanda pronóstico', real: 'Despacho real', vfact: 'V.Factible' };
-    var etiquetaDemanda = (d.denomBase && _BASE_LBL[d.denomBase]) || (esModoReal ? 'Despacho real' : 'Demanda pronóstico');
-    // Respaldo defensivo: si por cualquier motivo la fila no trajera
-    // denominador, se muestra el pronóstico en vez de un 0.0 engañoso.
+    var _BASE_LBL = { pron: 'Demanda pron\u00f3stico', real: 'Despacho real', vfact: 'V.Factible' };
+    var etiquetaDemanda = (d.denomBase && _BASE_LBL[d.denomBase]) || (esModoReal ? 'Despacho real' : 'Demanda pron\u00f3stico');
     var demandaMB = (d.denomMB > 0 ? d.denomMB : (d.pronMB || 0));
     var pronHTML = '<div style="color:#93c5fd">' + etiquetaDemanda + (prod!=='Todos'?(' ('+prod+')'):'') + ': ' + demandaMB.toFixed(DEC) + ' MB/d\u00eda</div>';
-    // ⚠️ AGREGADO — a pedido: en los primeros días de un mes nuevo, si
-    // el pronóstico recién aprobado todavía no se subió, se usa el del
-    // mes anterior como aproximación (ver _pTendPronParaFecha) — este
-    // aviso deja claro que eso está pasando, para que no se confunda
-    // con el pronóstico real del mes que se está viendo.
     var _baseEsPron = d.denomBase ? (d.denomBase === 'pron') : !esModoReal;
     if (_baseEsPron && window._pTendUsandoMesRespaldo && window._pTendUltimoMesUsado) {
       pronHTML += '<div style="color:#fbbf24;font-size:10px;margin-top:2px">\u26a0\ufe0f Pron\u00f3stico de ' + window._pTendUltimoMesUsado + ' (\u00faltimo aprobado disponible) \u2014 el del mes actual a\u00fan no se ha subido</div>';
     }
-    // ⚠️ CORREGIDO — bug real confirmado: antes AMBOS segmentos de la
-    // barra (el sólido de inventario Y el rayado de reposición/cabotaje)
-    // compartían el mismo popup combinado (reposición + pronóstico) —
-    // pasar el mouse por CUALQUIER parte de la barra mostraba lo mismo,
-    // incluso sobre el inventario en tierra donde no aplica la
-    // reposición. Ahora cada segmento tiene su PROPIO popup: el sólido
-    // (inventario) solo muestra el pronóstico; el rayado (cabotaje)
-    // solo muestra la info de la reposición — son divs hermanos, no
-    // anidados, así que no hay ambigüedad de qué popup corresponde a
-    // cuál al pasar el mouse.
     var tipEncodedPron = encodeURIComponent(pronHTML).replace(/'/g, '%27');
     var tipHandlersPron = 'onmouseenter="_execShowTip(event,\'' + tipEncodedPron + '\')" onmousemove="_execPosTip(event)" onmouseleave="_execHideTip()"';
-    var tipEncoded = encodeURIComponent(reposHTML).replace(/'/g, '%27');
-    var tipHandlers = reposHTML ? ('onmouseenter="_execShowTip(event,\'' + tipEncoded + '\')" onmousemove="_execPosTip(event)" onmouseleave="_execHideTip()"') : '';
+    // Segmentos de la barra (uno por cabotaje) — caso normal, no multi-producto.
+    var segmentosBarHTML = segmentosRepos.map(function(seg, i) {
+      var pct = Math.max(3, Math.round((seg.dias / maxDiasCob) * 100));
+      var esPrincipal = i === 0;
+      var tipHtml = _tipCabotajeNave(seg, esPrincipal);
+      var tipEnc = encodeURIComponent(tipHtml).replace(/'/g, '%27');
+      var tipH = 'onmouseenter="_execShowTip(event,\'' + tipEnc + '\')" onmousemove="_execPosTip(event)" onmouseleave="_execHideTip()"';
+      var leftR = (i === 0 && !seg.lejana) ? 0 : 6;
+      var rightR = 6;
+      var radio = leftR + 'px ' + rightR + 'px ' + rightR + 'px ' + leftR + 'px';
+      var gapPrevio = (i > 0 || seg.lejana) ? '<div style="width:5px;flex-shrink:0"></div>' : '';
+      return gapPrevio + '<div ' + tipH + ' style="height:100%;width:' + pct + '%;background:repeating-linear-gradient(45deg,#2563eb,#2563eb 5px,#3b82f6 5px,#3b82f6 10px);border-radius:' + radio + ';transition:width .4s;cursor:help' + (seg.lejana?';opacity:.7':'') + '"></div>';
+    }).join('');
+    // Tooltip resumen para el badge lateral "+Xd" (a la derecha de la
+    // barra) cuando hay más de un cabotaje — evita repetir el popup de
+    // uno solo de ellos ahí, que sería igual de confuso.
+    var resumenBadgeHTML = segmentosRepos.map(function(seg) {
+      var n = seg.nave;
+      return '\uD83D\uDEA2 ' + (n.buque||'\u2014') + ': +' + seg.dias + 'd (' + n.vol.toFixed(DEC) + ' MB' + (n.fecha ? (' \u00b7 ETA ' + n.fecha) : '') + ')';
+    }).join('<br>');
+    var tipHandlersBadge = esRepMultiProducto
+      ? (reposHTML ? ('onmouseenter="_execShowTip(event,\'' + encodeURIComponent(reposHTML).replace(/'/g,'%27') + '\')" onmousemove="_execPosTip(event)" onmouseleave="_execHideTip()"') : '')
+      : (segmentosRepos.length ? ('onmouseenter="_execShowTip(event,\'' + encodeURIComponent(resumenBadgeHTML).replace(/'/g,'%27') + '\')" onmousemove="_execPosTip(event)" onmouseleave="_execHideTip()"') : '');
     var confirmadaBadge = (d.diasRepos > 0 && !reposEsPendiente)
       ? '<div style="font-size:8.5px;color:var(--verde,#16a34a);font-weight:700" title="Descarga confirmada — ya sumada al inventario">\u2705 recibido</div>'
       : '';
@@ -23959,13 +23980,15 @@ function renderVistaEjecutivaSimple() {
         '<div style="font-size:9.5px;color:var(--txt3);font-family:var(--mono);margin-top:1px">' + fmtMB(d.invMB) + (d.proyectado ? ' <span style="color:#2563eb;font-style:italic;font-weight:700" title="Estimado: último inventario real menos consumo proyectado por demanda pronóstico — la planta aún no cierra el día">≈ proy.</span>' : '') + '</div>' +
       '</div>' +
       '<div style="flex:1;background:var(--bg3);border-radius:6px;height:22px;position:relative;overflow:hidden;display:flex">' +
-        '<div ' + tipHandlersPron + ' style="height:100%;width:' + pctBase + '%;background:' + col + ';border-radius:' + (pctRepos>0 ? (reposLejana?'6px':'6px 0 0 6px') : '6px') + ';transition:width .4s;cursor:help"></div>' +
-        (pctRepos > 0 && reposLejana ? '<div style="width:5px;flex-shrink:0"></div>' : '') +
-        (pctRepos > 0 ? '<div ' + tipHandlers + ' style="height:100%;width:' + pctRepos + '%;background:repeating-linear-gradient(45deg,#2563eb,#2563eb 5px,#3b82f6 5px,#3b82f6 10px);border-radius:' + (reposLejana?'6px':'0 6px 6px 0') + ';transition:width .4s;cursor:help' + (reposLejana?';opacity:.7':'') + '"></div>' : '') +
+        '<div ' + tipHandlersPron + ' style="height:100%;width:' + pctBase + '%;background:' + col + ';border-radius:' + (reposEsPendiente ? (reposLejana?'6px':'6px 0 0 6px') : '6px') + ';transition:width .4s;cursor:help"></div>' +
+        (esRepMultiProducto
+          ? ((pctRepos > 0 && reposLejana ? '<div style="width:5px;flex-shrink:0"></div>' : '') +
+             (pctRepos > 0 ? '<div ' + (reposHTML ? ('onmouseenter="_execShowTip(event,\'' + encodeURIComponent(reposHTML).replace(/'/g,'%27') + '\')" onmousemove="_execPosTip(event)" onmouseleave="_execHideTip()"') : '') + ' style="height:100%;width:' + pctRepos + '%;background:repeating-linear-gradient(45deg,#2563eb,#2563eb 5px,#3b82f6 5px,#3b82f6 10px);border-radius:' + (reposLejana?'6px':'0 6px 6px 0') + ';transition:width .4s;cursor:help' + (reposLejana?';opacity:.7':'') + '"></div>' : ''))
+          : segmentosBarHTML) +
       '</div>' +
       '<div style="width:70px;flex-shrink:0;text-align:right">' +
         '<div style="font-family:var(--mono);font-weight:800;font-size:13px;color:' + col + '">' + d.dias + 'd</div>' +
-        (reposEsPendiente ? '<div ' + tipHandlers + ' style="font-family:var(--mono);font-size:9px;color:#2563eb;font-weight:700;cursor:help' + (reposLejana?';opacity:.65':'') + '">+' + d.diasRepos + 'd \uD83D\uDEA2</div>' : confirmadaBadge) +
+        (reposEsPendiente ? '<div ' + tipHandlersBadge + ' style="font-family:var(--mono);font-size:9px;color:#2563eb;font-weight:700;cursor:help' + (reposLejana?';opacity:.65':'') + '">+' + d.diasRepos + 'd \uD83D\uDEA2</div>' : confirmadaBadge) +
       '</div>' +
     '</div>';
   }).join('');
