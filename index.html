@@ -22795,7 +22795,26 @@ function renderVistaEjecutivaSimple() {
   // posteriores de esta misma sesión.
   if (window._execMapaOculto === undefined) window._execMapaOculto = true;
 
-  function fmtMB(v) { return (v||0).toLocaleString('es-PE', {maximumFractionDigits:1}) + ' MB'; }
+  // ⚠️ CORREGIDO — bug real confirmado: Supe despachaba volúmenes reales
+  // pero muy chicos (ej. 0.024 MB) — con solo 1 decimal (DEC=1 en modo
+  // ejecutivo), toFixed/toLocaleString redondeaba esos valores a "0.0" y
+  // se mostraban como "0 MB" en el KPI, y el gráfico literalmente
+  // graficaba 0 (no solo se veía chico por la escala — el DATO en sí ya
+  // llegaba en cero). Esta función conserva más decimales SOLO cuando
+  // hace falta para no perder un valor real y distinto de cero.
+  function fmtMB(v) {
+    v = v || 0;
+    if (v !== 0 && Math.abs(v) < 0.1) {
+      return v.toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 3 }) + ' MB';
+    }
+    return v.toLocaleString('es-PE', { maximumFractionDigits: 1 }) + ' MB';
+  }
+  // Mismo criterio que fmtMB, pero para construir las series numéricas
+  // que van al gráfico (Chart.js) — ahí NO puede llevar el sufijo " MB".
+  function _roundMB(v) {
+    if (v !== 0 && Math.abs(v) < 0.1) return parseFloat(v.toFixed(3));
+    return parseFloat(v.toFixed(DEC));
+  }
   function mesCorto(d) {
     var mm = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
     return d.slice(8,10) + '-' + mm[parseInt(d.slice(5,7),10)-1];
@@ -23170,7 +23189,12 @@ function renderVistaEjecutivaSimple() {
       // despacho real, pero la curva pasaba por ahí como si lo
       // hubiera). Ahora se manda el valor real (0 cuando corresponde),
       // así la línea cae hasta el eje ese día, mostrando la realidad.
-      return parseFloat(v.toFixed(DEC));
+      // ⚠️ CORREGIDO — bug real confirmado: con DEC=1, un despacho
+      // chico pero real (ej. Supe: 0.024 MB) se redondeaba a 0.0 y el
+      // punto quedaba literalmente en cero — no era solo la escala del
+      // gráfico, el DATO mismo llegaba en 0. _roundMB conserva más
+      // decimales para estos casos en vez de aplastarlos.
+      return _roundMB(v);
     });
     reposSerie = datesN.map(function(d){
       var tot = 0;
@@ -23221,7 +23245,12 @@ function renderVistaEjecutivaSimple() {
       // despacho real, pero la curva pasaba por ahí como si lo
       // hubiera). Ahora se manda el valor real (0 cuando corresponde),
       // así la línea cae hasta el eje ese día, mostrando la realidad.
-      return parseFloat(v.toFixed(DEC));
+      // ⚠️ CORREGIDO — bug real confirmado: con DEC=1, un despacho
+      // chico pero real (ej. Supe: 0.024 MB) se redondeaba a 0.0 y el
+      // punto quedaba literalmente en cero — no era solo la escala del
+      // gráfico, el DATO mismo llegaba en 0. _roundMB conserva más
+      // decimales para estos casos en vez de aplastarlos.
+      return _roundMB(v);
     });
     // Volumen de reposición "pintado" en la barra de inventario — leído
     // de la etiqueta estructurada que deja Registro Diario al marcar
