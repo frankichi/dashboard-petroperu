@@ -213,8 +213,6 @@ function irFecha(delta) {
   cargar();
 }
 
-var _ultimoReporteCache = {};
-
 function cargar() {
   var fecha = document.getElementById('fechaInput').value || hoyLima();
   var btn = document.getElementById('btnActualizar');
@@ -312,13 +310,13 @@ function pintar(tracking, fecha) {
       }
       var lastSeenHtml = '';
       if (!done) {
-        var cacheKey = t.planta;
-        if (_ultimoReporteCache[cacheKey] === undefined) {
-          lastSeenHtml = '<div class="card-lastseen" id="ls-' + cacheKey.replace(/[^a-zA-Z0-9]/g,'_') + '">Buscando último reporte…</div>';
-          fetchUltimoReporte(cacheKey);
-        } else {
-          lastSeenHtml = renderLastSeen(_ultimoReporteCache[cacheKey]);
-        }
+        // ⚠️ CORREGIDO — a pedido: antes esto disparaba un fetch aparte
+        // al backend por cada planta pendiente (fetchUltimoReporte),
+        // uno por uno — con varias pendientes eso hacía lenta cada
+        // carga. Ahora rdGetTrackingHoy ya manda el último reporte de
+        // cada planta en la misma respuesta (t.ultimoFecha/ultimoNombre
+        // /ultimoHora), así que se pinta directo, sin pedir nada más.
+        lastSeenHtml = renderLastSeen(t);
       }
       return '<div class="card ' + (done?'done':'pend') + '">' +
           '<div class="card-name">' + (esRefineria(t.planta)?'🛢️':'🏭') + ' ' + plantaLabel(t.planta) + '</div>' +
@@ -339,22 +337,12 @@ function pintar(tracking, fecha) {
       : (!equipo.length && !refinerias.length ? '<div class="empty">Ninguna instalación coincide con el filtro "' + (_segFiltroEstado === 'pendientes' ? 'Pendientes' : 'Completadas') + '".</div>' : ''));
 }
 
-function fetchUltimoReporte(planta) {
-  fetch(API_URL + '?action=rdGetUltimoReporte&planta=' + encodeURIComponent(planta), {method:'GET', redirect:'follow'})
-    .then(function(r){ return r.json(); })
-    .then(function(res){
-      _ultimoReporteCache[planta] = (res && res.success && res.encontrado) ? res : null;
-      var el = document.getElementById('ls-' + planta.replace(/[^a-zA-Z0-9]/g,'_'));
-      if (el) el.outerHTML = renderLastSeen(_ultimoReporteCache[planta]);
-    })
-    .catch(function(){ _ultimoReporteCache[planta] = null; });
-}
-function renderLastSeen(info) {
-  if (!info) return '<div class="card-lastseen">Sin reportes previos registrados.</div>';
+function renderLastSeen(t) {
+  if (!t || !t.ultimoFecha) return '<div class="card-lastseen">Sin reportes previos registrados.</div>';
   var horaTxt = '';
-  if (info.hora) { try { horaTxt = new Date(info.hora).toLocaleTimeString('es-PE', {hour:'2-digit', minute:'2-digit'}); } catch(e) {} }
-  return '<div class="card-lastseen">Último reporte: <b>' + fmtFechaLarga(info.fecha) + '</b>' +
-    (info.nombre ? ' por ' + info.nombre : '') + (horaTxt ? ' a las ' + horaTxt : '') + '</div>';
+  if (t.ultimoHora) { try { horaTxt = new Date(t.ultimoHora).toLocaleTimeString('es-PE', {hour:'2-digit', minute:'2-digit'}); } catch(e) {} }
+  return '<div class="card-lastseen">Último reporte: <b>' + fmtFechaLarga(t.ultimoFecha) + '</b>' +
+    (t.ultimoNombre ? ' por ' + t.ultimoNombre : '') + (horaTxt ? ' a las ' + horaTxt : '') + '</div>';
 }
 
 document.querySelector('.ord-btn[data-filtro="todas"]').classList.add('active');
