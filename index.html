@@ -23458,6 +23458,63 @@ function renderVistaEjecutivaSimple() {
     var n = nombreBuque.toUpperCase();
     return BUQUES_MAR_EXEC.some(function(v){ return n.indexOf(v) >= 0; });
   }
+  // ⚠️ AGREGADO — a pedido: la planta puede confirmar en su Registro
+  // Diario (etiqueta [REPOS|TIPO|VOLUMEN] en el comentario del
+  // producto) cuánto YA recibió de una reposición marítima — un dato
+  // directo, dicho por la propia planta, más confiable que intentar
+  // inferirlo de variaciones de inventario. Sin cruzar esto contra el
+  // seguimiento automático de buques, la MISMA entrega se contaba dos
+  // veces: una en el inventario real ya reportado (y en "Reposiciones
+  // recibidas"), y otra en la barra de "Cobertura por producto" como
+  // si todavía no hubiera llegado. Caso real confirmado: Mollendo
+  // reportó 49.6 MB (12-ago) + 30.1 MB (13-ago) = 79.7 MB recibidos de
+  // UCAYALI (manifiesto de 80 MB) — prácticamente el envío completo —
+  // pero la barra seguía mostrando "+10d" de reposición pendiente para
+  // ese mismo buque.
+  function _volumenReposTagsConfirmado(planta, producto, hastaFecha, diasVentana) {
+    var desde = null;
+    if (diasVentana) {
+      var d = new Date(hastaFecha + 'T12:00:00');
+      d.setDate(d.getDate() - diasVentana);
+      desde = d.toISOString().slice(0, 10);
+    }
+    var total = 0;
+    RAW.forEach(function(row) {
+      if (row.planta !== planta || row.producto !== producto) return;
+      if (hastaFecha && row.fecha > hastaFecha) return;
+      if (desde && row.fecha < desde) return;
+      var tag = parseReposicionTag(row.comentario_prod);
+      if (tag) total += tag.volumenMB;
+    });
+    return total;
+  }
+  // Consume el volumen confirmado por la planta contra las naves
+  // PENDIENTES más antiguas primero (las que llevan más tiempo en
+  // camino son las más probables de ya haber llegado). Tolerancia de
+  // 1 MB para redondeos entre manifiesto y lo reportado por la planta.
+  // Devuelve una copia nueva — no muta las naves originales.
+  function _aplicarConfirmacionPlanta(naves, confirmadoPlanta) {
+    if (!(confirmadoPlanta > 0) || !naves.length) return naves;
+    var TOL = 1.0;
+    var copia = naves.map(function(n) { return Object.assign({}, n); });
+    var ordenadas = copia.slice().sort(function(a, b) { return (a.fecha||'').localeCompare(b.fecha||''); });
+    var restante = confirmadoPlanta;
+    ordenadas.forEach(function(n) {
+      if (n.estado === 'COMPLETADO' || restante <= 0) return;
+      if (n.vol <= restante + TOL) {
+        restante -= n.vol;
+        n.estado = 'COMPLETADO';
+        n._confirmadoPorPlanta = true;
+      } else if (restante > 0.05) {
+        n.volManifiesto = n.vol;
+        n.volYaRecibido = restante;
+        n.vol = Math.max(0, n.vol - restante);
+        n._confirmadoPorPlanta = true;
+        restante = 0;
+      }
+    });
+    return copia;
+  }
   function reposicionInfo(r) {
     // IMPORTANTE: los días de reposición SIEMPRE se calculan con la
     // demanda pronóstico (nunca con el despacho real), sin importar qué
@@ -23485,17 +23542,26 @@ function renderVistaEjecutivaSimple() {
         // apareciendo cada vez que se miraba una fecha pasada.
         var navesHistPendientes = navesHist.filter(function(n){ return n.estado !== 'COMPLETADO'; });
         var volTotalHist = (navesHistPendientes.length ? navesHistPendientes : navesHist).reduce(function(s, n){ return s + (n.vol || 0); }, 0);
+        // ⚠️ AGREGADO — misma reconciliación que la ruta en vivo: si la
+        // planta ya confirmó (vía Registro Diario) haber recibido este
+        // volumen a la fecha que se está viendo, no debe contarse otra
+        // vez como pendiente aquí.
+        var confirmadoPlantaHist = _volumenReposTagsConfirmado(r.planta, r.producto, fechaHoy, 20);
+        var navesHistAjustadas = _aplicarConfirmacionPlanta(navesHist, confirmadoPlantaHist);
+        var navesHistPendientesAj = navesHistAjustadas.filter(function(n){ return n.estado !== 'COMPLETADO'; });
+        volTotalHist = (navesHistPendientesAj.length ? navesHistPendientesAj : navesHistAjustadas).reduce(function(s, n){ return s + (n.vol || 0); }, 0);
         if (volTotalHist <= 0 || denom <= 0) return { diasRepos: 0, volMB: 0, tipo: '', naves: [], historico: true };
         return {
           diasRepos: Math.floor(volTotalHist / denom),
           volMB: volTotalHist,
-          tipo: navesHist.length > 1 ? 'multiple' : 'Cabotaje Marítimo',
-          bt: navesHist[0] ? navesHist[0].buque : '',
-          fecha: navesHist[0] ? navesHist[0].fecha : '',
-          estado: navesHist[0] ? navesHist[0].estado : '',
-          naves: navesHist.map(function(n){ return { buque: n.buque, vol: n.vol, fecha: n.fecha, estado: n.estado }; }),
+          tipo: navesHistAjustadas.length > 1 ? 'multiple' : 'Cabotaje Marítimo',
+          bt: navesHistAjustadas[0] ? navesHistAjustadas[0].buque : '',
+          fecha: navesHistAjustadas[0] ? navesHistAjustadas[0].fecha : '',
+          estado: navesHistAjustadas[0] ? navesHistAjustadas[0].estado : '',
+          naves: navesHistAjustadas.map(function(n){ return { buque: n.buque, vol: n.vol, fecha: n.fecha, estado: n.estado }; }),
           historico: true
         };
+
       }
       // Todavía no llegó la respuesta histórica — se muestra vacío en
       // vez del estado actual (que sería engañoso para una revisión
@@ -23590,6 +23656,15 @@ function renderVistaEjecutivaSimple() {
       }
     }
     if (volTotal <= 0) return { diasRepos: 0, volMB: 0, tipo: '', naves: [] };
+    // ⚠️ AGREGADO — misma reconciliación aplicada arriba en la ruta
+    // histórica: si la planta ya confirmó vía Registro Diario haber
+    // recibido este volumen, no debe contarse otra vez como pendiente.
+    var confirmadoPlantaHoy = _volumenReposTagsConfirmado(r.planta, r.producto, fechaHoy, 20);
+    naves = _aplicarConfirmacionPlanta(naves, confirmadoPlantaHoy);
+    var navesPendientesTras = naves.filter(function(n){ return n.estado !== 'COMPLETADO'; });
+    volTotal = (navesPendientesTras.length ? navesPendientesTras : naves).reduce(function(s, n){ return s + (n.vol || 0); }, 0);
+    if (volTotal <= 0) return { diasRepos: 0, volMB: 0, tipo: '', naves: naves };
+
     var tipos = naves.map(function(n){ return esMaritimoExec(n.buque) ? 'mar\u00edtima' : 'terrestre'; });
     var tipoUnico = new Set(tipos).size === 1 ? tipos[0] : (tipos.length > 1 ? 'mixta' : '');
     // bt/fecha/estado "principales" = el primero de la lista (ya viene
