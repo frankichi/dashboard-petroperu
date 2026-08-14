@@ -1,4 +1,9 @@
 <!DOCTYPE html>
+<!-- Versión: 2026-08-14-v1 — corrige _navEstadoActualTexto() para usar
+     precedencia cronológica estricta entre eventos del buque, basada en
+     los campos de fecha estructurados de posicionamiento_naves (en vez
+     de re-derivarlos por regex de texto libre). Ver comentarios junto a
+     _navEstadoActualTexto y _puertoSiguientePorRotacion en el código. -->
 <html lang="es">
 <head>
 <meta charset="UTF-8">
@@ -4576,7 +4581,18 @@ async function fetchData(forceRefresh) {
     // (renderP1/updateEventTicker/_updateShipOpsBar están ocultos o
     // vacíos en modo ejecutivo de todas formas), pero el fetch en sí
     // ya no se salta.
-    if (!_navPosData) {
+    // ⚠️ CORREGIDO — bug real confirmado: esta llamada solo se hacía UNA
+    // vez por sesión (el "if (!_navPosData)" la saltaba en cualquier
+    // refresco posterior) — mientras que el resto del panel (inventario,
+    // despachos) sí se actualiza cada 5 min con el auto-refresh. Caso
+    // real: se subió el reporte de posicionamiento del 14-ago (UCAYALI
+    // ya zarpado, navegando a Callao), pero el panel seguía mostrando
+    // "Empezó a descargar... hace 2 días" porque nunca volvió a pedir
+    // la posición de naves tras la primera carga. Ahora se pide de
+    // nuevo en cada ciclo de fetchData() — igual que todo lo demás —
+    // así el estado del buque queda al día sin necesidad de recargar
+    // la página entera.
+    {
       fetch(CONFIG.API_URL + '?action=getNavesPositioning', {method:'GET', redirect:'follow'})
         .then(r => r.ok ? r.json() : [])
         .then(nd => {
@@ -4589,7 +4605,7 @@ async function fetchData(forceRefresh) {
           renderP1();
           updateEventTicker();
           if (typeof _updateShipOpsBar === 'function') _updateShipOpsBar();
-        }).catch(() => { _navPosData = {}; });
+        }).catch(() => { if (!_navPosData) _navPosData = {}; });
     }
     cobComputeBadgeQuick();
     setTimeout(cobComputeBadgeQuick, 500);
@@ -7375,97 +7391,156 @@ function _parseNavEvents(estado, rotacion, ubicacion, refFecha) {
 // no se estaba usando. Ahora se compara contra la fecha real de hoy:
 // si el evento es de hoy, se muestra solo la hora; si es de un día
 // anterior, se agrega la fecha y cuántos días lleva así.
+function _puertoSiguientePorRotacion(rotacionRaw, puertoActual) {
+  if (!rotacionRaw || !puertoActual) return '';
+  var secuencia = rotacionRaw.split(/[-\u2013]/).map(function(t){ return t.replace(/\([^)]*\)/g,'').trim(); }).filter(Boolean);
+  function norm(t){ return (t||'').trim().toUpperCase().replace(/\u00cd/g,'I').replace(/\u00c1/g,'A').replace(/\u00c9/g,'E').replace(/\u00d3/g,'O').replace(/\u00da/g,'U'); }
+  var actNorm = norm(puertoActual);
+  var idx = secuencia.findIndex(function(p){ var pn = norm(p); return pn.indexOf(actNorm) >= 0 || actNorm.indexOf(pn) >= 0; });
+  return (idx >= 0 && idx < secuencia.length - 1) ? secuencia[idx + 1] : '';
+}
+// ⚠️ CORREGIDO — bug real confirmado: el "estado actual" se derivaba
+// re-parseando con regex el texto libre (nav.estado_nav + nav.estado),
+// en vez de usar los campos de fecha YA ESTRUCTURADOS que entrega
+// handleGetNavesPositioning (Code.gs): fecha_arribo, fecha_amarro,
+// fecha_inicio_descarga, fecha_termino_descarga, fecha_inicio_carga,
+// fecha_termino_carga, fecha_zarpe — cada uno fecha+hora ISO
+// (YYYY-MM-DDTHH:MM, normalizeFechaHora) directamente comparable.
+//
+// Caso real confirmado: UCAYALI con I.D. el 12/08 12:18 y ZARPE el
+// 13/08 12:15 (posterior) — el popup seguía mostrando "Empezó a
+// descargar" porque el regex sobre texto libre (que además mezclaba el
+// campo nuevo estado_nav con el viejo estado, truncado a 150
+// caracteres de mov_naves) no garantizaba tomar el evento realmente
+// más reciente. Ahora se comparan las fechas estructuradas
+// directamente: precedencia estrictamente cronológica entre TODOS los
+// eventos del buque (arribo, fondeo, amarre, I.D., T.D., I.C., T.C.,
+// zarpe) — sin regex, sin depender de en qué orden aparece cada cosa
+// en el texto, sin filtrar por puerto.
+//
+// Si el evento más reciente es un ZARPE y se conoce el próximo destino
+// (puerto_eta estructurado, o si falta, el siguiente puerto según la
+// rotación), se agrega "— navegando a X, E.T.A. fecha".
+//
+// Respaldo: si el buque no trae ningún campo estructurado (datos más
+// viejos que nunca pasaron por posicionamiento_naves), se cae al
+// parseo de texto libre de siempre — mismo criterio ID vs. IC como
+// tipos distintos, mismo criterio de puerto-de-origen-solo-si-navegando
+// ya existente, sin romper nada de lo que ya funcionaba ahí.
 function _navEstadoActualTexto(buqueName) {
   if (!buqueName || typeof _navPosData === 'undefined' || !_navPosData) return '';
   var nav = _navPosData[buqueName.toUpperCase()] || _navPosData[buqueName.toUpperCase()+' 2'];
-  if (!nav || typeof _parseNavEvents !== 'function') return '';
-  var navTexto = ((nav.estado_nav?nav.estado_nav+' ':'')+(nav.estado||''));
-  var parsed = _parseNavEvents(navTexto, nav.rotacion, nav.ubicacion, nav.fecha);
-  // ETA es un evento FUTURO/planeado, no un estado ya ocurrido — se
-  // excluye para quedarse con el último evento REAL (eventos ya vienen
-  // ordenados por fecha/hora ascendente).
-  var reales = (parsed.events||[]).filter(function(e){ return e.type !== 'ETA'; });
-  if (!reales.length) return '';
-  var ultimo = reales[reales.length-1];
-  if (!ultimo.time || !ultimo.datetime) return '';
+  if (!nav) return '';
+
+  var CANDIDATOS = [
+    { campo: 'fecha_arribo',           type: 'ARRIBO' },
+    { campo: 'fecha_fondeo',           type: 'FONDEO' },
+    { campo: 'fecha_amarro',           type: 'AMARRO' },
+    { campo: 'fecha_inicio_descarga',  type: 'ID' },
+    { campo: 'fecha_termino_descarga', type: 'TD' },
+    { campo: 'fecha_inicio_carga',     type: 'IC' },
+    { campo: 'fecha_termino_carga',    type: 'TC' },
+    { campo: 'fecha_zarpe',            type: 'ZARPE' }
+  ];
+  var eventosEstructurados = CANDIDATOS
+    .map(function(c){ return { type: c.type, datetime: nav[c.campo] }; })
+    .filter(function(e){ return e.datetime && /^\d{4}-\d{2}-\d{2}/.test(e.datetime); });
+
+  var ultimo, usandoEstructurados = eventosEstructurados.length > 0;
+  if (usandoEstructurados) {
+    eventosEstructurados.sort(function(a,b){ return a.datetime.localeCompare(b.datetime); });
+    ultimo = eventosEstructurados[eventosEstructurados.length - 1];
+  } else {
+    if (typeof _parseNavEvents !== 'function') return '';
+    var navTexto0 = ((nav.estado_nav?nav.estado_nav+' ':'')+(nav.estado||''));
+    var parsed = _parseNavEvents(navTexto0, nav.rotacion || nav.rotacion_raw, nav.ubicacion, nav.fecha);
+    var reales = (parsed.events||[]).filter(function(e){ return e.type !== 'ETA'; });
+    if (!reales.length) return '';
+    var ev = reales[reales.length-1];
+    if (!ev.time || !ev.datetime) return '';
+    ultimo = { type: ev.type, datetime: ev.datetime.replace(' ', 'T') };
+  }
+
   var VERBOS = {ZARPE:'Zarp\u00f3', ARRIBO:'Lleg\u00f3', AMARRO:'Amarr\u00f3', FONDEO:'Fonde\u00f3', IC:'Empez\u00f3 a cargar', ID:'Empez\u00f3 a descargar', TC:'Termin\u00f3 de cargar', ETC:'Termin\u00f3 carga', TD:'Descarg\u00f3'};
-  var verbo = VERBOS[ultimo.type] || ultimo.label;
-  function _extraerDestino(ubic) {
-    var u = (ubic || '').toUpperCase();
-    var m = u.match(/(?:NAVEGANDO\s+A|EN\s+BAH[I\u00cd]A?|EN)\s+([A-Z\u00c0-\u00dc\s]+?)(?:\s{2,}|$)/);
-    return m ? m[1].trim() : '';
-  }
-  function _normPuerto(t) {
-    return (t||'').trim().toUpperCase()
-      .replace(/\u00cd/g,'I').replace(/\u00c1/g,'A').replace(/\u00c9/g,'E').replace(/\u00d3/g,'O').replace(/\u00da/g,'U');
-  }
-  function _puertoOrigenPorRotacion(rotacionRaw, destino) {
-    if (!rotacionRaw || !destino) return '';
-    var secuencia = rotacionRaw.split(/[-\u2013]/).map(function(t){ return t.replace(/\([^)]*\)/g,'').trim(); }).filter(Boolean);
-    var destNorm = _normPuerto(destino);
-    var idx = secuencia.findIndex(function(p){ var pn=_normPuerto(p); return pn.indexOf(destNorm)>=0 || destNorm.indexOf(pn)>=0; });
-    return idx > 0 ? secuencia[idx-1] : '';
-  }
+  var verbo = VERBOS[ultimo.type] || ultimo.type;
+  var PREP = {ZARPE:'de', AMARRO:'en', FONDEO:'en', ARRIBO:'a', IC:'en', ID:'en', TC:'en', ETC:'en', TD:'en'};
+
   function _capitalizar(t) {
     return (t||'').split(/\s+/).map(function(p){ return p.charAt(0)+p.slice(1).toLowerCase(); }).join(' ');
   }
-  // ⚠️ CORREGIDO — bug real confirmado: "el puerto anterior en la
-  // rotación" SOLO es correcto cuando el buque YA ZARPÓ y está
-  // NAVEGANDO hacia el destino actual — en ese caso, amarre/carga/
-  // zarpe sí ocurrieron en el puerto de origen (el anterior en la
-  // secuencia). Pero si el estado actual dice "DESCARGANDO EN X",
-  // "CARGANDO EN X", "AMARRADO EN X" o "EN BAHÍA X" — el buque YA
-  // ESTÁ en X, así que esos mismos eventos (amarró, I.C., T.C.)
-  // ocurrieron EN X, no en el puerto anterior. Caso real confirmado:
-  // MOCHE "DESCARGANDO EN CONCHÁN" con "AMARRÓ: 11/23:24 HRS." — el
-  // popup decía "Amarró en Talara" (el puerto anterior en la
-  // rotación) cuando en realidad amarró en Conchán, el puerto donde
-  // ya está parado ahora mismo.
-  var destinoActual = _extraerDestino(nav.ubicacion);
-  var yaEnDestino = !/NAVEGANDO\s+A/i.test(nav.ubicacion || '');
-  var puertoTxt = '';
-  if (ultimo.planta) {
-    puertoTxt = ultimo.planta; // ARRIBO/T.D. ya lo traen capturado directo
-  } else if (ultimo.type === 'FONDEO') {
-    // Fondeó es siempre EN la ubicación actual del reporte (campo
-    // estructurado si existe, si no se re-parsea el texto).
-    puertoTxt = nav.puerto_ultimo || destinoActual;
-  } else if (yaEnDestino && ['ZARPE','AMARRO','IC','ID','TC','ETC'].indexOf(ultimo.type) >= 0) {
-    // El buque ya está EN destinoActual (no está "navegando a" otro
-    // lado) — estos eventos ocurrieron ahí mismo.
-    puertoTxt = destinoActual;
-  } else if (['ZARPE','AMARRO','IC','ID','TC','ETC'].indexOf(ultimo.type) >= 0) {
-    // El buque está "NAVEGANDO A" destinoActual — estos eventos
-    // ocurrieron en el puerto ANTERIOR de la rotación (de donde zarpó).
-    puertoTxt = _puertoOrigenPorRotacion(nav.rotacion, destinoActual);
+
+  // Puerto del evento: con datos estructurados, "puerto_ultimo" es el
+  // último puerto CONFIRMADO por el reporte — sirve para todos los
+  // eventos que ocurren "en" ese puerto, incluido el ZARPE ("zarpó DE
+  // puerto_ultimo": el puerto que recién dejó, sigue siendo el último
+  // confirmado hasta que llegue confirmación de arribo al siguiente).
+  var puertoTxt = usandoEstructurados ? (nav.puerto_ultimo || '') : '';
+  var navTextoFallback = ((nav.estado_nav?nav.estado_nav+' ':'')+(nav.estado||''));
+  if (!usandoEstructurados) {
+    // ⚠️ Regla existente, sin tocar: "puerto anterior en la rotación"
+    // solo aplica cuando el buque YA ZARPÓ y está NAVEGANDO hacia el
+    // destino actual; si el estado dice "DESCARGANDO/CARGANDO/AMARRADO
+    // EN X" o "EN BAHÍA X", el buque YA ESTÁ en X y esos eventos
+    // ocurrieron ahí, no en el puerto anterior.
+    function _extraerDestino(ubic) {
+      var u = (ubic || '').toUpperCase();
+      var m = u.match(/(?:NAVEGANDO\s+A|EN\s+BAH[I\u00cd]A?|EN)\s+([A-Z\u00c0-\u00dc\s]+?)(?:\s{2,}|$)/);
+      return m ? m[1].trim() : '';
+    }
+    function _normPuerto(t) {
+      return (t||'').trim().toUpperCase().replace(/\u00cd/g,'I').replace(/\u00c1/g,'A').replace(/\u00c9/g,'E').replace(/\u00d3/g,'O').replace(/\u00da/g,'U');
+    }
+    function _puertoOrigenPorRotacion(rotacionRaw, destino) {
+      if (!rotacionRaw || !destino) return '';
+      var secuencia = rotacionRaw.split(/[-\u2013]/).map(function(t){ return t.replace(/\([^)]*\)/g,'').trim(); }).filter(Boolean);
+      var destNorm = _normPuerto(destino);
+      var idx = secuencia.findIndex(function(p){ var pn=_normPuerto(p); return pn.indexOf(destNorm)>=0 || destNorm.indexOf(pn)>=0; });
+      return idx > 0 ? secuencia[idx-1] : '';
+    }
+    var destinoActual = _extraerDestino(nav.ubicacion);
+    var yaEnDestino = !/NAVEGANDO\s+A/i.test(nav.ubicacion || '');
+    if (ultimo.type === 'FONDEO') puertoTxt = nav.puerto_ultimo || destinoActual;
+    else if (yaEnDestino && ['ZARPE','AMARRO','IC','ID','TC','ETC'].indexOf(ultimo.type) >= 0) puertoTxt = destinoActual;
+    else if (['ZARPE','AMARRO','IC','ID','TC','ETC'].indexOf(ultimo.type) >= 0) puertoTxt = _puertoOrigenPorRotacion(nav.rotacion || nav.rotacion_raw, destinoActual);
   }
-  var PREP = {ZARPE:'de', AMARRO:'en', FONDEO:'en', ARRIBO:'a', IC:'en', ID:'en', TC:'en', ETC:'en', TD:'en'};
   var conPuerto = puertoTxt ? (' ' + (PREP[ultimo.type]||'en') + ' ' + _capitalizar(puertoTxt)) : '';
+
   var notaEspera = '';
-  if (/INGRESAR[A\u00c1][^.]*APERTURA\s+DE\s+PUERTO/i.test(navTexto)) {
+  if (/INGRESAR[A\u00c1][^.]*APERTURA\s+DE\s+PUERTO/i.test(navTextoFallback)) {
     notaEspera = ' \u2014 esperando apertura de puerto';
   }
-  // \u26a0\ufe0f AGREGADO \u2014 a pedido: si el buque est\u00e1 ACTUALMENTE cargando o
-  // descargando (\u00faltimo evento real = IC o ID, operaci\u00f3n en curso, sin
-  // T.C./T.D. real todav\u00eda), se agrega cu\u00e1ndo se ESPERA que termine
-  // (\"E.T. Operaciones\" / \"E.T.D.\" del reporte real) \u2014 antes el popup
-  // solo dec\u00eda \"empez\u00f3 a descargar\" sin dar ninguna idea de hasta
-  // cu\u00e1ndo, dejando la informaci\u00f3n incompleta frente al reporte real
-  // (que s\u00ed trae \"E.T.D.: 14/12:00 HRS.\").
   if ((ultimo.type === 'IC' || ultimo.type === 'ID') && nav.fecha_et_operaciones) {
     var etOp = nav.fecha_et_operaciones.replace('T', ' ');
     notaEspera += ' \u2014 estimado hasta el ' + etOp.slice(8,10) + '/' + etOp.slice(5,7) + ' ' + etOp.slice(11) + ' hrs';
   }
-  var fechaEvento = ultimo.datetime.slice(0, 10); // 'YYYY-MM-DD'
+  // ⚠️ AGREGADO — a pedido: cuando el último evento es un ZARPE y se
+  // conoce el próximo destino, se agrega "— navegando a X, E.T.A.
+  // fecha" — antes un zarpe solo decía "Zarpó de X", sin decir hacia
+  // dónde ni cuándo se le espera.
+  var siguienteHTML = '';
+  if (ultimo.type === 'ZARPE') {
+    var puertoSig = nav.puerto_eta || (usandoEstructurados ? _puertoSiguientePorRotacion(nav.rotacion_raw || nav.rotacion, puertoTxt) : '');
+    if (puertoSig) {
+      var etaTxt = '';
+      if (nav.fecha_eta && /^\d{4}-\d{2}-\d{2}/.test(nav.fecha_eta)) {
+        etaTxt = ', E.T.A. ' + nav.fecha_eta.slice(8,10) + '/' + nav.fecha_eta.slice(5,7);
+      }
+      siguienteHTML = ' \u2014 navegando a ' + _capitalizar(puertoSig) + etaTxt;
+    }
+  }
+
+  var fechaEvento = ultimo.datetime.slice(0, 10);
+  var horaEvento = ultimo.datetime.length >= 16 ? ultimo.datetime.slice(11,16) : '';
+  if (!horaEvento) return '';
   var hoyReal = new Date().toISOString().slice(0, 10);
-  if (fechaEvento === hoyReal) return verbo + conPuerto + ' a las ' + ultimo.time + ' hrs' + notaEspera;
+  if (fechaEvento === hoyReal) return verbo + conPuerto + ' a las ' + horaEvento + ' hrs' + notaEspera + siguienteHTML;
   var msPorDia = 86400000;
   var dEvento = new Date(fechaEvento + 'T00:00:00Z').getTime();
   var dHoy = new Date(hoyReal + 'T00:00:00Z').getTime();
   var diasTranscurridos = Math.round((dHoy - dEvento) / msPorDia);
-  var fechaCorta = fechaEvento.slice(8, 10) + '/' + fechaEvento.slice(5, 7); // DD/MM
+  var fechaCorta = fechaEvento.slice(8, 10) + '/' + fechaEvento.slice(5, 7);
   var sufijoDias = diasTranscurridos === 1 ? ' (hace 1 d\u00eda)' : diasTranscurridos > 1 ? (' (hace ' + diasTranscurridos + ' d\u00edas)') : '';
-  return verbo + conPuerto + ' el ' + fechaCorta + ' ' + ultimo.time + ' hrs' + sufijoDias + notaEspera;
+  return verbo + conPuerto + ' el ' + fechaCorta + ' ' + horaEvento + ' hrs' + sufijoDias + notaEspera + siguienteHTML;
 }
 
 async function openBTModal(buqueName) {
