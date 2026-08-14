@@ -16478,17 +16478,45 @@ var mAmarro = chunk.match(/AMARR[OÓ](?:\s+EN\s+[A-Z0-9\-]+)?:\s*(\d{1,2}(?:\.\d
       var fechaAmarro = mAmarro ? _posNavesParseDT(mAmarro[1], fecha) : '';
       var mID = chunk.match(/I\.D\.:\s*(\d{1,2}(?:\.\d{1,2})?\/\d{1,2}:\d{2})\s*HRS/i);
       var fechaID = mID ? _posNavesParseDT(mID[1], fecha) : '';
-      var mTD = chunk.match(/T\.D\.:\s*(\d{1,2}(?:\.\d{1,2})?\/\d{1,2}:\d{2})\s*HRS/i);
+      // ⚠️ CORREGIDO — bug real confirmado: el reporte puede traer, ANTES
+      // de cualquier otro evento, una línea resumen "E.T.D.: DD/HH:MM
+      // HRS." (estimado de término de descarga, la MISMA idea que
+      // "E.T.OPERACIONES:" pero con otra abreviatura). Como "E.T.D."
+      // contiene literalmente la subcadena "T.D.:", el regex de T.D.
+      // REAL (más abajo) la encontraba PRIMERO y la capturaba como si
+      // fuera el término de descarga YA OCURRIDO — con el caso real de
+      // UCAYALI, FECHA_TERMINO_DESCARGA quedaba en "15/08:00" (la
+      // ESTIMACIÓN) en vez de "13/07:00" (el T.D. REAL, que sí aparecía
+      // más adelante en el mismo texto). Se usa un lookbehind negativo
+      // para que el T.D. real nunca matchee la "T.D." que va pegada
+      // dentro de "E.T.D.".
+      var mTD = chunk.match(/(?<!E\.)T\.D\.:\s*(\d{1,2}(?:\.\d{1,2})?\/\d{1,2}:\d{2})\s*HRS/i);
       var fechaTD = mTD ? _posNavesParseDT(mTD[1], fecha) : '';
       var mIC = chunk.match(/I\.C\.:\s*(\d{1,2}(?:\.\d{1,2})?\/\d{1,2}:\d{2})\s*HRS/i);
       var fechaIC = mIC ? _posNavesParseDT(mIC[1], fecha) : '';
-      var mETOp = chunk.match(/E\.?\s*T\.?\s*OPERACIONES:\s*(\d{1,2}(?:\.\d{1,2})?\/\d{1,2}:\d{2})\s*HRS/i);
+      // ⚠️ AMPLIADO — a pedido: el reporte usa "E.T.D.:" (con puntos,
+      // igual significado que "E.T.OPERACIONES:") como abreviatura
+      // alterna para el estimado de término de descarga — el regex
+      // viejo solo reconocía "E.T.OPERACIONES:" y nunca capturaba nada
+      // cuando el reporte traía "E.T.D." en su lugar, dejando el E.T.D.
+      // vacío en el dashboard aunque el dato sí estuviera en el PDF.
+      var mETOp = chunk.match(/E\.?\s*T\.?\s*(?:OPERACIONES|D)\.?:\s*(\d{1,2}(?:\.\d{1,2})?\/\d{1,2}:\d{2})\s*HRS/i);
       var fechaETOp = mETOp ? _posNavesParseDT(mETOp[1], fecha) : '';
       var mZarpo = chunk.match(/ZARP[OÓ]:\s*(\d{1,2}(?:\.\d{1,2})?\/\d{1,2}:\d{2})\s*HRS/i);
       var fechaZarpe = mZarpo ? _posNavesParseDT(mZarpo[1], fecha) : '';
-      var mEta = chunk.match(/ETA\s+([A-ZÁÉÍÓÚÑ\s]+?):\s*(\d{1,2}(?:\.\d{1,2})?\/\d{1,2}:\d{2})\s*HRS/i);
+      // ⚠️ CORREGIDO — bug real confirmado: el reporte casi siempre
+      // escribe "E.T.A. [puerto]: DD/HH:MM HRS." (con puntos entre cada
+      // letra), pero este regex solo reconocía "ETA [puerto]:" sin
+      // puntos — como texto literal esas dos cadenas NO comparten
+      // ninguna subcadena de 3 letras seguidas ("E.T.A." tiene puntos
+      // intercalados), así que nunca coincidía y puerto_eta/fecha_eta
+      // quedaban vacíos aunque el dato estuviera ahí. Se tolen puntos
+      // opcionales entre cada letra, igual que ya se hace en el resto
+      // del parser para AMARRÓ/ZARPÓ/etc.
+      var mEta = chunk.match(/E\.?\s*T\.?\s*A\.?\s+([A-ZÁÉÍÓÚÑ\s]+?):\s*(\d{1,2}(?:\.\d{1,2})?\/\d{1,2}:\d{2})\s*HRS/i);
       var puertoEta = mEta ? mEta[1].trim() : '';
       var fechaEta  = mEta ? _posNavesParseDT(mEta[2], fecha) : '';
+
       var mAgencia = chunk.match(/\(([A-Z]{3,})\)/);
       var agencia = mAgencia ? mAgencia[1] : '';
       var producto = '', volumen = 0;
