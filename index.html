@@ -16425,18 +16425,64 @@ function parseNavesText() {
     var BUQUES_IMP = ['FAIRCHEM VALOR','MOCKINGBIRD','GALLOP','SEAWAYS LEYTE'];
     var ALL_BUQUES = BUQUES_PP.concat(BUQUES_3RD).concat(BUQUES_IMP);
     var textUp = text.toUpperCase();
+    // ⚠️ CORREGIDO — bug real confirmado: este reporte es un PDF
+    // EXPORTADO DESDE EXCEL (tabla real, con celdas). Cuando la última
+    // fila de un buque tiene 3 celdas con datos (ej. "AMARRÓ: ... | I.D.:
+    // ... | E.T.D.: ..."), al copiar/pegar el texto desde el visor del
+    // PDF esa TERCERA celda se desprende de su fila y aparece pegada al
+    // INICIO del bloque del SIGUIENTE buque — caso real: el E.T.D. de
+    // MOCHE terminaba apareciendo justo debajo del nombre "UCAYALI", así
+    // que el sistema se lo atribuía al buque equivocado (o no lo
+    // encontraba en absoluto, según el orden de recorrido). Para
+    // corregirlo hace falta procesar los buques en el ORDEN REAL en que
+    // aparecen en el texto (antes se recorría en el orden fijo de
+    // ALL_BUQUES, que no siempre coincide) y, al construir cada bloque,
+    // revisar si justo después del NOMBRE del siguiente buque hay una
+    // línea "huérfana" — un campo suelto (fecha/hora) sin ningún texto
+    // de estado antes ("NAVEGANDO A...", "DESCARGANDO EN...", etc.). Si
+    // la hay, en realidad pertenece a ESTE buque: se agrega a su propio
+    // bloque, y se excluye del inicio del bloque siguiente para que no
+    // quede contada dos veces.
+    var posicionesBuques = [];
     ALL_BUQUES.forEach(function(nombre) {
       var idx = textUp.indexOf(nombre);
-      if (idx < 0) return;
-      var nextIdx = text.length;
-      ALL_BUQUES.forEach(function(other) {
-        if (other === nombre) return;
-        var oi = textUp.indexOf(other, idx + nombre.length);
-        if (oi > idx && oi < nextIdx) nextIdx = oi;
-      });
+      if (idx >= 0) posicionesBuques.push({ nombre: nombre, idx: idx });
+    });
+    posicionesBuques.sort(function(a, b) { return a.idx - b.idx; });
+    var _lineaRobadaLen = 0; // longitud de la línea que el buque ANTERIOR ya se llevó — se descuenta del inicio de este
+    posicionesBuques.forEach(function(pos, kPos) {
+      var nombre = pos.nombre, idx = pos.idx;
+      var nextIdx = (kPos + 1 < posicionesBuques.length) ? posicionesBuques[kPos + 1].idx : text.length;
       var prepIdx = textUp.indexOf('PREPARADO POR', idx + nombre.length);
       if (prepIdx > idx && prepIdx < nextIdx) nextIdx = prepIdx;
-      var chunk = text.substring(idx, nextIdx).trim();
+
+      var inicioReal = idx;
+      var _saltoNombre = false;
+      if (_lineaRobadaLen > 0) {
+        var _tras = text.slice(idx + nombre.length);
+        var _trasTrim = _tras.replace(/^\s+/, '');
+        var _offsetEspacios = _tras.length - _trasTrim.length;
+        inicioReal = idx + nombre.length + _offsetEspacios + _lineaRobadaLen;
+        _saltoNombre = true; // el substring ya NO incluye el nombre — hay que reponerlo
+      }
+      _lineaRobadaLen = 0;
+
+      var chunk = text.substring(inicioReal, nextIdx).trim();
+      if (_saltoNombre) chunk = nombre + ' ' + chunk;
+
+      if (nextIdx < text.length) {
+        var siguientePos = posicionesBuques[kPos + 1];
+        if (siguientePos) {
+          var _trasNombreSig = text.slice(nextIdx + siguientePos.nombre.length, nextIdx + siguientePos.nombre.length + 100).replace(/^\s+/, '');
+          var _primeraLinea = (_trasNombreSig.split('\n')[0] || '').trim();
+          var _esCampoSuelto = /^(E\.?\s*T\.?\s*(?:OPERACIONES|D)|T\.D|I\.D|I\.C|ZARP[OÓ]|AMARR[OÓ]|ARRIB[OÓ]|FONDE[OÓ])\.?:?\s*\d/i.test(_primeraLinea);
+          if (_esCampoSuelto) {
+            chunk += ' ' + _primeraLinea;
+            _lineaRobadaLen = _primeraLinea.length;
+          }
+        }
+      }
+
       var isPP = BUQUES_PP.indexOf(nombre) >= 0;
       var isImp = BUQUES_IMP.indexOf(nombre) >= 0;
       var ubicacion = '';
