@@ -7391,6 +7391,23 @@ function _parseNavEvents(estado, rotacion, ubicacion, refFecha) {
 // no se estaba usando. Ahora se compara contra la fecha real de hoy:
 // si el evento es de hoy, se muestra solo la hora; si es de un día
 // anterior, se agrega la fecha y cuántos días lleva así.
+// ⚠️ AGREGADO — a pedido: mostrar el E.T.D. (estimado de término de
+// descarga, campo fecha_et_operaciones del reporte de Posicionamiento
+// de Naves) en el popup de reposición de la planta correspondiente —
+// caso concreto: Conchán con MOCHE descargando, y en general cualquier
+// descarga en curso o futura donde el reporte ya traiga esa estimación.
+// Es un dato aparte del "estado actual" (que describe el ÚLTIMO evento
+// real del buque) — el E.T.D. es una PROYECCIÓN hacia adelante, así que
+// tiene su propio helper en vez de mezclarse con _navEstadoActualTexto.
+function _navEtdTexto(buqueName) {
+  if (!buqueName || typeof _navPosData === 'undefined' || !_navPosData) return '';
+  var nav = _navPosData[buqueName.toUpperCase()] || _navPosData[buqueName.toUpperCase()+' 2'];
+  if (!nav || !nav.fecha_et_operaciones || !/^\d{4}-\d{2}-\d{2}/.test(nav.fecha_et_operaciones)) return '';
+  var etd = nav.fecha_et_operaciones;
+  var fechaCorta = etd.slice(8,10) + '/' + etd.slice(5,7);
+  var hora = etd.length >= 16 ? etd.slice(11,16) : '';
+  return 'E.T.D. ' + fechaCorta + (hora ? (' ' + hora + ' hrs') : '');
+}
 function _puertoSiguientePorRotacion(rotacionRaw, puertoActual) {
   if (!rotacionRaw || !puertoActual) return '';
   var secuencia = rotacionRaw.split(/[-\u2013]/).map(function(t){ return t.replace(/\([^)]*\)/g,'').trim(); }).filter(Boolean);
@@ -7509,10 +7526,12 @@ function _navEstadoActualTexto(buqueName) {
   if (/INGRESAR[A\u00c1][^.]*APERTURA\s+DE\s+PUERTO/i.test(navTextoFallback)) {
     notaEspera = ' \u2014 esperando apertura de puerto';
   }
-  if ((ultimo.type === 'IC' || ultimo.type === 'ID') && nav.fecha_et_operaciones) {
-    var etOp = nav.fecha_et_operaciones.replace('T', ' ');
-    notaEspera += ' \u2014 estimado hasta el ' + etOp.slice(8,10) + '/' + etOp.slice(5,7) + ' ' + etOp.slice(11) + ' hrs';
-  }
+  // ⚠️ QUITADO — a pedido: el "— estimado hasta el ..." que se agregaba
+  // aquí (para IC/ID) quedó reemplazado por _navEtdTexto(), un helper
+  // dedicado que muestra el E.T.D. como línea propia y clara en el
+  // popup de reposición — dejarlo también aquí lo duplicaba (la misma
+  // fecha aparecía dos veces: una dentro de "Estado actual" y otra en
+  // la línea de E.T.D.).
   // ⚠️ AGREGADO — a pedido: cuando el último evento es un ZARPE y se
   // conoce el próximo destino, se agrega "— navegando a X, E.T.A.
   // fecha" — antes un zarpe solo decía "Zarpó de X", sin decir hacia
@@ -24058,7 +24077,11 @@ function renderVistaEjecutivaSimple() {
         var etiquetaFecha = n.fecha ? ((n.estado === 'COMPLETADO' ? 'ya descarg\u00f3 ' : n.estado === 'DESCARGANDO' ? 'lleg\u00f3 (descargando) ' : 'ETA ') + n.fecha) : '';
         var prodTxt = n.producto ? (n.producto + ' \u2014 ') : '';
         var estadoActualTxt = (typeof _navEstadoActualTexto === 'function') ? _navEstadoActualTexto(n.buque) : '';
-        return '<div style="margin-top:5px">\uD83D\uDEA2 <b>' + (n.buque||'\u2014') + '</b> \u00b7 ' + prodTxt + n.vol.toFixed(DEC) + ' MB' + (etiquetaFecha ? ' \u00b7 ' + etiquetaFecha : '') + (estadoActualTxt ? '<div style="margin-left:14px;color:#facc15;font-size:11px">\uD83D\uDCE1 Estado actual: ' + estadoActualTxt + '</div>' : '') + '</div>';
+        var etdTxt = (typeof _navEtdTexto === 'function') ? _navEtdTexto(n.buque) : '';
+        return '<div style="margin-top:5px">\uD83D\uDEA2 <b>' + (n.buque||'\u2014') + '</b> \u00b7 ' + prodTxt + n.vol.toFixed(DEC) + ' MB' + (etiquetaFecha ? ' \u00b7 ' + etiquetaFecha : '')
+          + (estadoActualTxt ? '<div style="margin-left:14px;color:#facc15;font-size:11px">\uD83D\uDCE1 Estado actual: ' + estadoActualTxt + '</div>' : '')
+          + (etdTxt ? '<div style="margin-left:14px;color:#a5b4fc;font-size:11px">\uD83D\uDD52 ' + etdTxt + '</div>' : '')
+          + '</div>';
       }).join('');
     }
     var reposHTML = (esRepMultiProducto && d.diasRepos > 0)
@@ -24077,11 +24100,19 @@ function renderVistaEjecutivaSimple() {
       var n = seg.nave;
       var etiquetaFecha = n.fecha ? ((n.estado === 'COMPLETADO' ? 'ya descarg\u00f3 ' : n.estado === 'DESCARGANDO' ? 'lleg\u00f3 (descargando) ' : 'ETA ') + n.fecha) : '';
       var estadoActualTxt = (esPrincipal && typeof _navEstadoActualTexto === 'function') ? _navEstadoActualTexto(n.buque) : '';
+      // ⚠️ AGREGADO — a pedido: E.T.D. (estimado de término de descarga)
+      // junto al estado actual, cuando el reporte de Posicionamiento de
+      // Naves ya trae esa estimación — mismo criterio de "solo en el
+      // segmento principal" que el estado actual, para no repetir un
+      // dato que en realidad describe la operación EN CURSO del buque
+      // sobre una reposición programada distinta más adelante.
+      var etdTxt = (esPrincipal && typeof _navEtdTexto === 'function') ? _navEtdTexto(n.buque) : '';
       return '<b>Reposici\u00f3n' + (d.tipoRepos ? (' ' + d.tipoRepos) : '') + '</b>'
         + (!esPrincipal ? '<br><span style="color:#93c5fd;font-size:10px">\uD83D\uDCE6 Cabotaje distinto \u2014 reposici\u00f3n programada aparte</span>' : '')
         + '<br>\uD83D\uDEA2 <b>' + (n.buque||'\u2014') + '</b> \u00b7 ' + n.vol.toFixed(DEC) + ' MB'
         + (etiquetaFecha ? (' \u00b7 ' + etiquetaFecha) : '')
         + (estadoActualTxt ? ('<br><span style="color:#facc15">\uD83D\uDCE1 Estado actual: ' + estadoActualTxt + '</span>') : '')
+        + (etdTxt ? ('<br><span style="color:#a5b4fc">\uD83D\uDD52 ' + etdTxt + '</span>') : '')
         + '<br>D\u00edas equivalentes: +' + seg.dias + 'd'
         + (seg.lejana ? ('<br><span style="color:#93c5fd">\u26a0\ufe0f A\u00fan a ' + seg.diasHastaETA + ' d\u00edas \u2014 no confirmado, no cuenta como inventario todav\u00eda</span>') : '')
         + (d.reposHistorico && !d.reposCargando ? ('<br><span style="color:#94a3b8;font-size:10px">\uD83D\uDCC5 Reposici\u00f3n tal como se ve\u00eda el ' + fechaHoy + ' (vista hist\u00f3rica)</span>') : '')
