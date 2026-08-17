@@ -120,7 +120,8 @@
   .cc-chart-card{background:var(--card);border:1px solid var(--bdr);border-radius:12px;padding:16px 18px}
   .cc-chart-title{font-size:12px;font-weight:800;color:var(--txt);margin-bottom:2px;display:flex;align-items:center;gap:6px}
   .cc-chart-sub{font-size:10.5px;color:var(--txt3);margin-bottom:10px}
-  .cc-chart-svg-wrap{overflow-x:auto}
+  .cc-chart-svg-wrap{overflow-x:auto;overflow-y:hidden;padding-bottom:2px}
+  .cc-chart-svg-wrap svg{max-width:none}
 
   /* ── Impresión / Exportar a PDF — mismo patrón que registro-diario.html:
      documento aparte (#segPrintReport), oculta toda la app al imprimir. */
@@ -617,7 +618,7 @@ function ccParetoSVG(items) {
   });
   var anchoBarra = 52, gap = 22, margenIzq = 34, margenDer = 40, margenSup = 24, margenInf = 78;
   var altoGrafico = 260;
-  var anchoTotal = margenIzq + margenDer + puntos.length * (anchoBarra + gap);
+  var anchoTotal = Math.max(480, margenIzq + margenDer + puntos.length * (anchoBarra + gap));
   var maxValor = Math.max.apply(null, puntos.map(function(p) { return p.valor; }));
   function yBarra(v) { return margenSup + (altoGrafico - (maxValor ? (v / maxValor) * altoGrafico : 0)); }
   function yLinea(pct) { return margenSup + (altoGrafico - (pct / 100) * altoGrafico); }
@@ -648,8 +649,17 @@ function ccParetoSVG(items) {
   }).join('');
 
   var y80 = yLinea(80);
+  var altoTotal = margenSup + altoGrafico + margenInf;
 
-  return '<svg viewBox="0 0 ' + anchoTotal + ' ' + (margenSup + altoGrafico + margenInf) + '" style="width:100%;height:auto;font-family:inherit">'
+  // ⚠️ CORREGIDO — bug real confirmado: con "width:100%;height:auto" el
+  // navegador ESTIRA el ancho al contenedor pero mantiene la proporción
+  // del viewBox — con muchas plantas (gráfico muy ancho) eso ACHICA la
+  // altura real renderizada para conservar la proporción, y el Pareto
+  // terminaba viéndose chato/pequeño. Ahora se usa un tamaño fijo en
+  // píxeles (igual al viewBox, sin reescalar) — la altura nunca se
+  // encoge; si no entra a lo ancho, el contenedor (.cc-chart-svg-wrap)
+  // ya tiene scroll horizontal para eso, en vez de sacrificar altura.
+  return '<svg viewBox="0 0 ' + anchoTotal + ' ' + altoTotal + '" width="' + anchoTotal + '" height="' + altoTotal + '" style="display:block;font-family:inherit">'
     + '<line x1="' + margenIzq + '" y1="' + y80 + '" x2="' + (anchoTotal - margenDer + 20) + '" y2="' + y80 + '" stroke="#dc2626" stroke-dasharray="4 3" stroke-width="1"></line>'
     + '<text x="' + (anchoTotal - margenDer + 22) + '" y="' + (y80 + 3) + '" font-size="9" fill="#dc2626" font-weight="700">80%</text>'
     + barrasHTML
