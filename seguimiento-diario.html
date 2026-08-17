@@ -114,8 +114,9 @@
   .empty-ok{padding:40px 20px;text-align:center;color:var(--grn);font-size:13px;font-weight:700;background:var(--grn-bg);border-radius:12px}
 
   /* ── Gráficos de Cumplimiento de Cierres ─────────────────────────── */
-  .cc-charts-row{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin:0 0 20px}
+  .cc-charts-row{display:grid;grid-template-columns:1.3fr 1fr;gap:14px;margin:0 0 14px}
   @media (max-width:860px){ .cc-charts-row{grid-template-columns:1fr} }
+  .cc-charts-row-full{margin:0 0 20px}
   .cc-chart-card{background:var(--card);border:1px solid var(--bdr);border-radius:12px;padding:16px 18px}
   .cc-chart-title{font-size:12px;font-weight:800;color:var(--txt);margin-bottom:2px;display:flex;align-items:center;gap:6px}
   .cc-chart-sub{font-size:10.5px;color:var(--txt3);margin-bottom:10px}
@@ -614,8 +615,8 @@ function ccParetoSVG(items) {
     acumulado += it.valor;
     return { label: it.label, valor: it.valor, pctAcum: total ? (acumulado / total * 100) : 0 };
   });
-  var anchoBarra = 40, gap = 16, margenIzq = 30, margenDer = 34, margenSup = 20, margenInf = 68;
-  var altoGrafico = 180;
+  var anchoBarra = 52, gap = 22, margenIzq = 34, margenDer = 40, margenSup = 24, margenInf = 78;
+  var altoGrafico = 260;
   var anchoTotal = margenIzq + margenDer + puntos.length * (anchoBarra + gap);
   var maxValor = Math.max.apply(null, puntos.map(function(p) { return p.valor; }));
   function yBarra(v) { return margenSup + (altoGrafico - (maxValor ? (v / maxValor) * altoGrafico : 0)); }
@@ -655,6 +656,39 @@ function ccParetoSVG(items) {
     + '<polyline points="' + lineaPts + '" fill="none" stroke="#1e3a8a" stroke-width="2"></polyline>'
     + puntosCirculo
     + '</svg>';
+}
+
+// ⚠️ AGREGADO — a pedido: pie de % de cumplimiento respecto a la suma
+// total de días del rango seleccionado (sumando "a tiempo" + "tarde" +
+// "sin reportar" de TODAS las plantas juntas) — panorama general de un
+// vistazo, complementando el detalle por planta de los otros 2 gráficos.
+function ccPieSVG(segmentos, pctCentro) {
+  var total = segmentos.reduce(function(s, x) { return s + x.value; }, 0);
+  var r = 66, cx = 84, cy = 84, grosor = 26;
+  var circunferencia = 2 * Math.PI * r;
+  var offsetAcumulado = 0;
+  var arcos = segmentos.filter(function(s){ return s.value > 0; }).map(function(seg) {
+    var frac = total ? seg.value / total : 0;
+    var largo = frac * circunferencia;
+    var dasharray = largo + ' ' + (circunferencia - largo);
+    var dashoffset = -offsetAcumulado;
+    offsetAcumulado += largo;
+    return '<circle cx="' + cx + '" cy="' + cy + '" r="' + r + '" fill="none" stroke="' + seg.color + '" stroke-width="' + grosor + '" stroke-dasharray="' + dasharray + '" stroke-dashoffset="' + dashoffset + '" transform="rotate(-90 ' + cx + ' ' + cy + ')"></circle>';
+  }).join('');
+  var svg = '<svg viewBox="0 0 ' + (cx * 2) + ' ' + (cy * 2) + '" style="width:168px;height:168px;flex-shrink:0">'
+    + arcos
+    + '<text x="' + cx + '" y="' + (cy - 4) + '" text-anchor="middle" font-size="26" font-weight="800" fill="#0f1e3c">' + pctCentro + '%</text>'
+    + '<text x="' + cx + '" y="' + (cy + 16) + '" text-anchor="middle" font-size="8.5" font-weight="700" fill="#94a3b8" letter-spacing="0.5">CUMPLIMIENTO</text>'
+    + '</svg>';
+  var leyenda = segmentos.map(function(seg) {
+    var pct = total ? Math.round(seg.value / total * 100) : 0;
+    return '<div style="display:flex;align-items:center;gap:7px;padding:5px 0">'
+      + '<span style="width:11px;height:11px;border-radius:3px;background:' + seg.color + ';flex-shrink:0"></span>'
+      + '<span style="font-size:11.5px;color:#475569;flex:1">' + seg.label + '</span>'
+      + '<span style="font-size:11.5px;font-weight:800;color:' + seg.color + '">' + seg.value + 'd \u00b7 ' + pct + '%</span>'
+      + '</div>';
+  }).join('');
+  return '<div style="display:flex;align-items:center;gap:18px;flex-wrap:wrap">' + svg + '<div style="flex:1;min-width:140px">' + leyenda + '</div></div>';
 }
 
 
@@ -709,6 +743,21 @@ function ccRenderCharts(plantas) {
     });
   var svgBarra = ccBarraSVG(itemsBarra);
 
+  // ⚠️ AGREGADO — a pedido: pie de % de cumplimiento respecto a la suma
+  // total de días del rango seleccionado — se suman "a tiempo" +
+  // "tarde" + "sin reportar" de TODAS las plantas juntas (no por
+  // planta individual, sino el agregado de todo el periodo elegido).
+  var totalATiempo = plantas.reduce(function(s, p) { return s + p.aTiempo; }, 0);
+  var totalTarde = plantas.reduce(function(s, p) { return s + p.tarde; }, 0);
+  var totalSinReportar = plantas.reduce(function(s, p) { return s + p.sinReportar; }, 0);
+  var totalDiasSuma = totalATiempo + totalTarde + totalSinReportar;
+  var pctCumplimientoGeneral = totalDiasSuma ? Math.round(totalATiempo / totalDiasSuma * 100) : 0;
+  var svgPie = ccPieSVG([
+    { label: 'A tiempo', value: totalATiempo, color: '#16a34a' },
+    { label: 'Tarde', value: totalTarde, color: '#a86a00' },
+    { label: 'Sin reportar', value: totalSinReportar, color: '#dc2626' }
+  ], pctCumplimientoGeneral);
+
   var itemsPareto = plantas
     .map(function(p) {
       var totalDias = (p.incidencias || []).reduce(function(s, inc) { return s + inc.diasRetraso; }, 0);
@@ -720,6 +769,10 @@ function ccRenderCharts(plantas) {
     ? ccParetoSVG(itemsPareto)
     : '<div class="empty-ok" style="padding:24px">✅ Ninguna planta acumula días de atraso en este periodo.</div>';
 
+  // ⚠️ CAMBIADO — a pedido: el Pareto se veía muy chico compartiendo
+  // columna con el otro gráfico. Ahora va en su propia fila, a todo el
+  // ancho, con más alto — la barra de cumplimiento por planta comparte
+  // fila arriba con el pie nuevo (que es más chico por naturaleza).
   zona.innerHTML =
     '<div class="cc-charts-row">' +
       '<div class="cc-chart-card">' +
@@ -728,8 +781,15 @@ function ccRenderCharts(plantas) {
         '<div class="cc-chart-svg-wrap">' + svgBarra + '</div>' +
       '</div>' +
       '<div class="cc-chart-card">' +
-        '<div class="cc-chart-title">📈 Pareto — días de atraso por planta</div>' +
-        '<div class="cc-chart-sub">Barras: total de días de atraso acumulados · Línea: % acumulado (80% = línea roja) — identifica qué pocas plantas concentran la mayoría del problema</div>' +
+        '<div class="cc-chart-title">🥧 Cumplimiento general del periodo</div>' +
+        '<div class="cc-chart-sub">Suma de d\u00edas de todas las plantas en el rango seleccionado</div>' +
+        svgPie +
+      '</div>' +
+    '</div>' +
+    '<div class="cc-charts-row cc-charts-row-full">' +
+      '<div class="cc-chart-card">' +
+        '<div class="cc-chart-title">📈 Pareto — d\u00edas de atraso por planta</div>' +
+        '<div class="cc-chart-sub">Barras: total de d\u00edas de atraso acumulados \u00b7 L\u00ednea: % acumulado (80% = l\u00ednea roja) \u2014 identifica qu\u00e9 pocas plantas concentran la mayor\u00eda del problema</div>' +
         '<div class="cc-chart-svg-wrap">' + paretoHTML + '</div>' +
       '</div>' +
     '</div>';
