@@ -113,6 +113,14 @@
   .cc-inc-quien{color:var(--txt3);font-size:10.5px}
   .empty-ok{padding:40px 20px;text-align:center;color:var(--grn);font-size:13px;font-weight:700;background:var(--grn-bg);border-radius:12px}
 
+  /* ── Gráficos de Cumplimiento de Cierres ─────────────────────────── */
+  .cc-charts-row{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin:0 0 20px}
+  @media (max-width:860px){ .cc-charts-row{grid-template-columns:1fr} }
+  .cc-chart-card{background:var(--card);border:1px solid var(--bdr);border-radius:12px;padding:16px 18px}
+  .cc-chart-title{font-size:12px;font-weight:800;color:var(--txt);margin-bottom:2px;display:flex;align-items:center;gap:6px}
+  .cc-chart-sub{font-size:10.5px;color:var(--txt3);margin-bottom:10px}
+  .cc-chart-svg-wrap{overflow-x:auto}
+
   /* ── Impresión / Exportar a PDF — mismo patrón que registro-diario.html:
      documento aparte (#segPrintReport), oculta toda la app al imprimir. */
   #segPrintReport{ display:none; }
@@ -198,6 +206,7 @@
       </div>
     </div>
     <div id="ccKpiZone"></div>
+    <div id="ccChartsZone"></div>
     <div id="ccCuerpoZone">
       <div class="empty"><div class="spinner"></div>Calculando cumplimiento…</div>
     </div>
@@ -577,6 +586,78 @@ function ccCargar() {
     .catch(function(){ document.getElementById('ccCuerpoZone').innerHTML = '<div class="empty">Error de conexión al calcular el cumplimiento.</div>'; });
 }
 
+function ccBarraSVG(items) {
+  // items: [{label, value(0-100), color}] — ya vienen ordenados (peor primero)
+  var alto = 26, margenSup = 8, margenInf = 8;
+  var alturaTotal = margenSup + margenInf + items.length * alto;
+  var anchoEtiqueta = 120, anchoBarraMax = 420, anchoValor = 40;
+  var anchoTotal = anchoEtiqueta + anchoBarraMax + anchoValor + 10;
+  var filas = items.map(function(it, i) {
+    var y = margenSup + i * alto;
+    var w = Math.max(2, (it.value / 100) * anchoBarraMax);
+    var etiqueta = it.label.length > 16 ? it.label.slice(0, 15) + '\u2026' : it.label;
+    return ''
+      + '<text x="' + (anchoEtiqueta - 8) + '" y="' + (y + alto / 2 + 4) + '" text-anchor="end" font-size="11" font-weight="700" fill="#0f1e3c">' + etiqueta + '</text>'
+      + '<rect x="' + anchoEtiqueta + '" y="' + (y + 4) + '" width="' + anchoBarraMax + '" height="' + (alto - 8) + '" rx="4" fill="#e2e8f0"></rect>'
+      + '<rect x="' + anchoEtiqueta + '" y="' + (y + 4) + '" width="' + w + '" height="' + (alto - 8) + '" rx="4" fill="' + it.color + '"></rect>'
+      + '<text x="' + (anchoEtiqueta + anchoBarraMax + 8) + '" y="' + (y + alto / 2 + 4) + '" font-size="11" font-weight="800" fill="' + it.color + '">' + it.value + '%</text>';
+  }).join('');
+  return '<svg viewBox="0 0 ' + anchoTotal + ' ' + alturaTotal + '" style="width:100%;height:auto;font-family:inherit">' + filas + '</svg>';
+}
+
+function ccParetoSVG(items) {
+  // items: [{label, valor}] — se ordenan aquí mismo, descendente por valor
+  items = items.slice().sort(function(a, b) { return b.valor - a.valor; });
+  var total = items.reduce(function(s, it) { return s + it.valor; }, 0);
+  var acumulado = 0;
+  var puntos = items.map(function(it) {
+    acumulado += it.valor;
+    return { label: it.label, valor: it.valor, pctAcum: total ? (acumulado / total * 100) : 0 };
+  });
+  var anchoBarra = 40, gap = 16, margenIzq = 30, margenDer = 34, margenSup = 20, margenInf = 68;
+  var altoGrafico = 180;
+  var anchoTotal = margenIzq + margenDer + puntos.length * (anchoBarra + gap);
+  var maxValor = Math.max.apply(null, puntos.map(function(p) { return p.valor; }));
+  function yBarra(v) { return margenSup + (altoGrafico - (maxValor ? (v / maxValor) * altoGrafico : 0)); }
+  function yLinea(pct) { return margenSup + (altoGrafico - (pct / 100) * altoGrafico); }
+
+  var barrasHTML = puntos.map(function(p, i) {
+    var x = margenIzq + i * (anchoBarra + gap);
+    var y = yBarra(p.valor);
+    var h = margenSup + altoGrafico - y;
+    var etiqueta = p.label.length > 12 ? p.label.slice(0, 11) + '\u2026' : p.label;
+    var cx = x + anchoBarra / 2;
+    var yEtiqueta = margenSup + altoGrafico + 14;
+    return '<rect x="' + x + '" y="' + y + '" width="' + anchoBarra + '" height="' + h + '" rx="3" fill="#c2410c"></rect>'
+      + '<text x="' + cx + '" y="' + (y - 6) + '" text-anchor="middle" font-size="10" font-weight="800" fill="#0f1e3c">' + p.valor + 'd</text>'
+      + '<text x="' + cx + '" y="' + yEtiqueta + '" text-anchor="end" font-size="9.5" font-weight="700" fill="#475569" transform="rotate(-35 ' + cx + ' ' + yEtiqueta + ')">' + etiqueta + '</text>';
+  }).join('');
+
+  var lineaPts = puntos.map(function(p, i) {
+    var x = margenIzq + i * (anchoBarra + gap) + anchoBarra / 2;
+    var y = yLinea(p.pctAcum);
+    return x + ',' + y;
+  }).join(' ');
+
+  var puntosCirculo = puntos.map(function(p, i) {
+    var x = margenIzq + i * (anchoBarra + gap) + anchoBarra / 2;
+    var y = yLinea(p.pctAcum);
+    return '<circle cx="' + x + '" cy="' + y + '" r="3.5" fill="#1e3a8a"></circle>'
+      + '<text x="' + x + '" y="' + (y - 8) + '" text-anchor="middle" font-size="9.5" font-weight="800" fill="#1e3a8a">' + Math.round(p.pctAcum) + '%</text>';
+  }).join('');
+
+  var y80 = yLinea(80);
+
+  return '<svg viewBox="0 0 ' + anchoTotal + ' ' + (margenSup + altoGrafico + margenInf) + '" style="width:100%;height:auto;font-family:inherit">'
+    + '<line x1="' + margenIzq + '" y1="' + y80 + '" x2="' + (anchoTotal - margenDer + 20) + '" y2="' + y80 + '" stroke="#dc2626" stroke-dasharray="4 3" stroke-width="1"></line>'
+    + '<text x="' + (anchoTotal - margenDer + 22) + '" y="' + (y80 + 3) + '" font-size="9" fill="#dc2626" font-weight="700">80%</text>'
+    + barrasHTML
+    + '<polyline points="' + lineaPts + '" fill="none" stroke="#1e3a8a" stroke-width="2"></polyline>'
+    + puntosCirculo
+    + '</svg>';
+}
+
+
 function ccRenderKpis(data) {
   // ⚠️ AGREGADO — a pedido: las 3 refinerías (Talara, Conchán, Iquitos)
   // no reportan por Registro Diario — Claudia las trabaja manualmente
@@ -607,6 +688,50 @@ function ccRenderKpis(data) {
         '<div class="sub">Días sin ningún cierre registrado</div></div>' +
       '<div class="cc-kpi"><div class="lbl">⚠️ Planta con más atrasos</div><div class="val" style="font-size:18px;color:var(--txt)">' + (peor ? peor.planta : '—') + '</div>' +
         '<div class="sub">' + (peor ? (peor.pctCumplimiento + '% de cumplimiento') : '') + '</div></div>' +
+    '</div>';
+
+  ccRenderCharts(plantas);
+}
+
+// ── Gráficos: barra de cumplimiento por planta + Pareto de días de
+// atraso. Dibujados a mano en SVG (sin librería externa — el entorno
+// bloquea CDN) para que el apartado se entienda de un vistazo, no solo
+// con la tabla de números.
+function ccRenderCharts(plantas) {
+  var zona = document.getElementById('ccChartsZone');
+  if (!plantas.length) { zona.innerHTML = ''; return; }
+
+  var itemsBarra = plantas.slice()
+    .sort(function(a, b) { return a.pctCumplimiento - b.pctCumplimiento; })
+    .map(function(p) {
+      var color = ccColorPct(p.pctCumplimiento).fg;
+      return { label: p.planta, value: p.pctCumplimiento, color: color };
+    });
+  var svgBarra = ccBarraSVG(itemsBarra);
+
+  var itemsPareto = plantas
+    .map(function(p) {
+      var totalDias = (p.incidencias || []).reduce(function(s, inc) { return s + inc.diasRetraso; }, 0);
+      return { label: p.planta, valor: totalDias };
+    })
+    .filter(function(it) { return it.valor > 0; });
+
+  var paretoHTML = itemsPareto.length
+    ? ccParetoSVG(itemsPareto)
+    : '<div class="empty-ok" style="padding:24px">✅ Ninguna planta acumula días de atraso en este periodo.</div>';
+
+  zona.innerHTML =
+    '<div class="cc-charts-row">' +
+      '<div class="cc-chart-card">' +
+        '<div class="cc-chart-title">📊 Cumplimiento por planta</div>' +
+        '<div class="cc-chart-sub">Ordenadas de peor a mejor</div>' +
+        '<div class="cc-chart-svg-wrap">' + svgBarra + '</div>' +
+      '</div>' +
+      '<div class="cc-chart-card">' +
+        '<div class="cc-chart-title">📈 Pareto — días de atraso por planta</div>' +
+        '<div class="cc-chart-sub">Barras: total de días de atraso acumulados · Línea: % acumulado (80% = línea roja) — identifica qué pocas plantas concentran la mayoría del problema</div>' +
+        '<div class="cc-chart-svg-wrap">' + paretoHTML + '</div>' +
+      '</div>' +
     '</div>';
 }
 
