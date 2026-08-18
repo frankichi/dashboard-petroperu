@@ -181,6 +181,20 @@ input.input-error{border-color:var(--red)!important;box-shadow:0 0 0 3px rgba(20
 /* ── Tabs de navegación ─────────────────────────────── */
 .rd-tabs{display:flex;gap:0;border-bottom:2px solid var(--bdr);margin-bottom:20px;overflow-x:auto;scrollbar-width:none}
 .rd-tabs::-webkit-scrollbar{display:none}
+/* ── Botón Actualizar — a pedido: refrescar sin recargar la página ── */
+.rd-tabs-row{display:flex;align-items:center;gap:10px;margin-bottom:0}
+.rd-tabs-row .rd-tabs{flex:1;margin-bottom:0;border-bottom:none}
+.rd-tabs-row-wrap{border-bottom:2px solid var(--bdr);margin-bottom:20px}
+.rd-btn-actualizar{
+  display:flex;align-items:center;gap:6px;flex-shrink:0;padding:8px 14px;margin-bottom:6px;
+  border-radius:8px;border:1.5px solid var(--acc);background:#fff;color:var(--acc);
+  font-family:inherit;font-size:12px;font-weight:800;cursor:pointer;white-space:nowrap;
+  transition:background .15s,transform .1s;
+}
+.rd-btn-actualizar:hover{background:var(--acc);color:#fff}
+.rd-btn-actualizar:active{transform:scale(.96)}
+.rd-btn-actualizar.loading svg{animation:rd-spin .7s linear infinite}
+@keyframes rd-spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
 .rd-tab{padding:10px 18px;font-size:12px;font-weight:700;color:var(--txt3);cursor:pointer;border:none;border-bottom:2px solid transparent;margin-bottom:-2px;white-space:nowrap;transition:color .15s,border-color .15s;background:none;font-family:var(--sans)}
 .rd-tab:hover{color:var(--acc)}
 .rd-tab.active{color:var(--red);border-bottom-color:var(--red)}
@@ -441,12 +455,20 @@ document.write('<scr'+'ipt>' + atob('LyogeGxzeC1qcy1zdHlsZSAxLjIuMC1iZXRhIEAgMjA
 
 <div id="appShell">
 
-  <!-- ── Navegación por tabs ── -->
-  <div class="rd-tabs">
-    <button class="rd-tab active" data-tab="registro" onclick="rdSwitchTab('registro',this)">📋 Registro Diario</button>
-    <button class="rd-tab" data-tab="historico" onclick="rdSwitchTab('historico',this)">📊 Histórico</button>
-    <button class="rd-tab" data-tab="pronostico" onclick="rdSwitchTab('pronostico',this)">📈 Pronóstico Aprobado</button>
-    <button class="rd-tab" data-tab="solicitudes" onclick="rdSwitchTab('solicitudes',this)">📝 Mis Solicitudes<span id="solicitudesBadge" style="display:none;background:#dc2626;color:#fff;font-size:10px;font-weight:800;border-radius:10px;padding:1px 6px;margin-left:5px"></span></button>
+  <!-- ── Navegación por tabs + botón Actualizar ── -->
+  <div class="rd-tabs-row-wrap">
+    <div class="rd-tabs-row">
+      <div class="rd-tabs">
+        <button class="rd-tab active" data-tab="registro" onclick="rdSwitchTab('registro',this)">📋 Registro Diario</button>
+        <button class="rd-tab" data-tab="historico" onclick="rdSwitchTab('historico',this)">📊 Histórico</button>
+        <button class="rd-tab" data-tab="pronostico" onclick="rdSwitchTab('pronostico',this)">📈 Pronóstico Aprobado</button>
+        <button class="rd-tab" data-tab="solicitudes" onclick="rdSwitchTab('solicitudes',this)">📝 Mis Solicitudes<span id="solicitudesBadge" style="display:none;background:#dc2626;color:#fff;font-size:10px;font-weight:800;border-radius:10px;padding:1px 6px;margin-left:5px"></span></button>
+      </div>
+      <button class="rd-btn-actualizar" id="rdBtnActualizar" onclick="rdActualizarTodo()" title="Vuelve a pedir los datos al servidor sin recargar la página — útil justo después de que Planificación apruebe una corrección">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6"></path><path d="M1 20v-6h6"></path><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
+        Actualizar
+      </button>
+    </div>
   </div>
 
   <!-- ── TAB 1: Registro Diario (original) ── -->
@@ -1926,6 +1948,49 @@ function _rdAplicarReporteResp(res, hoy) {
   }
 }
 
+// ⚠️ AGREGADO — a pedido: botón "Actualizar" para no tener que recargar
+// toda la página cuando se quiere ver si ya llegó una corrección
+// aprobada (u otro cambio hecho desde otro lado). Limpia TODO el
+// caché del navegador para este panel (incluida la copia guardada de
+// "mi reporte" por fecha — sin esto, el patrón stale-while-revalidate
+// ya existente podría seguir mostrando la copia vieja un instante antes
+// de refrescarse) y vuelve a pedir los datos de la pestaña que esté
+// activa en este momento, sin tocar ninguna otra.
+function rdActualizarTodo() {
+  var btn = document.getElementById('rdBtnActualizar');
+  if (btn) btn.classList.add('loading');
+
+  // Limpiar todo el caché local — igual que ya se hacía puntualmente
+  // en un solo lugar (línea ~2186), pero aquí de forma completa.
+  window._rdMiReporteCache = {};
+
+  var panelActivo = document.querySelector('.rd-panel.active');
+  var tabActiva = panelActivo ? panelActivo.id.replace('rdPanel-', '') : 'registro';
+
+  var promesa;
+  var tabConFeedbackPropio = (tabActiva === 'registro'); // ya maneja su propio loader/toast de error
+  if (tabActiva === 'historico') {
+    window._histLoaded = false;
+    promesa = rdLoadHistorico();
+  } else if (tabActiva === 'pronostico') {
+    window._pronLoaded = false;
+    promesa = rdLoadPronostico();
+  } else if (tabActiva === 'solicitudes') {
+    promesa = rdLoadMisSolicitudes();
+  } else {
+    // "registro" — recarga la fecha que se esté viendo ahora mismo
+    promesa = rdRefreshMiReporte();
+  }
+
+  Promise.resolve(promesa).then(function() {
+    if (!tabConFeedbackPropio) rdToast('✓ Datos actualizados', 'ok');
+  }).catch(function() {
+    if (!tabConFeedbackPropio) rdToast('No se pudo actualizar — revisa tu conexión', 'error');
+  }).finally(function() {
+    if (btn) btn.classList.remove('loading');
+  });
+}
+
 function rdRefreshMiReporte() {
   if (!RD.fechaReporte) rdInicializarFechaReporte();
   rdRenderFechaBanner();
@@ -1961,7 +2026,7 @@ function rdRefreshMiReporte() {
   // ── Primera vez que se ve esta fecha (para esta planta) en la
   // sesión: sin nada que mostrar todavía, sí hace falta el loader normal.
   rdShowLoader(true);
-  rdGet('rdGetMiReporte', { token: RD.token, fecha: hoy }).then(res => {
+  return rdGet('rdGetMiReporte', { token: RD.token, fecha: hoy }).then(res => {
     rdShowLoader(false);
     if (res.success) window._rdMiReporteCache[cacheKey] = res;
     _rdAplicarReporteResp(res, hoy);
@@ -2272,7 +2337,7 @@ function rdMarcarSolicitudesVistas() {
 function rdLoadMisSolicitudes() {
   var content = document.getElementById('misSolicitudesContent');
   if (content) content.innerHTML = '<div class="rd-loading">\u23f3 Cargando\u2026</div>';
-  rdGet('rdGetMisSolicitudes', { token: RD.token })
+  return rdGet('rdGetMisSolicitudes', { token: RD.token })
     .then(function(res) {
       var soles = (res && res.solicitudes) || [];
       if (!soles.length) {
@@ -2420,7 +2485,7 @@ function rdLoadHistorico() {
   }
 
   // Esperar ambos y renderizar juntos
-  Promise.all([ cargarHistorico(), cargarCabotajes() ])
+  return Promise.all([ cargarHistorico(), cargarCabotajes() ])
     .then(function(results) {
       var registros  = results[0] || [];
       window._cabotajes = results[1] || [];
@@ -3604,7 +3669,7 @@ function rdLoadPronostico() {
   var content = document.getElementById('pronContent');
   if (content) content.innerHTML = '<div class="rd-loading">\u23f3 Cargando pron\u00f3stico\u2026</div>';
 
-  rdGet('rdGetPronosticoPlanta', { token: RD.token, planta: plantaEfectiva })
+  return rdGet('rdGetPronosticoPlanta', { token: RD.token, planta: plantaEfectiva })
     .then(function(res) {
       if (res && res.success === false && !res.pronostico) throw new Error('endpoint_not_found');
       var datos = Array.isArray(res) ? res : (res.pronostico || res.data || []);
