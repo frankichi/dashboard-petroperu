@@ -24685,11 +24685,22 @@ function renderVistaEjecutivaSimple() {
       { val: '15',  label: '📆 Últimos 15 días', sub: 'Resumen + detalle día por día' },
       { val: '30',  label: '📆 Últimos 30 días', sub: 'Resumen + detalle día por día' }
     ];
+    // ⚠️ AGREGADO — a pedido: exportar por MES ANTERIOR completo, no
+    // solo "últimos N días". Reutiliza mesesDisponiblesExec (ya
+    // calculado más arriba en esta misma función, para la "Vista
+    // mensual" del dashboard) — mismo criterio de qué meses tienen
+    // datos, sin duplicar la lógica.
+    var MESES_NOMBRE_EXPORT = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+    (mesesDisponiblesExec || []).slice().reverse().forEach(function(m) {
+      var mn = MESES_NOMBRE_EXPORT[parseInt(m.slice(5,7), 10) - 1];
+      opciones.push({ val: 'mes:' + m, label: '🗓️ ' + mn + ' ' + m.slice(0,4), sub: 'Mes completo' });
+    });
     menu.innerHTML = opciones.map(function(o, i) {
       return '<button onclick="window._execToggleExportMenu(\'\');document.getElementById(\'exec-export-menu-periodo\').style.display=\'none\';window._exec' + (tipo==='excel'?'ExportExcel':'ExportPDF') + '(\'' + alcance + '\',\'' + o.val + '\')" '
         + 'style="display:block;width:100%;text-align:left;padding:9px 14px;background:none;border:none;cursor:pointer;font-size:12px;font-weight:600;color:var(--txt)' + (i>0?';border-top:1px solid var(--bdr)':'') + '">'
         + o.label + '<br><span style="font-size:9.5px;font-weight:400;color:var(--txt3)">' + o.sub + '</span></button>';
-    }).join('');
+    }).join('')
+      + ((mesesDisponiblesExec || []).length ? '' : '<div style="padding:9px 14px;font-size:10.5px;color:var(--txt3);border-top:1px solid var(--bdr)">⚠️ Sin meses anteriores con datos disponibles todavía</div>');
     menu.style.display = 'block';
   };
 
@@ -24738,7 +24749,7 @@ function renderVistaEjecutivaSimple() {
     // selector de 7/15/30 días de las gráficas de pantalla. 'hoy' = un
     // solo día (fechaHoy); en otro caso, los últimos N días con datos
     // disponibles.
-    var _diasExport = (!periodo || periodo === 'hoy') ? [fechaHoy] : (DATES || []).slice(-(parseInt(periodo, 10) || 1));
+    var _diasExport = (!periodo || periodo === 'hoy') ? [fechaHoy] : (periodo.indexOf('mes:') === 0 ? (DATES || []).filter(function(d){ return d.slice(0,7) === periodo.slice(4); }) : (DATES || []).slice(-(parseInt(periodo, 10) || 1)));
     var filasNac = _execReporteFilasNacional(_diasExport);
     // ⚠️ AGREGADO — alcance del reporte: si el usuario eligió "solo la
     // planta seleccionada", se filtra sobre el mismo conjunto de datos
@@ -24786,8 +24797,8 @@ function renderVistaEjecutivaSimple() {
     ws.getCell('B2').font = { size: 11, color: { argb: 'FF475569' } };
     ws.mergeCells('B3:H3');
     ws.getCell('B3').value = (_diasExport.length > 1
-        ? ('Del ' + _diasExport[0].slice(8,10)+'.'+_diasExport[0].slice(5,7)+'.'+_diasExport[0].slice(0,4) + ' al ' + fechaHoy.slice(8,10)+'.'+fechaHoy.slice(5,7)+'.'+fechaHoy.slice(0,4))
-        : ('Al cierre del ' + fechaHoy.slice(8,10) + '.' + fechaHoy.slice(5,7) + '.' + fechaHoy.slice(0,4)))
+        ? ('Del ' + _diasExport[0].slice(8,10)+'.'+_diasExport[0].slice(5,7)+'.'+_diasExport[0].slice(0,4) + ' al ' + _diasExport[_diasExport.length-1].slice(8,10)+'.'+_diasExport[_diasExport.length-1].slice(5,7)+'.'+_diasExport[_diasExport.length-1].slice(0,4))
+        : ('Al cierre del ' + _diasExport[0].slice(8,10) + '.' + _diasExport[0].slice(5,7) + '.' + _diasExport[0].slice(0,4)))
       + '   ·   Generado: ' + new Date().toLocaleString('es-PE');
     ws.getCell('B3').font = { size: 10, italic: true, color: { argb: 'FF64748B' } };
     for (var rr = 1; rr <= 3; rr++) ws.getRow(rr).height = 20;
@@ -24842,7 +24853,7 @@ function renderVistaEjecutivaSimple() {
     var buffer = await wb.xlsx.writeBuffer();
     var blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
     var url = URL.createObjectURL(blob);
-    var nombre = ('Reporte_Suministro_' + (scope === 'planta' && _plantaScopeXls ? _plantaScopeXls : 'Nacional') + '_' + (periodo && periodo !== 'hoy' ? periodo+'d_' : '') + fechaHoy).replace(/[^a-zA-Z0-9._-]/g, '_');
+    var nombre = ('Reporte_Suministro_' + (scope === 'planta' && _plantaScopeXls ? _plantaScopeXls : 'Nacional') + '_' + (periodo && periodo !== 'hoy' ? (periodo.indexOf('mes:') === 0 ? periodo.slice(4)+'_' : periodo+'d_') : '') + fechaHoy).replace(/[^a-zA-Z0-9._-]/g, '_');
     var a = document.createElement('a');
     a.href = url; a.download = nombre + '.xlsx';
     document.body.appendChild(a); a.click(); document.body.removeChild(a);
@@ -24851,7 +24862,7 @@ function renderVistaEjecutivaSimple() {
   window._execExportPDF = function(scope, periodo) {
     // ⚠️ AGREGADO — período de exportación: paso independiente del
     // selector de 7/15/30 días de las gráficas de pantalla.
-    var _diasExportPdf = (!periodo || periodo === 'hoy') ? [fechaHoy] : (DATES || []).slice(-(parseInt(periodo, 10) || 1));
+    var _diasExportPdf = (!periodo || periodo === 'hoy') ? [fechaHoy] : (periodo.indexOf('mes:') === 0 ? (DATES || []).filter(function(d){ return d.slice(0,7) === periodo.slice(4); }) : (DATES || []).slice(-(parseInt(periodo, 10) || 1)));
     var _esMultiDia = _diasExportPdf.length > 1;
     var _plantaScope = (window._execPlanta && window._execPlanta !== 'Nacional') ? window._execPlanta : null;
     var filasNacPdf = _execReporteFilasNacional(_diasExportPdf);
@@ -24892,7 +24903,7 @@ function renderVistaEjecutivaSimple() {
       }).join('');
       resumenPeriodoHTML =
         '<div style="margin:22px 0 14px">'
-        +   '<div style="font-size:15px;font-weight:800;color:#0a3a5c;margin-bottom:2px">📈 Resumen del Período — ' + _diasExportPdf[0].slice(8,10)+'.'+_diasExportPdf[0].slice(5,7) + ' al ' + fechaHoy.slice(8,10)+'.'+fechaHoy.slice(5,7) + '</div>'
+        +   '<div style="font-size:15px;font-weight:800;color:#0a3a5c;margin-bottom:2px">📈 Resumen del Período — ' + _diasExportPdf[0].slice(8,10)+'.'+_diasExportPdf[0].slice(5,7) + ' al ' + _diasExportPdf[_diasExportPdf.length-1].slice(8,10)+'.'+_diasExportPdf[_diasExportPdf.length-1].slice(5,7) + '</div>'
         +   '<div style="font-size:10.5px;color:#64748b;margin-bottom:10px">Inventario mínimo/máximo/promedio y cobertura mínima observada durante el período · <span style="background:#fca5a5;padding:1px 8px;border-radius:3px;font-weight:700">Cobertura Crítico ≤ 7 días</span></div>'
         +   '<table><thead><tr style="background:#3b5f8a;color:#fff">'
         +     '<th style="padding:7px 10px;text-align:left">Planta</th>'
@@ -24996,7 +25007,7 @@ function renderVistaEjecutivaSimple() {
     var detalleNacionalHTML =
       '<div style="page-break-before:always;padding-top:6px">'
       +   '<div style="font-size:15px;font-weight:800;color:#0a3a5c;margin-bottom:4px">📋 Detalle Nacional por Planta y Producto</div>'
-      +   '<div style="font-size:11px;color:#64748b;margin-bottom:10px">' + (_esMultiDia ? ('Del ' + _diasExportPdf[0] + ' al ' + fechaHoy) : ('Cierre del ' + fechaHoy)) + '</div>'
+      +   '<div style="font-size:11px;color:#64748b;margin-bottom:10px">' + (_esMultiDia ? ('Del ' + _diasExportPdf[0] + ' al ' + _diasExportPdf[_diasExportPdf.length-1]) : ('Cierre del ' + _diasExportPdf[0])) + '</div>'
       +   bloquesFechaHTML
       + '</div>';
 
@@ -25049,7 +25060,7 @@ function renderVistaEjecutivaSimple() {
       +     '<div style="text-align:right;font-size:11px;opacity:.9">Generado: ' + new Date().toLocaleString('es-PE') + '</div>'
       +   '</div>'
       +   '<div style="display:flex;justify-content:space-between;align-items:baseline;margin:16px 2px 16px;flex-wrap:wrap;gap:6px">'
-      +     '<div style="font-size:15px;font-weight:800;color:#0a3a5c">' + (_esMultiDia ? ('Período: ' + _diasExportPdf[0].slice(8,10)+'.'+_diasExportPdf[0].slice(5,7)+'.'+_diasExportPdf[0].slice(0,4) + ' al ' + fechaHoy.slice(8,10)+'.'+fechaHoy.slice(5,7)+'.'+fechaHoy.slice(0,4) + ' (' + _diasExportPdf.length + ' días)') : ('Al cierre del ' + fechaHoy.slice(8,10) + '.' + fechaHoy.slice(5,7) + '.' + fechaHoy.slice(0,4))) + '</div>'
+      +     '<div style="font-size:15px;font-weight:800;color:#0a3a5c">' + (_esMultiDia ? ('Período: ' + _diasExportPdf[0].slice(8,10)+'.'+_diasExportPdf[0].slice(5,7)+'.'+_diasExportPdf[0].slice(0,4) + ' al ' + _diasExportPdf[_diasExportPdf.length-1].slice(8,10)+'.'+_diasExportPdf[_diasExportPdf.length-1].slice(5,7)+'.'+_diasExportPdf[_diasExportPdf.length-1].slice(0,4) + ' (' + _diasExportPdf.length + ' días)') : ('Al cierre del ' + _diasExportPdf[0].slice(8,10) + '.' + _diasExportPdf[0].slice(5,7) + '.' + _diasExportPdf[0].slice(0,4))) + '</div>'
       +     '<div style="font-size:11.5px;color:#64748b">' + (_esMultiDia ? 'Última fecha del rango: fecha de cierre más reciente con datos reportados' : 'Última fecha de cierre con datos reportados') + '</div>'
       +   '</div>'
       +   '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:22px">'
@@ -25078,7 +25089,7 @@ function renderVistaEjecutivaSimple() {
     // restaura solo después de imprimir (mismo patrón ya usado en el
     // reporte de inventario individual, más arriba en este archivo).
     var _tituloOriginalPdf = document.title;
-    document.title = 'Reporte_Suministro_' + (scope === 'planta' && _plantaScope ? _plantaScope : 'Nacional') + '_' + (_esMultiDia ? (periodo+'d_') : '') + fechaHoy;
+    document.title = 'Reporte_Suministro_' + (scope === 'planta' && _plantaScope ? _plantaScope : 'Nacional') + '_' + (_esMultiDia ? (periodo.indexOf('mes:') === 0 ? periodo.slice(4)+'_' : periodo+'d_') : '') + fechaHoy;
     var _restaurarTituloPdf = function() { document.title = _tituloOriginalPdf; window.removeEventListener('afterprint', _restaurarTituloPdf); };
     window.addEventListener('afterprint', _restaurarTituloPdf);
   };
@@ -25587,6 +25598,24 @@ function renderVistaEjecutivaSimple() {
         }
       }
     });
+
+    // ⚠️ AGREGADO — a pedido: cuando se achica la ventana, el gráfico a
+    // veces se quedaba con el tamaño/posición viejo (pegado a la
+    // izquierda, con espacio vacío a la derecha) — Chart.js no siempre
+    // vuelve a calcular el área de dibujo solo con su ResizeObserver
+    // interno. Listener de resize explícito como respaldo, con
+    // debounce, instalado una sola vez, siempre usando los gráficos
+    // ACTUALES (nunca una referencia vieja).
+    if (!window._execResizeListenerInstalado) {
+      window._execResizeListenerInstalado = true;
+      window.addEventListener('resize', function() {
+        if (window._execResizeDebounce) clearTimeout(window._execResizeDebounce);
+        window._execResizeDebounce = setTimeout(function() {
+          if (window._execChartInv && window._execChartInv.resize) window._execChartInv.resize();
+          if (window._execChartDesp && window._execChartDesp.resize) window._execChartDesp.resize();
+        }, 80);
+      });
+    }
   }
 }
 
