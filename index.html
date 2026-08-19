@@ -24685,24 +24685,40 @@ function renderVistaEjecutivaSimple() {
       { val: '15',  label: '📆 Últimos 15 días', sub: 'Resumen + detalle día por día' },
       { val: '30',  label: '📆 Últimos 30 días', sub: 'Resumen + detalle día por día' }
     ];
-    // ⚠️ AGREGADO — a pedido: exportar por MES ANTERIOR completo, no
-    // solo "últimos N días". Reutiliza mesesDisponiblesExec (ya
-    // calculado más arriba en esta misma función, para la "Vista
-    // mensual" del dashboard) — mismo criterio de qué meses tienen
-    // datos, sin duplicar la lógica.
-    var MESES_NOMBRE_EXPORT = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
-    (mesesDisponiblesExec || []).slice().reverse().forEach(function(m) {
-      var mn = MESES_NOMBRE_EXPORT[parseInt(m.slice(5,7), 10) - 1];
-      opciones.push({ val: 'mes:' + m, label: '🗓️ ' + mn + ' ' + m.slice(0,4), sub: 'Mes completo' });
-    });
-    menu.innerHTML = opciones.map(function(o, i) {
+    var botonesHTML = opciones.map(function(o, i) {
       return '<button onclick="window._execToggleExportMenu(\'\');document.getElementById(\'exec-export-menu-periodo\').style.display=\'none\';window._exec' + (tipo==='excel'?'ExportExcel':'ExportPDF') + '(\'' + alcance + '\',\'' + o.val + '\')" '
         + 'style="display:block;width:100%;text-align:left;padding:9px 14px;background:none;border:none;cursor:pointer;font-size:12px;font-weight:600;color:var(--txt)' + (i>0?';border-top:1px solid var(--bdr)':'') + '">'
         + o.label + '<br><span style="font-size:9.5px;font-weight:400;color:var(--txt3)">' + o.sub + '</span></button>';
-    }).join('')
-      + ((mesesDisponiblesExec || []).length ? '' : '<div style="padding:9px 14px;font-size:10.5px;color:var(--txt3);border-top:1px solid var(--bdr)">⚠️ Sin meses anteriores con datos disponibles todavía</div>');
+    }).join('');
+    // ⚠️ CAMBIADO — a pedido: un botón por cada mes con datos hacía que
+    // la lista creciera sin límite con el tiempo (con 1-2 años de
+    // historial ya no cabía cómodo en el menú). En vez de eso, un único
+    // selector de mes compacto (<input type="month">, el mismo control
+    // nativo del navegador para elegir mes/año), acotado con min/max a
+    // los meses que realmente tienen datos — escala igual de bien con
+    // 3 meses que con 3 años.
+    var mesPickerHTML = '';
+    if ((mesesDisponiblesExec || []).length) {
+      var minMes = mesesDisponiblesExec[0];
+      var maxMes = mesesDisponiblesExec[mesesDisponiblesExec.length - 1];
+      var idInput = 'exec-mes-picker-' + tipo;
+      mesPickerHTML =
+        '<div style="padding:10px 14px;border-top:1px solid var(--bdr)">' +
+          '<div style="font-size:10.5px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.3px;margin-bottom:6px">🗓️ O elige un mes anterior</div>' +
+          '<div style="display:flex;gap:6px">' +
+            '<input type="month" id="' + idInput + '" min="' + minMes + '" max="' + maxMes + '" value="' + maxMes + '" ' +
+              'style="flex:1;min-width:0;padding:6px 8px;border:1px solid var(--bdr);border-radius:6px;font-size:12px;font-family:inherit;background:var(--card);color:var(--txt)">' +
+            '<button onclick="window._execToggleExportMenu(\'\');document.getElementById(\'exec-export-menu-periodo\').style.display=\'none\';window._exec' + (tipo==='excel'?'ExportExcel':'ExportPDF') + '(\'' + alcance + '\',\'mes:\'+document.getElementById(\'' + idInput + '\').value)" ' +
+              'style="padding:6px 14px;border-radius:6px;border:none;background:#0a3a5c;color:#fff;font-weight:700;font-size:11.5px;cursor:pointer;white-space:nowrap">Ver →</button>' +
+          '</div>' +
+        '</div>';
+    } else {
+      mesPickerHTML = '<div style="padding:9px 14px;font-size:10.5px;color:var(--txt3);border-top:1px solid var(--bdr)">⚠️ Sin meses anteriores con datos disponibles todavía</div>';
+    }
+    menu.innerHTML = botonesHTML + mesPickerHTML;
     menu.style.display = 'block';
   };
+
 
   window._execExportExcel = async function(scope, periodo) {
     // ⚠️ CAMBIADO A ExcelJS — SheetJS (usado en el resto del dashboard)
@@ -25334,7 +25350,7 @@ function renderVistaEjecutivaSimple() {
         '</div>' +
         // Paso 2 (período) — oculto por defecto, se rellena y muestra
         // desde _execExportPasoAlcance() una vez elegido el alcance.
-        '<div id="exec-export-menu-periodo" style="display:none;position:absolute;top:calc(100% + 4px);right:0;z-index:601;background:var(--card);border:1px solid var(--bdr);border-radius:8px;box-shadow:0 6px 20px rgba(0,0,0,.18);min-width:200px;overflow:hidden"></div>' +
+        '<div id="exec-export-menu-periodo" style="display:none;position:absolute;top:calc(100% + 4px);right:0;z-index:601;background:var(--card);border:1px solid var(--bdr);border-radius:8px;box-shadow:0 6px 20px rgba(0,0,0,.18);min-width:260px"></div>' +
       '</div>' +
       // ── KPIs de Inventario/Despacho — antes vivían debajo del header y
       // desaparecían al hacer scroll; ahora quedan DENTRO del bloque
