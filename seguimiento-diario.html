@@ -123,6 +123,18 @@
   .cc-chart-svg-wrap{overflow-x:auto;overflow-y:hidden;padding-bottom:2px}
   .cc-chart-svg-wrap svg{max-width:none}
 
+  /* ── Días Pendientes ──────────────────────────────────────────────── */
+  .dp-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px}
+  .dp-card{background:var(--card);border:1px solid var(--bdr);border-radius:12px;padding:14px 16px;border-left:4px solid #dc2626}
+  .dp-card.dp-ok{border-left-color:#16a34a}
+  .dp-card-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+  .dp-planta{font-size:13px;font-weight:800;color:var(--txt)}
+  .dp-count{font-size:11px;font-weight:800;padding:2px 9px;border-radius:10px;background:#fdecec;color:#dc2626}
+  .dp-card.dp-ok .dp-count{background:var(--grn-bg);color:var(--grn)}
+  .dp-dias{display:flex;flex-wrap:wrap;gap:5px}
+  .dp-dia-chip{font-family:ui-monospace,monospace;font-size:11px;font-weight:700;padding:3px 8px;border-radius:6px;background:#fdecec;color:#dc2626;border:1px solid #fca5a5}
+  .dp-ok-msg{font-size:12px;color:var(--grn);font-weight:700}
+
   /* ── Impresión / Exportar a PDF — mismo patrón que registro-diario.html:
      documento aparte (#segPrintReport), oculta toda la app al imprimir. */
   #segPrintReport{ display:none; }
@@ -170,6 +182,7 @@
   <div class="tabs">
     <button class="tab-btn active" id="tabHoy" onclick="setVista('hoy')">📅 Seguimiento de Hoy</button>
     <button class="tab-btn" id="tabCumplimiento" onclick="setVista('cumplimiento')">📊 Cumplimiento de Cierres</button>
+    <button class="tab-btn" id="tabPendientes" onclick="setVista('pendientes')">📋 Días Pendientes</button>
   </div>
 
   <div id="vistaHoy">
@@ -214,6 +227,22 @@
     </div>
     <div class="footer" style="margin-top:16px">
       "A tiempo" = el reporte se guardó el mismo día calendario que cierra. "Tarde" = se guardó en un día posterior — se muestra cuántos días de atraso tuvo cada caso. "Sin reportar" = no hay ningún reporte guardado para esa fecha en absoluto.
+    </div>
+  </div>
+
+  <div id="vistaPendientes" style="display:none">
+    <div class="toolbar cc-toolbar">
+      <label>Mes</label>
+      <input type="month" id="dpMes">
+      <button class="btn primary" onclick="dpCargar()">↻ Calcular</button>
+      <div style="margin-left:auto;font-size:11px;color:var(--txt3);font-weight:600" id="dpSubtitulo"></div>
+    </div>
+    <div id="dpKpiZone"></div>
+    <div id="dpCuerpoZone">
+      <div class="empty"><div class="spinner"></div>Calculando días pendientes…</div>
+    </div>
+    <div class="footer" style="margin-top:16px">
+      Muestra, para el mes elegido (hasta hoy), qué días exactos le faltan a cada planta por reportar — el objetivo es llegar a 0 pendientes antes de fin de mes. No incluye días de hoy en adelante, ni las 3 refinerías (seguimiento manual, ver pestaña "Cumplimiento de Cierres").
     </div>
   </div>
 
@@ -543,12 +572,14 @@ document.addEventListener('visibilitychange', function(){
 var _ccData = null;
 
 function setVista(vista) {
-  var esHoy = vista === 'hoy';
-  document.getElementById('vistaHoy').style.display = esHoy ? '' : 'none';
-  document.getElementById('vistaCumplimiento').style.display = esHoy ? 'none' : '';
-  document.getElementById('tabHoy').classList.toggle('active', esHoy);
-  document.getElementById('tabCumplimiento').classList.toggle('active', !esHoy);
-  if (!esHoy && !_ccData) ccCargar();
+  document.getElementById('vistaHoy').style.display = vista === 'hoy' ? '' : 'none';
+  document.getElementById('vistaCumplimiento').style.display = vista === 'cumplimiento' ? '' : 'none';
+  document.getElementById('vistaPendientes').style.display = vista === 'pendientes' ? '' : 'none';
+  document.getElementById('tabHoy').classList.toggle('active', vista === 'hoy');
+  document.getElementById('tabCumplimiento').classList.toggle('active', vista === 'cumplimiento');
+  document.getElementById('tabPendientes').classList.toggle('active', vista === 'pendientes');
+  if (vista === 'cumplimiento' && !_ccData) ccCargar();
+  if (vista === 'pendientes' && !window._dpData) dpCargar();
 }
 
 function _ccHoyLima() { return hoyLima(); }
@@ -894,6 +925,86 @@ function ccRenderTabla(data) {
     });
   });
 }
+
+function dpHoyLima() { return hoyLima(); }
+
+function dpInit() {
+  var input = document.getElementById('dpMes');
+  if (input) input.value = dpHoyLima().slice(0, 7); // mes actual, formato YYYY-MM
+}
+
+function dpCargar() {
+  var mesVal = document.getElementById('dpMes').value; // 'YYYY-MM'
+  if (!mesVal) { rdToastSeg('Selecciona un mes.', 'error'); return; }
+  var fechaDesde = mesVal + '-01';
+  var hoy = dpHoyLima();
+  // Si el mes elegido es el actual, el rango llega hasta HOY (no tiene
+  // sentido pedir días futuros); si es un mes anterior, llega hasta su
+  // último día real.
+  var esMesActual = mesVal === hoy.slice(0, 7);
+  var fechaHasta;
+  if (esMesActual) {
+    fechaHasta = hoy;
+  } else {
+    var d = new Date(mesVal + '-01T12:00:00');
+    d.setMonth(d.getMonth() + 1);
+    d.setDate(0); // último día del mes elegido
+    fechaHasta = d.toISOString().slice(0, 10);
+  }
+
+  document.getElementById('dpCuerpoZone').innerHTML = '<div class="empty"><div class="spinner"></div>Calculando días pendientes…</div>';
+  document.getElementById('dpKpiZone').innerHTML = '';
+  document.getElementById('dpSubtitulo').textContent = '';
+
+  fetch(API_URL + '?action=rdGetCumplimientoCierres&fechaDesde=' + encodeURIComponent(fechaDesde) + '&fechaHasta=' + encodeURIComponent(fechaHasta), {method:'GET', redirect:'follow'})
+    .then(function(r){ return r.json(); })
+    .then(function(res){
+      if (!res || !res.success) { document.getElementById('dpCuerpoZone').innerHTML = '<div class="empty">No se pudo calcular.</div>'; return; }
+      dpRender(res, fechaDesde, fechaHasta);
+    })
+    .catch(function(){ document.getElementById('dpCuerpoZone').innerHTML = '<div class="empty">Error de conexión.</div>'; });
+}
+
+function dpRender(data, fechaDesde, fechaHasta) {
+  window._dpData = data;
+  // Mismo criterio ya usado en Cumplimiento de Cierres: las refinerías
+  // son de seguimiento manual, no aplica pedirles cierres diarios.
+  var plantas = data.resumen.filter(function(r){ return r.planta.indexOf('Refinería') !== 0; });
+
+  var sub = document.getElementById('dpSubtitulo');
+  if (sub) sub.textContent = fmtFechaLarga(fechaDesde) + ' → ' + fmtFechaLarga(fechaHasta);
+
+  var totalFaltantes = plantas.reduce(function(s, p){ return s + (p.diasFaltantesLista||[]).length; }, 0);
+  var plantasCompletas = plantas.filter(function(p){ return (p.diasFaltantesLista||[]).length === 0; }).length;
+  document.getElementById('dpKpiZone').innerHTML =
+    '<div class="cc-kpi-row">' +
+      '<div class="cc-kpi"><div class="lbl">📋 Total días pendientes</div><div class="val" style="color:' + (totalFaltantes>0?'#dc2626':'#16a34a') + '">' + totalFaltantes + '</div>' +
+        '<div class="sub">Sumando todas las plantas del mes</div></div>' +
+      '<div class="cc-kpi"><div class="lbl">✅ Plantas al día</div><div class="val" style="color:#16a34a">' + plantasCompletas + ' / ' + plantas.length + '</div>' +
+        '<div class="sub">Sin ningún día pendiente</div></div>' +
+    '</div>';
+
+  if (!totalFaltantes) {
+    document.getElementById('dpCuerpoZone').innerHTML = '<div class="empty-ok">✅ Todas las plantas tienen registrados todos los días del periodo — nada pendiente.</div>';
+    return;
+  }
+
+  // Peor primero (más días pendientes arriba), plantas completas al final.
+  var ordenadas = plantas.slice().sort(function(a, b){
+    return (b.diasFaltantesLista||[]).length - (a.diasFaltantesLista||[]).length;
+  });
+
+  document.getElementById('dpCuerpoZone').innerHTML = '<div class="dp-grid">' + ordenadas.map(function(p){
+    var faltan = p.diasFaltantesLista || [];
+    var ok = faltan.length === 0;
+    var chips = faltan.map(function(f){ return '<span class="dp-dia-chip">' + f.slice(8,10) + '</span>'; }).join('');
+    return '<div class="dp-card' + (ok?' dp-ok':'') + '">' +
+      '<div class="dp-card-hdr"><span class="dp-planta">' + p.planta + '</span><span class="dp-count">' + (ok?'✓ completo':(faltan.length+' pendiente'+(faltan.length>1?'s':''))) + '</span></div>' +
+      (ok ? '<div class="dp-ok-msg">Sin días pendientes en este periodo</div>' : '<div class="dp-dias">' + chips + '</div>') +
+    '</div>';
+  }).join('') + '</div>';
+}
+
 
 function rdToastSeg(msg, tipo) {
   // Este archivo no tenía toast propio — se agrega uno mínimo, mismo
