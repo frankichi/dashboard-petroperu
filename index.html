@@ -24869,7 +24869,8 @@ function renderVistaEjecutivaSimple() {
     var buffer = await wb.xlsx.writeBuffer();
     var blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
     var url = URL.createObjectURL(blob);
-    var nombre = ('Reporte_Suministro_' + (scope === 'planta' && _plantaScopeXls ? _plantaScopeXls : 'Nacional') + '_' + (periodo && periodo !== 'hoy' ? (periodo.indexOf('mes:') === 0 ? periodo.slice(4)+'_' : periodo+'d_') : '') + fechaHoy).replace(/[^a-zA-Z0-9._-]/g, '_');
+    var _sufijoNombreXls = (!periodo || periodo === 'hoy') ? fechaHoy : (periodo.indexOf('mes:') === 0 ? periodo.slice(4) : (periodo + 'd_' + fechaHoy));
+    var nombre = ('Reporte_Suministro_' + (scope === 'planta' && _plantaScopeXls ? _plantaScopeXls : 'Nacional') + '_' + _sufijoNombreXls).replace(/[^a-zA-Z0-9._-]/g, '_');
     var a = document.createElement('a');
     a.href = url; a.download = nombre + '.xlsx';
     document.body.appendChild(a); a.click(); document.body.removeChild(a);
@@ -25105,7 +25106,8 @@ function renderVistaEjecutivaSimple() {
     // restaura solo después de imprimir (mismo patrón ya usado en el
     // reporte de inventario individual, más arriba en este archivo).
     var _tituloOriginalPdf = document.title;
-    document.title = 'Reporte_Suministro_' + (scope === 'planta' && _plantaScope ? _plantaScope : 'Nacional') + '_' + (_esMultiDia ? (periodo.indexOf('mes:') === 0 ? periodo.slice(4)+'_' : periodo+'d_') : '') + fechaHoy;
+    var _sufijoNombrePdf = !_esMultiDia ? fechaHoy : (periodo.indexOf('mes:') === 0 ? periodo.slice(4) : (periodo + 'd_' + fechaHoy));
+    document.title = 'Reporte_Suministro_' + (scope === 'planta' && _plantaScope ? _plantaScope : 'Nacional') + '_' + _sufijoNombrePdf;
     var _restaurarTituloPdf = function() { document.title = _tituloOriginalPdf; window.removeEventListener('afterprint', _restaurarTituloPdf); };
     window.addEventListener('afterprint', _restaurarTituloPdf);
   };
@@ -25615,23 +25617,34 @@ function renderVistaEjecutivaSimple() {
       }
     });
 
-    // ⚠️ AGREGADO — a pedido: cuando se achica la ventana, el gráfico a
-    // veces se quedaba con el tamaño/posición viejo (pegado a la
-    // izquierda, con espacio vacío a la derecha) — Chart.js no siempre
-    // vuelve a calcular el área de dibujo solo con su ResizeObserver
-    // interno. Listener de resize explícito como respaldo, con
-    // debounce, instalado una sola vez, siempre usando los gráficos
-    // ACTUALES (nunca una referencia vieja).
-    if (!window._execResizeListenerInstalado) {
-      window._execResizeListenerInstalado = true;
-      window.addEventListener('resize', function() {
-        if (window._execResizeDebounce) clearTimeout(window._execResizeDebounce);
-        window._execResizeDebounce = setTimeout(function() {
-          if (window._execChartInv && window._execChartInv.resize) window._execChartInv.resize();
-          if (window._execChartDesp && window._execChartDesp.resize) window._execChartDesp.resize();
-        }, 80);
-      });
+    // ⚠️ CAMBIADO — a pedido: el listener de window.resize no bastaba —
+    // el achicamiento seguía pasando. La razón real: Chart.js reacciona
+    // a cambios de tamaño de SU CONTENEDOR, no necesariamente a que la
+    // VENTANA del navegador cambie — un ResizeObserver directamente
+    // sobre los divs que envuelven cada canvas detecta cualquier cambio
+    // de tamaño del contenedor (por la ventana, por el sidebar, por
+    // cambios de layout al cambiar de planta/producto, etc.), sea cual
+    // sea la causa — más robusto que depender solo del evento 'resize'
+    // de window, que no se dispara en esos otros casos.
+    if (typeof ResizeObserver !== 'undefined') {
+      if (!window._execResizeObserver) {
+        window._execResizeObserver = new ResizeObserver(function() {
+          if (window._execResizeDebounce) clearTimeout(window._execResizeDebounce);
+          window._execResizeDebounce = setTimeout(function() {
+            if (window._execChartInv && window._execChartInv.resize) window._execChartInv.resize();
+            if (window._execChartDesp && window._execChartDesp.resize) window._execChartDesp.resize();
+          }, 60);
+        });
+      }
+      // Los divs se recrean en cada render (box.innerHTML se reemplaza
+      // entero) — hay que volver a observar los NUEVOS elementos cada
+      // vez; observar el mismo elemento dos veces no hace nada extra,
+      // y los elementos viejos (ya desconectados del DOM) simplemente
+      // dejan de disparar el observer solos.
+      if (ctxInv && ctxInv.parentElement) window._execResizeObserver.observe(ctxInv.parentElement);
+      if (ctxDesp && ctxDesp.parentElement) window._execResizeObserver.observe(ctxDesp.parentElement);
     }
+
   }
 }
 
