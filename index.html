@@ -22940,7 +22940,22 @@ function rdHoyRealFmt() {
   var yyyy = lima.getUTCFullYear();
   return dd + '.' + mm + '.' + yyyy;
 }
+// ⚠️ AGREGADO — a pedido: al entrar por primera vez a la Vista
+// Ejecutiva, varios disparadores independientes (el splash terminando
+// de cargar, el pronóstico de meses faltantes llegando, la reposición
+// histórica llegando, el mapa terminando de armarse, etc.) pueden
+// llamar a renderVistaEjecutivaSimple() casi al mismo tiempo — cada
+// llamada destruye y vuelve a crear los gráficos (Chart.js), y eso se
+// veía como un parpadeo/animación de encogerse-crecer varias veces
+// seguidas. En vez de perseguir cada disparador por separado, se
+// envuelve la función real con un debounce corto (60ms): si llegan
+// varias llamadas casi juntas, solo se ejecuta la ÚLTIMA — un único
+// render final con los datos ya completos, sin el parpadeo visual.
 function renderVistaEjecutivaSimple() {
+  if (window._execRenderDebounce) clearTimeout(window._execRenderDebounce);
+  window._execRenderDebounce = setTimeout(_renderVistaEjecutivaSimpleImpl, 60);
+}
+function _renderVistaEjecutivaSimpleImpl() {
   var mc = document.getElementById('main-content');
   if (!mc || !Array.isArray(RAW) || !RAW.length) return;
 
