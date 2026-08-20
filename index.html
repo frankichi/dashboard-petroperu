@@ -25765,18 +25765,74 @@ function _renderVistaEjecutivaSimpleImpl() {
       });
     }
 
+    // ⚠️ AGREGADO — a pedido: el valor del pronóstico no se veía en la
+    // línea punteada (había que adivinarlo por la escala del eje Y), y
+    // el tooltip tampoco aparecía al pasar el mouse sobre esa línea en
+    // particular (sin interaction.mode:'index', Chart.js solo muestra
+    // el tooltip si el cursor cae justo sobre un punto DIBUJADO — y esta
+    // línea no dibuja puntos, a propósito, para que se vea limpia). Se
+    // agrega: (1) interaction en modo 'index' para que el tooltip
+    // aparezca en cualquier parte de esa columna, mostrando ambas
+    // series juntas, y (2) un plugin que dibuja una "pastilla" fija con
+    // el valor, en el extremo derecho de la línea — visible siempre,
+    // sin necesidad de hacer hover.
+    var _pronPillPlugin = {
+      id: '_execPronPillPlugin',
+      afterDatasetsDraw: function(chart) {
+        if (!_pronMensualVal || _pronMensualVal <= 0) return;
+        var idxPron = despDatasets.findIndex(function(d){ return d.label && d.label.indexOf('Pronóstico') !== -1; });
+        if (idxPron < 0) return;
+        var meta = chart.getDatasetMeta(idxPron);
+        if (!meta || !meta.data || !meta.data.length) return;
+        var puntoRef = meta.data[meta.data.length - 1];
+        var ctx = chart.ctx;
+        var texto = fmtMB(_pronMensualVal) + '/d';
+        ctx.save();
+        ctx.font = '700 11px Inter, system-ui, sans-serif';
+        var anchoTexto = ctx.measureText(texto).width;
+        var padX = 8, altoPastilla = 20;
+        var anchoPastilla = anchoTexto + padX * 2;
+        var x = puntoRef.x - anchoPastilla - 4;
+        var y = puntoRef.y - altoPastilla / 2;
+        var area = chart.chartArea;
+        if (x < area.left) x = puntoRef.x + 4; // si no cabe a la izquierda, se pone a la derecha del punto
+        if (y < area.top) y = area.top;
+        if (y + altoPastilla > area.bottom) y = area.bottom - altoPastilla;
+        var r = 10;
+        ctx.beginPath();
+        ctx.moveTo(x + r, y);
+        ctx.lineTo(x + anchoPastilla - r, y);
+        ctx.arcTo(x + anchoPastilla, y, x + anchoPastilla, y + r, r);
+        ctx.lineTo(x + anchoPastilla, y + altoPastilla - r);
+        ctx.arcTo(x + anchoPastilla, y + altoPastilla, x + anchoPastilla - r, y + altoPastilla, r);
+        ctx.lineTo(x + r, y + altoPastilla);
+        ctx.arcTo(x, y + altoPastilla, x, y + altoPastilla - r, r);
+        ctx.lineTo(x, y + r);
+        ctx.arcTo(x, y, x + r, y, r);
+        ctx.closePath();
+        ctx.fillStyle = '#7c3aed';
+        ctx.fill();
+        ctx.fillStyle = '#fff';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(texto, x + padX, y + altoPastilla / 2 + 0.5);
+        ctx.restore();
+      }
+    };
+
     window._execChartDesp = new Chart(ctxDesp, {
       type: 'line',
       data: { labels: labels, datasets: despDatasets },
+      plugins: [_pronPillPlugin],
       options: {
         responsive: true, maintainAspectRatio: false,
+        interaction: { mode: 'index', intersect: false },
         plugins: {
           legend: { display: despDatasets.length > 1, position: 'top', align: 'end', labels: { boxWidth: 14, font: { size: 10.5 }, usePointStyle: false } },
           tooltip: {
             backgroundColor: '#0a3a5c', padding: 10, cornerRadius: 8, titleFont: {weight:'700'},
             callbacks: {
               title: function(ctx){ var f = datesN[ctx[0].dataIndex]; return f ? (_execNombreDiaCorto(f) + '. ' + mesCorto(f)) : ''; },
-              label: function(c){ return (c.dataset.label.indexOf('Pronóstico') === 0 ? '🎯 Pronóstico aprobado: ' : (c.dataset.label + ': ')) + fmtMB(c.parsed.y) + '/d'; }
+              label: function(c){ return (c.dataset.label.indexOf('Pronóstico') !== -1 ? '🎯 Pronóstico aprobado: ' : (c.dataset.label + ': ')) + fmtMB(c.parsed.y) + '/d'; }
             }
           }
         },
