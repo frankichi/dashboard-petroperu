@@ -25726,24 +25726,57 @@ function _renderVistaEjecutivaSimpleImpl() {
     var gDesp = ctxDesp.getContext('2d').createLinearGradient(0, 0, 0, 220);
     gDesp.addColorStop(0, 'rgba(234,88,12,.35)');
     gDesp.addColorStop(1, 'rgba(234,88,12,0)');
+
+    // ⚠️ AGREGADO — a pedido: línea punteada horizontal con el
+    // pronóstico aprobado del mes (por producto, según el desplegable),
+    // para que el gerente compare de un vistazo el despacho real contra
+    // la meta aprobada. pronParaFechaExec() ya trae la lógica de
+    // respaldo (si el mes actual todavía no tiene pronóstico aprobado
+    // subido — normal en los primeros días del mes — usa el del mes
+    // anterior más reciente disponible, en vez de mostrar un hueco/cero
+    // engañoso). Se evalúa con la ÚLTIMA fecha del rango visible, para
+    // que sea coherente con el mes que se esté viendo (incluye meses
+    // pasados en "Vista mensual").
+    var despDatasets = [{
+      label: 'Despachos',
+      data: despSerie, borderColor: '#ea580c', backgroundColor: gDesp,
+      borderWidth: 3, pointRadius: 6, pointHoverRadius: 9, pointHitRadius: 18,
+      pointBackgroundColor: '#ea580c', pointBorderColor: '#fff', pointBorderWidth: 2,
+      tension: 0.25, fill: true, spanGaps: true, order: 1
+    }];
+    var _pronMensualVal = 0, _pronMensualEsRespaldo = false, _pronMensualMesUsado = '';
+    if (typeof pronParaFechaExec === 'function' && datesN && datesN.length) {
+      var _fechaRefPron = datesN[datesN.length - 1];
+      _pronMensualVal = pronParaFechaExec(_fechaRefPron, pl, prod) || 0;
+      _pronMensualEsRespaldo = !!window._pTendUsandoMesRespaldo;
+      _pronMensualMesUsado = window._pTendUltimoMesUsado || _fechaRefPron.slice(0,7);
+    }
+    if (_pronMensualVal > 0) {
+      var _MESES_LARGO_PRON = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+      var _mesUsadoPartes = _pronMensualMesUsado.split('-');
+      var _mesUsadoLabel = _MESES_LARGO_PRON[parseInt(_mesUsadoPartes[1],10)-1] + ' ' + _mesUsadoPartes[0];
+      var _pronLabel = '🎯 Pronóstico aprobado' + (_pronMensualEsRespaldo ? ' (⚠️ de ' + _mesUsadoLabel + ', el mes actual aún no se sube)' : '');
+      despDatasets.push({
+        label: _pronLabel,
+        data: despSerie.map(function(){ return parseFloat(_pronMensualVal.toFixed(DEC)); }),
+        borderColor: '#7c3aed', borderWidth: 2, borderDash: [7, 5],
+        pointRadius: 0, pointHoverRadius: 0, pointHitRadius: 6, pointBackgroundColor: '#7c3aed',
+        fill: false, tension: 0, order: 0
+      });
+    }
+
     window._execChartDesp = new Chart(ctxDesp, {
       type: 'line',
-      data: { labels: labels, datasets: [{
-        label: 'Despachos',
-        data: despSerie, borderColor: '#ea580c', backgroundColor: gDesp,
-        borderWidth: 3, pointRadius: 6, pointHoverRadius: 9, pointHitRadius: 18,
-        pointBackgroundColor: '#ea580c', pointBorderColor: '#fff', pointBorderWidth: 2,
-        tension: 0.25, fill: true, spanGaps: true
-      }] },
+      data: { labels: labels, datasets: despDatasets },
       options: {
         responsive: true, maintainAspectRatio: false,
         plugins: {
-          legend: { display: false },
+          legend: { display: despDatasets.length > 1, position: 'top', align: 'end', labels: { boxWidth: 14, font: { size: 10.5 }, usePointStyle: false } },
           tooltip: {
-            backgroundColor: '#ea580c', padding: 10, cornerRadius: 8, titleFont: {weight:'700'},
+            backgroundColor: '#0a3a5c', padding: 10, cornerRadius: 8, titleFont: {weight:'700'},
             callbacks: {
               title: function(ctx){ var f = datesN[ctx[0].dataIndex]; return f ? (_execNombreDiaCorto(f) + '. ' + mesCorto(f)) : ''; },
-              label: function(c){ return fmtMB(c.parsed.y); }
+              label: function(c){ return (c.dataset.label.indexOf('Pronóstico') === 0 ? '🎯 Pronóstico aprobado: ' : (c.dataset.label + ': ')) + fmtMB(c.parsed.y) + '/d'; }
             }
           }
         },
