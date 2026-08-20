@@ -193,6 +193,8 @@
     <button class="btn" onclick="irHoy()">Hoy</button>
     <button class="btn" onclick="irFecha(1)">Día siguiente →</button>
     <button class="btn primary" id="btnActualizar" onclick="cargar()" style="margin-left:auto">↻ Actualizar</button>
+    <button class="btn" onclick="hoyExportarExcel()" style="border-color:#1a7a44;color:#1a7a44">📗 Excel</button>
+    <button class="btn" onclick="hoyExportarPDF()" style="border-color:#c8102e;color:#c8102e">📄 PDF</button>
   </div>
 
   <div class="toolbar" id="ordenToolbar">
@@ -235,7 +237,11 @@
       <label>Mes</label>
       <input type="month" id="dpMes">
       <button class="btn primary" onclick="dpCargar()">↻ Calcular</button>
-      <div style="margin-left:auto;font-size:11px;color:var(--txt3);font-weight:600" id="dpSubtitulo"></div>
+      <div style="margin-left:auto;display:flex;gap:8px">
+        <button class="btn" onclick="dpExportarExcel()" style="border-color:#1a7a44;color:#1a7a44">📗 Excel</button>
+        <button class="btn" onclick="dpExportarPDF()" style="border-color:#c8102e;color:#c8102e">📄 PDF</button>
+      </div>
+      <div style="font-size:11px;color:var(--txt3);font-weight:600" id="dpSubtitulo"></div>
     </div>
     <div id="dpKpiZone"></div>
     <div id="dpCuerpoZone">
@@ -1287,6 +1293,307 @@ function ccExportarPDF() {
 
   var _tituloOriginal = document.title;
   document.title = 'Cumplimiento_Cierres_' + _ccData.fechaDesde + '_a_' + _ccData.fechaHasta;
+  document.body.classList.add('seg-print-mode');
+  var restaurar = function(){ document.body.classList.remove('seg-print-mode'); document.title = _tituloOriginal; window.removeEventListener('afterprint', restaurar); };
+
+  var btnCerrar = document.getElementById('segPrintCerrarBtn');
+  if (!btnCerrar) { btnCerrar = document.createElement('button'); btnCerrar.id = 'segPrintCerrarBtn'; btnCerrar.innerHTML = '✕ Cerrar'; document.body.appendChild(btnCerrar); }
+  btnCerrar.onclick = restaurar;
+
+  window.print();
+  window.addEventListener('afterprint', restaurar);
+  setTimeout(restaurar, 6000);
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// ⚠️ AGREGADO — a pedido: exportación a Excel/PDF también para "Días
+// Pendientes" y "Seguimiento de Hoy" (antes solo existía en
+// "Cumplimiento de Cierres"). Mismo patrón visual y mecanismo ya
+// establecido (xlsx-js-style embebido, overlay de impresión para PDF).
+// Todos los nombres de archivo llevan como sufijo la fecha/mes/planta
+// que se esté viendo en ese momento, para que quede claro qué contiene
+// cada descarga sin tener que abrirla.
+// ═══════════════════════════════════════════════════════════════════
+
+// ── Días Pendientes — Excel ──────────────────────────────────────────
+function dpExportarExcel() {
+  if (!window._dpData || !window._dpData.resumen) { rdToastSeg('Primero calcula los días pendientes.', 'error'); return; }
+  if (typeof XLSX === 'undefined') { rdToastSeg('La librería de Excel aún está cargando, intenta de nuevo.', 'error'); return; }
+
+  var mesVal = document.getElementById('dpMes').value || '';
+  var plantas = window._dpData.resumen.filter(function(r){ return r.planta.indexOf('Refinería') !== 0; });
+
+  var C = {
+    navy:'0F1E3C', navy2:'12305F', red:'C8102E', white:'FFFFFF',
+    txt:'4C5768', txt3:'8791A1', bdr:'DDE1E8', zebra:'F1F4F9', soft:'F0F3F8',
+    verde:'1A7A44', rojo:'C8102E', rojoBg:'FDECEC', verdeBg:'E9F7EE'
+  };
+  function ln(c){ return { style:'thin', color:{ rgb: c || C.bdr } }; }
+  function box(c){ return { top:ln(c), bottom:ln(c), left:ln(c), right:ln(c) }; }
+  var NC = 3;
+  var ws = {}, merges = [], rowsH = [], R = 0;
+  function put(r, c, v, s, z) {
+    var cell;
+    if (v === null || v === undefined || v === '') cell = { t:'s', v:'' };
+    else if (typeof v === 'number' && isFinite(v)) cell = { t:'n', v:v };
+    else cell = { t:'s', v:String(v) };
+    if (z) cell.z = z;
+    if (s) cell.s = s;
+    ws[XLSX.utils.encode_cell({ r:r, c:c })] = cell;
+  }
+  function banda(r, c0, c1, valor, estilo, alto) {
+    for (var c = c0; c <= c1; c++) put(r, c, c === c0 ? valor : '', estilo);
+    if (c1 > c0) merges.push({ s:{ r:r, c:c0 }, e:{ r:r, c:c1 } });
+    if (alto) rowsH[r] = { hpt: alto };
+  }
+
+  banda(R, 0, NC-1, 'PETROPERÚ S.A.', { fill:{fgColor:{rgb:C.navy}}, font:{name:'Calibri',sz:18,bold:true,color:{rgb:C.white}}, alignment:{horizontal:'left',vertical:'center',indent:1} }, 34); R++;
+  banda(R, 0, NC-1, 'DÍAS PENDIENTES  ·  Seguimiento Diario  ·  Planificación de Suministro', { fill:{fgColor:{rgb:C.red}}, font:{name:'Calibri',sz:10.5,bold:true,color:{rgb:C.white}}, alignment:{horizontal:'left',vertical:'center',indent:1} }, 20); R++;
+  banda(R, 0, NC-1, '', { fill:{fgColor:{rgb:C.white}} }, 7); R++;
+
+  var ahora = new Date();
+  banda(R, 0, NC-1, 'Mes: ' + mesVal + '   ·   Generado: ' + ahora.toLocaleDateString('es-PE') + ' ' + ahora.toLocaleTimeString('es-PE',{hour:'2-digit',minute:'2-digit'}), { fill:{fgColor:{rgb:C.soft}}, font:{name:'Calibri',sz:9.5,bold:true,color:{rgb:C.txt3}}, alignment:{horizontal:'left',vertical:'center',indent:1}, border:box() }, 19); R++;
+  banda(R, 0, NC-1, '', { fill:{fgColor:{rgb:C.white}} }, 7); R++;
+
+  var CAB = ['Planta', 'Días pendientes', 'Fechas exactas'];
+  var rCab = R;
+  CAB.forEach(function(t, c){
+    put(rCab, c, t, { fill:{fgColor:{rgb:C.navy2}}, font:{name:'Calibri',sz:9.5,bold:true,color:{rgb:C.white}}, alignment:{horizontal:c===1?'center':'left',vertical:'center',indent:1}, border:box(C.navy) });
+  });
+  rowsH[rCab] = { hpt: 22 }; R++;
+
+  plantas.slice().sort(function(a,b){ return (b.diasFaltantesLista||[]).length - (a.diasFaltantesLista||[]).length; }).forEach(function(r, i) {
+    var faltan = r.diasFaltantesLista || [];
+    var ok = faltan.length === 0;
+    var bg = (i % 2 === 1) ? C.zebra : C.white;
+    function base(extra){ var s = { fill:{fgColor:{rgb:bg}}, font:{name:'Calibri',sz:10,color:{rgb:C.txt}}, alignment:{horizontal:'left',vertical:'center',indent:1}, border:box() }; if (extra) for (var k in extra) s[k]=extra[k]; return s; }
+    put(R, 0, r.planta, base({ font:{name:'Calibri',sz:10,bold:true,color:{rgb:C.navy}} }));
+    put(R, 1, ok ? 'Completo' : faltan.length, { fill:{fgColor:{rgb:ok?C.verdeBg:C.rojoBg}}, font:{name:'Calibri',sz:10.5,bold:true,color:{rgb:ok?C.verde:C.rojo}}, alignment:{horizontal:'center',vertical:'center'}, border:box() });
+    put(R, 2, ok ? '—' : faltan.map(function(f){ return f.slice(8,10)+'/'+f.slice(5,7); }).join(', '), base({ font:{name:'Calibri',sz:9.5,color:{rgb: ok?C.txt3:C.txt}} }));
+    rowsH[R] = { hpt: 16 };
+    R++;
+  });
+  var rUlt = R - 1;
+  banda(R, 0, NC-1, '', { fill:{fgColor:{rgb:C.white}} }, 7); R++;
+  banda(R, 0, NC-1, 'Documento generado automáticamente por el Sistema de Seguimiento Diario · PETROPERÚ S.A. · Planificación de Suministro', { fill:{fgColor:{rgb:C.soft}}, font:{name:'Calibri',sz:8,italic:true,color:{rgb:C.txt3}}, alignment:{horizontal:'center',vertical:'center'}, border:{top:ln()} }, 18); R++;
+
+  ws['!ref'] = XLSX.utils.encode_range({s:{r:0,c:0},e:{r:R-1,c:NC-1}});
+  ws['!merges'] = merges;
+  ws['!rows'] = rowsH;
+  ws['!cols'] = [{wch:16},{wch:16},{wch:50}];
+  if (rUlt > rCab) ws['!autofilter'] = { ref: XLSX.utils.encode_range({s:{r:rCab,c:0},e:{r:rUlt,c:NC-1}}) };
+  ws['!margins'] = { left:0.4, right:0.4, top:0.5, bottom:0.5, header:0.3, footer:0.3 };
+
+  var wb = XLSX.utils.book_new();
+  wb.Props = { Title:'Días Pendientes', Subject:'Seguimiento Diario', Author:'PETROPERÚ S.A. — Planificación de Suministro', Company:'PETROPERÚ S.A.' };
+  XLSX.utils.book_append_sheet(wb, ws, 'Días Pendientes');
+  XLSX.writeFile(wb, 'Dias_Pendientes_' + mesVal + '.xlsx');
+  rdToastSeg('📗 Excel generado.', 'ok');
+}
+
+// ── Días Pendientes — PDF ────────────────────────────────────────────
+function dpExportarPDF() {
+  if (!window._dpData || !window._dpData.resumen) { rdToastSeg('Primero calcula los días pendientes.', 'error'); return; }
+
+  var mesVal = document.getElementById('dpMes').value || '';
+  var plantas = window._dpData.resumen.filter(function(r){ return r.planta.indexOf('Refinería') !== 0; })
+    .slice().sort(function(a,b){ return (b.diasFaltantesLista||[]).length - (a.diasFaltantesLista||[]).length; });
+
+  var filasHTML = plantas.map(function(r, i) {
+    var faltan = r.diasFaltantesLista || [];
+    var ok = faltan.length === 0;
+    var stripe = i % 2 === 0 ? '#ffffff' : '#f8fafc';
+    var chips = ok
+      ? '<span style="color:#16a34a;font-weight:700">✓ Completo</span>'
+      : faltan.map(function(f){ return '<span style="display:inline-block;background:#fdecec;color:#dc2626;font-weight:700;font-family:ui-monospace,monospace;padding:2px 7px;border-radius:5px;margin:1px 3px 1px 0;font-size:10px">' + f.slice(8,10) + '/' + f.slice(5,7) + '</span>'; }).join('');
+    return '<tr style="background:' + stripe + '">' +
+      '<td style="padding:8px 10px;font-weight:800;color:#0f1e3c;border-top:1px solid #e2e8f0">' + r.planta + '</td>' +
+      '<td style="padding:8px 10px;text-align:center;font-weight:800;border-top:1px solid #e2e8f0;color:' + (ok?'#16a34a':'#dc2626') + '">' + (ok?'—':faltan.length) + '</td>' +
+      '<td style="padding:8px 10px;border-top:1px solid #e2e8f0">' + chips + '</td>' +
+    '</tr>';
+  }).join('');
+
+  var ahora = new Date();
+  var fechaGen = ahora.toLocaleDateString('es-PE') + ' a las ' + ahora.toLocaleTimeString('es-PE',{hour:'2-digit',minute:'2-digit'});
+
+  var reporteHTML =
+    '<div style="font-family:Inter,system-ui,sans-serif;color:#0f1e3c;max-width:100%">' +
+      '<div style="background:linear-gradient(90deg,#0a3a5c,#1e3a8a);padding:20px 24px;border-radius:10px 10px 0 0">' +
+        '<div style="color:#fff;font-size:16px;font-weight:800;letter-spacing:.02em">PETROPERÚ S.A.</div>' +
+        '<div style="color:rgba(255,255,255,.85);font-size:11px">Días Pendientes · Seguimiento Diario · Planificación de Suministro</div>' +
+      '</div>' +
+      '<div style="border:1px solid #e2e8f0;border-top:none;padding:16px 24px;background:#f8fafc">' +
+        '<table style="width:100%;font-size:11px"><tr>' +
+          '<td><b>Mes:</b> ' + mesVal + '</td>' +
+          '<td style="text-align:right"><b>Generado el:</b> ' + fechaGen + '</td>' +
+        '</tr></table>' +
+      '</div>' +
+      '<table style="width:100%;border-collapse:collapse;font-size:10.5px;border:1px solid #e2e8f0;border-top:none">' +
+        '<thead><tr style="background:#0a3a5c">' +
+          '<th style="padding:9px 10px;text-align:left;color:#fff;font-size:9.5px;text-transform:uppercase;letter-spacing:.3px">Planta</th>' +
+          '<th style="padding:9px 10px;text-align:center;color:#fff;font-size:9.5px;text-transform:uppercase;letter-spacing:.3px">Pendientes</th>' +
+          '<th style="padding:9px 10px;text-align:left;color:#fff;font-size:9.5px;text-transform:uppercase;letter-spacing:.3px">Fechas exactas</th>' +
+        '</tr></thead><tbody>' + filasHTML + '</tbody>' +
+      '</table>' +
+      '<div style="padding:12px 24px;border:1px solid #e2e8f0;border-top:none;border-radius:0 0 10px 10px;font-size:9px;color:#94a3b8;text-align:center">' +
+        'Documento generado automáticamente por el Sistema de Seguimiento Diario · PETROPERÚ S.A. · Planificación de Suministro' +
+      '</div>' +
+    '</div>';
+
+  var contenedor = document.getElementById('segPrintReport');
+  if (!contenedor) { contenedor = document.createElement('div'); contenedor.id = 'segPrintReport'; document.body.appendChild(contenedor); }
+  contenedor.innerHTML = reporteHTML;
+
+  var _tituloOriginal = document.title;
+  document.title = 'Dias_Pendientes_' + mesVal;
+  document.body.classList.add('seg-print-mode');
+  var restaurar = function(){ document.body.classList.remove('seg-print-mode'); document.title = _tituloOriginal; window.removeEventListener('afterprint', restaurar); };
+
+  var btnCerrar = document.getElementById('segPrintCerrarBtn');
+  if (!btnCerrar) { btnCerrar = document.createElement('button'); btnCerrar.id = 'segPrintCerrarBtn'; btnCerrar.innerHTML = '✕ Cerrar'; document.body.appendChild(btnCerrar); }
+  btnCerrar.onclick = restaurar;
+
+  window.print();
+  window.addEventListener('afterprint', restaurar);
+  setTimeout(restaurar, 6000);
+}
+
+// ── Seguimiento de Hoy — Excel ───────────────────────────────────────
+function hoyExportarExcel() {
+  if (!window._ultimoTracking || !window._ultimoTracking.length) { rdToastSeg('Primero espera a que cargue el seguimiento.', 'error'); return; }
+  if (typeof XLSX === 'undefined') { rdToastSeg('La librería de Excel aún está cargando, intenta de nuevo.', 'error'); return; }
+
+  var fecha = window._ultimaFechaPintada || hoyLima();
+  var lista = filtrarPorEstado(window._ultimoTracking);
+
+  var C = {
+    navy:'0F1E3C', navy2:'12305F', red:'C8102E', white:'FFFFFF',
+    txt:'4C5768', txt3:'8791A1', bdr:'DDE1E8', zebra:'F1F4F9', soft:'F0F3F8',
+    verde:'1A7A44', rojo:'C8102E', rojoBg:'FDECEC', verdeBg:'E9F7EE'
+  };
+  function ln(c){ return { style:'thin', color:{ rgb: c || C.bdr } }; }
+  function box(c){ return { top:ln(c), bottom:ln(c), left:ln(c), right:ln(c) }; }
+  var NC = 4;
+  var ws = {}, merges = [], rowsH = [], R = 0;
+  function put(r, c, v, s, z) {
+    var cell;
+    if (v === null || v === undefined || v === '') cell = { t:'s', v:'' };
+    else if (typeof v === 'number' && isFinite(v)) cell = { t:'n', v:v };
+    else cell = { t:'s', v:String(v) };
+    if (z) cell.z = z;
+    if (s) cell.s = s;
+    ws[XLSX.utils.encode_cell({ r:r, c:c })] = cell;
+  }
+  function banda(r, c0, c1, valor, estilo, alto) {
+    for (var c = c0; c <= c1; c++) put(r, c, c === c0 ? valor : '', estilo);
+    if (c1 > c0) merges.push({ s:{ r:r, c:c0 }, e:{ r:r, c:c1 } });
+    if (alto) rowsH[r] = { hpt: alto };
+  }
+
+  banda(R, 0, NC-1, 'PETROPERÚ S.A.', { fill:{fgColor:{rgb:C.navy}}, font:{name:'Calibri',sz:18,bold:true,color:{rgb:C.white}}, alignment:{horizontal:'left',vertical:'center',indent:1} }, 34); R++;
+  banda(R, 0, NC-1, 'SEGUIMIENTO DIARIO  ·  Estado de Reportes  ·  Planificación de Suministro', { fill:{fgColor:{rgb:C.red}}, font:{name:'Calibri',sz:10.5,bold:true,color:{rgb:C.white}}, alignment:{horizontal:'left',vertical:'center',indent:1} }, 20); R++;
+  banda(R, 0, NC-1, '', { fill:{fgColor:{rgb:C.white}} }, 7); R++;
+
+  var ahora = new Date();
+  var reportaron = lista.filter(function(t){ return t.estado==='Reportado' || t.estado==='Validado'; }).length;
+  banda(R, 0, NC-1, 'Fecha: ' + fmtFechaLarga(fecha) + '   ·   ' + reportaron + ' de ' + lista.length + ' reportaron   ·   Generado: ' + ahora.toLocaleDateString('es-PE') + ' ' + ahora.toLocaleTimeString('es-PE',{hour:'2-digit',minute:'2-digit'}), { fill:{fgColor:{rgb:C.soft}}, font:{name:'Calibri',sz:9.5,bold:true,color:{rgb:C.txt3}}, alignment:{horizontal:'left',vertical:'center',indent:1}, border:box() }, 19); R++;
+  banda(R, 0, NC-1, '', { fill:{fgColor:{rgb:C.white}} }, 7); R++;
+
+  var CAB = ['Planta', 'Estado', 'Hora de reporte', 'Último reporte previo'];
+  var rCab = R;
+  CAB.forEach(function(t, c){
+    put(rCab, c, t, { fill:{fgColor:{rgb:C.navy2}}, font:{name:'Calibri',sz:9.5,bold:true,color:{rgb:C.white}}, alignment:{horizontal:c===1?'center':'left',vertical:'center',indent:1}, border:box(C.navy) });
+  });
+  rowsH[rCab] = { hpt: 22 }; R++;
+
+  lista.forEach(function(t, i) {
+    var done = t.estado === 'Reportado' || t.estado === 'Validado';
+    var bg = (i % 2 === 1) ? C.zebra : C.white;
+    function base(extra){ var s = { fill:{fgColor:{rgb:bg}}, font:{name:'Calibri',sz:10,color:{rgb:C.txt}}, alignment:{horizontal:'left',vertical:'center',indent:1}, border:box() }; if (extra) for (var k in extra) s[k]=extra[k]; return s; }
+    var horaTxt = '—';
+    if (done && t.hora) { try { horaTxt = new Date(t.hora).toLocaleString('es-PE',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}); } catch(e) {} }
+    var ultimoTxt = (!done && t.ultimoFecha) ? (fmtFechaLarga(t.ultimoFecha) + (t.ultimoNombre ? ' · ' + t.ultimoNombre : '')) : '—';
+    put(R, 0, t.planta, base({ font:{name:'Calibri',sz:10,bold:true,color:{rgb:C.navy}} }));
+    put(R, 1, done ? 'Reportado' : 'Pendiente', { fill:{fgColor:{rgb:done?C.verdeBg:C.rojoBg}}, font:{name:'Calibri',sz:10,bold:true,color:{rgb:done?C.verde:C.rojo}}, alignment:{horizontal:'center',vertical:'center'}, border:box() });
+    put(R, 2, horaTxt, base());
+    put(R, 3, ultimoTxt, base({ font:{name:'Calibri',sz:9.5,color:{rgb:C.txt3}} }));
+    rowsH[R] = { hpt: 16 };
+    R++;
+  });
+  var rUlt = R - 1;
+  banda(R, 0, NC-1, '', { fill:{fgColor:{rgb:C.white}} }, 7); R++;
+  banda(R, 0, NC-1, 'Documento generado automáticamente por el Sistema de Seguimiento Diario · PETROPERÚ S.A. · Planificación de Suministro', { fill:{fgColor:{rgb:C.soft}}, font:{name:'Calibri',sz:8,italic:true,color:{rgb:C.txt3}}, alignment:{horizontal:'center',vertical:'center'}, border:{top:ln()} }, 18); R++;
+
+  ws['!ref'] = XLSX.utils.encode_range({s:{r:0,c:0},e:{r:R-1,c:NC-1}});
+  ws['!merges'] = merges;
+  ws['!rows'] = rowsH;
+  ws['!cols'] = [{wch:16},{wch:12},{wch:16},{wch:30}];
+  if (rUlt > rCab) ws['!autofilter'] = { ref: XLSX.utils.encode_range({s:{r:rCab,c:0},e:{r:rUlt,c:NC-1}}) };
+  ws['!margins'] = { left:0.4, right:0.4, top:0.5, bottom:0.5, header:0.3, footer:0.3 };
+
+  var wb = XLSX.utils.book_new();
+  wb.Props = { Title:'Seguimiento Diario', Subject:'Estado de Reportes', Author:'PETROPERÚ S.A. — Planificación de Suministro', Company:'PETROPERÚ S.A.' };
+  XLSX.utils.book_append_sheet(wb, ws, 'Seguimiento');
+  XLSX.writeFile(wb, 'Seguimiento_Diario_' + fecha + '.xlsx');
+  rdToastSeg('📗 Excel generado.', 'ok');
+}
+
+// ── Seguimiento de Hoy — PDF ──────────────────────────────────────────
+function hoyExportarPDF() {
+  if (!window._ultimoTracking || !window._ultimoTracking.length) { rdToastSeg('Primero espera a que cargue el seguimiento.', 'error'); return; }
+
+  var fecha = window._ultimaFechaPintada || hoyLima();
+  var lista = filtrarPorEstado(window._ultimoTracking);
+  var reportaron = lista.filter(function(t){ return t.estado==='Reportado' || t.estado==='Validado'; }).length;
+
+  var filasHTML = lista.map(function(t, i) {
+    var done = t.estado === 'Reportado' || t.estado === 'Validado';
+    var stripe = i % 2 === 0 ? '#ffffff' : '#f8fafc';
+    var horaTxt = '—';
+    if (done && t.hora) { try { horaTxt = new Date(t.hora).toLocaleString('es-PE',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}); } catch(e) {} }
+    var ultimoTxt = (!done && t.ultimoFecha) ? (fmtFechaLarga(t.ultimoFecha) + (t.ultimoNombre ? ' · ' + t.ultimoNombre : '')) : '—';
+    return '<tr style="background:' + stripe + '">' +
+      '<td style="padding:8px 10px;font-weight:800;color:#0f1e3c;border-top:1px solid #e2e8f0">' + t.planta + '</td>' +
+      '<td style="padding:8px 10px;text-align:center;border-top:1px solid #e2e8f0"><span style="display:inline-block;padding:2px 10px;border-radius:10px;font-weight:800;font-size:10px;background:' + (done?'#e9f7ee':'#fdecec') + ';color:' + (done?'#1a7a44':'#c8102e') + '">' + (done?'Reportado':'Pendiente') + '</span></td>' +
+      '<td style="padding:8px 10px;font-family:ui-monospace,monospace;border-top:1px solid #e2e8f0">' + horaTxt + '</td>' +
+      '<td style="padding:8px 10px;font-size:10px;color:#64748b;border-top:1px solid #e2e8f0">' + ultimoTxt + '</td>' +
+    '</tr>';
+  }).join('');
+
+  var ahora = new Date();
+  var fechaGen = ahora.toLocaleDateString('es-PE') + ' a las ' + ahora.toLocaleTimeString('es-PE',{hour:'2-digit',minute:'2-digit'});
+
+  var reporteHTML =
+    '<div style="font-family:Inter,system-ui,sans-serif;color:#0f1e3c;max-width:100%">' +
+      '<div style="background:linear-gradient(90deg,#0a3a5c,#1e3a8a);padding:20px 24px;border-radius:10px 10px 0 0">' +
+        '<div style="color:#fff;font-size:16px;font-weight:800;letter-spacing:.02em">PETROPERÚ S.A.</div>' +
+        '<div style="color:rgba(255,255,255,.85);font-size:11px">Seguimiento Diario · Estado de Reportes · Planificación de Suministro</div>' +
+      '</div>' +
+      '<div style="border:1px solid #e2e8f0;border-top:none;padding:16px 24px;background:#f8fafc">' +
+        '<table style="width:100%;font-size:11px"><tr>' +
+          '<td><b>Fecha:</b> ' + fmtFechaLarga(fecha) + ' &nbsp;·&nbsp; <b>' + reportaron + ' de ' + lista.length + '</b> reportaron</td>' +
+          '<td style="text-align:right"><b>Generado el:</b> ' + fechaGen + '</td>' +
+        '</tr></table>' +
+      '</div>' +
+      '<table style="width:100%;border-collapse:collapse;font-size:10.5px;border:1px solid #e2e8f0;border-top:none">' +
+        '<thead><tr style="background:#0a3a5c">' +
+          '<th style="padding:9px 10px;text-align:left;color:#fff;font-size:9.5px;text-transform:uppercase;letter-spacing:.3px">Planta</th>' +
+          '<th style="padding:9px 10px;text-align:center;color:#fff;font-size:9.5px;text-transform:uppercase;letter-spacing:.3px">Estado</th>' +
+          '<th style="padding:9px 10px;text-align:left;color:#fff;font-size:9.5px;text-transform:uppercase;letter-spacing:.3px">Hora de reporte</th>' +
+          '<th style="padding:9px 10px;text-align:left;color:#fff;font-size:9.5px;text-transform:uppercase;letter-spacing:.3px">Último reporte previo</th>' +
+        '</tr></thead><tbody>' + filasHTML + '</tbody>' +
+      '</table>' +
+      '<div style="padding:12px 24px;border:1px solid #e2e8f0;border-top:none;border-radius:0 0 10px 10px;font-size:9px;color:#94a3b8;text-align:center">' +
+        'Documento generado automáticamente por el Sistema de Seguimiento Diario · PETROPERÚ S.A. · Planificación de Suministro' +
+      '</div>' +
+    '</div>';
+
+  var contenedor = document.getElementById('segPrintReport');
+  if (!contenedor) { contenedor = document.createElement('div'); contenedor.id = 'segPrintReport'; document.body.appendChild(contenedor); }
+  contenedor.innerHTML = reporteHTML;
+
+  var _tituloOriginal = document.title;
+  document.title = 'Seguimiento_Diario_' + fecha;
   document.body.classList.add('seg-print-mode');
   var restaurar = function(){ document.body.classList.remove('seg-print-mode'); document.title = _tituloOriginal; window.removeEventListener('afterprint', restaurar); };
 
