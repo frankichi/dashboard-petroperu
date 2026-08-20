@@ -25453,22 +25453,17 @@ function _renderVistaEjecutivaSimpleImpl() {
 
   box.innerHTML =
     '<div class="exec-sticky-hdr" style="position:sticky;top:0;z-index:50;background:var(--bg);margin:0 -36px 20px;padding:18px 36px 14px;border-bottom:1px solid var(--bdr)">' +
-      // ── Título + selectores Planta/Producto en la MISMA fila ──────────
-      '<div style="display:flex;align-items:flex-start;justify-content:flex-end;flex-wrap:wrap;gap:10px 16px;margin-bottom:14px">' +
+      // ⚠️ CAMBIADO — a pedido: planta/producto/fecha/exportar vuelven
+      // a estar siempre visibles (1 solo toque para cambiarlos) —
+      // volvemos al criterio de antes de las burbujas flotantes. Los
+      // KPIs SALEN de este bloque fijo (ver más abajo) — ya no ocupan
+      // espacio fijo en pantalla, ganando espacio para el contenido.
+      '<div style="display:flex;align-items:flex-start;flex-wrap:wrap;gap:10px 16px;margin-bottom:14px">' +
         '<div class="exec-select-row" style="display:flex;gap:10px;flex-wrap:wrap">' + plantaSelector + productoSelector + '</div>' +
       '</div>' +
       volverBtn +
-      '<div class="exec-datebar-wrap" style="position:relative;z-index:500;margin-bottom:12px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">' +
+      '<div class="exec-datebar-wrap" style="position:relative;z-index:500;display:flex;align-items:center;gap:8px;flex-wrap:wrap">' +
         '<div style="flex:1;min-width:0">' + buildDateBar('dateBarExec') + '</div>' +
-        // ⚠️ AGREGADO — a pedido: los botones de exportar vivían dentro de
-        // la tarjeta "Inventario · [planta]", dando a entender que
-        // exportaban solo lo seleccionado — pero SIEMPRE exportaban el
-        // reporte nacional completo. Se movieron acá, integrados en la
-        // MISMA fila de la fecha (sin franja nueva que ocupe espacio
-        // vertical extra en celular) — 2 íconos simples, sin texto de
-        // más. Flujo de 2 pasos: primero alcance (Nacional/Planta),
-        // luego período (Hoy/7/15/30 días) — independiente de lo que
-        // el usuario tenga elegido en las gráficas de pantalla.
         '<div style="position:relative;display:inline-block;flex-shrink:0">' +
           '<button onclick="window._execToggleExportMenu(\'excel\')" title="Exportar a Excel" style="width:36px;height:36px;padding:6px;border-radius:8px;cursor:pointer;border:1.5px solid #1a7a44;background:#f0faf3;display:flex;align-items:center;justify-content:center"><img src="' + EXEC_ICON_XLS_B64 + '" alt="Excel" style="width:100%;height:100%;object-fit:contain"></button>' +
           '<div id="exec-export-menu-excel" style="display:none;position:absolute;top:calc(100% + 4px);right:0;z-index:600;background:var(--card);border:1px solid var(--bdr);border-radius:8px;box-shadow:0 6px 20px rgba(0,0,0,.18);min-width:230px;overflow:hidden">' +
@@ -25487,52 +25482,46 @@ function _renderVistaEjecutivaSimpleImpl() {
         // desde _execExportPasoAlcance() una vez elegido el alcance.
         '<div id="exec-export-menu-periodo" style="display:none;position:absolute;top:calc(100% + 4px);right:0;z-index:601;background:var(--card);border:1px solid var(--bdr);border-radius:8px;box-shadow:0 6px 20px rgba(0,0,0,.18);min-width:260px"></div>' +
       '</div>' +
-      // ── KPIs de Inventario/Despacho — antes vivían debajo del header y
-      // desaparecían al hacer scroll; ahora quedan DENTRO del bloque
-      // sticky (visibles todo el tiempo), en versión compacta para no
-      // ocupar demasiado espacio fijo en pantalla. En celular además se
-      // oculta el detalle "· Planta · Producto" del label (redundante:
-      // ya está en el título grande de arriba) y las notas de
-      // proyección se truncan a una sola línea — antes, aunque el
-      // número era chico, el título envolvía 2 líneas y la nota 3,
-      // sumando bastante alto fijo en pantalla.
-      '<div class="exec-kpi-grid" style="display:grid;grid-template-columns:' + (esRefineriaExec ? '1fr' : (despPromedioPeriodo === null ? '1fr 1fr' : '1fr 1fr 1fr')) + ';gap:12px;margin-top:14px">' +
-        '<div style="background:var(--card);border:1px solid var(--bdr);border-radius:10px;padding:10px 14px;min-width:0">' +
-          '<div style="font-size:9.5px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">📦 Inventario<span class="exec-kpi-detail">' + (pl==='Nacional'?' Nacional':' · '+_plLabel(pl)) + (prod!=='Todos'?' · '+prod:'') + '</span></div>' +
-          '<div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap">' +
-            '<div class="exec-kpi-val" style="font-size:22px;font-weight:800;color:var(--txt);font-family:var(--mono);line-height:1">' + fmtMB(invHoy) + '</div>' +
-            '<div style="font-size:11.5px;min-width:0">' + deltaHTML(deltaInv, true, invAyer, fechaAyer) + '</div>' +
-          '</div>' +
-        '</div>' +
-        (esRefineriaExec ? '' :
-        '<div style="background:var(--card);border:1px solid var(--bdr);border-radius:10px;padding:10px 14px;min-width:0">' +
-          '<div style="font-size:9.5px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">🚚 Despacho<span class="exec-kpi-detail"> Reportado' + (prod!=='Todos'?' · '+prod:'') + '</span></div>' +
-          '<div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap">' +
-            '<div class="exec-kpi-val" style="font-size:22px;font-weight:800;color:var(--txt);font-family:var(--mono);line-height:1">' + fmtMB(despHoy) + '</div>' +
-            '<div style="font-size:11.5px;min-width:0">' + deltaHTML(despAyer!==null ? despHoy-despAyer : null, false, despAyer, fechaAyer) + '</div>' +
-          '</div>' +
-        '</div>') +
-        (esRefineriaExec || despPromedioPeriodo === null ? '' :
-        '<div style="background:var(--card);border:1px solid var(--bdr);border-radius:10px;padding:10px 14px;min-width:0">' +
-          '<div style="font-size:9.5px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">⌀ Promedio Despacho<span class="exec-kpi-detail"> · ' + periodoLabelTxt + (prod!=='Todos'?' · '+prod:'') + '</span></div>' +
-          '<div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap">' +
-            '<div class="exec-kpi-val" style="font-size:22px;font-weight:800;color:var(--txt);font-family:var(--mono);line-height:1">' + fmtMB(despPromedioPeriodo) + '<span style="font-size:13px;font-weight:700">/d</span></div>' +
-          '</div>' +
-        '</div>') +
-      '</div>' +
-      // ⚠️ Las notas de proyección/período ANTES vivían DENTRO de cada
-      // tarjeta angosta — con 3 columnas en celular no había espacio y
-      // el texto se cortaba con "...". Ahora van juntas, en una línea
-      // de ancho completo debajo de las 3 tarjetas: nunca se cortan, Y
-      // además las tarjetas quedan más bajas (una razón más para que
-      // el bloque de arriba ocupe menos alto en celular).
-      (invHoyTieneProyeccion || invHoyTieneProyeccionConsumo || (despPromedioPeriodo !== null && !esRefineriaExec) ?
-      '<div class="exec-kpi-notas" style="margin-top:6px;display:flex;flex-direction:column;gap:2px">' +
-        (invHoyTieneProyeccion ? '<div style="font-size:9.5px;color:#2563eb;font-weight:700">🚢 Incluye reposición proyectada (buque ya descargó, planta aún no reporta cierre)</div>' : '') +
-        (invHoyTieneProyeccionConsumo ? '<div style="font-size:9.5px;color:#2563eb;font-weight:700">≈ Incluye inventario proyectado por consumo (plantas que aún no cierran inventario)</div>' : '') +
-        (despPromedioPeriodo !== null && !esRefineriaExec ? '<div style="font-size:9.5px;color:var(--txt3);font-weight:600">⌀ Promedio de despacho calculado sobre ' + periodoLabelTxt + '</div>' : '') +
-      '</div>' : '') +
     '</div>' +
+    // ⚠️ CAMBIADO — a pedido: los KPIs (Inventario/Despacho/Promedio)
+    // ya NO viven dentro del bloque sticky de arriba — antes se
+    // quedaban fijos en pantalla ocupando espacio permanente; ahora
+    // se desplazan con el resto del contenido al hacer scroll,
+    // ganando espacio visible.
+    '<div class="exec-kpi-grid" style="display:grid;grid-template-columns:' + (esRefineriaExec ? '1fr' : (despPromedioPeriodo === null ? '1fr 1fr' : '1fr 1fr 1fr')) + ';gap:12px;margin-top:14px">' +
+      '<div style="background:var(--card);border:1px solid var(--bdr);border-radius:10px;padding:10px 14px;min-width:0">' +
+        '<div style="font-size:9.5px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">📦 Inventario<span class="exec-kpi-detail">' + (pl==='Nacional'?' Nacional':' · '+_plLabel(pl)) + (prod!=='Todos'?' · '+prod:'') + '</span></div>' +
+        '<div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap">' +
+          '<div class="exec-kpi-val" style="font-size:22px;font-weight:800;color:var(--txt);font-family:var(--mono);line-height:1">' + fmtMB(invHoy) + '</div>' +
+          '<div style="font-size:11.5px;min-width:0">' + deltaHTML(deltaInv, true, invAyer, fechaAyer) + '</div>' +
+        '</div>' +
+      '</div>' +
+      (esRefineriaExec ? '' :
+      '<div style="background:var(--card);border:1px solid var(--bdr);border-radius:10px;padding:10px 14px;min-width:0">' +
+        '<div style="font-size:9.5px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">🚚 Despacho<span class="exec-kpi-detail"> Reportado' + (prod!=='Todos'?' · '+prod:'') + '</span></div>' +
+        '<div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap">' +
+          '<div class="exec-kpi-val" style="font-size:22px;font-weight:800;color:var(--txt);font-family:var(--mono);line-height:1">' + fmtMB(despHoy) + '</div>' +
+          '<div style="font-size:11.5px;min-width:0">' + deltaHTML(despAyer!==null ? despHoy-despAyer : null, false, despAyer, fechaAyer) + '</div>' +
+        '</div>' +
+      '</div>') +
+      (esRefineriaExec || despPromedioPeriodo === null ? '' :
+      '<div style="background:var(--card);border:1px solid var(--bdr);border-radius:10px;padding:10px 14px;min-width:0">' +
+        '<div style="font-size:9.5px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">⌀ Promedio Despacho<span class="exec-kpi-detail"> · ' + periodoLabelTxt + (prod!=='Todos'?' · '+prod:'') + '</span></div>' +
+        '<div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap">' +
+          '<div class="exec-kpi-val" style="font-size:22px;font-weight:800;color:var(--txt);font-family:var(--mono);line-height:1">' + fmtMB(despPromedioPeriodo) + '<span style="font-size:13px;font-weight:700">/d</span></div>' +
+        '</div>' +
+      '</div>') +
+    '</div>' +
+    // ⚠️ Las notas de proyección/período ANTES vivían DENTRO de cada
+    // tarjeta angosta — con 3 columnas en celular no había espacio y
+    // el texto se cortaba con "...". Ahora van juntas, en una línea
+    // de ancho completo debajo de las 3 tarjetas: nunca se cortan.
+    (invHoyTieneProyeccion || invHoyTieneProyeccionConsumo || (despPromedioPeriodo !== null && !esRefineriaExec) ?
+    '<div class="exec-kpi-notas" style="margin-top:6px;margin-bottom:14px;display:flex;flex-direction:column;gap:2px">' +
+      (invHoyTieneProyeccion ? '<div style="font-size:9.5px;color:#2563eb;font-weight:700">🚢 Incluye reposición proyectada (buque ya descargó, planta aún no reporta cierre)</div>' : '') +
+      (invHoyTieneProyeccionConsumo ? '<div style="font-size:9.5px;color:#2563eb;font-weight:700">≈ Incluye inventario proyectado por consumo (plantas que aún no cierran inventario)</div>' : '') +
+      (despPromedioPeriodo !== null && !esRefineriaExec ? '<div style="font-size:9.5px;color:var(--txt3);font-weight:600">⌀ Promedio de despacho calculado sobre ' + periodoLabelTxt + '</div>' : '') +
+    '</div>' : '') +
     (esRefineriaExec ? '<div style="margin-bottom:16px;padding:10px 14px;background:#eef2f7;border:1px solid #cbd5e1;border-radius:10px;font-size:12px;color:#475569">🛢️ <b>' + pl + '</b> es una refinería — solo procesa y almacena producto, no vende. Por eso aquí solo se muestra su <b>inventario</b>, sin despacho.</div>' : '') +
     '<div class="exec-mapa-card" style="background:var(--card);border:1px solid var(--bdr);border-radius:14px;padding:22px 24px;margin-bottom:24px">' +
       '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:12px">' +
