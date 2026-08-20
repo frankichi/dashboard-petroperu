@@ -24287,7 +24287,47 @@ function _buildCoberturaSectionHTML(plantaParam, productoParam, nombreFnRerender
         : '<div style="padding:30px;text-align:center;color:var(--txt3);font-size:12px">Sin datos de cobertura para este filtro con el modo "' + (window._execCobModo==='pron'?'Demanda pronóstico':'Despacho real') + '" — prueba con el otro modo.</div>') +
     '</div>';
 
-  return { cobSectionHTML: cobSectionHTML, reposSectionHTML: reposSectionHTML };
+  // ⚠️ CORREGIDO — bug real confirmado (3ra ronda, ahora con cruce
+  // exhaustivo de nombres): además de cobSectionHTML/reposSectionHTML,
+  // el resto de _renderVistaEjecutivaSimpleImpl (selectores, gráficos,
+  // KPIs) usa pl/prod/fechaHoy/invHoy/despHoy y varias funciones
+  // (sumFecha, filaAplica, fmtMB, etc.) que también vivían solo
+  // dentro de este bloque. Se devuelven TODAS las que se confirmó,
+  // por cruce automático contra el código real, que se usan después
+  // del punto donde se llama a esta función.
+  return {
+    COMBO_PLANTAS,
+    _getInvHistIdx,
+    _invArrastrado,
+    _plLabel,
+    cobColor,
+    cobSectionHTML,
+    deltaInv,
+    despAyer,
+    despHoy,
+    despRow,
+    despSerie,
+    esRefineriaExec,
+    fechaAyer,
+    fechaHoy,
+    filaAplica,
+    fmtMB,
+    invAyer,
+    invHoy,
+    invHoyTieneProyeccion,
+    invHoyTieneProyeccionConsumo,
+    invSerie,
+    labels,
+    mesCorto,
+    mesesDisponiblesExec,
+    pl,
+    prod,
+    pronParaFechaExec,
+    pronSerie,
+    reposSectionHTML,
+    reposSerie,
+    sumFecha
+  };
 }
 
 
@@ -24336,10 +24376,43 @@ function _renderVistaEjecutivaSimpleImpl() {
 // cambiar el orden/modo en una página afecte accidentalmente
 // a la otra.
   // ⚠️ Ahora construido por la función compartida
-  // _buildCoberturaSectionHTML() — ver su definición más abajo.
+  // _buildCoberturaSectionHTML() — ver su definición más abajo. Se
+  // extraen TODAS las variables/funciones que devuelve (cruce
+  // exhaustivo confirmado contra el uso real más abajo en esta
+  // misma función) — no solo las de HTML, porque el resto de
+  // _renderVistaEjecutivaSimpleImpl las sigue necesitando.
   var _cobResult = _buildCoberturaSectionHTML(undefined, undefined, 'renderVistaEjecutivaSimple');
+  var COMBO_PLANTAS = _cobResult.COMBO_PLANTAS;
+  var _getInvHistIdx = _cobResult._getInvHistIdx;
+  var _invArrastrado = _cobResult._invArrastrado;
+  var _plLabel = _cobResult._plLabel;
+  var cobColor = _cobResult.cobColor;
   var cobSectionHTML = _cobResult.cobSectionHTML;
+  var deltaInv = _cobResult.deltaInv;
+  var despAyer = _cobResult.despAyer;
+  var despHoy = _cobResult.despHoy;
+  var despRow = _cobResult.despRow;
+  var despSerie = _cobResult.despSerie;
+  var esRefineriaExec = _cobResult.esRefineriaExec;
+  var fechaAyer = _cobResult.fechaAyer;
+  var fechaHoy = _cobResult.fechaHoy;
+  var filaAplica = _cobResult.filaAplica;
+  var fmtMB = _cobResult.fmtMB;
+  var invAyer = _cobResult.invAyer;
+  var invHoy = _cobResult.invHoy;
+  var invHoyTieneProyeccion = _cobResult.invHoyTieneProyeccion;
+  var invHoyTieneProyeccionConsumo = _cobResult.invHoyTieneProyeccionConsumo;
+  var invSerie = _cobResult.invSerie;
+  var labels = _cobResult.labels;
+  var mesCorto = _cobResult.mesCorto;
+  var mesesDisponiblesExec = _cobResult.mesesDisponiblesExec;
+  var pl = _cobResult.pl;
+  var prod = _cobResult.prod;
+  var pronParaFechaExec = _cobResult.pronParaFechaExec;
+  var pronSerie = _cobResult.pronSerie;
   var reposSectionHTML = _cobResult.reposSectionHTML;
+  var reposSerie = _cobResult.reposSerie;
+  var sumFecha = _cobResult.sumFecha;
 
 
   var _mesesCortoKpi = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
