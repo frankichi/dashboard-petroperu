@@ -23246,6 +23246,31 @@ function _buildCoberturaSectionHTML(plantaParam, productoParam, nombreFnRerender
   // (planta que aún no cierra el día, estimada con último real menos
   // demanda pronóstico) — complementa la detección de arriba, que solo
   // cubre la proyección por descarga de buque.
+  // ⚠️ AGREGADO — corrección de bug real: _estadoPlantaHoy vivía SOLO
+  // dentro de _renderVistaEjecutivaSimpleImpl (definida más abajo en
+  // ese archivo, después de donde se cortó esta función al extraerla),
+  // así que quedaba fuera de alcance acá y rompía la Vista Ejecutiva
+  // con "_estadoPlantaHoy is not defined". Se duplica aquí (no se
+  // mueve — la otra copia sigue haciendo falta para las tarjetas de
+  // planta) porque solo depende de _getInvHistIdx/_invArrastrado/
+  // fechaHoy, que ya están disponibles en este mismo scope.
+  function _estadoPlantaHoy(planta) {
+    var idx = _getInvHistIdx();
+    var tieneCerrado = false, tieneProyectado = false, tieneArrastreSinProy = false;
+    Object.keys(idx).forEach(function(key) {
+      if (key.indexOf(planta + '|') !== 0) return;
+      var producto = key.slice(planta.length + 1);
+      var r = _invArrastrado(planta, producto, fechaHoy);
+      if (!r) return;
+      if (r.fecha === fechaHoy) tieneCerrado = true;
+      else if (r._proyectadoConsumo) tieneProyectado = true;
+      else tieneArrastreSinProy = true;
+    });
+    if (tieneCerrado) return 'cerrado';
+    if (tieneProyectado) return 'proyectado';
+    if (tieneArrastreSinProy) return 'arrastre';
+    return 'sindato';
+  }
   var invHoyTieneProyeccionConsumo = (function() {
     var plantasChequear = (!pl || pl === 'Nacional') ? PLANTAS_18_OFICIALES.concat(REFINERIAS) : [pl];
     return plantasChequear.some(function(p2) { return _estadoPlantaHoy(p2) === 'proyectado'; });
