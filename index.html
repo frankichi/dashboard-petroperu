@@ -1,9 +1,15 @@
 <!DOCTYPE html>
-<!-- Versión: 2026-08-14-v1 — corrige _navEstadoActualTexto() para usar
-     precedencia cronológica estricta entre eventos del buque, basada en
-     los campos de fecha estructurados de posicionamiento_naves (en vez
-     de re-derivarlos por regex de texto libre). Ver comentarios junto a
-     _navEstadoActualTexto y _puertoSiguientePorRotacion en el código. -->
+<!-- Versión: 2026-08-20-v3 — _buildCoberturaSectionHTML() completa:
+     devuelve las 33 variables/funciones que el resto de
+     _renderVistaEjecutivaSimpleImpl necesita (incluye datesN e
+     invEsProyectadoSerie, agregadas en esta versión — antes causaban
+     "ReferenceError: invEsProyectadoSerie is not defined" al cambiar de
+     planta/mes en la Vista Ejecutiva o en Inv. Nacional). Si después de
+     desplegar este archivo el error sigue apareciendo, es que el
+     navegador está sirviendo una copia vieja — revisar Service Worker
+     (Application → Service Workers → Unregister + Clear site data) y
+     confirmar en Vercel que el deployment más reciente está en
+     Production. -->
 <html lang="es">
 <head>
 <meta charset="UTF-8">
@@ -22911,7 +22917,15 @@ function _pTendEnsurePronMesesExec(meses) {
   pendientes.forEach(function(m) {
     _pTendLoadPronMes(m).then(function(){
       restantes--;
-      if (restantes === 0 && typeof renderVistaEjecutivaSimple === 'function') renderVistaEjecutivaSimple();
+      // ⚠️ CORREGIDO — bug real confirmado: esta función se llama ahora
+      // también desde renderPInv() (panel principal, "Inv. Nacional"),
+      // no solo desde la Vista Ejecutiva. Sin este guardia, si esta
+      // promesa resolvía mientras el usuario estaba en el panel normal
+      // (no en ?view=executive), llamaba a renderVistaEjecutivaSimple()
+      // igual — que oculta TODAS las páginas con style.display='none'
+      // directo (no por clase CSS), rompiendo la navegación del panel
+      // principal por completo, sin ningún error en consola.
+      if (restantes === 0 && typeof EXECUTIVE_MODE !== 'undefined' && EXECUTIVE_MODE && typeof renderVistaEjecutivaSimple === 'function') renderVistaEjecutivaSimple();
     });
   });
 }
@@ -26127,10 +26141,16 @@ function _fetchReposicionHistorica(fecha) {
     .then(function(res) {
       window._reposHistoricaCache[fecha] = (res && res.success && res.reposicion) || {};
       delete window._reposHistoricaPendiente[fecha];
-      // Volver a dibujar la vista actual ahora que ya llegó el dato
-      // histórico — sin esto, el usuario vería el estado "actual" hasta
-      // la próxima interacción manual.
-      if (typeof renderVistaEjecutivaSimple === 'function') renderVistaEjecutivaSimple();
+      // ⚠️ CORREGIDO — bug real confirmado: esta función se llama ahora
+      // también desde el panel principal ("Inv. Nacional"), no solo
+      // desde la Vista Ejecutiva. Llamar siempre a
+      // renderVistaEjecutivaSimple() sin importar el contexto rompía
+      // la navegación del panel normal (oculta TODAS las páginas con
+      // style.display='none' directo, no por clase CSS — ningún clic
+      // vuelve a mostrar nada después). rerenderActivePage() ya sabe
+      // distinguir el contexto correcto (Vista Ejecutiva vs. la página
+      // que esté activa en el panel principal).
+      if (typeof rerenderActivePage === 'function') rerenderActivePage();
     })
     .catch(function(err) {
       console.warn('[Reposición histórica] error:', err.message);
