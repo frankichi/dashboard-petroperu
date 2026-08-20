@@ -27243,7 +27243,7 @@ function getCapacidad(planta, producto) {
         <div class="pinv-kcard-sub">MB en tránsito / programado</div>
       </div>
     `;
-    const tblRows = rows.map(r => {
+    const tblRows = rows.map((r, idx) => {
       const cobCls = cobClass(r.cob);
       let repStr;
       if (r.rep <= 0) {
@@ -27258,7 +27258,11 @@ function getCapacidad(planta, producto) {
       } else {
         repStr = `<span class="pinv-rep-pill">+${fmt(r.rep)} MB</span>${r.bt ? ' · '+r.bt : ''}${r.repDate ? ' · ETA '+fmtD(r.repDate) : ''}`;
       }
-      return `<tr>
+      // ⚠️ AGREGADO — a pedido: al quitar el gráfico de barras viejo se
+      // perdía la forma de hacer clic para ver el detalle de una
+      // terminal (antes se hacía clic en su barra). Se recupera acá,
+      // haciendo clic en la fila de la tabla.
+      return `<tr onclick="window._pInvOpenModal(window._pInvRowsActuales[${idx}], '${cfg.color}')" style="cursor:pointer">
         <td>${r.planta}</td>
         <td>${fmt(r.inv)}</td>
         <td>${r.vf > 0 ? fmt(r.vf) : '—'}</td>
@@ -27266,6 +27270,7 @@ function getCapacidad(planta, producto) {
         <td>${repStr}</td>
       </tr>`;
     }).join('');
+    window._pInvRowsActuales = rows;
     
     // ⚠️ AGREGADO — a pedido: la sección "Cobertura por planta" del
     // panel gerencial (con reposiciones marítimas, cabotajes, y las 3
@@ -27316,15 +27321,6 @@ el.innerHTML = `
             <span class="pinv-chart-dot" style="background:${cfg.color}"></span>
             ${_pInvProd} — Inventario por terminal
           </div>
-          <div class="pinv-sem">
-            <span class="pinv-sem-lbl">COBERTURA:</span>
-            <div class="pinv-sem-item"><div class="pinv-sem-dot" style="background:${cfg.color}"></div>Normal</div>
-            <div class="pinv-sem-item"><div class="pinv-sem-dot" style="background:var(--red)"></div>Crítico</div>
-            ${_pInvShowRep ? `<div class="pinv-sem-item" style="margin-left:6px"><div class="pinv-sem-dot" style="background:#C9A84C"></div>Reposición</div>` : ''}
-          </div>
-        </div>
-        <div id="pinv-chart-wrap" style="position:relative;width:100%;height:${Math.max(rows.length*62+60,200)}px">
-          <canvas id="pinv-canvas"></canvas>
         </div>
         ${_pInvShowTable ? `
         <div class="pinv-tbl-wrap">
@@ -27363,195 +27359,207 @@ el.innerHTML = `
     });
     const txtColor = getComputedStyle(document.documentElement).getPropertyValue('--txt2').trim() || '#8a9bb8';
     const gridColor = 'rgba(255,255,255,0.07)';
+    // ⚠️ CAMBIADO — a pedido: el gráfico de barras viejo (Chart.js,
+    // 'pinv-canvas') se quitó de esta página — ya no coincide con
+    // el criterio actual (ordenar por días de cobertura, mismo
+    // estilo que el panel gerencial). Se reemplazó por la sección
+    // "Cobertura por planta" (_cobResultPInv.cobSectionHTML, más
+    // abajo), la misma que usa la Vista Ejecutiva. El canvas ya no
+    // existe en el DOM — este guardia evita que la creación del
+    // gráfico viejo truene con un error si algo todavía llega a
+    // ejecutar este bloque.
+    if (document.getElementById('pinv-canvas')) {
     _pInvChart = new Chart(document.getElementById('pinv-canvas'), {
-      type: 'bar',
-      data: {
-        labels,
-        datasets: [
-          {
-            label: 'Inventario',
-            data: invVals,
-            backgroundColor: barColors,
-            borderColor: barBorders,
-            borderWidth: rows.map(r => r.cob>0&&r.cob<COB_CRIT?2:0),
-            borderRadius: 0,
-            borderSkipped: false,
-            stack: 'inv',
-            barPercentage: 0.85,
-            categoryPercentage: 0.90,
-            order: 1,
-          },
-          {
-            label: '🚢 Cab. Marítimo',
-            data: marVals,
-            backgroundColor: 'rgba(249,115,22,0.85)',
-            borderColor: '#f97316',
-            borderWidth: 0,
-            borderRadius: 0,
-            borderSkipped: false,
-            stack: 'inv',
-            barPercentage: 0.85,
-            categoryPercentage: 0.90,
-            order: 2,
-            hidden: !hasMar,
-          },
-          {
-            label: '🚛 Cab. Terrestre',
-            data: terrVals,
-            backgroundColor: 'rgba(20,184,166,0.85)',
-            borderColor: '#14b8a6',
-            borderWidth: 0,
-            borderRadius: 0,
-            borderSkipped: false,
-            stack: 'inv',
-            barPercentage: 0.85,
-            categoryPercentage: 0.90,
-            order: 3,
-            hidden: !hasTerr,
-          }
-        ]
-      },
-      options: {
-        indexAxis: 'y',
-        responsive: true,
-        maintainAspectRatio: false,
-        onClick(evt, elements) {
-          if (elements && elements.length > 0) {
-            const idx = elements[0].index;
-            if (rows[idx]) window._pInvOpenModal(rows[idx], cfg.color);
-          }
-        },
-        onHover(evt, elements) {
-          evt.native.target.style.cursor = elements.length > 0 ? 'pointer' : 'default';
-        },
-        plugins: {
-          legend: { display: false },
-          tooltip: {
-            backgroundColor: '#0f1623',
-            borderColor: '#1e2d45',
-            borderWidth: 1,
-            titleColor: '#8BAED4',
-            bodyColor: '#e8edf5',
-            padding: 10,
-            callbacks: {
-              title: ctx => ctx[0].label,
-              label: ctx => {
-                const r = rows[ctx.dataIndex];
-                if (ctx.datasetIndex === 0) {
-                  const lines = [`  📦 Inventario: ${fmt(ctx.parsed.x)} MB`];
-                  if (r.cob > 0) lines.push(`  📅 Cobertura: ${r.cob.toFixed(DEC)} días`);
-                  if (r.vf > 0)  lines.push(`  📊 V. Factible: ${fmt(r.vf)} MBDC`);
-                  return lines;
-                }
-                if (ctx.parsed.x > 0) {
-                  const lines = [`  🚢 Reposición: ${fmt(ctx.parsed.x)} MB`];
-                  if (r.bt)      lines.push(`  Buque: ${r.bt}`);
-                  if (r.repDate) lines.push(`  ETA: ${fmtD(r.repDate)}`);
-                  return lines;
-                }
-                return null;
+          type: 'bar',
+          data: {
+            labels,
+            datasets: [
+              {
+                label: 'Inventario',
+                data: invVals,
+                backgroundColor: barColors,
+                borderColor: barBorders,
+                borderWidth: rows.map(r => r.cob>0&&r.cob<COB_CRIT?2:0),
+                borderRadius: 0,
+                borderSkipped: false,
+                stack: 'inv',
+                barPercentage: 0.85,
+                categoryPercentage: 0.90,
+                order: 1,
+              },
+              {
+                label: '🚢 Cab. Marítimo',
+                data: marVals,
+                backgroundColor: 'rgba(249,115,22,0.85)',
+                borderColor: '#f97316',
+                borderWidth: 0,
+                borderRadius: 0,
+                borderSkipped: false,
+                stack: 'inv',
+                barPercentage: 0.85,
+                categoryPercentage: 0.90,
+                order: 2,
+                hidden: !hasMar,
+              },
+              {
+                label: '🚛 Cab. Terrestre',
+                data: terrVals,
+                backgroundColor: 'rgba(20,184,166,0.85)',
+                borderColor: '#14b8a6',
+                borderWidth: 0,
+                borderRadius: 0,
+                borderSkipped: false,
+                stack: 'inv',
+                barPercentage: 0.85,
+                categoryPercentage: 0.90,
+                order: 3,
+                hidden: !hasTerr,
               }
-            }
-          }
-        },
-        scales: {
-          x: {
-            stacked: true,
-            min: 0,
-            beginAtZero: true,
-            grid: { color: gridColor },
-            ticks: { color: txtColor, font:{size:10}, callback: v => v + ' MB' },
-            border: { display: false }
+            ]
           },
-          y: {
-            stacked: true,
-            grid: { display: false },
-            ticks: { color: txtColor, font:{size:11,weight:'600'}, autoSkip:false },
-            border: { display: false },
-            afterFit: function(scale) { scale.width = Math.max(scale.width, 90); }
-          }
-        },
-        animation: { duration: 320, easing: 'easeOutQuart' }
-      },
-      plugins: [{
-        id: 'pinvLabels',
-        afterDatasetsDraw(chart) {
-          const ctx   = chart.ctx;
-          const ds0   = chart.getDatasetMeta(0);
-          // Obtener el total apilado (inv + mar + terr) para el extremo derecho
-          const allMetas = chart.data.datasets.map((_,di) => chart.getDatasetMeta(di));
-          ds0.data.forEach((bar, i) => {
-            const r      = rows[i];
-            const isCrit = r.cob > 0 && r.cob <= 7;
-            // Calcular el x del extremo derecho de todos los segmentos apilados
-            let rightEdge = bar.x;  // barra de inventario (siempre el más largo)
-            allMetas.forEach(function(meta) {
-              if (meta.data[i] && !meta.hidden) {
-                rightEdge = Math.max(rightEdge, meta.data[i].x);
+          options: {
+            indexAxis: 'y',
+            responsive: true,
+            maintainAspectRatio: false,
+            onClick(evt, elements) {
+              if (elements && elements.length > 0) {
+                const idx = elements[0].index;
+                if (rows[idx]) window._pInvOpenModal(rows[idx], cfg.color);
               }
-            });
-            const labelX = rightEdge + 8;  // 8px fuera de la barra
-            const invTotal = invVals[i] + (marVals[i]||0) + (terrVals[i]||0);
-            const invLbl = invVals[i].toFixed(DEC) + ' MB';
-            ctx.save();
-            ctx.fillStyle = txtColor;
-            ctx.font = '700 12px Sora, sans-serif';
-            ctx.textAlign = 'left';
-            ctx.textBaseline = 'middle';
-            ctx.fillText(invLbl, labelX, bar.y - 7);
-            ctx.restore();
-            if (r.cob > 0) {
-              const cobDays = Math.round(r.cob);
-              const cobLbl  = cobDays + 'd';
-              ctx.save();
-              ctx.fillStyle = isCrit ? '#dc2626' : '#2563eb';
-              ctx.font = (isCrit ? '800' : '700') + ' 11px Sora, sans-serif';
-              ctx.textAlign = 'left';
-              ctx.textBaseline = 'middle';
-              ctx.fillText(cobLbl, labelX, bar.y + 7);
-              ctx.restore();
-            }
-          });
-          if (_pInvShowRep) {
-            // Texto de reposición: a la derecha del label MB/días, sin chocar con barras
-            ds0.data.forEach((bar, i) => {
-              const r = rows[i];
-              if (!r.rep || r.rep <= 0) return;
-              // Calcular el mismo rightEdge que los labels MB
-              let rEdge = bar.x;
-              allMetas.forEach(function(meta) {
-                if (meta.data[i] && !meta.hidden) rEdge = Math.max(rEdge, meta.data[i].x);
+            },
+            onHover(evt, elements) {
+              evt.native.target.style.cursor = elements.length > 0 ? 'pointer' : 'default';
+            },
+            plugins: {
+              legend: { display: false },
+              tooltip: {
+                backgroundColor: '#0f1623',
+                borderColor: '#1e2d45',
+                borderWidth: 1,
+                titleColor: '#8BAED4',
+                bodyColor: '#e8edf5',
+                padding: 10,
+                callbacks: {
+                  title: ctx => ctx[0].label,
+                  label: ctx => {
+                    const r = rows[ctx.dataIndex];
+                    if (ctx.datasetIndex === 0) {
+                      const lines = [`  📦 Inventario: ${fmt(ctx.parsed.x)} MB`];
+                      if (r.cob > 0) lines.push(`  📅 Cobertura: ${r.cob.toFixed(DEC)} días`);
+                      if (r.vf > 0)  lines.push(`  📊 V. Factible: ${fmt(r.vf)} MBDC`);
+                      return lines;
+                    }
+                    if (ctx.parsed.x > 0) {
+                      const lines = [`  🚢 Reposición: ${fmt(ctx.parsed.x)} MB`];
+                      if (r.bt)      lines.push(`  Buque: ${r.bt}`);
+                      if (r.repDate) lines.push(`  ETA: ${fmtD(r.repDate)}`);
+                      return lines;
+                    }
+                    return null;
+                  }
+                }
+              }
+            },
+            scales: {
+              x: {
+                stacked: true,
+                min: 0,
+                beginAtZero: true,
+                grid: { color: gridColor },
+                ticks: { color: txtColor, font:{size:10}, callback: v => v + ' MB' },
+                border: { display: false }
+              },
+              y: {
+                stacked: true,
+                grid: { display: false },
+                ticks: { color: txtColor, font:{size:11,weight:'600'}, autoSkip:false },
+                border: { display: false },
+                afterFit: function(scale) { scale.width = Math.max(scale.width, 90); }
+              }
+            },
+            animation: { duration: 320, easing: 'easeOutQuart' }
+          },
+          plugins: [{
+            id: 'pinvLabels',
+            afterDatasetsDraw(chart) {
+              const ctx   = chart.ctx;
+              const ds0   = chart.getDatasetMeta(0);
+              // Obtener el total apilado (inv + mar + terr) para el extremo derecho
+              const allMetas = chart.data.datasets.map((_,di) => chart.getDatasetMeta(di));
+              ds0.data.forEach((bar, i) => {
+                const r      = rows[i];
+                const isCrit = r.cob > 0 && r.cob <= 7;
+                // Calcular el x del extremo derecho de todos los segmentos apilados
+                let rightEdge = bar.x;  // barra de inventario (siempre el más largo)
+                allMetas.forEach(function(meta) {
+                  if (meta.data[i] && !meta.hidden) {
+                    rightEdge = Math.max(rightEdge, meta.data[i].x);
+                  }
+                });
+                const labelX = rightEdge + 8;  // 8px fuera de la barra
+                const invTotal = invVals[i] + (marVals[i]||0) + (terrVals[i]||0);
+                const invLbl = invVals[i].toFixed(DEC) + ' MB';
+                ctx.save();
+                ctx.fillStyle = txtColor;
+                ctx.font = '700 12px Sora, sans-serif';
+                ctx.textAlign = 'left';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(invLbl, labelX, bar.y - 7);
+                ctx.restore();
+                if (r.cob > 0) {
+                  const cobDays = Math.round(r.cob);
+                  const cobLbl  = cobDays + 'd';
+                  ctx.save();
+                  ctx.fillStyle = isCrit ? '#dc2626' : '#2563eb';
+                  ctx.font = (isCrit ? '800' : '700') + ' 11px Sora, sans-serif';
+                  ctx.textAlign = 'left';
+                  ctx.textBaseline = 'middle';
+                  ctx.fillText(cobLbl, labelX, bar.y + 7);
+                  ctx.restore();
+                }
               });
-              // Medir el ancho del label MB para posicionar el texto de reposición después
-              ctx.save();
-              ctx.font = '700 12px Sora, sans-serif';
-              const mbW = ctx.measureText(invVals[i].toFixed(DEC) + ' MB').width;
-              ctx.restore();
-              const repX = rEdge + 8 + Math.max(mbW, 42) + 16;
-              const hasProj = r.repProj > 0;
-              const hasConf = r.repConf > 0;
-              const parts = [];
-              if (r.bt)      parts.push('⚓ ' + r.bt);
-              if (r.repDate) parts.push('ETA ' + fmtD(r.repDate));
-              if (hasConf && hasProj) {
-                parts.push('+' + fmt(r.repConf) + ' MB · 📋 +' + fmt(r.repProj) + ' MB');
-              } else if (hasProj && !hasConf) {
-                parts.push('📋 +' + fmt(r.rep) + ' MB PROY');
-              } else {
-                parts.push('+' + fmt(r.rep) + ' MB');
+              if (_pInvShowRep) {
+                // Texto de reposición: a la derecha del label MB/días, sin chocar con barras
+                ds0.data.forEach((bar, i) => {
+                  const r = rows[i];
+                  if (!r.rep || r.rep <= 0) return;
+                  // Calcular el mismo rightEdge que los labels MB
+                  let rEdge = bar.x;
+                  allMetas.forEach(function(meta) {
+                    if (meta.data[i] && !meta.hidden) rEdge = Math.max(rEdge, meta.data[i].x);
+                  });
+                  // Medir el ancho del label MB para posicionar el texto de reposición después
+                  ctx.save();
+                  ctx.font = '700 12px Sora, sans-serif';
+                  const mbW = ctx.measureText(invVals[i].toFixed(DEC) + ' MB').width;
+                  ctx.restore();
+                  const repX = rEdge + 8 + Math.max(mbW, 42) + 16;
+                  const hasProj = r.repProj > 0;
+                  const hasConf = r.repConf > 0;
+                  const parts = [];
+                  if (r.bt)      parts.push('⚓ ' + r.bt);
+                  if (r.repDate) parts.push('ETA ' + fmtD(r.repDate));
+                  if (hasConf && hasProj) {
+                    parts.push('+' + fmt(r.repConf) + ' MB · 📋 +' + fmt(r.repProj) + ' MB');
+                  } else if (hasProj && !hasConf) {
+                    parts.push('📋 +' + fmt(r.rep) + ' MB PROY');
+                  } else {
+                    parts.push('+' + fmt(r.rep) + ' MB');
+                  }
+                  ctx.save();
+                  ctx.fillStyle = (hasProj && !hasConf) ? '#2563eb' : '#92400e';
+                  ctx.font = (hasProj && !hasConf ? 'italic ' : '') + '600 10.5px Sora, sans-serif';
+                  ctx.textAlign = 'left';
+                  ctx.textBaseline = 'middle';
+                  ctx.fillText(parts.join(' · '), repX, bar.y);
+                  ctx.restore();
+                });
               }
-              ctx.save();
-              ctx.fillStyle = (hasProj && !hasConf) ? '#2563eb' : '#92400e';
-              ctx.font = (hasProj && !hasConf ? 'italic ' : '') + '600 10.5px Sora, sans-serif';
-              ctx.textAlign = 'left';
-              ctx.textBaseline = 'middle';
-              ctx.fillText(parts.join(' · '), repX, bar.y);
-              ctx.restore();
-            });
-          }
-        }
-      }]
-    });
+            }
+          }]
+        });
+    }
+
   };
   function _pInvAddDays(dateStr, n) {
     if (!dateStr) return '';
