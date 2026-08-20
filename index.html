@@ -22934,40 +22934,8 @@ function rdHoyRealFmt() {
 // envuelve la función real con un debounce corto (60ms): si llegan
 // varias llamadas casi juntas, solo se ejecuta la ÚLTIMA — un único
 // render final con los datos ya completos, sin el parpadeo visual.
-function renderVistaEjecutivaSimple() {
-  if (window._execRenderDebounce) clearTimeout(window._execRenderDebounce);
-  window._execRenderDebounce = setTimeout(_renderVistaEjecutivaSimpleImpl, 60);
-}
-function _renderVistaEjecutivaSimpleImpl() {
-  var mc = document.getElementById('main-content');
-  if (!mc || !Array.isArray(RAW) || !RAW.length) return;
-
-  document.querySelectorAll('.page').forEach(function(p){ p.style.display = 'none'; });
-  var box = document.getElementById('exec-simple-view');
-  if (!box) {
-    box = document.createElement('div');
-    box.id = 'exec-simple-view';
-    box.style.cssText = 'padding:0 36px 50px;overflow-y:auto;overflow-x:hidden;height:100%;box-sizing:border-box;width:100%;position:relative';
-    mc.appendChild(box);
-  }
-  box.style.display = 'block';
-
-  if (window._execPeriod === undefined) window._execPeriod = 7;   // 7 | 15 | 30 | 'mensual'
-  if (window._execPlanta === undefined) window._execPlanta = 'Nacional';
-  if (window._execProducto === undefined || window._execProducto === 'Todos') window._execProducto = 'Diesel';
-  // El mapa arranca OCULTO por defecto — solo se muestra cuando el
-  // usuario presiona "Mostrar mapa" (toggleExecMapa). Una vez que decide
-  // mostrarlo u ocultarlo, esa elección se respeta en refrescos
-  // posteriores de esta misma sesión.
-  if (window._execMapaOculto === undefined) window._execMapaOculto = true;
-
-  // ⚠️ CORREGIDO — bug real confirmado: Supe despachaba volúmenes reales
-  // pero muy chicos (ej. 0.024 MB) — con solo 1 decimal (DEC=1 en modo
-  // ejecutivo), toFixed/toLocaleString redondeaba esos valores a "0.0" y
-  // se mostraban como "0 MB" en el KPI, y el gráfico literalmente
-  // graficaba 0 (no solo se veía chico por la escala — el DATO en sí ya
-  // llegaba en cero). Esta función conserva más decimales SOLO cuando
-  // hace falta para no perder un valor real y distinto de cero.
+function _buildCoberturaSectionHTML(plantaParam, productoParam, nombreFnRerender) {
+  nombreFnRerender = nombreFnRerender || 'renderVistaEjecutivaSimple';
   function fmtMB(v) {
     v = v || 0;
     if (v !== 0 && Math.abs(v) < 0.1) {
@@ -23246,8 +23214,8 @@ function _renderVistaEjecutivaSimpleImpl() {
   var fechaHoy  = currentDate || (DATES && DATES.length ? DATES[DATES.length-1] : '');
   var idxHoy    = (DATES||[]).indexOf(fechaHoy);
   var fechaAyer = idxHoy > 0 ? DATES[idxHoy-1] : '';
-  var pl        = window._execPlanta;
-  var prod      = window._execProducto;
+  var pl        = (plantaParam !== undefined && plantaParam !== null) ? plantaParam : window._execPlanta;
+  var prod      = (productoParam !== undefined && productoParam !== null) ? productoParam : window._execProducto;
   var esRefineriaExec = REFINERIAS.indexOf(pl) !== -1;
   // Las refinerías solo procesan/almacenan — no venden. Si el producto
   // elegido no aplica ahí, o si veníamos con un producto fijado desde otra
@@ -24036,14 +24004,14 @@ function _renderVistaEjecutivaSimpleImpl() {
   function cobColor(dias) { return dias <= 7 ? '#dc2626' : dias <= 14 ? '#e8a000' : '#16a34a'; }
   function sortBtn(val, label) {
     var active = window._execCobSort === val;
-    return '<button onclick="window._execCobSort=\'' + val + '\';renderVistaEjecutivaSimple();" '
+    return '<button onclick="window._execCobSort=\'' + val + '\';' + nombreFnRerender + '();" '
       + 'style="padding:6px 14px;border-radius:8px;font-size:11.5px;font-weight:700;cursor:pointer;border:1.5px solid '
       + (active ? '#0a3a5c;background:#0a3a5c;color:#fff' : 'var(--bdr);background:var(--card);color:var(--txt2)')
       + '">' + label + '</button>';
   }
   function modoBtn(val, label) {
     var active = window._execCobModo === val;
-    return '<button onclick="window._execCobModo=\'' + val + '\';renderVistaEjecutivaSimple();" '
+    return '<button onclick="window._execCobModo=\'' + val + '\';' + nombreFnRerender + '();" '
       + 'style="padding:6px 14px;border-radius:8px;font-size:11.5px;font-weight:700;cursor:pointer;border:1.5px solid '
       + (active ? '#0e7490;background:#0e7490;color:#fff' : 'var(--bdr);background:var(--card);color:var(--txt2)')
       + '">' + label + '</button>';
@@ -24293,6 +24261,61 @@ function _renderVistaEjecutivaSimpleImpl() {
           '</div>'
         : '<div style="padding:30px;text-align:center;color:var(--txt3);font-size:12px">Sin datos de cobertura para este filtro con el modo "' + (window._execCobModo==='pron'?'Demanda pronóstico':'Despacho real') + '" — prueba con el otro modo.</div>') +
     '</div>';
+
+  return { cobSectionHTML: cobSectionHTML, reposSectionHTML: reposSectionHTML };
+}
+
+
+function renderVistaEjecutivaSimple() {
+  if (window._execRenderDebounce) clearTimeout(window._execRenderDebounce);
+  window._execRenderDebounce = setTimeout(_renderVistaEjecutivaSimpleImpl, 60);
+}
+function _renderVistaEjecutivaSimpleImpl() {
+  var mc = document.getElementById('main-content');
+  if (!mc || !Array.isArray(RAW) || !RAW.length) return;
+
+  document.querySelectorAll('.page').forEach(function(p){ p.style.display = 'none'; });
+  var box = document.getElementById('exec-simple-view');
+  if (!box) {
+    box = document.createElement('div');
+    box.id = 'exec-simple-view';
+    box.style.cssText = 'padding:0 36px 50px;overflow-y:auto;overflow-x:hidden;height:100%;box-sizing:border-box;width:100%;position:relative';
+    mc.appendChild(box);
+  }
+  box.style.display = 'block';
+
+  if (window._execPeriod === undefined) window._execPeriod = 7;   // 7 | 15 | 30 | 'mensual'
+  if (window._execPlanta === undefined) window._execPlanta = 'Nacional';
+  if (window._execProducto === undefined || window._execProducto === 'Todos') window._execProducto = 'Diesel';
+  // El mapa arranca OCULTO por defecto — solo se muestra cuando el
+  // usuario presiona "Mostrar mapa" (toggleExecMapa). Una vez que decide
+  // mostrarlo u ocultarlo, esa elección se respeta en refrescos
+  // posteriores de esta misma sesión.
+  if (window._execMapaOculto === undefined) window._execMapaOculto = true;
+
+  // ⚠️ CORREGIDO — bug real confirmado: Supe despachaba volúmenes reales
+  // pero muy chicos (ej. 0.024 MB) — con solo 1 decimal (DEC=1 en modo
+  // ejecutivo), toFixed/toLocaleString redondeaba esos valores a "0.0" y
+  // se mostraban como "0 MB" en el KPI, y el gráfico literalmente
+  // graficaba 0 (no solo se veía chico por la escala — el DATO en sí ya
+  // llegaba en cero). Esta función conserva más decimales SOLO cuando
+  // hace falta para no perder un valor real y distinto de cero.
+// ⚠️ AGREGADO — a pedido: subsistema completo de "Cobertura por
+// planta/producto" (con reposiciones marítimas, cabotajes, y las 3
+// bases de cálculo con respaldo — real/pronóstico/V.Factible) que
+// vivía SOLO dentro de la Vista Ejecutiva, extraído a una función
+// compartida y parametrizada — así "Inv. Nacional" (panel principal)
+// puede mostrar EXACTAMENTE el mismo componente, con su propio
+// filtro de planta/producto (no depende de window._execPlanta), y
+// su propio botón de refrescar (nombreFnRerender) — evita que
+// cambiar el orden/modo en una página afecte accidentalmente
+// a la otra.
+  // ⚠️ Ahora construido por la función compartida
+  // _buildCoberturaSectionHTML() — ver su definición más abajo.
+  var _cobResult = _buildCoberturaSectionHTML(undefined, undefined, 'renderVistaEjecutivaSimple');
+  var cobSectionHTML = _cobResult.cobSectionHTML;
+  var reposSectionHTML = _cobResult.reposSectionHTML;
+
 
   var _mesesCortoKpi = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
   function _fechaCortaKpi(fecha) {
@@ -27032,7 +27055,15 @@ function getCapacidad(planta, producto) {
         <td>${repStr}</td>
       </tr>`;
     }).join('');
-    el.innerHTML = `
+    
+    // ⚠️ AGREGADO — a pedido: la sección "Cobertura por planta" del
+    // panel gerencial (con reposiciones marítimas, cabotajes, y las 3
+    // bases de cálculo con respaldo) replicada aquí — mismo componente
+    // exacto, mismos datos, pero con su propio filtro (todas las
+    // terminales para el producto seleccionado en esta página) y su
+    // propia función de refresco (renderPInv, no la de Vista Ejecutiva).
+    var _cobResultPInv = _buildCoberturaSectionHTML('Nacional', _pInvProd, 'renderPInv');
+el.innerHTML = `
       <div class="pinv-sticky-hdr">
         <div class="pinv-toolbar">
           <span class="pinv-datelabel">Fecha:</span>
@@ -27095,6 +27126,8 @@ function getCapacidad(planta, producto) {
           </table>
         </div>` : ''}
       </div>
+      ${_cobResultPInv.reposSectionHTML}
+      ${_cobResultPInv.cobSectionHTML}
       </div>
     `;
     if (_pInvChart) { _pInvChart.destroy(); _pInvChart = null; }
