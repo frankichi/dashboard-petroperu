@@ -4800,8 +4800,22 @@ function fmt(n, d=1) {
 }
 function fmtDate(d) {
   if (!d) return '—';
-  const date = new Date(d + 'T12:00:00');
-  return date.toLocaleDateString('es-PE', {day:'2-digit', month:'short'});
+  // ⚠️ CORREGIDO — bug real: "ETA Invalid Date" en el simulador What-If
+  // (y potencialmente en cualquier otro lugar que use fmtDate). Causa:
+  // si la fecha que llega NO es un string "YYYY-MM-DD" limpio (ej. un
+  // objeto Date que Google Sheets devolvió en vez de texto — el mismo
+  // patrón de bug ya conocido en este proyecto), concatenarlo con
+  // 'T12:00:00' produce un string no parseable, y toLocaleDateString()
+  // sobre una fecha inválida imprime literalmente "Invalid Date" en
+  // pantalla. Ahora se detecta ese caso y se muestra un guion, igual
+  // que cuando no hay fecha.
+  try {
+    const date = new Date(d + 'T12:00:00');
+    if (isNaN(date.getTime())) return '—';
+    return date.toLocaleDateString('es-PE', {day:'2-digit', month:'short'});
+  } catch (e) {
+    return '—';
+  }
 }
 function semClass(cob) {
   if (cob <= 0) return 's0';
@@ -17814,13 +17828,18 @@ function renderWhatIfChart(planta, producto) {
   var curBase = inv, curSim = inv;
   var baseRate = pronVal > 0 ? pronVal : (r.dem_prom || 0);
   var btAddedBase = false, btAddedSim = false;
+  // ⚠️ AGREGADO — a pedido: marcar en el gráfico la fecha estimada de
+  // reposición del BT (según el reporte de Posicionamiento y Carga de
+  // Naves) — antes el volumen SE SUMABA en la fecha correcta pero no
+  // se veía dónde, así que la curva "saltaba" sin explicación visual.
+  var etaIndex = -1;
   for (var d = 0; d <= days; d++) {
     var dt = _fechaCurrenteSegura();
     dt.setDate(dt.getDate() + d);
     labels.push(dt.getDate() + '/' + (dt.getMonth() + 1));
     baseLine.push(Math.max(0, Math.round(curBase * 100) / 100));
     simLine.push(Math.max(0, Math.round(curSim * 100) / 100));
-    if (!btAddedBase && btEtaMs && dt.getTime() >= btEtaMs && btVol > 0) { curBase += btVol; curSim += btVol; btAddedBase = true; btAddedSim = true; }
+    if (!btAddedBase && btEtaMs && dt.getTime() >= btEtaMs && btVol > 0) { curBase += btVol; curSim += btVol; btAddedBase = true; btAddedSim = true; etaIndex = d; }
     curBase -= Math.abs(baseRate);
     curSim -= Math.abs(simVfact);
   }
@@ -17831,6 +17850,58 @@ function renderWhatIfChart(planta, producto) {
   if (!ctx) return;
   if (whatIfChart) { try { whatIfChart.destroy(); } catch(e) {} }
   var isLight = document.body.classList.contains('light');
+  // ⚠️ AGREGADO — plugin que dibuja la línea vertical punteada de ETA
+  // del BT, con una etiqueta con el nombre del buque y el volumen —
+  // mismo patrón ya usado en el panel gerencial para la línea de
+  // pronóstico aprobado (dibujo directo sobre el canvas, sin depender
+  // de un plugin externo de Chart.js).
+  var _wiEtaLinePlugin = {
+    id: '_wiEtaLinePlugin',
+    afterDatasetsDraw: function(chart) {
+      if (etaIndex < 0) return;
+      var meta = chart.getDatasetMeta(0);
+      if (!meta || !meta.data || !meta.data[etaIndex]) return;
+      var punto = meta.data[etaIndex];
+      var area = chart.chartArea;
+      var ctx2d = chart.ctx;
+      ctx2d.save();
+      ctx2d.strokeStyle = '#7c3aed';
+      ctx2d.lineWidth = 1.5;
+      ctx2d.setLineDash([5, 4]);
+      ctx2d.beginPath();
+      ctx2d.moveTo(punto.x, area.top);
+      ctx2d.lineTo(punto.x, area.bottom);
+      ctx2d.stroke();
+      ctx2d.setLineDash([]);
+      var texto = '\u26F5 ' + (r.bt || 'BT') + ' +' + btVol.toFixed(1) + ' MB';
+      ctx2d.font = '700 10px Inter, system-ui, sans-serif';
+      var anchoTexto = ctx2d.measureText(texto).width;
+      var padX = 6, altoPastilla = 16;
+      var anchoPastilla = anchoTexto + padX * 2;
+      var x = punto.x - anchoPastilla / 2;
+      if (x < area.left) x = area.left;
+      if (x + anchoPastilla > area.right) x = area.right - anchoPastilla;
+      var y = area.top + 4;
+      ctx2d.fillStyle = '#7c3aed';
+      var r2 = 8;
+      ctx2d.beginPath();
+      ctx2d.moveTo(x + r2, y);
+      ctx2d.lineTo(x + anchoPastilla - r2, y);
+      ctx2d.arcTo(x + anchoPastilla, y, x + anchoPastilla, y + r2, r2);
+      ctx2d.lineTo(x + anchoPastilla, y + altoPastilla - r2);
+      ctx2d.arcTo(x + anchoPastilla, y + altoPastilla, x + anchoPastilla - r2, y + altoPastilla, r2);
+      ctx2d.lineTo(x + r2, y + altoPastilla);
+      ctx2d.arcTo(x, y + altoPastilla, x, y + altoPastilla - r2, r2);
+      ctx2d.lineTo(x, y + r2);
+      ctx2d.arcTo(x, y, x + r2, y, r2);
+      ctx2d.closePath();
+      ctx2d.fill();
+      ctx2d.fillStyle = '#fff';
+      ctx2d.textBaseline = 'middle';
+      ctx2d.fillText(texto, x + padX, y + altoPastilla / 2 + 0.5);
+      ctx2d.restore();
+    }
+  };
   whatIfChart = new Chart(ctx, {
     type: 'line',
     data: {
@@ -17840,6 +17911,7 @@ function renderWhatIfChart(planta, producto) {
         { label: 'Simulado (V.Factible)', data: simLine, borderColor: '#d97706', borderWidth: 2.5, pointRadius: 1, fill: { target: 'origin', above: 'rgba(217,119,6,.08)' } }
       ]
     },
+    plugins: [_wiEtaLinePlugin],
     options: {
       responsive: true, maintainAspectRatio: false,
       plugins: { legend: { labels: { color: isLight ? '#333' : '#ccc', font: { size: 10 } } } },
