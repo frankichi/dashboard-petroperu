@@ -1561,6 +1561,55 @@ function rdRecalc(prod) {
   var vacioEl = document.querySelector('[data-vacio-calc="' + prod + '"]');
   if (brutaEl) brutaEl.textContent = rdFmt(bruta);
   if (vacioEl) { vacioEl.textContent = rdFmt(vacio); vacioEl.style.color = vacio < 0 ? '#c8102e' : ''; }
+  // ⚠️ AGREGADO — a pedido: aviso visual en vivo (mientras se escribe,
+  // no solo al momento de guardar) cuando el inventario supera el
+  // máximo permitido según la capacidad registrada + margen (ver
+  // rdMargenPermitido). Distinto del aviso de "vacío negativo" ya
+  // existente (que dispara con CUALQUIER exceso) — este solo aparece
+  // cuando el exceso ya pasó el margen razonable de préstamo de franja.
+  // ⚠️ AGREGADO (2da vuelta) — a pedido: antes, superar el vacío exacto
+  // (pero seguir dentro del margen permitido) solo se notaba por el
+  // número de "vacío" poniéndose en rojo — fácil de pasar por alto,
+  // sin ningún mensaje explícito. Ahora hay un aviso intermedio (ámbar,
+  // NO bloquea el guardado) para ese caso, y el rojo queda reservado
+  // para cuando de verdad se pasa del margen y se bloquea.
+  var existEl = document.querySelector('.rd-existencia[data-prod="' + prod + '"]');
+  var avisoExcesoId = 'aviso-exceso-' + prod.replace(/[^a-z0-9]/gi,'_');
+  var avisoExcesoEl = document.getElementById(avisoExcesoId);
+  if (existEl && capacidad > 0) {
+    var margenMax = rdMargenPermitido(capacidad);
+    var excedeVacio  = bruta > capacidad;       // pasó el vacío disponible
+    var excedeMargen = bruta > margenMax;       // pasó también el margen — esto bloquea al guardar
+    if (excedeMargen) {
+      existEl.style.borderColor = '#c8102e';
+      existEl.style.background = '#fdecec';
+    } else if (excedeVacio) {
+      existEl.style.borderColor = '#d97706';
+      existEl.style.background = '#fef3e0';
+    } else {
+      existEl.style.borderColor = '';
+      existEl.style.background = '';
+    }
+    if (!avisoExcesoEl && existEl.parentElement) {
+      avisoExcesoEl = document.createElement('div');
+      avisoExcesoEl.id = avisoExcesoId;
+      avisoExcesoEl.style.cssText = 'font-size:10.5px;font-weight:700;margin-top:3px';
+      existEl.parentElement.appendChild(avisoExcesoEl);
+    }
+    if (avisoExcesoEl) {
+      if (excedeMargen) {
+        avisoExcesoEl.style.display = 'block';
+        avisoExcesoEl.style.color = '#c8102e';
+        avisoExcesoEl.textContent = '⚠️ Supera el máximo permitido (' + rdFmt(margenMax) + ' MB — capacidad ' + rdFmt(capacidad) + ' MB + margen)';
+      } else if (excedeVacio) {
+        avisoExcesoEl.style.display = 'block';
+        avisoExcesoEl.style.color = '#b45309';
+        avisoExcesoEl.textContent = '⚠️ Supera tu vacío disponible (' + rdFmt(capacidad) + ' MB de capacidad), pero está dentro del margen permitido por préstamo de franja (hasta ' + rdFmt(margenMax) + ' MB)';
+      } else {
+        avisoExcesoEl.style.display = 'none';
+      }
+    }
+  }
   var ref = (RD.detalle && RD.detalle[prod]) || {};
   var uc  = ref.ultimo_calculo;
   // Detección inteligente de reposición: si la existencia que se está
@@ -2211,6 +2260,17 @@ function rdAbrirConfirmacionFinal() {
 }
 function rdCerrarConfirmacion() { document.getElementById('confirmModal').classList.remove('open'); }
 
+// ⚠️ AGREGADO — a pedido: límite de cuánto puede exceder el inventario
+// digitado a la capacidad registrada (de la E&D que se sube al
+// sistema) — para evitar cifras exageradas o dígitos de más por error.
+// Criterio: el mayor entre "capacidad + 10%" o "capacidad + 5 MB" —
+// así una planta chica (ej. 15 MB) siempre tiene un colchón mínimo
+// razonable para el préstamo de franja entre productos, mientras que
+// una planta grande (ej. 300 MB) tiene un margen proporcional, no un
+// número fijo insignificante ni exagerado.
+function rdMargenPermitido(capacidad) {
+  return Math.max(capacidad * 1.10, capacidad + 5);
+}
 function rdConfirmarGuardar() {
   // ⚠️ AGREGADO — bug real confirmado: el panel de aviso de reposición
   // le decía al operador "obligatorio para poder guardar", pero el
@@ -2253,6 +2313,27 @@ function rdConfirmarGuardar() {
       motivo_minima:     motivoMinEl ? motivoMinEl.value.trim() : ''
     };
   });
+
+  // ⚠️ AGREGADO — a pedido: bloquear el guardado si el inventario
+  // digitado (existencia + fondos) supera la capacidad registrada más
+  // el margen permitido (ver rdMargenPermitido) — para evitar cifras
+  // exageradas o dígitos de más por error, dejando igual un colchón
+  // razonable para el préstamo real de franja entre productos.
+  var productosExcedidos = productos.filter(function(pr) {
+    if (!(pr.capacidad > 0)) return false; // sin capacidad registrada, no hay contra qué comparar
+    var bruta = pr.existencia + pr.fondos;
+    return bruta > rdMargenPermitido(pr.capacidad);
+  });
+  if (productosExcedidos.length > 0) {
+    var primero = productosExcedidos[0];
+    var brutaP = primero.existencia + primero.fondos;
+    var maxP = rdMargenPermitido(primero.capacidad);
+    rdToast('⚠️ ' + primero.producto + ': el inventario digitado (' + rdFmt(brutaP) + ' MB) supera el máximo permitido (' + rdFmt(maxP) + ' MB — capacidad ' + rdFmt(primero.capacidad) + ' MB + margen). Revisa la cifra antes de guardar.', 'error');
+    var campoExcedido = document.querySelector('.rd-existencia[data-prod="' + primero.producto + '"]');
+    if (campoExcedido) campoExcedido.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    btn.disabled = false; btn.textContent = 'Confirmar';
+    return;
+  }
 
   var comentarioGeneral = document.getElementById('comentario').value.trim();
   var payload = {
