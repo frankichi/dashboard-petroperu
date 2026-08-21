@@ -25598,8 +25598,24 @@ function _renderVistaEjecutivaSimpleImpl() {
   }
 
   if (typeof Chart === 'undefined') return;
-  if (window._execChartInv) { window._execChartInv.destroy(); }
-  if (window._execChartDesp) { window._execChartDesp.destroy(); window._execChartDesp = null; }
+  // ⚠️ CORREGIDO — bug real: causaba "gráficas en blanco" al cambiar de
+  // planta/producto, requiriendo actualizar o volver a elegir la
+  // planta para que se recuperara. Causa: _execChartInv se destruía
+  // pero NUNCA se ponía en null (a diferencia de _execChartDesp, que sí
+  // lo hacía) — si por cualquier motivo la recreación del gráfico no
+  // llegaba a completarse en un render (ej. una condición de carrera
+  // con otro trigger de render), la siguiente vez que se intentaba
+  // destruir esa MISMA instancia ya destruida, Chart.js lanza un error
+  // (comportamiento documentado de estas librerías) — que abortaba el
+  // resto de la función sin dibujar NINGÚN gráfico, sin ningún aviso
+  // visible salvo en la consola. Ahora: try/catch (un fallo al destruir
+  // no debe impedir que se sigan creando los gráficos nuevos) + null
+  // simétrico en ambos, siempre, para que la próxima destrucción nunca
+  // encuentre una instancia ya destruida.
+  try { if (window._execChartInv) window._execChartInv.destroy(); } catch (eDestroyInv) { console.warn('[exec] error al destruir gráfico de inventario (no crítico):', eDestroyInv.message); }
+  window._execChartInv = null;
+  try { if (window._execChartDesp) window._execChartDesp.destroy(); } catch (eDestroyDesp) { console.warn('[exec] error al destruir gráfico de despacho (no crítico):', eDestroyDesp.message); }
+  window._execChartDesp = null;
 
   var barMode = window._execPeriod === 'mensual';
   var ctxInv = document.getElementById('exec-chart-inv');
