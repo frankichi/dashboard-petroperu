@@ -4924,6 +4924,32 @@ function _diasHabilesEntreFechas(fechaDesde, fechaHasta) {
   }
   return dias;
 }
+// ⚠️ AGREGADO — a pedido: función compartida para decidir si una
+// fecha tiene "suficiente cierre real" (mínimo de plantas que
+// reportaron de verdad, sin proyección) — usada tanto por la Vista
+// Ejecutiva como por su mapa, para que ambos usen el mismo criterio y
+// no diverjan (antes cada uno decidía por su cuenta).
+function _tieneSuficientesCierresGlobal(fecha) {
+  var MIN_PLANTAS_CIERRE_G = 5;
+  var _plantasConReporte = {};
+  RAW.forEach(function(r) {
+    if (r.fecha === fecha && !r._proyectadoConsumo && !r._proyectado) _plantasConReporte[r.planta] = true;
+  });
+  return Object.keys(_plantasConReporte).length >= MIN_PLANTAS_CIERRE_G;
+}
+// Dada una fecha candidata, devuelve la fecha REAL a usar para
+// calcular (la misma, si ya tiene suficiente cierre; si no, retrocede
+// hasta encontrar la última que sí lo tenga).
+function _fechaConCierreReal(fechaCandidata) {
+  if (!fechaCandidata) return fechaCandidata;
+  if (_tieneSuficientesCierresGlobal(fechaCandidata)) return fechaCandidata;
+  var idx = (DATES||[]).indexOf(fechaCandidata);
+  if (idx === -1) idx = (DATES||[]).length;
+  for (var i = idx - 1; i >= 0; i--) {
+    if (_tieneSuficientesCierresGlobal(DATES[i])) return DATES[i];
+  }
+  return fechaCandidata; // no se encontró ninguna — se deja tal cual, mejor que devolver vacío
+}
 function _invConProyeccion(planta, producto, fechaObjetivo) {
   var idx = _getInvHistIdxGlobal();
   var arr = idx[planta + '|' + producto];
@@ -23444,30 +23470,19 @@ function _buildCoberturaSectionHTML(plantaParam, productoParam, nombreFnRerender
   // Suministro abriera en 17-jul mostrando "Despacho 1 MB" y el resto
   // en inventario proyectado, dando la impresión de que el día ya había
   // cerrado cuando casi ninguna planta había reportado todavía.
-  // ⚠️ CORREGIDO (2da vuelta) — bug real confirmado: este chequeo solo
-  // corría en la PRIMERA carga de la página. El auto-refresh (cada 5
-  // min) usa una asignación de currentDate distinta y más laxa en otra
-  // parte del código, que SÍ corre en cada actualización — así que en
-  // cuanto pasaba de medianoche o llegaba el primer dato aislado del
-  // día nuevo, la Vista Ejecutiva terminaba mostrando ese día sin
-  // cierre real como si fuera el actual, aunque este chequeo lo había
-  // corregido bien al cargar la página. Ahora se re-evalúa en CADA
-  // render — salvo que la persona haya elegido una fecha a propósito
-  // con el selector (ver selectDate/window._execFechaElegidaManualmente),
-  // en cuyo caso se respeta su elección sin forzarla de vuelta.
-  if (!window._execFechaElegidaManualmente) {
-    window._execFechaInicializada = true;
-    var MIN_PLANTAS_CIERRE = 5;
-    for (var _fi = (DATES||[]).length - 1; _fi >= 0; _fi--) {
-      var _fCand = DATES[_fi];
-      var _plantasConReporte = {};
-      RAW.forEach(function(r) {
-        if (r.fecha === _fCand && !r._proyectadoConsumo && !r._proyectado) _plantasConReporte[r.planta] = true;
-      });
-      if (Object.keys(_plantasConReporte).length >= MIN_PLANTAS_CIERRE) { currentDate = _fCand; break; }
-    }
-  }
-  var fechaHoy  = currentDate || (DATES && DATES.length ? DATES[DATES.length-1] : '');
+  // ⚠️ CORREGIDO (2da vuelta, a pedido) — aunque este chequeo evitaba
+  // que el sistema AVANZARA solo a un día sin cierre, seguía dejando
+  // que la persona pudiera SELECCIONAR manualmente ese día y viera
+  // "0 MB" en casi todas las plantas — confuso e igual de engañoso
+  // aunque fuera una elección voluntaria. Ahora la separación es:
+  // `currentDate` (lo que la persona ve seleccionado en el calendario,
+  // se respeta siempre) vs. `fechaHoy` (la fecha que REALMENTE se usa
+  // para calcular y mostrar cifras) — si el día elegido no tiene
+  // suficientes cierres reales, `fechaHoy` retrocede al último día que
+  // sí los tiene, SIN importar si la elección fue manual o automática.
+  // El texto ("Datos al cierre del...") ya usa `fechaHoy`, así que deja
+  // explícito de qué fecha son realmente los números que se ven.
+  var fechaHoy = _fechaConCierreReal(currentDate || (DATES && DATES.length ? DATES[DATES.length-1] : ''));
   var idxHoy    = (DATES||[]).indexOf(fechaHoy);
   var fechaAyer = idxHoy > 0 ? DATES[idxHoy-1] : '';
   var pl        = (plantaParam !== undefined && plantaParam !== null) ? plantaParam : window._execPlanta;
@@ -26628,7 +26643,7 @@ function renderExecMapa(plantaSeleccionada) {
     _execLeafletMap = null;
   }
 
-  var fechaMapa = currentDate || window._execMapaFecha || (DATES && DATES.length ? DATES[DATES.length-1] : '');
+  var fechaMapa = _fechaConCierreReal(currentDate || window._execMapaFecha || (DATES && DATES.length ? DATES[DATES.length-1] : ''));
   window._execMapaFecha = fechaMapa;
   var tituloFechaEl = document.getElementById('exec-mapa-fecha-titulo');
   if (tituloFechaEl && fechaMapa) {
