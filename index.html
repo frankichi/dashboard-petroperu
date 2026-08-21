@@ -4162,6 +4162,14 @@ function selectDate(fecha) {
   }
   currentDate = fecha;
   window._fechaActual = fecha;
+  // ⚠️ AGREGADO — a pedido: distinguir "el sistema eligió esta fecha
+  // por defecto" de "la persona la eligió a propósito". Cuando es
+  // elección manual, se respeta sin forzar de vuelta a la última fecha
+  // cerrada (la persona puede querer ver el avance parcial del día);
+  // cuando es automático (recarga, refresco), si el día no tiene
+  // suficientes cierres reales, se prefiere mostrar la última fecha
+  // realmente cerrada — ver el guardia más abajo en Vista Ejecutiva.
+  window._execFechaElegidaManualmente = true;
   // ⚠️ AGREGADO — a pedido: el selector de fecha principal y el del mapa
   // deben trabajar sobre la misma fecha, sin importar cuál de los dos se
   // use para cambiarla. Antes el mapa tenía su propio estado
@@ -4872,7 +4880,13 @@ function byDateWithMandatory(fecha) {
 //    la planta no registró ese día, así que por defecto se le resta
 //    su pronóstico.
 function _getInvHistIdxGlobal() {
-  if (window._invHistIdxCache && window._invHistIdxRawRef === RAW) return window._invHistIdxCache;
+  // ⚠️ CORREGIDO — bug real encontrado al revisar: la caché comparaba
+  // solo la REFERENCIA de RAW, pero hay lugares (guardado de cambios
+  // en Coberturas) que hacen RAW.push(...) — mutan el mismo array en
+  // vez de reasignarlo — así que la referencia seguía "igual" y la
+  // caché quedaba desactualizada, sin la fila recién agregada. Ahora
+  // también se compara el LARGO del array, que sí cambia con push().
+  if (window._invHistIdxCache && window._invHistIdxRawRef === RAW && window._invHistIdxRawLen === RAW.length) return window._invHistIdxCache;
   var idx = {};
   RAW.forEach(function(r) {
     if (r.fecha && r.inv != null && invFilaValida(r)) {
@@ -4885,6 +4899,7 @@ function _getInvHistIdxGlobal() {
   });
   window._invHistIdxCache = idx;
   window._invHistIdxRawRef = RAW;
+  window._invHistIdxRawLen = RAW.length;
   return idx;
 }
 function _diasEntreFechasCalendario(fechaDesde, fechaHasta) {
@@ -4940,11 +4955,31 @@ function _invConProyeccion(planta, producto, fechaObjetivo) {
   }
   var diasHabiles = _diasHabilesEntreFechas(rAntes.fecha, fechaObjetivo);
   if (!diasHabiles.length) return Object.assign({}, rAntes, { _proyectadoConsumo: false });
+  // ⚠️ AGREGADO — red de seguridad: si la brecha desde el último
+  // reporte real es muy grande (más de ~2 semanas hábiles), proyectar
+  // día por día deja de ser confiable — el margen de error se acumula
+  // demasiado. En vez de arriesgarse a mostrar un "0" engañoso, se
+  // prefiere mostrar el último dato REAL conocido (como antes de este
+  // cambio) y avisar por consola, para poder diagnosticar si esto pasa
+  // seguido (podría indicar que el índice no está encontrando el
+  // reporte más reciente por algún motivo).
+  var LIMITE_DIAS_PROYECCION = 14;
+  if (diasHabiles.length > LIMITE_DIAS_PROYECCION) {
+    console.warn('[_invConProyeccion] Brecha demasiado grande (' + diasHabiles.length + ' días hábiles) para ' + planta + '|' + producto + ' — se muestra el último dato real (' + rAntes.fecha + ') sin proyectar, para evitar un resultado poco confiable.');
+    return null;
+  }
   var invProy = rAntes.inv || 0;
   diasHabiles.forEach(function(fechaDia) {
     var pronDia = (typeof _pTendPronParaFecha === 'function') ? (_pTendPronParaFecha(fechaDia, planta, producto) || 0) : 0;
     invProy -= pronDia;
   });
+  // ⚠️ AGREGADO — si la proyección "toca fondo" (llega a 0) mientras el
+  // último dato real era razonablemente positivo, es más probable que
+  // sea un error del cálculo que una coincidencia real de agotamiento
+  // exacto — se avisa por consola para poder diagnosticarlo.
+  if (invProy <= 0 && rAntes.inv > 0.5) {
+    console.warn('[_invConProyeccion] La proyección para ' + planta + '|' + producto + ' llegó a 0 partiendo de ' + rAntes.inv.toFixed(2) + ' MB (' + diasHabiles.length + ' días hábiles desde ' + rAntes.fecha + ') — revisar si el pronóstico usado es razonable.');
+  }
   invProy = Math.max(0, invProy);
   return Object.assign({}, rAntes, {
     inv: invProy,
@@ -23309,32 +23344,14 @@ function _buildCoberturaSectionHTML(plantaParam, productoParam, nombreFnRerender
     return habiles;
   }
   function _invArrastrado(planta, producto, fecha) {
-    var idx = _getInvHistIdx();
-    var arr = idx[planta + '|' + producto];
-    if (!arr || !arr.length) return null; // nunca se reportó — no se inventa nada
-    var lo = 0, hi = arr.length - 1, best = -1;
-    while (lo <= hi) {
-      var mid = (lo + hi) >> 1;
-      if (arr[mid].fecha <= fecha) { best = mid; lo = mid + 1; } else hi = mid - 1;
-    }
-    if (best < 0) return null;
-    var r = arr[best];
-    if (r.fecha === fecha) return r; // hay reporte real exacto para esta fecha, se usa tal cual
-    // ⚠️ CORREGIDO — bug real confirmado (Eten/Diesel, feriado de
-    // Fiestas Patrias): antes se restaba consumo por CADA día corrido
-    // desde el último reporte real, incluyendo feriados y domingos —
-    // días en los que normalmente no hay despacho. Eso hacía que el
-    // inventario proyectado cayera a 0 aunque la planta simplemente no
-    // había tenido movimiento por ser feriado, no porque se hubiera
-    // quedado sin producto de verdad. Ahora solo se resta consumo por
-    // los días HÁBILES reales dentro del rango — los feriados/domingos
-    // se saltan, manteniendo el inventario del día anterior tal cual.
-    var pronVal = r.pron_mes || r.pron || 0;
-    if (pronVal <= 0) return r; // sin demanda pronóstico cargada, no se puede proyectar consumo — se mantiene el arrastre simple
-    var diasHabiles = _diasHabilesEntreInv(r.fecha, fecha);
-    if (diasHabiles <= 0) return Object.assign({}, r, { _proyectadoConsumo: false }); // solo feriados/domingos de por medio — mismo dato, sin marcar como proyectado
-    var invProy = Math.max(0, (r.inv || 0) - diasHabiles * pronVal);
-    return Object.assign({}, r, { inv: invProy, _proyectadoConsumo: true, _proyectadoBaseFecha: r.fecha, _proyectadoDias: diasHabiles });
+    // ⚠️ CAMBIADO — a pedido explícito de unificar ambos paneles: en
+    // vez de mantener 2 implementaciones paralelas (esta usaba
+    // r.pron_mes guardado en la fila, que puede quedar desactualizado;
+    // el panel principal ya usa el pronóstico mensual aprobado con
+    // respaldo al mes anterior, consultado día por día — más robusto).
+    // Delega en la misma función global que usa el panel principal,
+    // para que los dos calculen exactamente igual, sin divergencias.
+    return (typeof _invConProyeccion === 'function') ? _invConProyeccion(planta, producto, fecha) : null;
   }
   // ⚠️ AGREGADO — el mapa de Vista Ejecutiva (_execMapaDatos) vive FUERA
   // de esta función, en un scope aparte, así que no podía llamar a
@@ -23427,12 +23444,18 @@ function _buildCoberturaSectionHTML(plantaParam, productoParam, nombreFnRerender
   // Suministro abriera en 17-jul mostrando "Despacho 1 MB" y el resto
   // en inventario proyectado, dando la impresión de que el día ya había
   // cerrado cuando casi ninguna planta había reportado todavía.
-  // Aquí, SOLO en la primera carga de esta vista (no en cada re-render,
-  // para no pisar la navegación manual del selector de fecha), se
-  // verifica que la fecha tenga un mínimo razonable de plantas con
-  // cierre real; si no, retrocede día por día hasta encontrar una que
-  // sí lo tenga.
-  if (!window._execFechaInicializada) {
+  // ⚠️ CORREGIDO (2da vuelta) — bug real confirmado: este chequeo solo
+  // corría en la PRIMERA carga de la página. El auto-refresh (cada 5
+  // min) usa una asignación de currentDate distinta y más laxa en otra
+  // parte del código, que SÍ corre en cada actualización — así que en
+  // cuanto pasaba de medianoche o llegaba el primer dato aislado del
+  // día nuevo, la Vista Ejecutiva terminaba mostrando ese día sin
+  // cierre real como si fuera el actual, aunque este chequeo lo había
+  // corregido bien al cargar la página. Ahora se re-evalúa en CADA
+  // render — salvo que la persona haya elegido una fecha a propósito
+  // con el selector (ver selectDate/window._execFechaElegidaManualmente),
+  // en cuyo caso se respeta su elección sin forzarla de vuelta.
+  if (!window._execFechaElegidaManualmente) {
     window._execFechaInicializada = true;
     var MIN_PLANTAS_CIERRE = 5;
     for (var _fi = (DATES||[]).length - 1; _fi >= 0; _fi--) {
@@ -24508,7 +24531,20 @@ function _buildCoberturaSectionHTML(plantaParam, productoParam, nombreFnRerender
         '<span style="font-size:10.5px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.04em">Calcular con:</span>' +
         '<div class="exec-btn-grid" style="display:flex;gap:8px">' + modoBtn('real','📋 Despacho real') + modoBtn('pron','🎯 Pronóstico') + '</div>' +
       '</div>' +
-      '<div style="font-size:11px;color:var(--txt3);margin-bottom:14px">Datos al cierre del <b style="color:var(--txt2)">' + _execNombreDia(fechaHoy) + ' ' + fechaHoy.slice(8,10)+'.'+fechaHoy.slice(5,7)+'.'+fechaHoy.slice(0,4) + '</b></div>' +
+      // ⚠️ CORREGIDO — mismo bug/fix que el subtítulo del banner: no
+      // asumir que el día está cerrado solo porque es la fecha
+      // seleccionada — verificar cuántas plantas realmente reportaron.
+      (function() {
+        var _plantasConCierreCob = {};
+        RAW.forEach(function(r) {
+          if (r.fecha === fechaHoy && !r._proyectadoConsumo && !r._proyectado) _plantasConCierreCob[r.planta] = true;
+        });
+        var _nCerraronCob = Object.keys(_plantasConCierreCob).length;
+        var _fechaTextoCob = _execNombreDia(fechaHoy) + ' ' + fechaHoy.slice(8,10)+'.'+fechaHoy.slice(5,7)+'.'+fechaHoy.slice(0,4);
+        return (_nCerraronCob >= 5)
+          ? ('<div style="font-size:11px;color:var(--txt3);margin-bottom:14px">Datos al cierre del <b style="color:var(--txt2)">' + _fechaTextoCob + '</b></div>')
+          : ('<div style="font-size:11px;color:#b45309;font-weight:600;margin-bottom:14px">⚠️ ' + _fechaTextoCob + ' — día en curso, aún no cierra (' + _nCerraronCob + (_nCerraronCob===1?' planta reportó':' plantas reportaron') + ')</div>');
+      })() +
       (datosCob.length
         ? '<div>' + cobRowsHTML + '</div>' +
           '<div style="display:flex;gap:16px;margin-top:14px;padding-top:12px;border-top:1px solid var(--bdr);font-size:10.5px;color:var(--txt3)">' +
@@ -25667,7 +25703,25 @@ function _renderVistaEjecutivaSimpleImpl() {
     var h1El = document.getElementById('exec-banner-h1');
     var h2CortoEl = document.getElementById('exec-banner-h2-corto');
     if (h1El) h1El.textContent = 'Inventarios y Despachos' + (pl === 'Nacional' ? ' ' : ' — ') + tituloScope;
-    if (h2CortoEl) h2CortoEl.textContent = '📅 Datos al cierre del ' + _execNombreDia(fechaHoy) + ' ' + fechaHoy.slice(8,10) + '.' + fechaHoy.slice(5,7) + '.' + fechaHoy.slice(0,4);
+    // ⚠️ CORREGIDO — bug real: el subtítulo decía "Datos al cierre del
+    // [fecha]" incluso cuando casi ninguna planta había cerrado ese
+    // día todavía (ej. navegando a "hoy" apenas empezando el día, con
+    // solo 1 planta reportando) — dando a entender que era información
+    // cerrada y confiable cuando en realidad era un avance parcial.
+    // Ahora se verifica cuántas plantas realmente cerraron esa fecha
+    // (mismo criterio de 5 plantas mínimo que ya se usa para elegir la
+    // fecha por defecto) y se avisa explícitamente cuando no alcanza.
+    if (h2CortoEl) {
+      var _plantasConCierreHoy = {};
+      RAW.forEach(function(r) {
+        if (r.fecha === fechaHoy && !r._proyectadoConsumo && !r._proyectado) _plantasConCierreHoy[r.planta] = true;
+      });
+      var _nCerraronHoy = Object.keys(_plantasConCierreHoy).length;
+      var _fechaTextoBanner = _execNombreDia(fechaHoy) + ' ' + fechaHoy.slice(8,10) + '.' + fechaHoy.slice(5,7) + '.' + fechaHoy.slice(0,4);
+      h2CortoEl.textContent = (_nCerraronHoy >= 5)
+        ? ('📅 Datos al cierre del ' + _fechaTextoBanner)
+        : ('⚠️ ' + _fechaTextoBanner + ' — día en curso, aún no cierra (' + _nCerraronHoy + (_nCerraronHoy===1?' planta reportó':' plantas reportaron') + ')');
+    }
   })();
 
   box.innerHTML =
@@ -25746,7 +25800,18 @@ function _renderVistaEjecutivaSimpleImpl() {
       '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:12px">' +
         '<div>' +
           '<div style="font-size:13px;font-weight:800;color:var(--txt)">🗺️ Mapa Nacional — Cobertura por Instalación</div>' +
-          '<div id="exec-mapa-fecha-titulo" style="font-size:11px;color:var(--txt3);margin-top:2px">Datos al cierre del ' + _execNombreDia(window._execMapaFecha || fechaHoy) + ' ' + (window._execMapaFecha || fechaHoy).slice(8,10)+'.'+(window._execMapaFecha || fechaHoy).slice(5,7)+'.'+(window._execMapaFecha || fechaHoy).slice(0,4) + '</div>' +
+          (function() {
+            var _fechaMapaLbl = window._execMapaFecha || fechaHoy;
+            var _plantasConCierreMapa = {};
+            RAW.forEach(function(r) {
+              if (r.fecha === _fechaMapaLbl && !r._proyectadoConsumo && !r._proyectado) _plantasConCierreMapa[r.planta] = true;
+            });
+            var _nCerraronMapa = Object.keys(_plantasConCierreMapa).length;
+            var _fechaTextoMapa = _execNombreDia(_fechaMapaLbl) + ' ' + _fechaMapaLbl.slice(8,10)+'.'+_fechaMapaLbl.slice(5,7)+'.'+_fechaMapaLbl.slice(0,4);
+            return (_nCerraronMapa >= 5)
+              ? ('<div id="exec-mapa-fecha-titulo" style="font-size:11px;color:var(--txt3);margin-top:2px">Datos al cierre del ' + _fechaTextoMapa + '</div>')
+              : ('<div id="exec-mapa-fecha-titulo" style="font-size:11px;color:#b45309;font-weight:600;margin-top:2px">⚠️ ' + _fechaTextoMapa + ' — día en curso, aún no cierra</div>');
+          })() +
         '</div>' +
         '<div style="display:flex;align-items:center;gap:8px">' +
           '<label style="font-size:10.5px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.4px">📅 Ver fecha</label>' +
@@ -26567,7 +26632,21 @@ function renderExecMapa(plantaSeleccionada) {
   window._execMapaFecha = fechaMapa;
   var tituloFechaEl = document.getElementById('exec-mapa-fecha-titulo');
   if (tituloFechaEl && fechaMapa) {
-    tituloFechaEl.textContent = 'Datos al cierre del ' + _execNombreDia(fechaMapa) + ' ' + fechaMapa.slice(8,10)+'.'+fechaMapa.slice(5,7)+'.'+fechaMapa.slice(0,4);
+    var _plantasConCierreMapa2 = {};
+    RAW.forEach(function(r) {
+      if (r.fecha === fechaMapa && !r._proyectadoConsumo && !r._proyectado) _plantasConCierreMapa2[r.planta] = true;
+    });
+    var _nCerraronMapa2 = Object.keys(_plantasConCierreMapa2).length;
+    var _fechaTextoMapa2 = _execNombreDia(fechaMapa) + ' ' + fechaMapa.slice(8,10)+'.'+fechaMapa.slice(5,7)+'.'+fechaMapa.slice(0,4);
+    if (_nCerraronMapa2 >= 5) {
+      tituloFechaEl.textContent = 'Datos al cierre del ' + _fechaTextoMapa2;
+      tituloFechaEl.style.color = '';
+      tituloFechaEl.style.fontWeight = '';
+    } else {
+      tituloFechaEl.textContent = '⚠️ ' + _fechaTextoMapa2 + ' — día en curso, aún no cierra';
+      tituloFechaEl.style.color = '#b45309';
+      tituloFechaEl.style.fontWeight = '600';
+    }
   }
   var inputFechaEl = document.getElementById('exec-mapa-fecha-input');
   if (inputFechaEl && !inputFechaEl.value) inputFechaEl.value = fechaMapa;
