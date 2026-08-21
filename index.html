@@ -4526,18 +4526,26 @@ async function fetchData(forceRefresh) {
     // cualquier valor que no calce con el patrón exacto.
     DATES = [...new Set(RAW.map(r => r.fecha))].filter(function(f){ return /^\d{4}-\d{2}-\d{2}$/.test(f); }).sort();
     if (!currentDate || !DATES.includes(currentDate)) {
-      // ⚠️ Por defecto, el selector debe mostrar el último día con
-      // CIERRE REAL (al menos una planta reportó de verdad ese día),
-      // no simplemente la fecha más reciente que aparezca en los
-      // datos — que puede ser "hoy" solo porque un buque confirmó T.D.
-      // y el sistema proyectó la existencia, sin que ninguna planta
-      // haya cerrado su reporte formal todavía. Mostrar "hoy" como si
-      // ya estuviera cerrado, cuando en realidad es una proyección,
-      // puede confundir. El usuario sigue pudiendo navegar manualmente
-      // a hoy con el selector si quiere ver la proyección.
-      var fechasConCierreReal = [...new Set(RAW.filter(function(r){ return !r._proyectadoConsumo && !r._proyectado; }).map(function(r){ return r.fecha; }))]
-        .filter(function(f){ return /^\d{4}-\d{2}-\d{2}$/.test(f); }).sort();
-      currentDate = (fechasConCierreReal.length ? fechasConCierreReal[fechasConCierreReal.length - 1] : DATES[DATES.length - 1]) || '';
+      // ⚠️ CORREGIDO — bug real confirmado: el criterio anterior
+      // ("fechasConCierreReal") bastaba con que UNA sola planta
+      // hubiera reportado de verdad ese día para considerarlo "el
+      // último día cerrado" — por eso el selector de fecha, en AMBOS
+      // paneles (comparten esta misma variable), saltaba a "hoy" apenas
+      // llegaba el primer reporte aislado, aunque casi ninguna planta
+      // hubiera cerrado todavía. Ahora usa el mismo criterio de mínimo
+      // 5 plantas que ya se aplicaba solo dentro de Vista Ejecutiva —
+      // unificado en una sola función (_tieneSuficientesCierresGlobal)
+      // para que ambos paneles decidan exactamente igual. El usuario
+      // sigue pudiendo navegar manualmente a "hoy" con el selector si
+      // quiere ver el avance parcial.
+      var _fechaConSuficienteCierre = '';
+      for (var _diFecha = DATES.length - 1; _diFecha >= 0; _diFecha--) {
+        if (typeof _tieneSuficientesCierresGlobal === 'function' && _tieneSuficientesCierresGlobal(DATES[_diFecha])) {
+          _fechaConSuficienteCierre = DATES[_diFecha];
+          break;
+        }
+      }
+      currentDate = _fechaConSuficienteCierre || DATES[DATES.length - 1] || '';
       window._fechaActual = currentDate;
     }
     // ⚠️ AGREGADO — a pedido: esperar (con un límite de 2.5s) a que las
