@@ -1,15 +1,21 @@
 <!DOCTYPE html>
-<!-- Versión: 2026-08-20-v3 — _buildCoberturaSectionHTML() completa:
-     devuelve las 33 variables/funciones que el resto de
-     _renderVistaEjecutivaSimpleImpl necesita (incluye datesN e
-     invEsProyectadoSerie, agregadas en esta versión — antes causaban
-     "ReferenceError: invEsProyectadoSerie is not defined" al cambiar de
-     planta/mes en la Vista Ejecutiva o en Inv. Nacional). Si después de
-     desplegar este archivo el error sigue apareciendo, es que el
-     navegador está sirviendo una copia vieja — revisar Service Worker
-     (Application → Service Workers → Unregister + Clear site data) y
-     confirmar en Vercel que el deployment más reciente está en
-     Production. -->
+<!-- Versión: 2026-08-21-v1 — selector de fecha por defecto (currentDate,
+     compartido entre panel principal y gerencial): ya NO salta a "hoy"
+     con solo unas pocas plantas reportando. Ahora exige que al menos
+     el 70% de las 18 plantas oficiales tengan cierre real ese día
+     (_tieneSuficientesCierresGlobal) — antes bastaba con 5 plantas
+     (28%), muy poco representativo para un total nacional. Si después
+     de desplegar este archivo el selector SIGUE mostrando "hoy" sin
+     que la mayoría de plantas haya reportado, es casi seguro que el
+     navegador está sirviendo una copia vieja — revisar:
+     1) DevTools → Application → Service Workers → Unregister + Clear
+        site data, luego recargar con Ctrl+Shift+R (recarga forzada).
+     2) En Vercel, confirmar que el deployment más reciente (con la
+        fecha/hora de este cambio) está marcado como "Production", no
+        solo como preview.
+     3) Buscar "2026-08-21-v1" en el código fuente de la página (clic
+        derecho → Ver código fuente, o Ctrl+U) para confirmar que el
+        navegador realmente cargó ESTE archivo. -->
 <html lang="es">
 <head>
 <meta charset="UTF-8">
@@ -3599,6 +3605,18 @@ function invFilaValida(r) {
   var max = esRef ? INV_SANO_MAX_REFINERIA : INV_SANO_MAX;
   return (r.inv || 0) <= max;
 }
+// ⚠️ AGREGADO — a pedido: detecta las filas "fantasma" que a veces
+// aparecen en la base de datos (inventario, pronóstico, venta real y
+// V.Factible en 0 al mismo tiempo) — confirmado con un caso real: el
+// 21.08 aparecían TODAS las plantas/productos con fila creada y todo
+// en cero, como si hubieran reportado sin haber reportado nada. Mismo
+// criterio que ya usa limpiarFilasFantasmaInventario() en el backend
+// (Code.gs) para detectarlas — aquí se usa para que el DASHBOARD no
+// las cuente como cierres reales al decidir qué fecha mostrar por
+// defecto, aunque la fila exista en la base de datos.
+function _esFilaFantasma(r) {
+  return (r.inv || 0) === 0 && (r.pron || 0) === 0 && (r.vreal || 0) === 0 && (r.vfact || 0) === 0;
+}
 // Lee la etiqueta estructurada que Registro Diario antepone al comentario
 // cuando un operador marca una reposición recibida (botón "¿Cómo llegó el
 // producto?"): "[REPOS|MARITIMO|12.45] texto libre..." — así el dashboard
@@ -4897,7 +4915,7 @@ function _getInvHistIdxGlobal() {
   if (window._invHistIdxCache && window._invHistIdxRawRef === RAW && window._invHistIdxRawLen === RAW.length) return window._invHistIdxCache;
   var idx = {};
   RAW.forEach(function(r) {
-    if (r.fecha && r.inv != null && invFilaValida(r)) {
+    if (r.fecha && r.inv != null && invFilaValida(r) && !_esFilaFantasma(r)) {
       var key = r.planta + '|' + r.producto;
       (idx[key] = idx[key] || []).push(r);
     }
@@ -4950,7 +4968,7 @@ function _tieneSuficientesCierresGlobal(fecha) {
   var MIN_PLANTAS_CIERRE_G = Math.ceil(_totalPlantas * 0.7);
   var _plantasConReporte = {};
   RAW.forEach(function(r) {
-    if (r.fecha === fecha && !r._proyectadoConsumo && !r._proyectado) _plantasConReporte[r.planta] = true;
+    if (r.fecha === fecha && !r._proyectadoConsumo && !r._proyectado && !_esFilaFantasma(r)) _plantasConReporte[r.planta] = true;
   });
   return Object.keys(_plantasConReporte).length >= MIN_PLANTAS_CIERRE_G;
 }
@@ -24569,7 +24587,7 @@ function _buildCoberturaSectionHTML(plantaParam, productoParam, nombreFnRerender
       (function() {
         var _plantasConCierreCob = {};
         RAW.forEach(function(r) {
-          if (r.fecha === fechaHoy && !r._proyectadoConsumo && !r._proyectado) _plantasConCierreCob[r.planta] = true;
+          if (r.fecha === fechaHoy && !r._proyectadoConsumo && !r._proyectado && !_esFilaFantasma(r)) _plantasConCierreCob[r.planta] = true;
         });
         var _nCerraronCob = Object.keys(_plantasConCierreCob).length;
         var _fechaTextoCob = _execNombreDia(fechaHoy) + ' ' + fechaHoy.slice(8,10)+'.'+fechaHoy.slice(5,7)+'.'+fechaHoy.slice(0,4);
@@ -25746,7 +25764,7 @@ function _renderVistaEjecutivaSimpleImpl() {
     if (h2CortoEl) {
       var _plantasConCierreHoy = {};
       RAW.forEach(function(r) {
-        if (r.fecha === fechaHoy && !r._proyectadoConsumo && !r._proyectado) _plantasConCierreHoy[r.planta] = true;
+        if (r.fecha === fechaHoy && !r._proyectadoConsumo && !r._proyectado && !_esFilaFantasma(r)) _plantasConCierreHoy[r.planta] = true;
       });
       var _nCerraronHoy = Object.keys(_plantasConCierreHoy).length;
       var _fechaTextoBanner = _execNombreDia(fechaHoy) + ' ' + fechaHoy.slice(8,10) + '.' + fechaHoy.slice(5,7) + '.' + fechaHoy.slice(0,4);
@@ -25836,7 +25854,7 @@ function _renderVistaEjecutivaSimpleImpl() {
             var _fechaMapaLbl = window._execMapaFecha || fechaHoy;
             var _plantasConCierreMapa = {};
             RAW.forEach(function(r) {
-              if (r.fecha === _fechaMapaLbl && !r._proyectadoConsumo && !r._proyectado) _plantasConCierreMapa[r.planta] = true;
+              if (r.fecha === _fechaMapaLbl && !r._proyectadoConsumo && !r._proyectado && !_esFilaFantasma(r)) _plantasConCierreMapa[r.planta] = true;
             });
             var _nCerraronMapa = Object.keys(_plantasConCierreMapa).length;
             var _fechaTextoMapa = _execNombreDia(_fechaMapaLbl) + ' ' + _fechaMapaLbl.slice(8,10)+'.'+_fechaMapaLbl.slice(5,7)+'.'+_fechaMapaLbl.slice(0,4);
@@ -26666,7 +26684,7 @@ function renderExecMapa(plantaSeleccionada) {
   if (tituloFechaEl && fechaMapa) {
     var _plantasConCierreMapa2 = {};
     RAW.forEach(function(r) {
-      if (r.fecha === fechaMapa && !r._proyectadoConsumo && !r._proyectado) _plantasConCierreMapa2[r.planta] = true;
+      if (r.fecha === fechaMapa && !r._proyectadoConsumo && !r._proyectado && !_esFilaFantasma(r)) _plantasConCierreMapa2[r.planta] = true;
     });
     var _nCerraronMapa2 = Object.keys(_plantasConCierreMapa2).length;
     var _fechaTextoMapa2 = _execNombreDia(fechaMapa) + ' ' + fechaMapa.slice(8,10)+'.'+fechaMapa.slice(5,7)+'.'+fechaMapa.slice(0,4);
