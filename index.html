@@ -24429,12 +24429,27 @@ function _buildCoberturaSectionHTML(plantaParam, productoParam, nombreFnRerender
   var vacioRowsHTML = datosVacio.map(function(d) {
     var pctActual = Math.max(2, Math.round((d.dias / maxDiasVacio) * 100));
     var pctExtra = Math.max(d.diasPotencial > d.dias ? 2 : 0, Math.round(((d.diasPotencial - d.dias) / maxDiasVacio) * 100));
+    // ⚠️ CORREGIDO — a pedido: antes usaba el atributo "title" nativo
+    // del navegador — no se ve igual que el resto del dashboard, y en
+    // móvil no aparece al tocar (algunos navegadores lo muestran solo
+    // con una pulsación larga, la mayoría no lo muestra nunca). Ahora
+    // usa el mismo popup estilizado que ya usan las demás gráficas
+    // (_execShowTip), con soporte tanto de mouse como de toque —
+    // touchstart lo abre, touchmove lo sigue mientras se mantiene el
+    // dedo, touchend lo cierra (mismo patrón "mostrar mientras se
+    // toca" que un tooltip táctil normal).
+    var vacioTipHTML = '<div style="font-weight:800;margin-bottom:4px">🈳 ' + d.label + '</div>' +
+      '<div>Cobertura hoy: <b>' + d.dias + 'd</b></div>' +
+      '<div>Capacidad: <b>' + fmtMB(d.capMB) + '</b></div>' +
+      '<div>Vacío disponible: <b>' + fmtMB(d.vacioMB) + '</b></div>' +
+      '<div>Si se llena: <b style="color:#a78bfa">' + d.diasPotencial + 'd</b> de cobertura</div>';
+    var vacioTipAttrs = 'onmouseenter="_execShowTip(event,\'' + encodeURIComponent(vacioTipHTML).replace(/'/g,'%27') + '\')" onmousemove="_execPosTip(event)" onmouseleave="_execHideTip()" ontouchstart="_execShowTip(event,\'' + encodeURIComponent(vacioTipHTML).replace(/'/g,'%27') + '\')" ontouchmove="_execPosTip(event)" ontouchend="_execHideTip()"';
     return '<div style="display:flex;align-items:center;gap:10px;padding:7px 0">' +
       '<div class="exec-cob-label" style="width:120px;flex-shrink:0" title="' + d.label + '">' +
         '<div style="font-size:11.5px;font-weight:700;color:var(--txt);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + d.label + '</div>' +
         '<div style="font-size:9.5px;color:var(--txt3);font-family:var(--mono);margin-top:1px">vacío ' + fmtMB(d.vacioMB) + '</div>' +
       '</div>' +
-      '<div style="flex:1;background:var(--bg3);border-radius:6px;height:22px;position:relative;overflow:hidden;display:flex" title="Hoy: ' + d.dias + 'd · Capacidad: ' + fmtMB(d.capMB) + ' · Vacío: ' + fmtMB(d.vacioMB) + '">' +
+      '<div ' + vacioTipAttrs + ' style="flex:1;background:var(--bg3);border-radius:6px;height:22px;position:relative;overflow:hidden;display:flex;cursor:help">' +
         '<div style="height:100%;width:' + pctActual + '%;background:#94a3b8;border-radius:' + (pctExtra>0?'6px 0 0 6px':'6px') + ';transition:width .4s"></div>' +
         (pctExtra > 0 ? '<div style="height:100%;width:' + pctExtra + '%;background:repeating-linear-gradient(45deg,#7c3aed,#7c3aed 5px,#a78bfa 5px,#a78bfa 10px);border-radius:0 6px 6px 0;transition:width .4s"></div>' : '') +
       '</div>' +
@@ -26760,15 +26775,29 @@ function _execShowTip(evt, encoded) {
   tip.style.display = 'block';
   _execPosTip(evt);
 }
+// ⚠️ CORREGIDO — a pedido: el popup no aparecía al tocar con el dedo
+// en móvil (solo respondía a eventos de mouse: mouseenter/mousemove).
+// Ahora también extrae la posición de eventos táctiles (touchstart/
+// touchmove), que traen las coordenadas dentro de evt.touches[0] en
+// vez de directo en evt.clientX/clientY — sin este cambio, en un
+// dispositivo táctil el popup se abría en la esquina (0,0) o ni
+// aparecía, porque evt.clientX/clientY vienen "undefined" en un
+// evento táctil.
+function _execCoordsDeEvento(evt) {
+  if (evt.touches && evt.touches.length) return { x: evt.touches[0].clientX, y: evt.touches[0].clientY };
+  if (evt.changedTouches && evt.changedTouches.length) return { x: evt.changedTouches[0].clientX, y: evt.changedTouches[0].clientY };
+  return { x: evt.clientX, y: evt.clientY };
+}
 function _execPosTip(evt) {
   var tip = document.getElementById('exec-tip-float');
   if (!tip || tip.style.display === 'none') return;
   var pad = 14;
-  var x = evt.clientX + pad, y = evt.clientY + pad;
+  var coords = _execCoordsDeEvento(evt);
+  var x = coords.x + pad, y = coords.y + pad;
   var vw = window.innerWidth, vh = window.innerHeight;
   var rect = tip.getBoundingClientRect();
-  if (x + rect.width > vw - 10) x = evt.clientX - rect.width - pad;
-  if (y + rect.height > vh - 10) y = evt.clientY - rect.height - pad;
+  if (x + rect.width > vw - 10) x = coords.x - rect.width - pad;
+  if (y + rect.height > vh - 10) y = coords.y - rect.height - pad;
   tip.style.left = Math.max(6, x) + 'px';
   tip.style.top = Math.max(6, y) + 'px';
 }
