@@ -24192,7 +24192,7 @@ function _buildCoberturaSectionHTML(plantaParam, productoParam, nombreFnRerender
       var despachoRealProd = r.vreal || r.dem || 0;
       var denomProd = (esTalaraComb || window._execCobModo !== 'real') ? pronProd : despachoRealProd;
       if (!porPlantaFila[r.planta]) {
-        porPlantaFila[r.planta] = { invSum: 0, pronSum: 0, invSumCob: 0, pronSumCob: 0, proyectado: false, planta: r.planta, producto: r.producto };
+        porPlantaFila[r.planta] = { invSum: 0, pronSum: 0, invSumCob: 0, pronSumCob: 0, capSum: 0, proyectado: false, planta: r.planta, producto: r.producto };
       }
       var acc = porPlantaFila[r.planta];
       // invSum/pronSum: totales COMPLETOS de la planta (incluyen TA1),
@@ -24200,6 +24200,10 @@ function _buildCoberturaSectionHTML(plantaParam, productoParam, nombreFnRerender
       // planta en general.
       acc.invSum += invCombProd;
       acc.pronSum += pronProd;
+      // ⚠️ AGREGADO — a pedido: capacidad total de la planta (suma de
+      // todos sus productos), para el visualizador de "vacío" y los
+      // días de cobertura potenciales si se llenara ese espacio.
+      acc.capSum += (typeof getCapacidad === 'function' ? getCapacidad(r.planta, r.producto) : 0);
       // ⚠️ CORREGIDO — fórmula explícita solicitada: los "días de
       // cobertura" a nivel Nacional ya NO son un promedio ponderado de
       // los días de cada producto por separado. Ahora son directamente:
@@ -24229,7 +24233,7 @@ function _buildCoberturaSectionHTML(plantaParam, productoParam, nombreFnRerender
     // propio calculable.
     if (COMBO_PLANTAS['Talara']) {
       if (!porPlantaFila['Talara'] && Object.keys(refTalaraInvPorProducto).length) {
-        porPlantaFila['Talara'] = { invSum: 0, pronSum: 0, invSumCob: 0, pronSumCob: 0, proyectado: false, planta: 'Talara', producto: '' };
+        porPlantaFila['Talara'] = { invSum: 0, pronSum: 0, invSumCob: 0, pronSumCob: 0, capSum: 0, proyectado: false, planta: 'Talara', producto: '' };
       }
       if (porPlantaFila['Talara']) {
         Object.keys(refTalaraInvPorProducto).forEach(function(prodRef) {
@@ -24243,7 +24247,18 @@ function _buildCoberturaSectionHTML(plantaParam, productoParam, nombreFnRerender
       var acc = porPlantaFila[p];
       var rep = reposicionInfoPlanta(p, prod);
       var diasDirecto = acc.pronSumCob > 0 ? Math.floor(acc.invSumCob / acc.pronSumCob) : null;
-      return { label: p, dias: diasDirecto, invMB: acc.invSum, pronMB: acc.pronSum, denomMB: acc.pronSumCob, diasRepos: rep.diasRepos, volReposMB: rep.volMB, tipoRepos: rep.tipo, reposDetalle: rep.detalle, reposBt: rep.bt, reposFecha: rep.fecha, reposEstado: rep.estado, reposNaves: rep.naves, reposHistorico: rep.historico, reposCargando: rep.cargando, sinCob: diasDirecto === null, proyectado: acc.proyectado };
+      // ⚠️ AGREGADO — a pedido: "vacío" (espacio libre hasta la
+      // capacidad total) y los días de cobertura que tendría la planta
+      // SI se llenara ese vacío — calculado en base al pronóstico
+      // (acc.pronSum), no el despacho real, para que sea un número
+      // estable y comparable entre plantas, sin el ruido día a día del
+      // despacho real. Se recalcula fresco en cada render junto con el
+      // resto — por eso ya se comporta "diario y trazable" igual que
+      // el inventario: cambia solo si cambia la fecha vista, el
+      // inventario, o la capacidad cargada (E&D).
+      var vacioMB = Math.max(0, acc.capSum - acc.invSum);
+      var diasPotencial = acc.pronSum > 0 ? Math.floor(acc.capSum / acc.pronSum) : null;
+      return { label: p, dias: diasDirecto, invMB: acc.invSum, pronMB: acc.pronSum, denomMB: acc.pronSumCob, capMB: acc.capSum, vacioMB: vacioMB, diasPotencial: diasPotencial, diasRepos: rep.diasRepos, volReposMB: rep.volMB, tipoRepos: rep.tipo, reposDetalle: rep.detalle, reposBt: rep.bt, reposFecha: rep.fecha, reposEstado: rep.estado, reposNaves: rep.naves, reposHistorico: rep.historico, reposCargando: rep.cargando, sinCob: diasDirecto === null, proyectado: acc.proyectado };
     });
   } else if (!esRefineriaExec) {
     var plantaCobertura = COMBO_PLANTAS[pl] ? COMBO_PLANTAS[pl].plantaDespacho : pl;
@@ -24280,6 +24295,18 @@ function _buildCoberturaSectionHTML(plantaParam, productoParam, nombreFnRerender
           var r3 = _invArrastrado(pl3, r.producto, fechaHoy);
           if (r3) invCombinado += (r3.inv || 0);
         });
+      }
+      // ⚠️ AGREGADO — a pedido: capacidad del producto en esta planta
+      // (o combinada, si es un combo como Talara + Refinería Talara),
+      // para el visualizador de "vacío" y los días de cobertura
+      // potenciales si se llenara ese espacio.
+      var capProducto = 0;
+      if (typeof getCapacidad === 'function') {
+        if (comboActivo) {
+          comboActivo.plantasInv.forEach(function(pl3) { capProducto += getCapacidad(pl3, r.producto) || 0; });
+        } else {
+          capProducto = getCapacidad(plantaCobertura, r.producto) || 0;
+        }
       }
       var rParaCob = comboActivo ? Object.assign({}, r, { inv: invCombinado }) : r;
       // Vista combinada (Talara + Refinería Talara, etc.): la cobertura
@@ -24333,17 +24360,33 @@ function _buildCoberturaSectionHTML(plantaParam, productoParam, nombreFnRerender
       var esMollendoULSDVista = plantaCobertura === 'Mollendo' && r.producto === 'ULSD DA';
       var esExcepcionSinDias = esTalaraTA1Vista || esMollendoULSDVista;
       if (c === null && !esExcepcionSinDias) return;
-      datosCob.push({ label: r.producto, dias: esExcepcionSinDias ? null : c, invMB: invCombinado, pronMB: pronVal2, denomMB: _denomMB, denomBase: _denomBase, diasRepos: rep.diasRepos, volReposMB: rep.volMB, tipoRepos: rep.tipo, reposBt: rep.bt, reposFecha: rep.fecha, reposEstado: rep.estado, reposNaves: rep.naves, reposHistorico: rep.historico, reposCargando: rep.cargando, sinCob: esExcepcionSinDias ? true : (c === null), proyectado: !!r._proyectadoConsumo });
+      // ⚠️ AGREGADO — a pedido: "vacío" y días de cobertura potenciales
+      // si se llenara — mismo criterio que Vista Nacional (en base al
+      // pronóstico, pronVal2, no el despacho real, para que sea un
+      // número estable entre plantas).
+      var vacioMBFila = Math.max(0, capProducto - invCombinado);
+      var diasPotencialFila = pronVal2 > 0 ? Math.floor(capProducto / pronVal2) : null;
+      datosCob.push({ label: r.producto, dias: esExcepcionSinDias ? null : c, invMB: invCombinado, pronMB: pronVal2, denomMB: _denomMB, denomBase: _denomBase, capMB: capProducto, vacioMB: vacioMBFila, diasPotencial: diasPotencialFila, diasRepos: rep.diasRepos, volReposMB: rep.volMB, tipoRepos: rep.tipo, reposBt: rep.bt, reposFecha: rep.fecha, reposEstado: rep.estado, reposNaves: rep.naves, reposHistorico: rep.historico, reposCargando: rep.cargando, sinCob: esExcepcionSinDias ? true : (c === null), proyectado: !!r._proyectadoConsumo });
     });
   }
+  // ⚠️ AGREGADO — a pedido: nuevo criterio de orden, por días de
+  // cobertura POTENCIALES (si se llenara el vacío hasta la capacidad),
+  // además del orden por días ACTUALES que ya existía. Son dos cosas
+  // independientes — el "Mayor → Menor"/"Menor → Mayor" sigue
+  // controlando la dirección, sin importar cuál de los dos criterios
+  // esté activo.
+  if (window._execCobSortBy === undefined) window._execCobSortBy = 'dias';
   datosCob.sort(function(a,b){
     // Las filas "sin cobertura calculable" van al final, sin importar
     // el orden mayor/menor elegido — no tienen un número real que
     // ordenar de forma significativa.
     if (a.sinCob !== b.sinCob) return a.sinCob ? 1 : -1;
-    return window._execCobSort==='asc' ? a.dias-b.dias : b.dias-a.dias;
+    var campo = window._execCobSortBy === 'potencial' ? 'diasPotencial' : 'dias';
+    var va = (a[campo] == null) ? -1 : a[campo];
+    var vb = (b[campo] == null) ? -1 : b[campo];
+    return window._execCobSort==='asc' ? va-vb : vb-va;
   });
-  var maxDiasCob = datosCob.reduce(function(m,d){ return d.sinCob ? m : Math.max(m, d.dias + (d.diasRepos||0)); }, 1);
+  var maxDiasCob = datosCob.reduce(function(m,d){ return d.sinCob ? m : Math.max(m, d.dias + (d.diasRepos||0), d.diasPotencial||0); }, 1);
 
   function cobColor(dias) { return dias <= 7 ? '#dc2626' : dias <= 14 ? '#e8a000' : '#16a34a'; }
   function sortBtn(val, label) {
@@ -24351,6 +24394,15 @@ function _buildCoberturaSectionHTML(plantaParam, productoParam, nombreFnRerender
     return '<button onclick="window._execCobSort=\'' + val + '\';' + nombreFnRerender + '();" '
       + 'style="padding:6px 14px;border-radius:8px;font-size:11.5px;font-weight:700;cursor:pointer;border:1.5px solid '
       + (active ? '#0a3a5c;background:#0a3a5c;color:#fff' : 'var(--bdr);background:var(--card);color:var(--txt2)')
+      + '">' + label + '</button>';
+  }
+  // ⚠️ AGREGADO — botón para elegir el CRITERIO de orden (días actuales
+  // vs. potencial si se llena) — separado del botón de dirección.
+  function sortByBtn(val, label) {
+    var active = window._execCobSortBy === val;
+    return '<button onclick="window._execCobSortBy=\'' + val + '\';' + nombreFnRerender + '();" '
+      + 'style="padding:6px 14px;border-radius:8px;font-size:11.5px;font-weight:700;cursor:pointer;border:1.5px solid '
+      + (active ? '#7c3aed;background:#7c3aed;color:#fff' : 'var(--bdr);background:var(--card);color:var(--txt2)')
       + '">' + label + '</button>';
   }
   function modoBtn(val, label) {
@@ -24539,6 +24591,21 @@ function _buildCoberturaSectionHTML(plantaParam, productoParam, nombreFnRerender
     var confirmadaBadge = (d.diasRepos > 0 && !reposEsPendiente)
       ? '<div style="font-size:8.5px;color:var(--verde,#16a34a);font-weight:700" title="Descarga confirmada — ya sumada al inventario">\u2705 recibido</div>'
       : '';
+    // ⚠️ AGREGADO — a pedido: segmento visual del "vacío" — cuánta
+    // cobertura adicional tendría la planta si se llenara ese espacio
+    // hasta su capacidad. Se dibuja como una extensión rayada, distinta
+    // del azul de reposición (esa es volumen YA en camino; esto es
+    // espacio disponible, sin nada asignado todavía).
+    var pctPotencial = 0;
+    if (d.diasPotencial != null && d.diasPotencial > d.dias && d.vacioMB > 0.05) {
+      pctPotencial = Math.max(2, Math.round(((d.diasPotencial - d.dias) / maxDiasCob) * 100));
+    }
+    var vacioTipHTML = '<div style="font-weight:800;margin-bottom:4px">🈳 Espacio disponible</div>' +
+      '<div>Vacío: <b>' + fmtMB(d.vacioMB) + '</b> (capacidad ' + fmtMB(d.capMB) + ')</div>' +
+      '<div>Si se llena: <b>' + d.diasPotencial + 'd</b> de cobertura (+' + (d.diasPotencial - d.dias) + 'd más que hoy)</div>';
+    var vacioSegHTML = pctPotencial > 0
+      ? '<div onmouseenter="_execShowTip(event,\'' + encodeURIComponent(vacioTipHTML).replace(/'/g,'%27') + '\')" onmousemove="_execPosTip(event)" onmouseleave="_execHideTip()" style="height:100%;width:' + pctPotencial + '%;background:repeating-linear-gradient(45deg,var(--bg3),var(--bg3) 4px,rgba(124,58,237,.18) 4px,rgba(124,58,237,.18) 8px);border-left:2px dashed rgba(124,58,237,.5);flex-shrink:0;cursor:help"></div>'
+      : '';
     return '<div style="display:flex;align-items:center;gap:10px;padding:7px 0">' +
       '<div class="exec-cob-label" style="width:120px;flex-shrink:0" title="' + d.label + '">' +
         '<div style="font-size:11.5px;font-weight:700;color:var(--txt);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + d.label + '</div>' +
@@ -24550,10 +24617,12 @@ function _buildCoberturaSectionHTML(plantaParam, productoParam, nombreFnRerender
           ? ((pctRepos > 0 && reposLejana ? '<div style="width:5px;flex-shrink:0"></div>' : '') +
              (pctRepos > 0 ? '<div ' + (reposHTML ? ('onmouseenter="_execShowTip(event,\'' + encodeURIComponent(reposHTML).replace(/'/g,'%27') + '\')" onmousemove="_execPosTip(event)" onmouseleave="_execHideTip()"') : '') + ' style="height:100%;width:' + pctRepos + '%;background:repeating-linear-gradient(45deg,#2563eb,#2563eb 5px,#3b82f6 5px,#3b82f6 10px);border-radius:' + (reposLejana?'6px':'0 6px 6px 0') + ';transition:width .4s;cursor:help' + (reposLejana?';opacity:.7':'') + '"></div>' : ''))
           : segmentosBarHTML) +
+        vacioSegHTML +
       '</div>' +
       '<div style="width:70px;flex-shrink:0;text-align:right">' +
         '<div style="font-family:var(--mono);font-weight:800;font-size:13px;color:' + col + '">' + d.dias + 'd</div>' +
         (reposEsPendiente ? '<div ' + tipHandlersBadge + ' style="font-family:var(--mono);font-size:9px;color:#2563eb;font-weight:700;cursor:help' + (reposLejana?';opacity:.65':'') + '">+' + d.diasRepos + 'd \uD83D\uDEA2</div>' : confirmadaBadge) +
+        (pctPotencial > 0 ? '<div style="font-family:var(--mono);font-size:9px;color:#7c3aed;font-weight:700">🈳 ' + d.diasPotencial + 'd pot.</div>' : '') +
       '</div>' +
     '</div>';
   }).join('');
@@ -24593,6 +24662,10 @@ function _buildCoberturaSectionHTML(plantaParam, productoParam, nombreFnRerender
       '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap">' +
         '<span style="font-size:10.5px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.04em">Calcular con:</span>' +
         '<div class="exec-btn-grid" style="display:flex;gap:8px">' + modoBtn('real','📋 Despacho real') + modoBtn('pron','🎯 Pronóstico') + '</div>' +
+      '</div>' +
+      '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap">' +
+        '<span style="font-size:10.5px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.04em">Ordenar por:</span>' +
+        '<div class="exec-btn-grid" style="display:flex;gap:8px">' + sortByBtn('dias','Cobertura actual') + sortByBtn('potencial','🈳 Potencial si se llena') + '</div>' +
       '</div>' +
       // ⚠️ CORREGIDO — mismo bug/fix que el subtítulo del banner: no
       // asumir que el día está cerrado solo porque es la fecha
