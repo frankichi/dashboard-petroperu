@@ -8487,8 +8487,19 @@ function cobSetPronTodos() {
     if (typeof SKIP_COMBOS !== 'undefined' && SKIP_COMBOS.has((r.planta||'')+'|'+(r.producto||''))) return;
     var pronVal = cobGetPron(r);
     if (pronVal <= 0) return;
-    var vfactActual = cobGetVfact(r);
-    if (Math.abs(vfactActual - pronVal) < 0.001) return; // ya está igualado, nada que hacer
+    // ⚠️ CORREGIDO — bug real: "el botón no funciona". cobGetVfact()
+    // tiene un respaldo — si la fila no tiene dato REAL de V.Factible,
+    // devuelve el pronóstico por defecto (para no mostrar un vacío en
+    // pantalla). El chequeo de "ya está igualado" usaba ese valor CON
+    // el respaldo aplicado — así que para cualquier fila sin V.Factible
+    // real cargado, ya "parecía" igual al pronóstico y se saltaba sin
+    // crear el override real, sin guardar nada. Ahora se usa el valor
+    // SIN el respaldo (_getVfactEffective) para decidir si saltar —
+    // solo se salta cuando hay un dato REAL ya igual al pronóstico; si
+    // no hay dato real, siempre se aplica el override (quedando
+    // efectivamente guardado, no solo mostrado por defecto).
+    var vfactReal = _getVfactEffective(r);
+    if (vfactReal > 0 && Math.abs(vfactReal - pronVal) < 0.001) return; // ya está igualado con un dato REAL, nada que hacer
     cobOverrides[r.planta + '|' + r.producto] = cobOverrides[r.planta + '|' + r.producto] || {};
     cobOverrides[r.planta + '|' + r.producto].vfact = pronVal;
     n++;
