@@ -4938,7 +4938,16 @@ function _diasHabilesEntreFechas(fechaDesde, fechaHasta) {
 // Ejecutiva como por su mapa, para que ambos usen el mismo criterio y
 // no diverjan (antes cada uno decidía por su cuenta).
 function _tieneSuficientesCierresGlobal(fecha) {
-  var MIN_PLANTAS_CIERRE_G = 5;
+  // ⚠️ CORREGIDO — bug real confirmado con datos reales: un mínimo fijo
+  // de 5 plantas era demasiado bajo para un total NACIONAL — se veía
+  // "cerrado" con apenas el 28% de las plantas reportando (5 de 18),
+  // suficiente para mostrar caídas de más de 100 MB en un solo día
+  // (comparado contra el día anterior con TODAS las plantas) sin ser un
+  // consumo real, solo plantas faltantes. Ahora el mínimo es dinámico:
+  // el 70% de las plantas oficiales (13 de 18) — un total nacional con
+  // menos de eso no es representativo para mostrarlo como "cerrado".
+  var _totalPlantas = (typeof PLANTAS_18_OFICIALES !== 'undefined' && PLANTAS_18_OFICIALES.length) ? PLANTAS_18_OFICIALES.length : 18;
+  var MIN_PLANTAS_CIERRE_G = Math.ceil(_totalPlantas * 0.7);
   var _plantasConReporte = {};
   RAW.forEach(function(r) {
     if (r.fecha === fecha && !r._proyectadoConsumo && !r._proyectado) _plantasConReporte[r.planta] = true;
@@ -24564,7 +24573,7 @@ function _buildCoberturaSectionHTML(plantaParam, productoParam, nombreFnRerender
         });
         var _nCerraronCob = Object.keys(_plantasConCierreCob).length;
         var _fechaTextoCob = _execNombreDia(fechaHoy) + ' ' + fechaHoy.slice(8,10)+'.'+fechaHoy.slice(5,7)+'.'+fechaHoy.slice(0,4);
-        return (_nCerraronCob >= 5)
+        return (_tieneSuficientesCierresGlobal(fechaHoy))
           ? ('<div style="font-size:11px;color:var(--txt3);margin-bottom:14px">Datos al cierre del <b style="color:var(--txt2)">' + _fechaTextoCob + '</b></div>')
           : ('<div style="font-size:11px;color:#b45309;font-weight:600;margin-bottom:14px">⚠️ ' + _fechaTextoCob + ' — día en curso, aún no cierra (' + _nCerraronCob + (_nCerraronCob===1?' planta reportó':' plantas reportaron') + ')</div>');
       })() +
@@ -25741,7 +25750,7 @@ function _renderVistaEjecutivaSimpleImpl() {
       });
       var _nCerraronHoy = Object.keys(_plantasConCierreHoy).length;
       var _fechaTextoBanner = _execNombreDia(fechaHoy) + ' ' + fechaHoy.slice(8,10) + '.' + fechaHoy.slice(5,7) + '.' + fechaHoy.slice(0,4);
-      h2CortoEl.textContent = (_nCerraronHoy >= 5)
+      h2CortoEl.textContent = (_tieneSuficientesCierresGlobal(fechaHoy))
         ? ('📅 Datos al cierre del ' + _fechaTextoBanner)
         : ('⚠️ ' + _fechaTextoBanner + ' — día en curso, aún no cierra (' + _nCerraronHoy + (_nCerraronHoy===1?' planta reportó':' plantas reportaron') + ')');
     }
@@ -25831,7 +25840,7 @@ function _renderVistaEjecutivaSimpleImpl() {
             });
             var _nCerraronMapa = Object.keys(_plantasConCierreMapa).length;
             var _fechaTextoMapa = _execNombreDia(_fechaMapaLbl) + ' ' + _fechaMapaLbl.slice(8,10)+'.'+_fechaMapaLbl.slice(5,7)+'.'+_fechaMapaLbl.slice(0,4);
-            return (_nCerraronMapa >= 5)
+            return (_tieneSuficientesCierresGlobal(_fechaMapaLbl))
               ? ('<div id="exec-mapa-fecha-titulo" style="font-size:11px;color:var(--txt3);margin-top:2px">Datos al cierre del ' + _fechaTextoMapa + '</div>')
               : ('<div id="exec-mapa-fecha-titulo" style="font-size:11px;color:#b45309;font-weight:600;margin-top:2px">⚠️ ' + _fechaTextoMapa + ' — día en curso, aún no cierra</div>');
           })() +
@@ -26661,7 +26670,7 @@ function renderExecMapa(plantaSeleccionada) {
     });
     var _nCerraronMapa2 = Object.keys(_plantasConCierreMapa2).length;
     var _fechaTextoMapa2 = _execNombreDia(fechaMapa) + ' ' + fechaMapa.slice(8,10)+'.'+fechaMapa.slice(5,7)+'.'+fechaMapa.slice(0,4);
-    if (_nCerraronMapa2 >= 5) {
+    if (_tieneSuficientesCierresGlobal(fechaMapa)) {
       tituloFechaEl.textContent = 'Datos al cierre del ' + _fechaTextoMapa2;
       tituloFechaEl.style.color = '';
       tituloFechaEl.style.fontWeight = '';
