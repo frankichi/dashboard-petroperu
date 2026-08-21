@@ -23517,7 +23517,20 @@ function _buildCoberturaSectionHTML(plantaParam, productoParam, nombreFnRerender
   // sí los tiene, SIN importar si la elección fue manual o automática.
   // El texto ("Datos al cierre del...") ya usa `fechaHoy`, así que deja
   // explícito de qué fecha son realmente los números que se ven.
-  var fechaHoy = _fechaConCierreReal(currentDate || (DATES && DATES.length ? DATES[DATES.length-1] : ''));
+  // ⚠️ CAMBIADO (3ra vuelta, a pedido) — con el día 21 seleccionable
+  // mientras las plantas aún no terminan de cerrar su reporte, los
+  // valores NO deben quedarse "congelados" en el último cierre real
+  // (20.08) — deben seguir proyectando (restando el pronóstico
+  // día por día) hasta que cada planta reporte de verdad. Por eso
+  // `fechaHoy` ahora usa directamente la fecha seleccionada —
+  // _invArrastrado()/_invConProyeccion() ya hacen esa proyección por
+  // planta (con su propia red de seguridad: si la brecha es
+  // demasiado grande, no proyecta y avisa por consola en vez de
+  // arriesgar un número poco confiable). El aviso "⚠️ día en curso,
+  // aún no cierra" en el texto (más abajo) sigue funcionando igual —
+  // solo avisa, ya no fuerza los números a quedarse en el día
+  // anterior.
+  var fechaHoy = currentDate || (DATES && DATES.length ? DATES[DATES.length-1] : '');
   var idxHoy    = (DATES||[]).indexOf(fechaHoy);
   var fechaAyer = idxHoy > 0 ? DATES[idxHoy-1] : '';
   var pl        = (plantaParam !== undefined && plantaParam !== null) ? plantaParam : window._execPlanta;
@@ -26678,7 +26691,10 @@ function renderExecMapa(plantaSeleccionada) {
     _execLeafletMap = null;
   }
 
-  var fechaMapa = _fechaConCierreReal(currentDate || window._execMapaFecha || (DATES && DATES.length ? DATES[DATES.length-1] : ''));
+  // ⚠️ CAMBIADO (3ra vuelta) — mismo criterio que arriba: el mapa
+  // también debe seguir proyectando hasta la fecha seleccionada, no
+  // congelarse en el último cierre real.
+  var fechaMapa = currentDate || window._execMapaFecha || (DATES && DATES.length ? DATES[DATES.length-1] : '');
   window._execMapaFecha = fechaMapa;
   var tituloFechaEl = document.getElementById('exec-mapa-fecha-titulo');
   if (tituloFechaEl && fechaMapa) {
