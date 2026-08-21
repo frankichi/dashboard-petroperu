@@ -4850,6 +4850,109 @@ function byDateWithMandatory(fecha) {
   });
   return data;
 }
+// ⚠️ AGREGADO — a pedido: unificar el inventario que muestra el panel
+// principal con el criterio del panel gerencial. Antes, si una planta
+// no había reportado en la fecha consultada, el panel principal
+// mostraba el dato CONGELADO desde su último cierre real — el
+// gerencial en cambio proyecta el consumo estimado. Con esto, ambos
+// paneles calculan igual.
+//
+// Reglas:
+// 1) Sin reporte posterior disponible (caso normal: "hoy" o la fecha
+//    más reciente): se resta, día hábil por día hábil, el pronóstico
+//    MENSUAL APROBADO de CADA fecha intermedia — no una tasa fija —
+//    porque el pronóstico cambia cada mes; si el rango cruza de un mes
+//    a otro, cada día usa la tasa de su propio mes.
+// 2) Fecha histórica CON reporte posterior disponible: se interpola
+//    proporcionalmente entre el último reporte anterior y el primer
+//    reporte posterior, ponderando por los días transcurridos entre
+//    ambos — más preciso que solo restar el pronóstico, porque ya se
+//    sabe el punto de llegada real.
+// 3) Fecha histórica SIN reporte posterior: mismo criterio que (1) —
+//    la planta no registró ese día, así que por defecto se le resta
+//    su pronóstico.
+function _getInvHistIdxGlobal() {
+  if (window._invHistIdxCache && window._invHistIdxRawRef === RAW) return window._invHistIdxCache;
+  var idx = {};
+  RAW.forEach(function(r) {
+    if (r.fecha && r.inv != null && invFilaValida(r)) {
+      var key = r.planta + '|' + r.producto;
+      (idx[key] = idx[key] || []).push(r);
+    }
+  });
+  Object.keys(idx).forEach(function(k) {
+    idx[k].sort(function(a, b) { return a.fecha < b.fecha ? -1 : a.fecha > b.fecha ? 1 : 0; });
+  });
+  window._invHistIdxCache = idx;
+  window._invHistIdxRawRef = RAW;
+  return idx;
+}
+function _diasEntreFechasCalendario(fechaDesde, fechaHasta) {
+  var p1 = fechaDesde.split('-').map(Number), p2 = fechaHasta.split('-').map(Number);
+  var d1 = Date.UTC(p1[0], p1[1]-1, p1[2]);
+  var d2 = Date.UTC(p2[0], p2[1]-1, p2[2]);
+  return Math.round((d2 - d1) / 86400000);
+}
+function _diasHabilesEntreFechas(fechaDesde, fechaHasta) {
+  var p1 = fechaDesde.split('-').map(Number), p2 = fechaHasta.split('-').map(Number);
+  var d1 = Date.UTC(p1[0], p1[1]-1, p1[2]);
+  var d2 = Date.UTC(p2[0], p2[1]-1, p2[2]);
+  var totalDias = Math.round((d2 - d1) / 86400000);
+  if (totalDias <= 0) return [];
+  var dias = [];
+  for (var i = 1; i <= totalDias; i++) {
+    var dt = new Date(d1 + i * 86400000);
+    var fechaIter = dt.toISOString().slice(0, 10);
+    var esDomingo = dt.getUTCDay() === 0;
+    var esFeriado = typeof _execEsFeriado === 'function' && !!_execEsFeriado(fechaIter);
+    if (!esDomingo && !esFeriado) dias.push(fechaIter);
+  }
+  return dias;
+}
+function _invConProyeccion(planta, producto, fechaObjetivo) {
+  var idx = _getInvHistIdxGlobal();
+  var arr = idx[planta + '|' + producto];
+  if (!arr || !arr.length) return null;
+  var lo = 0, hi = arr.length - 1, iAntes = -1;
+  while (lo <= hi) {
+    var mid = (lo + hi) >> 1;
+    if (arr[mid].fecha <= fechaObjetivo) { iAntes = mid; lo = mid + 1; }
+    else hi = mid - 1;
+  }
+  if (iAntes < 0) return null;
+  var rAntes = arr[iAntes];
+  if (rAntes.fecha === fechaObjetivo) return rAntes;
+  var rDespues = (iAntes + 1 < arr.length) ? arr[iAntes + 1] : null;
+  if (rDespues) {
+    var totalDias = _diasEntreFechasCalendario(rAntes.fecha, rDespues.fecha);
+    var diasHastaObjetivo = _diasEntreFechasCalendario(rAntes.fecha, fechaObjetivo);
+    if (totalDias > 0) {
+      var peso = diasHastaObjetivo / totalDias;
+      var invInterp = rAntes.inv + (rDespues.inv - rAntes.inv) * peso;
+      return Object.assign({}, rAntes, {
+        inv: Math.max(0, invInterp),
+        _proyectadoConsumo: false,
+        _interpolado: true,
+        _interpoladoDesde: rAntes.fecha,
+        _interpoladoHasta: rDespues.fecha
+      });
+    }
+  }
+  var diasHabiles = _diasHabilesEntreFechas(rAntes.fecha, fechaObjetivo);
+  if (!diasHabiles.length) return Object.assign({}, rAntes, { _proyectadoConsumo: false });
+  var invProy = rAntes.inv || 0;
+  diasHabiles.forEach(function(fechaDia) {
+    var pronDia = (typeof _pTendPronParaFecha === 'function') ? (_pTendPronParaFecha(fechaDia, planta, producto) || 0) : 0;
+    invProy -= pronDia;
+  });
+  invProy = Math.max(0, invProy);
+  return Object.assign({}, rAntes, {
+    inv: invProy,
+    _proyectadoConsumo: true,
+    _proyectadoBaseFecha: rAntes.fecha,
+    _proyectadoDias: diasHabiles.length
+  });
+}
 function byLatest() {
   return byDateLatestPerPlant(currentDate || DATES[DATES.length - 1] || '');
 }
@@ -4865,6 +4968,17 @@ function byDateLatestPerPlant(fecha) {
     if (!latestMap[key] || r.fecha > latestMap[key].fecha) {
       latestMap[key] = r;
     }
+  });
+  // ⚠️ AGREGADO — a pedido: si la fila más reciente encontrada NO es
+  // exactamente de la fecha consultada, se reemplaza por la versión
+  // proyectada/interpolada — así el panel principal deja de mostrar el
+  // dato congelado sin ajustar. Se aplica acá (un solo lugar) para que
+  // los 40+ lugares que usan esta función queden consistentes de una.
+  Object.keys(latestMap).forEach(function(key) {
+    var r = latestMap[key];
+    if (r.fecha === fecha) return;
+    var proyectado = _invConProyeccion(r.planta, r.producto, fecha);
+    if (proyectado) latestMap[key] = proyectado;
   });
   var data = Object.values(latestMap);
   // Agregar mandatory combos faltantes
@@ -17740,9 +17854,21 @@ function openWhatIf(planta, producto) {
   var pronVal = pronDiarioAprobado(r);
   var vfactVal = r.vfact || 0;
   var demRate = vfactVal > 0 ? vfactVal : (pronVal > 0 ? pronVal : (r.dem_prom || 0));
-  var btVol = (r.vol_rep || 0) + (r.vol_rep_bt2 || 0);
-  var btEta = r.fecha_reposicion || '';
-  var btName = r.bt || '';
+  // ⚠️ CORREGIDO — bug real: "aparece un cabotaje pasado". El
+  // simulador mostraba cualquier BT/cabotaje registrado en la fila sin
+  // verificar si su ETA ya había pasado (respecto a la fecha del
+  // propio reporte) o si ya estaba marcado como COMPLETADO — mismo
+  // guardia que ya existe en otras partes del sistema (ver vigente() +
+  // bt_estado === 'COMPLETADO'), pero que acá faltaba. Se evalúan BT1
+  // y BT2 por separado, porque cada uno tiene su propio ETA.
+  var _wiRowFecha = r.fecha || '';
+  function _wiVigente(eta) { return !eta || !_wiRowFecha || eta >= _wiRowFecha; }
+  var _wiCompletado = r.bt_estado === 'COMPLETADO';
+  var _wiBt1Valido = !!(r.bt && (r.vol_rep||0) > 0 && _wiVigente(r.fecha_reposicion||'') && !_wiCompletado);
+  var _wiBt2Valido = !!(r.bt2 && (r.vol_rep_bt2||0) > 0 && _wiVigente(r.fecha_repos_bt2||'') && !_wiCompletado);
+  var btVol = (_wiBt1Valido ? (r.vol_rep||0) : 0) + (_wiBt2Valido ? (r.vol_rep_bt2||0) : 0);
+  var btEta = _wiBt1Valido ? (r.fecha_reposicion||'') : (_wiBt2Valido ? (r.fecha_repos_bt2||'') : '');
+  var btName = _wiBt1Valido ? (r.bt||'') : (_wiBt2Valido ? (r.bt2||'') : '');
   var modal = document.getElementById('whatif-modal');
   modal.style.display = 'flex';
   modal.style.alignItems = 'center';
@@ -17821,8 +17947,18 @@ function renderWhatIfChart(planta, producto) {
   var slider = document.getElementById('wi-slider');
   var simVfact = input ? (parseFloat(input.value) || 0) : (slider ? parseFloat(slider.value) || 0 : 0);
   var pronVal = pronDiarioAprobado(r);
-  var btVol = (r.vol_rep || 0) + (r.vol_rep_bt2 || 0);
-  var btEtaMs = r.fecha_reposicion ? new Date(r.fecha_reposicion + 'T12:00:00').getTime() : null;
+  // ⚠️ CORREGIDO — mismo guardia de vigencia que en openWhatIf (ver
+  // comentario ahí): sin esto, el gráfico sumaba el volumen de un
+  // cabotaje YA PASADO como si todavía viniera en camino, inflando la
+  // proyección de forma engañosa.
+  var _wiRowFecha2 = r.fecha || '';
+  function _wiVigente2(eta) { return !eta || !_wiRowFecha2 || eta >= _wiRowFecha2; }
+  var _wiCompletado2 = r.bt_estado === 'COMPLETADO';
+  var _wiBt1Valido2 = !!(r.bt && (r.vol_rep||0) > 0 && _wiVigente2(r.fecha_reposicion||'') && !_wiCompletado2);
+  var _wiBt2Valido2 = !!(r.bt2 && (r.vol_rep_bt2||0) > 0 && _wiVigente2(r.fecha_repos_bt2||'') && !_wiCompletado2);
+  var btVol = (_wiBt1Valido2 ? (r.vol_rep||0) : 0) + (_wiBt2Valido2 ? (r.vol_rep_bt2||0) : 0);
+  var _wiBtEtaUsada = _wiBt1Valido2 ? (r.fecha_reposicion||'') : (_wiBt2Valido2 ? (r.fecha_repos_bt2||'') : '');
+  var btEtaMs = _wiBtEtaUsada ? new Date(_wiBtEtaUsada + 'T12:00:00').getTime() : null;
   var days = 30;
   var labels = [], baseLine = [], simLine = [];
   var curBase = inv, curSim = inv;
@@ -17873,7 +18009,7 @@ function renderWhatIfChart(planta, producto) {
       ctx2d.lineTo(punto.x, area.bottom);
       ctx2d.stroke();
       ctx2d.setLineDash([]);
-      var texto = '\u26F5 ' + (r.bt || 'BT') + ' +' + btVol.toFixed(1) + ' MB';
+      var texto = '\u26F5 ' + ((_wiBt1Valido2 ? r.bt : (_wiBt2Valido2 ? r.bt2 : '')) || 'BT') + ' +' + btVol.toFixed(1) + ' MB';
       ctx2d.font = '700 10px Inter, system-ui, sans-serif';
       var anchoTexto = ctx2d.measureText(texto).width;
       var padX = 6, altoPastilla = 16;
