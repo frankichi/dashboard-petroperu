@@ -1578,8 +1578,20 @@ function rdRecalc(prod) {
   var avisoExcesoEl = document.getElementById(avisoExcesoId);
   if (existEl && capacidad > 0) {
     var margenMax = rdMargenPermitido(capacidad);
-    var excedeVacio  = bruta > capacidad;       // pasó el vacío disponible
-    var excedeMargen = bruta > margenMax;       // pasó también el margen — esto bloquea al guardar
+    // ⚠️ CORREGIDO — bug real confirmado (planta Ilo, Diesel): estas dos
+    // comparaciones usaban `bruta` (existencia + fondos), pero "Fondos"
+    // es una AUTORIZACIÓN FINANCIERA para cubrir demanda mientras llega
+    // la reposición física — no es volumen físico ocupando espacio en
+    // el tanque. Sumarlo antes de comparar contra la capacidad física
+    // bloqueaba entregas reales y legítimas (ej. un préstamo de franja
+    // real) solo porque el campo "Fondos" también tenía algo cargado,
+    // aunque la existencia física por sí sola cupiera sin problema.
+    // Ahora la validación de capacidad usa solo `existencia` (el
+    // volumen físico real) — "Existencia Bruta"/"Vacío disponible" en
+    // pantalla siguen mostrando el total combinado para fines
+    // informativos/de autonomía, eso no cambió.
+    var excedeVacio  = existencia > capacidad;       // pasó el vacío disponible
+    var excedeMargen = existencia > margenMax;       // pasó también el margen — esto bloquea al guardar
     if (excedeMargen) {
       existEl.style.borderColor = '#c8102e';
       existEl.style.background = '#fdecec';
@@ -2319,16 +2331,19 @@ function rdConfirmarGuardar() {
   // el margen permitido (ver rdMargenPermitido) — para evitar cifras
   // exageradas o dígitos de más por error, dejando igual un colchón
   // razonable para el préstamo real de franja entre productos.
+  // ⚠️ CORREGIDO — mismo bug que en rdRecalc (ver comentario ahí): la
+  // validación usaba `bruta` (existencia + fondos), pero "Fondos" es
+  // una autorización financiera, no volumen físico — sumarlo antes de
+  // comparar contra la capacidad bloqueaba entregas reales y legítimas.
+  // Ahora compara solo `existencia` (el volumen físico real).
   var productosExcedidos = productos.filter(function(pr) {
     if (!(pr.capacidad > 0)) return false; // sin capacidad registrada, no hay contra qué comparar
-    var bruta = pr.existencia + pr.fondos;
-    return bruta > rdMargenPermitido(pr.capacidad);
+    return pr.existencia > rdMargenPermitido(pr.capacidad);
   });
   if (productosExcedidos.length > 0) {
     var primero = productosExcedidos[0];
-    var brutaP = primero.existencia + primero.fondos;
     var maxP = rdMargenPermitido(primero.capacidad);
-    rdToast('⚠️ ' + primero.producto + ': el inventario digitado (' + rdFmt(brutaP) + ' MB) supera el máximo permitido (' + rdFmt(maxP) + ' MB — capacidad ' + rdFmt(primero.capacidad) + ' MB + margen). Revisa la cifra antes de guardar.', 'error');
+    rdToast('⚠️ ' + primero.producto + ': el inventario digitado (' + rdFmt(primero.existencia) + ' MB) supera el máximo permitido (' + rdFmt(maxP) + ' MB — capacidad ' + rdFmt(primero.capacidad) + ' MB + margen). Revisa la cifra antes de guardar.', 'error');
     var campoExcedido = document.querySelector('.rd-existencia[data-prod="' + primero.producto + '"]');
     if (campoExcedido) campoExcedido.scrollIntoView({ behavior: 'smooth', block: 'center' });
     btn.disabled = false; btn.textContent = 'Confirmar';
