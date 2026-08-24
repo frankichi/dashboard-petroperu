@@ -5027,7 +5027,17 @@ function _invConProyeccion(planta, producto, fechaObjetivo) {
   var LIMITE_DIAS_PROYECCION = 14;
   if (diasHabiles.length > LIMITE_DIAS_PROYECCION) {
     console.warn('[_invConProyeccion] Brecha demasiado grande (' + diasHabiles.length + ' días hábiles) para ' + planta + '|' + producto + ' — se muestra el último dato real (' + rAntes.fecha + ') sin proyectar, para evitar un resultado poco confiable.');
-    return null;
+    // ⚠️ CORREGIDO — bug real confirmado (Pucallpa · Diesel, gráfico de
+    // Vista Ejecutiva completamente en blanco): el comentario de arriba
+    // decía "se muestra el último dato real conocido", pero el código
+    // devolvía `null` — lo contrario. sumFecha() (que arma la serie de
+    // los gráficos) trata `null` como "esta planta no existe, no la
+    // sumo" — así que cuando TODAS las fechas visibles caían en esta
+    // brecha grande, el total daba 0 para cada día y el gráfico se
+    // veía vacío, en vez de mostrar el dato congelado como decía la
+    // intención original. Ahora sí se devuelve la última fila real
+    // (marcada como "dato congelado", sin inventar ningún número).
+    return Object.assign({}, rAntes, { _proyectadoConsumo: false, _datoCongelado: true, _diasSinReportar: diasHabiles.length });
   }
   var invProy = rAntes.inv || 0;
   diasHabiles.forEach(function(fechaDia) {
