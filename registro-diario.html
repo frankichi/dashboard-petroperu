@@ -2466,7 +2466,20 @@ function rdEnterApp() {
   }
   // Precargar histórico y pronóstico en background
   setTimeout(function() { rdLoadPronostico(); }, 2000);
-  setTimeout(function() { rdLoadHistorico(); }, 4000);
+  // ⚠️ CORREGIDO — bug real confirmado con la pila de llamadas del
+  // navegador: mi fix anterior (dentro de rdLoadHistorico, reutilizar
+  // la promesa si ya había una EN CURSO) solo protegía contra
+  // llamadas SIMULTÁNEAS — pero en la práctica, la carga inmediata
+  // (disparada por _rdAplicarReporteResp, vía rdRefreshMiReporte) casi
+  // siempre TERMINA bien antes de que pasen los 4 segundos de este
+  // respaldo — así que cuando este setTimeout disparaba, la guardia
+  // de "en curso" ya estaba libre (nada que reutilizar) y se
+  // disparaba una segunda carga completa, totalmente redundante. Este
+  // respaldo solo tiene sentido como red de seguridad SI la carga
+  // inmediata todavía no se completó por algún motivo — se agrega
+  // exactamente esa condición, el mismo patrón que ya se usa
+  // correctamente en rdSwitchTab.
+  setTimeout(function() { if (!window._histLoaded) rdLoadHistorico(); }, 4000);
   // Aviso dentro de la página (no por correo) si hay solicitudes
   // resueltas que el operador todavía no vio.
   setTimeout(function() { rdRevisarSolicitudesNuevas(); }, 1500);
@@ -2592,6 +2605,18 @@ function rdLoadHistorico() {
   // equivocada (o ninguna), pareciendo que simplemente "no carga".
   var plantaEfectiva = RD.plantaAdminVista || RD.planta;
   if (!RD.token || !plantaEfectiva) return;
+  // ⚠️ AGREGADO — bug real confirmado (visible en consola: los logs
+  // "[HIST] usando fallback" y "[cabotajes] FINAL" aparecían
+  // DUPLICADOS): esta función se disparaba dos veces al entrar a la
+  // app — una vez de inmediato (ver window._rdCalDisparado, más
+  // arriba en _rdAplicarReporteResp) y otra vez 4 segundos después (el
+  // respaldo en segundo plano de rdEnterApp) — sin ninguna protección
+  // contra esa superposición, desperdiciando una llamada COMPLETA al
+  // backend en cada carga de la app (justo lo que se buscaba evitar
+  // con la caché del lado del servidor agregada antes). Ahora, si ya
+  // hay una carga en curso, se reutiliza esa misma promesa en vez de
+  // iniciar una redundante.
+  if (window._histLoadingPromise) return window._histLoadingPromise;
   var dias = document.getElementById('histPeriodo') ? parseInt(document.getElementById('histPeriodo').value) : 7;
   var sub = document.getElementById('histSub');
   if (sub) sub.textContent = 'Planta: ' + plantaLabel(plantaEfectiva) + ' \u00b7 \u00daltimos ' + dias + ' d\u00edas';
@@ -2682,7 +2707,7 @@ function rdLoadHistorico() {
   }
 
   // Esperar ambos y renderizar juntos
-  return Promise.all([ cargarHistorico(), cargarCabotajes() ])
+  var _promesaHist = Promise.all([ cargarHistorico(), cargarCabotajes() ])
     .then(function(results) {
       var registros  = results[0] || [];
       window._cabotajes = results[1] || [];
@@ -2714,7 +2739,17 @@ function rdLoadHistorico() {
     .catch(function(e) {
       console.error('[HIST]', e);
       if (content) content.innerHTML = '<div class="rd-empty">\u26a0\ufe0f No se pudo cargar el hist\u00f3rico.</div>';
+    })
+    .finally(function() {
+      // ⚠️ AGREGADO — libera el guardia apenas termina (éxito o
+      // error), para que una PRÓXIMA llamada legítima (ej. el usuario
+      // cambia el desplegable de días, o usa "Actualizar") sí dispare
+      // una carga nueva con normalidad — el guardia solo evita
+      // superposiciones simultáneas, no bloquea recargas futuras.
+      window._histLoadingPromise = null;
     });
+  window._histLoadingPromise = _promesaHist;
+  return _promesaHist;
 }
 
 
