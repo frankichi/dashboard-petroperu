@@ -2377,6 +2377,33 @@ function rdConfirmarGuardar() {
       // segundo plano. Misma clave planta+fecha que usa rdRefreshMiReporte.
       if (window._rdMiReporteCache) delete window._rdMiReporteCache[(RD.plantaAdminVista || RD.planta || '') + '|' + RD.fechaReporte];
       rdRefreshMiReporte();
+      // ⚠️ CORREGIDO — bug real confirmado: el calendario (pestaña
+      // Histórico) no reflejaba lo recién guardado. Causa: usa un
+      // dataset aparte (_histData), cargado UNA SOLA VEZ por sesión
+      // (window._histLoaded) — el guardado nunca lo actualizaba, y ni
+      // siquiera cambiar de pestaña ayudaba, porque esa bandera ya
+      // quedaba en true desde la primera vez que se vio Histórico.
+      // Ahora se inyectan directamente los datos recién guardados
+      // (que ya se tienen a mano, sin ninguna llamada de red extra) en
+      // _histData, y se vuelve a pintar el calendario si está visible
+      // — así el día recién reportado aparece en verde de inmediato.
+      if (typeof _histData !== 'undefined' && Array.isArray(_histData)) {
+        var _fechaGuardadaCal = RD.fechaReporte;
+        _histData = _histData.filter(function(r){ return r.fecha !== _fechaGuardadaCal; });
+        productos.forEach(function(p) {
+          _histData.push({
+            fecha: _fechaGuardadaCal,
+            producto: p.producto,
+            existencia: p.existencia,
+            inv_mb: p.existencia,
+            despacho: p.despacho_diario,
+            dem: p.despacho_diario,
+            comentario_planta: comentarioGeneral,
+            comentario_prod: p.comentario_prod || ''
+          });
+        });
+        if (typeof rdRenderCalendario === 'function' && document.getElementById('rdCalendario')) rdRenderCalendario();
+      }
     }
     else { rdToast(res.message || 'Error al guardar', 'error'); if (/sesi\u00f3n/i.test(res.message || '')) rdLogout(); }
   }).catch(function() {
