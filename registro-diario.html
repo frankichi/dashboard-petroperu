@@ -210,6 +210,19 @@ input.input-error{border-color:var(--red)!important;box-shadow:0 0 0 3px rgba(20
 .loader.show{display:flex}
 .spinner{width:40px;height:40px;border:3px solid var(--bdr);border-top-color:var(--red);border-radius:50%;animation:spin 1s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
+/* ⚠️ AGREGADO — a pedido: al navegar entre días del calendario, la
+   pantalla completa se ponía en blanco con el loader normal (.loader,
+   arriba) — visualmente indistinguible de una recarga de página,
+   aunque técnicamente era solo una llamada de red. Esta versión
+   liviana solo atenúa el formulario (sin taparlo del todo) y muestra
+   un spinner más chico encima — se ve claramente que sigue siendo la
+   MISMA página, solo esperando datos, nunca como si se hubiera
+   recargado. Se usa exclusivamente para navegación posterior a la
+   primera carga (ver rdShowLoaderLocal) — la primera carga real de la
+   página sigue usando el loader de pantalla completa, que ahí sí
+   tiene sentido porque no hay nada que mostrar todavía.*/
+.rd-cargando-local{position:relative;opacity:.35;pointer-events:none;transition:opacity .15s ease}
+.rd-cargando-local::after{content:'';position:fixed;top:50%;left:50%;width:32px;height:32px;margin:-16px 0 0 -16px;border:3px solid var(--bdr);border-top-color:var(--red);border-radius:50%;animation:spin .8s linear infinite;z-index:500}
 
 .footer-credit{text-align:center;font-size:10px;padding:20px 0 8px}
 .footer-credit span{display:inline-flex;align-items:center;gap:6px;background:#f0f3f8;border:1px solid #dde1e8;border-radius:20px;padding:5px 16px;font-size:10.5px;color:#374664;font-weight:600;letter-spacing:.01em}
@@ -964,6 +977,14 @@ const RD = {
 };
 
 function rdShowLoader(v) { document.getElementById('loader').classList.toggle('show', v); }
+// ⚠️ AGREGADO — a pedido: versión liviana del loader, solo para
+// navegación ENTRE días del calendario (después de la primera carga
+// real de la página) — atenúa el formulario en vez de tapar toda la
+// pantalla, para que nunca se sienta como una recarga.
+function rdShowLoaderLocal(v) {
+  var el = document.getElementById('prodRows');
+  if (el) el.classList.toggle('rd-cargando-local', v);
+}
 
 function rdLimpiarFormRegistro() {
   ['regNombre', 'regEmail', 'regPassword', 'regPassword2'].forEach(function (id) {
@@ -2116,13 +2137,22 @@ function rdRefreshMiReporte() {
   }
 
   // ── Primera vez que se ve esta fecha (para esta planta) en la
-  // sesión: sin nada que mostrar todavía, sí hace falta el loader normal.
-  rdShowLoader(true);
+  // sesión: sin nada que mostrar todavía en ESTA fecha puntual.
+  // ⚠️ CAMBIADO — a pedido: si ya pasó la carga inicial real de la
+  // página (window._rdCargaInicialCompleta), esto es navegación entre
+  // días del calendario, no la primera vez que se abre la app — usar
+  // el loader LIVIANO (solo atenúa el formulario) en vez del de
+  // pantalla completa, para que nunca se sienta como una recarga.
+  var usarLoaderCompleto = !window._rdCargaInicialCompleta;
+  if (usarLoaderCompleto) rdShowLoader(true); else rdShowLoaderLocal(true);
   return rdGet('rdGetMiReporte', { token: RD.token, fecha: hoy }).then(res => {
-    rdShowLoader(false);
+    if (usarLoaderCompleto) rdShowLoader(false); else rdShowLoaderLocal(false);
     if (res.success) window._rdMiReporteCache[cacheKey] = res;
     _rdAplicarReporteResp(res, hoy);
-  }).catch(() => { rdShowLoader(false); rdToast('No se pudo cargar tu reporte', 'error'); });
+  }).catch(() => {
+    if (usarLoaderCompleto) rdShowLoader(false); else rdShowLoaderLocal(false);
+    rdToast('No se pudo cargar tu reporte', 'error');
+  });
 }
 
 function rdAbrirConfirmacion() {
@@ -2420,7 +2450,20 @@ function rdEnterApp() {
   document.getElementById('viewReset').style.display = 'none';
   document.getElementById('appShell').style.display = 'block';
   rdInicializarFechaReporte();
-  rdRefreshMiReporte();
+  // ⚠️ AGREGADO — a pedido: marca cuándo terminó la PRIMERA carga real
+  // de la página (esta llamada específica) — a partir de ahí,
+  // rdRefreshMiReporte() usa el loader liviano para cualquier
+  // navegación posterior entre días del calendario, en vez del de
+  // pantalla completa (que aquí, en la primera carga, sí tiene
+  // sentido — todavía no hay nada en pantalla que mostrar).
+  var _rdPrimeraLlamadaReporte = rdRefreshMiReporte();
+  if (_rdPrimeraLlamadaReporte && typeof _rdPrimeraLlamadaReporte.then === 'function') {
+    _rdPrimeraLlamadaReporte
+      .then(function(){ window._rdCargaInicialCompleta = true; })
+      .catch(function(){ window._rdCargaInicialCompleta = true; });
+  } else {
+    window._rdCargaInicialCompleta = true;
+  }
   // Precargar histórico y pronóstico en background
   setTimeout(function() { rdLoadPronostico(); }, 2000);
   setTimeout(function() { rdLoadHistorico(); }, 4000);
@@ -2970,12 +3013,15 @@ function rdRenderCalendario() {
   // backend. Ahora, para cuando el usuario realmente toca un día, es
   // muy probable que ya esté cargado en segundo plano.
   //
-  // Escalonada (una petición cada 350ms, no todas de golpe) para no
-  // saturar el backend con una ráfaga de ~20-30 peticiones simultáneas
-  // — mejor una fila ordenada que llegue completa en unos segundos, a
-  // reventar el límite de peticiones en paralelo de Google Apps Script.
+  // ⚠️ CAMBIADO — a pedido: intervalo reducido de 350ms a 100ms por
+  // día. Con 350ms, un mes de ~30 días clickeables tardaba hasta ~10.5
+  // segundos en TERMINAR de precargarse — si el usuario tocaba un día
+  // antes de que le tocara su turno, igual esperaba la respuesta
+  // completa del backend. Con 100ms, el mismo mes termina en ~3
+  // segundos — sigue siendo escalonado (no una ráfaga de golpe), solo
+  // más rápido.
   diasParaPrecargar.forEach(function(iso, idx) {
-    setTimeout(function() { rdCalPrecargar(iso); }, idx * 350);
+    setTimeout(function() { rdCalPrecargar(iso); }, idx * 100);
   });
 }
 
