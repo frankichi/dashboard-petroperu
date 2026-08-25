@@ -23949,7 +23949,7 @@ function _buildCoberturaSectionHTML(plantaParam, productoParam, nombreFnRerender
   // UCAYALI (manifiesto de 80 MB) — prácticamente el envío completo —
   // pero la barra seguía mostrando "+10d" de reposición pendiente para
   // ese mismo buque.
-  function _volumenReposTagsConfirmado(planta, producto, hastaFecha, diasVentana, tipoFiltro) {
+  function _volumenReposTagsConfirmado(planta, producto, hastaFecha, diasVentana, tipoFiltro, fechaMinimaEntrega) {
     var desde = null;
     if (diasVentana) {
       var d = new Date(hastaFecha + 'T12:00:00');
@@ -23976,6 +23976,17 @@ function _buildCoberturaSectionHTML(plantaParam, productoParam, nombreFnRerender
       // suman los tags cuyo tipo coincide con el que se está
       // reconciliando (siempre 'MARITIMO' para reposición naval).
       if (tipoFiltro && tag.tipo !== tipoFiltro) return;
+      // ⚠️ AGREGADO — bug real confirmado (todavía quedaba un rastro del
+      // mismo problema tras el fix de tipo): un tag de confirmación
+      // fechado ANTES de que la entrega actual siquiera se hubiera
+      // reportado en cargas_naves no puede estar hablando de esa
+      // entrega — es matemáticamente imposible confirmar algo que
+      // todavía no existía en el sistema. Caso real confirmado: un tag
+      // marítimo del 09-ago se restaba contra un viaje de UCAYALI
+      // reportado por primera vez el 25-ago (16 días después) — tenía
+      // que ser un tag huérfano de una reposición marítima anterior y
+      // distinta, ya vieja, sin relación con la entrega actual.
+      if (fechaMinimaEntrega && row.fecha < fechaMinimaEntrega) return;
       total += tag.volumenMB;
     });
     return total;
@@ -24113,7 +24124,7 @@ function _buildCoberturaSectionHTML(plantaParam, productoParam, nombreFnRerender
       try {
         var lista = JSON.parse(r.bt_lista);
         if (Array.isArray(lista)) {
-          naves = lista.map(function(e){ return { buque: e.buque, vol: e.vol || 0, fecha: e.fecha_hasta || '', estado: e.estado || '' }; });
+          naves = lista.map(function(e){ return { buque: e.buque, vol: e.vol || 0, fecha: e.fecha_hasta || '', estado: e.estado || '', fecha_reporte_origen: e.fecha_reporte_origen || '' }; });
         }
       } catch(eParseBt) { /* bt_lista corrupto — se ignora, cae al mecanismo anterior */ }
     }
@@ -24205,7 +24216,21 @@ function _buildCoberturaSectionHTML(plantaParam, productoParam, nombreFnRerender
     // ⚠️ AGREGADO — misma reconciliación aplicada arriba en la ruta
     // histórica: si la planta ya confirmó vía Registro Diario haber
     // recibido este volumen, no debe contarse otra vez como pendiente.
-    var confirmadoPlantaHoy = _volumenReposTagsConfirmado(r.planta, r.producto, fechaHoy, 20, 'MARITIMO');
+    // ⚠️ AGREGADO — bug real confirmado: un tag de confirmación fechado
+    // ANTES de que la entrega pendiente actual siquiera se hubiera
+    // reportado en cargas_naves no puede estar hablando de esa entrega
+    // (caso real: un tag marítimo del 09-ago restándose contra un viaje
+    // de UCAYALI reportado por primera vez el 25-ago). Se calcula la
+    // fecha de reporte más antigua entre las naves PENDIENTES (las ya
+    // completadas no necesitan esta reconciliación) y solo se cuentan
+    // tags de confirmación desde esa fecha en adelante.
+    var _fechaMinEntregaPendiente = null;
+    naves.filter(function(n){ return n.estado !== 'COMPLETADO'; }).forEach(function(n) {
+      if (n.fecha_reporte_origen && (!_fechaMinEntregaPendiente || n.fecha_reporte_origen < _fechaMinEntregaPendiente)) {
+        _fechaMinEntregaPendiente = n.fecha_reporte_origen;
+      }
+    });
+    var confirmadoPlantaHoy = _volumenReposTagsConfirmado(r.planta, r.producto, fechaHoy, 20, 'MARITIMO', _fechaMinEntregaPendiente);
     naves = _aplicarConfirmacionPlanta(naves, confirmadoPlantaHoy);
     var navesPendientesTras = naves.filter(function(n){ return n.estado !== 'COMPLETADO'; });
     volTotal = (navesPendientesTras.length ? navesPendientesTras : naves).reduce(function(s, n){ return s + (n.vol || 0); }, 0);
