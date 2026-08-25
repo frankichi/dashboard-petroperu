@@ -24086,7 +24086,24 @@ function _buildCoberturaSectionHTML(plantaParam, productoParam, nombreFnRerender
     // porque no depende de qué tan "vieja" esté la fila ni de si
     // alguien limpió o no sus columnas.
     if (!r._btConfirmadoHoy) {
+      // ⚠️ DIAGNÓSTICO TEMPORAL — a pedido, para encontrar con precisión
+      // por qué UCAYALI sigue apareciendo en Eten a pesar de que
+      // _btConfirmadoHoy debería bloquearlo. Solo imprime para la fila
+      // exacta reportada (Eten · Diesel) — quitar una vez resuelto.
+      if (r.planta === 'Eten' && r.producto === 'Diesel') {
+        console.log('[DIAG reposicionInfo] Eten·Diesel — bloqueado por _btConfirmadoHoy=false. Valores crudos de la fila:', {
+          bt: r.bt, vol_rep: r.vol_rep, fecha_reposicion: r.fecha_reposicion,
+          bt_lista: r.bt_lista, _btConfirmadoHoy: r._btConfirmadoHoy, fecha_fila: r.fecha
+        });
+      }
       return { diasRepos: 0, volMB: 0, tipo: '', naves: [] };
+    }
+    if (r.planta === 'Eten' && r.producto === 'Diesel') {
+      console.log('[DIAG reposicionInfo] Eten·Diesel — PASÓ _btConfirmadoHoy=true. Valores crudos de la fila:', {
+        bt: r.bt, vol_rep: r.vol_rep, fecha_reposicion: r.fecha_reposicion,
+        bt_lista: r.bt_lista, _btConfirmadoHoy: r._btConfirmadoHoy, fecha_fila: r.fecha,
+        naves_calculadas: naves
+      });
     }
     // ⚠️ AGREGADO — bug real confirmado: un buque DESCARGANDO en
     // parcial (ej. UCAYALI, 32 de 84 MB ya entregados) mostraba el
