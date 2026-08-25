@@ -17004,16 +17004,27 @@ async function sendEDToGS() {
     // al presionar el botón global "Actualizar", nunca automáticamente
     // al terminar de subir el E&D. Si el usuario iba directo a
     // Capacidades sin pasar por "Actualizar", seguía viendo los
-    // valores de la primera vez que se cargó en la sesión. Ahora se
-    // invalida acá también, y si la persona ya está viendo Capacidades
-    // o Decisiones, se vuelve a dibujar sola en cuanto llega el dato
-    // fresco — sin que tenga que hacer nada más.
+    // valores de la primera vez que se cargó en la sesión.
+    // ⚠️ AGREGADO — a pedido: estos mismos valores de capacidad son los
+    // que se grafican en el Panel Gerencial (Vista Ejecutiva — que NO
+    // es una "página" normal del menú, sino todo el layout completo
+    // activado por ?view=executive en la URL) y también en "Inv.
+    // Nacional" del panel principal (pInv — comparte el mismo
+    // componente de Cobertura/Vacío que la Vista Ejecutiva). Ahora se
+    // invalida la caché y se vuelve a dibujar automáticamente
+    // cualquiera de las 3 vistas que dependen de este dato, sin que la
+    // persona tenga que hacer nada más.
     if (typeof _capRefCache !== 'undefined') _capRefCache = null;
     (function() {
+      if (typeof EXECUTIVE_MODE !== 'undefined' && EXECUTIVE_MODE && typeof renderVistaEjecutivaSimple === 'function') {
+        renderVistaEjecutivaSimple();
+        return;
+      }
       var activePageEl = document.querySelector('.page.active');
       if (!activePageEl) return;
       if (activePageEl.id === 'pCapRef' && typeof renderPCapRef === 'function') renderPCapRef();
       if (activePageEl.id === 'pDec' && typeof renderPDec === 'function') renderPDec();
+      if (activePageEl.id === 'pInv' && typeof renderPInv === 'function') renderPInv();
     })();
     setTimeout(function() { fetchData(true); }, 2500);
   } catch (err) {
