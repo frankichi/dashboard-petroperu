@@ -26204,9 +26204,14 @@ function _renderVistaEjecutivaSimpleImpl() {
     // respaldo (si el mes actual todavía no tiene pronóstico aprobado
     // subido — normal en los primeros días del mes — usa el del mes
     // anterior más reciente disponible, en vez de mostrar un hueco/cero
-    // engañoso). Se evalúa con la ÚLTIMA fecha del rango visible, para
-    // que sea coherente con el mes que se esté viendo (incluye meses
-    // pasados en "Vista mensual").
+    // engañoso).
+    // ⚠️ CORREGIDO — bug real confirmado: al ver 30 días (o "Vista
+    // mensual" con varios meses), la línea usaba UNA sola tasa —la de
+    // la ÚLTIMA fecha visible— repetida en TODO el gráfico. Si el rango
+    // cruzaba de julio a agosto (con pronósticos distintos), julio se
+    // veía con la tasa de agosto — engañoso. Ahora cada punto del eje X
+    // consulta el pronóstico de SU PROPIO mes, así la línea hace un
+    // "escalón" correcto al cruzar de un mes a otro.
     var despDatasets = [{
       label: 'Despachos',
       data: despSerie, borderColor: '#ea580c', backgroundColor: gDesp,
@@ -26228,10 +26233,13 @@ function _renderVistaEjecutivaSimpleImpl() {
       var _pronLabel = '🎯 Pronóstico aprobado' + (_pronMensualEsRespaldo ? ' (⚠️ de ' + _mesUsadoLabel + ', el mes actual aún no se sube)' : '');
       despDatasets.push({
         label: _pronLabel,
-        data: despSerie.map(function(){ return parseFloat(_pronMensualVal.toFixed(DEC)); }),
+        data: (datesN || []).map(function(fechaPunto) {
+          var vPunto = (typeof pronParaFechaExec === 'function') ? pronParaFechaExec(fechaPunto, pl, prod) : 0;
+          return vPunto > 0 ? parseFloat(vPunto.toFixed(DEC)) : null;
+        }),
         borderColor: '#7c3aed', borderWidth: 2, borderDash: [7, 5],
         pointRadius: 0, pointHoverRadius: 0, pointHitRadius: 6, pointBackgroundColor: '#7c3aed',
-        fill: false, tension: 0, order: 0
+        fill: false, tension: 0, order: 0, spanGaps: true
       });
     }
 
