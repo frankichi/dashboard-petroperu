@@ -16574,6 +16574,17 @@ async function sendCargasNavesToGS() {
     _uplSetBadge('acc-cargas-naves', cargasNavesData.fecha_reporte);
     _cargasNavesCache=null;
     if(typeof _updateShipOpsBar==='function') setTimeout(_updateShipOpsBar,300);
+    // ⚠️ CORREGIDO — bug real confirmado: a diferencia de la subida de
+    // E&D (que sí refresca el dashboard), esta subida NUNCA volvía a
+    // pedir los datos del servidor — ni siquiera el caché del navegador
+    // se refrescaba, y el caché del BACKEND (10 minutos) tampoco se
+    // saltaba salvo que la persona presionara "Actualizar" a mano. Un
+    // cabotaje recién subido podía tardar hasta 10 minutos en
+    // reflejarse (o nunca, si nadie volvía a pedir los datos), tanto en
+    // el panel principal como en el panel gerencial (comparten la misma
+    // fuente). fetchData(true) manda nocache= al backend, forzando a
+    // que ignore ese caché y lea cargas_naves fresco.
+    setTimeout(function() { fetchData(true); }, 2500);
   } catch (err) {
     if (st) { st.textContent = '❌ ' + err.message; st.className = 'upload-status error'; }
     if (btn) btn.disabled = false;
@@ -17111,6 +17122,15 @@ async function sendNavesToGS() {
     addUploadLog(true, 'Naves ' + fechaFinal + ': ' + uploadNavesData.naves.length + ' naves, ' + cierresN + ' cierres puerto');
     _uplSetBadge('acc-naves', fechaFinal);
     if(typeof _updateShipOpsBar==='function') setTimeout(_updateShipOpsBar,300);
+    // ⚠️ CORREGIDO — mismo bug que en Cargas de Naves: esta subida
+    // (Posicionamiento de Naves) tampoco refrescaba nunca los datos del
+    // dashboard después de guardar. Como buildRotacionActualPorBuque()
+    // y buildDescargaConfirmadaPorTD() (en el backend) leen justamente
+    // esta hoja para decidir qué reposiciones marítimas mostrar como
+    // vigentes, un posicionamiento recién subido podía no reflejarse en
+    // ningún panel hasta el próximo refresco manual o hasta que
+    // venciera el caché del servidor (10 min).
+    setTimeout(function() { fetchData(true); }, 2500);
   } catch (err) {
     console.error('[Upload Send Naves]', err);
     if (status) { status.className = 'upload-status error'; status.textContent = '❌ ' + err.message; }
@@ -24461,7 +24481,7 @@ function _buildCoberturaSectionHTML(plantaParam, productoParam, nombreFnRerender
     var active = window._execVacioSort === val;
     return '<button onclick="window._execVacioSort=\'' + val + '\';' + nombreFnRerender + '();" '
       + 'style="padding:6px 14px;border-radius:8px;font-size:11.5px;font-weight:700;cursor:pointer;border:1.5px solid '
-      + (active ? '#7c3aed;background:#7c3aed;color:#fff' : 'var(--bdr);background:var(--card);color:var(--txt2)')
+      + (active ? '#0d9488;background:#0d9488;color:#fff' : 'var(--bdr);background:var(--card);color:var(--txt2)')
       + '">' + label + '</button>';
   }
   var datosVacio = datosCob.filter(function(d){ return !d.sinCob && d.capMB > 0 && d.diasPotencial != null; });
@@ -24483,7 +24503,7 @@ function _buildCoberturaSectionHTML(plantaParam, productoParam, nombreFnRerender
       '<div>Cobertura hoy: <b>' + d.dias + 'd</b></div>' +
       '<div>Capacidad: <b>' + fmtMB(d.capMB) + '</b></div>' +
       '<div>Vacío disponible: <b>' + fmtMB(d.vacioMB) + '</b></div>' +
-      '<div>Si se llena: <b style="color:#a78bfa">' + d.diasPotencial + 'd</b> de cobertura</div>';
+      '<div>Si se llena: <b style="color:#5eead4">' + d.diasPotencial + 'd</b> de cobertura</div>';
     var vacioTipAttrs = 'onmouseenter="_execShowTip(event,\'' + encodeURIComponent(vacioTipHTML).replace(/'/g,'%27') + '\')" onmousemove="_execPosTip(event)" onmouseleave="_execHideTip()" ontouchstart="_execShowTip(event,\'' + encodeURIComponent(vacioTipHTML).replace(/'/g,'%27') + '\')" ontouchmove="_execPosTip(event)" ontouchend="_execHideTip()"';
     return '<div style="display:flex;align-items:center;gap:10px;padding:7px 0">' +
       '<div class="exec-cob-label" style="width:120px;flex-shrink:0" title="' + d.label + '">' +
@@ -24492,10 +24512,10 @@ function _buildCoberturaSectionHTML(plantaParam, productoParam, nombreFnRerender
       '</div>' +
       '<div ' + vacioTipAttrs + ' style="flex:1;background:var(--bg3);border-radius:6px;height:22px;position:relative;overflow:hidden;display:flex;cursor:help">' +
         '<div style="height:100%;width:' + pctActual + '%;background:#94a3b8;border-radius:' + (pctExtra>0?'6px 0 0 6px':'6px') + ';transition:width .4s"></div>' +
-        (pctExtra > 0 ? '<div style="height:100%;width:' + pctExtra + '%;background:repeating-linear-gradient(45deg,#7c3aed,#7c3aed 5px,#a78bfa 5px,#a78bfa 10px);border-radius:0 6px 6px 0;transition:width .4s"></div>' : '') +
+        (pctExtra > 0 ? '<div style="height:100%;width:' + pctExtra + '%;background:#0d9488;border-radius:0 6px 6px 0;transition:width .4s"></div>' : '') +
       '</div>' +
       '<div style="width:70px;flex-shrink:0;text-align:right">' +
-        '<div style="font-family:var(--mono);font-weight:800;font-size:13px;color:#7c3aed">' + d.diasPotencial + 'd</div>' +
+        '<div style="font-family:var(--mono);font-weight:800;font-size:13px;color:#0d9488">' + d.diasPotencial + 'd</div>' +
         '<div style="font-family:var(--mono);font-size:9px;color:var(--txt3)">hoy: ' + d.dias + 'd</div>' +
       '</div>' +
     '</div>';
@@ -24506,7 +24526,7 @@ function _buildCoberturaSectionHTML(plantaParam, productoParam, nombreFnRerender
         '<div style="font-size:13px;font-weight:800;color:var(--txt)">🈳 Vacío ' + (pl==='Nacional'?'por planta':'por producto') + (prod!=='Todos'&&pl==='Nacional'?' · '+prod:'') + '</div>' +
         '<div class="exec-btn-grid" style="display:flex;gap:8px">' + vacioSortBtn('desc','Mayor → Menor') + vacioSortBtn('asc','Menor → Mayor') + '</div>' +
       '</div>' +
-      '<div style="font-size:11px;color:var(--txt3);margin-bottom:14px">Días de cobertura si se llenara el espacio disponible hasta la capacidad — <span style="color:#94a3b8;font-weight:700">■</span> cobertura de hoy &nbsp; <span style="color:#7c3aed;font-weight:700">▨</span> potencial adicional (según pronóstico aprobado)</div>' +
+      '<div style="font-size:11px;color:var(--txt3);margin-bottom:14px">Días de cobertura si se llenara el espacio disponible hasta la capacidad — <span style="color:#94a3b8;font-weight:700">■</span> cobertura de hoy &nbsp; <span style="color:#0d9488;font-weight:700">■</span> potencial adicional (según pronóstico aprobado)</div>' +
       '<div>' + vacioRowsHTML + '</div>' +
     '</div>'
   );
