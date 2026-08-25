@@ -4440,6 +4440,20 @@ async function fetchData(forceRefresh) {
     }
     window.PRON_META = (raw && raw.pronMeta) ? raw.pronMeta : {mesActivo:'', mesesDisponibles:[], motivo:''};
     console.log('[API] Datos recibidos:', data.length, 'registros');
+    // ⚠️ DIAGNÓSTICO TEMPORAL — a pedido, para encontrar por qué no se ve
+    // ninguna reposición marítima. Muestra bien visible en consola si la
+    // sincronización de buques (cargas_naves) falló en el backend, y
+    // cuántas combinaciones planta|producto sí encontró buques — quitar
+    // una vez resuelto.
+    if (raw && raw._btSyncDiag) {
+      if (!raw._btSyncDiag.ok) {
+        console.error('%c[DIAG] La sincronización de buques (cargas_naves) FALLÓ en el backend:', 'background:#c8102e;color:#fff;font-weight:bold;padding:3px 8px', raw._btSyncDiag.error);
+      } else {
+        console.log('%c[DIAG] Sincronización de buques OK — ' + raw._btSyncDiag.keysConBuques + ' combinaciones planta|producto con al menos un buque vigente', 'background:#16a34a;color:#fff;font-weight:bold;padding:3px 8px');
+      }
+    } else {
+      console.warn('[DIAG] La respuesta del backend no trae _btSyncDiag — probablemente sigues viendo una respuesta CACHEADA de antes de este diagnóstico. Presiona "Actualizar" para forzar una respuesta fresca.');
+    }
     if (window.PRON_META.mesActivo) {
       console.log('[API] Pronóstico mes activo: ' + window.PRON_META.mesActivo + ' — ' + window.PRON_META.motivo);
     }
