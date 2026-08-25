@@ -23949,7 +23949,7 @@ function _buildCoberturaSectionHTML(plantaParam, productoParam, nombreFnRerender
   // UCAYALI (manifiesto de 80 MB) — prácticamente el envío completo —
   // pero la barra seguía mostrando "+10d" de reposición pendiente para
   // ese mismo buque.
-  function _volumenReposTagsConfirmado(planta, producto, hastaFecha, diasVentana) {
+  function _volumenReposTagsConfirmado(planta, producto, hastaFecha, diasVentana, tipoFiltro) {
     var desde = null;
     if (diasVentana) {
       var d = new Date(hastaFecha + 'T12:00:00');
@@ -23962,7 +23962,21 @@ function _buildCoberturaSectionHTML(plantaParam, productoParam, nombreFnRerender
       if (hastaFecha && row.fecha > hastaFecha) return;
       if (desde && row.fecha < desde) return;
       var tag = parseReposicionTag(row.comentario_prod);
-      if (tag) total += tag.volumenMB;
+      if (!tag) return;
+      // ⚠️ CORREGIDO — bug real confirmado (UCAYALI mostraba 28.8 MB en
+      // vez de 50 en Conchán): esta función sumaba TODOS los tags de
+      // confirmación de la planta+producto sin importar su TIPO —
+      // mezclando confirmaciones de "Vía Refinería" (un canal de
+      // reposición totalmente distinto, sin relación con el cabotaje
+      // naval) junto con las de "Cabotaje Marítimo", y restando el
+      // total combinado contra el buque pendiente. Caso real
+      // confirmado: 2 MB de un tag marítimo + 17.2 MB + 2.0 MB de DOS
+      // tags de refinería = 21.2 MB restados de UCAYALI, cuando solo
+      // los 2 MB marítimos le correspondían de verdad. Ahora solo se
+      // suman los tags cuyo tipo coincide con el que se está
+      // reconciliando (siempre 'MARITIMO' para reposición naval).
+      if (tipoFiltro && tag.tipo !== tipoFiltro) return;
+      total += tag.volumenMB;
     });
     return total;
   }
@@ -23975,8 +23989,25 @@ function _buildCoberturaSectionHTML(plantaParam, productoParam, nombreFnRerender
     if (!(confirmadoPlanta > 0) || !naves.length) return naves;
     var TOL = 1.0;
     var copia = naves.map(function(n) { return Object.assign({}, n); });
+    // ⚠️ CORREGIDO — bug real confirmado (MOCHE mostraba 17.9 MB en vez
+    // de 20 MB en Eten, y UCAYALI 28.8 en vez de 50 en Conchán): si una
+    // nave YA está COMPLETADO por otro mecanismo (ej. T.D. real de
+    // Posicionamiento de Naves), el bucle de abajo la SALTA sin
+    // consumir nada de `confirmadoPlanta` contra ella — pero ese
+    // volumen confirmado por la planta probablemente correspondía
+    // justamente a ESA entrega ya completada, no a ninguna otra. Sin
+    // este ajuste, el remanente completo se aplicaba contra la
+    // SIGUIENTE nave pendiente en la lista (ej. MOCHE), aunque no
+    // tuviera ninguna relación con la confirmación real — restándole
+    // volumen que en realidad nunca le correspondía a esa entrega.
+    // Ahora primero se descuenta de `confirmadoPlanta` el volumen de
+    // las naves que YA están completadas (dando por hecho que esa
+    // confirmación ya está cubierta por ellas); solo el remanente
+    // genuino, si lo hay, se aplica contra las pendientes.
+    var volYaCompletado = copia.filter(function(n){ return n.estado === 'COMPLETADO'; }).reduce(function(s, n){ return s + (n.vol || 0); }, 0);
+    var restante = Math.max(0, confirmadoPlanta - volYaCompletado);
+    if (restante <= 0) return copia;
     var ordenadas = copia.slice().sort(function(a, b) { return (a.fecha||'').localeCompare(b.fecha||''); });
-    var restante = confirmadoPlanta;
     ordenadas.forEach(function(n) {
       if (n.estado === 'COMPLETADO' || restante <= 0) return;
       if (n.vol <= restante + TOL) {
@@ -24044,7 +24075,7 @@ function _buildCoberturaSectionHTML(plantaParam, productoParam, nombreFnRerender
         // planta ya confirmó (vía Registro Diario) haber recibido este
         // volumen a la fecha que se está viendo, no debe contarse otra
         // vez como pendiente aquí.
-        var confirmadoPlantaHist = _volumenReposTagsConfirmado(r.planta, r.producto, fechaHoy, 20);
+        var confirmadoPlantaHist = _volumenReposTagsConfirmado(r.planta, r.producto, fechaHoy, 20, 'MARITIMO');
         var navesHistAjustadas = _aplicarConfirmacionPlanta(navesHist, confirmadoPlantaHist);
         var navesHistPendientesAj = navesHistAjustadas.filter(function(n){ return n.estado !== 'COMPLETADO'; });
         volTotalHist = (navesHistPendientesAj.length ? navesHistPendientesAj : navesHistAjustadas).reduce(function(s, n){ return s + (n.vol || 0); }, 0);
@@ -24174,7 +24205,7 @@ function _buildCoberturaSectionHTML(plantaParam, productoParam, nombreFnRerender
     // ⚠️ AGREGADO — misma reconciliación aplicada arriba en la ruta
     // histórica: si la planta ya confirmó vía Registro Diario haber
     // recibido este volumen, no debe contarse otra vez como pendiente.
-    var confirmadoPlantaHoy = _volumenReposTagsConfirmado(r.planta, r.producto, fechaHoy, 20);
+    var confirmadoPlantaHoy = _volumenReposTagsConfirmado(r.planta, r.producto, fechaHoy, 20, 'MARITIMO');
     naves = _aplicarConfirmacionPlanta(naves, confirmadoPlantaHoy);
     var navesPendientesTras = naves.filter(function(n){ return n.estado !== 'COMPLETADO'; });
     volTotal = (navesPendientesTras.length ? navesPendientesTras : naves).reduce(function(s, n){ return s + (n.vol || 0); }, 0);
