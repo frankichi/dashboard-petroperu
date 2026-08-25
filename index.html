@@ -24006,8 +24006,28 @@ function _buildCoberturaSectionHTML(plantaParam, productoParam, nombreFnRerender
     // EN ESE MOMENTO — en vez del estado actual (que es lo que
     // _btConfirmadoHoy siempre refleja, sin importar qué fecha se esté
     // mirando en pantalla).
+    // ⚠️ CORREGIDO — bug real confirmado: "ayer" contaba como "fecha
+    // pasada" con el mismo criterio que una navegación histórica
+    // deliberada de semanas atrás. Pero fechaHoy también puede caer en
+    // "ayer" simplemente porque HOY todavía no tiene suficientes
+    // plantas cerradas (ver _fechaConCierreReal/_tieneSuficientesCierresGlobal
+    // más arriba en el archivo) — en ese caso NO es una consulta
+    // histórica a propósito, es la vista normal "esperando el cierre de
+    // hoy", y debe seguir usando los datos EN VIVO (bt_lista,
+    // _btConfirmadoHoy) — no la reconstrucción histórica, que es un
+    // camino aparte con su propia caché y que no refleja cambios
+    // recientes de la misma forma. Ahora solo se considera "histórica"
+    // una fecha con MÁS DE 1 día de diferencia respecto a hoy real —
+    // "ayer, esperando cierre" ya no dispara este camino.
     var _hoyRealChk = new Date().toISOString().slice(0, 10);
+    var _esFechaGenuinamenteHistorica = false;
     if (fechaHoy && fechaHoy < _hoyRealChk) {
+      var _msPorDiaHist = 86400000;
+      var _dFechaHoyHist = new Date(fechaHoy + 'T00:00:00Z').getTime();
+      var _dHoyRealHist = new Date(_hoyRealChk + 'T00:00:00Z').getTime();
+      _esFechaGenuinamenteHistorica = ((_dHoyRealHist - _dFechaHoyHist) / _msPorDiaHist) > 1;
+    }
+    if (_esFechaGenuinamenteHistorica) {
       _fetchReposicionHistorica(fechaHoy); // no-op si ya está en caché o pendiente
       var cacheHist = window._reposHistoricaCache[fechaHoy];
       if (cacheHist) {
