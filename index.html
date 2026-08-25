@@ -16995,6 +16995,26 @@ async function sendEDToGS() {
       if (r.capacidad > 0) window.capMap[r.planta + '|' + r.producto] = { cap: r.capacidad, fecha: r.fecha };
     });
     console.log('[sendED] capMap actualizado:', Object.keys(window.capMap).length, 'pares con capacidad');
+    // ⚠️ CORREGIDO — bug real confirmado: "a veces la data de
+    // Capacidades no está actualizada tras subir el E&D". Causa: existen
+    // DOS cachés distintas de capacidad — window.capMap (que sí se
+    // actualizaba arriba) y _capRefCache (una caché SEPARADA que usan
+    // la página "Capacidades", "Centro de Decisiones" y el cálculo de
+    // Fondos en "Vacío por planta") — esta segunda solo se invalidaba
+    // al presionar el botón global "Actualizar", nunca automáticamente
+    // al terminar de subir el E&D. Si el usuario iba directo a
+    // Capacidades sin pasar por "Actualizar", seguía viendo los
+    // valores de la primera vez que se cargó en la sesión. Ahora se
+    // invalida acá también, y si la persona ya está viendo Capacidades
+    // o Decisiones, se vuelve a dibujar sola en cuanto llega el dato
+    // fresco — sin que tenga que hacer nada más.
+    if (typeof _capRefCache !== 'undefined') _capRefCache = null;
+    (function() {
+      var activePageEl = document.querySelector('.page.active');
+      if (!activePageEl) return;
+      if (activePageEl.id === 'pCapRef' && typeof renderPCapRef === 'function') renderPCapRef();
+      if (activePageEl.id === 'pDec' && typeof renderPDec === 'function') renderPDec();
+    })();
     setTimeout(function() { fetchData(true); }, 2500);
   } catch (err) {
     console.error('[Upload Send E&D]', err);
