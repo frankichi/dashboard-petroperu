@@ -28937,6 +28937,38 @@ function _buildRepoMarBuques() {
     // deja vacío en vez de inventar una, para no mostrar un dato falso.
     var proximoPuertoEsTalara = pos && pos.puerto_eta && pos.puerto_eta.toUpperCase().indexOf('TALARA') !== -1;
     b.retornoTalara = proximoPuertoEsTalara ? (pos.fecha_eta || '') : '';
+    // ⚠️ AGREGADO — a pedido: si el buque TODAVÍA no zarpó, mostrar su
+    // estado real y actual en Talara (cargando, amarrado, fondeado,
+    // etc.) en vez de un mensaje genérico — usando los mismos campos
+    // detallados de Posicionamiento de Naves que ya trae el backend
+    // (estado_nav es el estado real más reciente; fecha_et_operaciones
+    // es el ETC — Estimado Término de Carga/Operaciones — cuando ya se
+    // conoce). Se arma un texto corto priorizando el dato más útil
+    // disponible: ETC si ya lo hay, si no la hora en que empezó a
+    // cargar, si no cuándo amarró, si no cuándo fondeó — el primero que
+    // exista, de más específico a más general.
+    if (!b.zarpe) {
+      var estadoBase = (pos && (pos.estado_nav || pos.ubicacion)) || 'En Talara';
+      var detalle = '';
+      // Formato corto local — mismas funciones que usa el render, pero
+      // reproducidas aquí porque _buildRepoMarBuques() es una función
+      // aparte y no comparte alcance con las auxiliares de
+      // renderPRepoMar().
+      var _fmtC = function(f) { if (!f) return '—'; var p = f.slice(0,10).split('-'); return p[2]+'/'+p[1]+'/'+p[0].slice(2); };
+      var _fmtH = function(f) { if (!f || f.indexOf('T') === -1) return ''; return ' ' + f.split('T')[1].slice(0,5); };
+      if (pos && pos.fecha_et_operaciones) {
+        detalle = 'ETC: ' + _fmtC(pos.fecha_et_operaciones) + _fmtH(pos.fecha_et_operaciones);
+      } else if (pos && pos.fecha_inicio_carga && !pos.fecha_termino_carga) {
+        detalle = 'Cargando desde: ' + _fmtC(pos.fecha_inicio_carga) + _fmtH(pos.fecha_inicio_carga);
+      } else if (pos && pos.fecha_amarro) {
+        detalle = 'Amarró: ' + _fmtC(pos.fecha_amarro) + _fmtH(pos.fecha_amarro);
+      } else if (pos && pos.fecha_fondeo) {
+        detalle = 'Fondeó: ' + _fmtC(pos.fecha_fondeo) + _fmtH(pos.fecha_fondeo);
+      }
+      b.estadoActualPreZarpe = estadoBase + (detalle ? ' · ' + detalle : '');
+    } else {
+      b.estadoActualPreZarpe = '';
+    }
   });
   // Ordenar por fecha de zarpe (los que salieron primero, arriba) —
   // coincide con el orden del reporte de referencia.
@@ -29214,12 +29246,15 @@ window.renderPRepoMar = function() {
       // (fecha_zarpe vacía en Posicionamiento de Naves — caso real
       // confirmado: UCAYALI reportado como "EN TALARA", sin fecha de
       // zarpe todavía porque sigue cargando), la caja quedaba vacía sin
-      // ninguna explicación, como si el dato faltara por error. Ahora
-      // se muestra un aviso honesto en su lugar — no hay nada que
-      // corregir en el código, es el estado real del buque.
+      // ninguna explicación, como si el dato faltara por error.
+      // ⚠️ AMPLIADO — a pedido: en vez de un mensaje genérico, mostrar
+      // el estado REAL del buque en Talara (cargando, amarrado,
+      // fondeado, con su ETC si ya se conoce) — ya calculado en
+      // b.estadoActualPreZarpe usando los mismos campos detallados de
+      // Posicionamiento de Naves.
       var zarpeTxt = b.zarpe
         ? '<div class="repomar-shipzarpe">Zarpó de ' + b.zarpeOrigen + ': ' + fmtCorta(b.zarpe) + fmtHora(b.zarpe) + '</div>'
-        : '<div class="repomar-shipzarpe repomar-shipzarpe-pendiente">Aún en Talara (cargando)</div>';
+        : '<div class="repomar-shipzarpe repomar-shipzarpe-pendiente">' + (b.estadoActualPreZarpe || 'Aún en Talara') + '</div>';
       var shipBox = '<div class="repomar-cell" style="align-items:flex-start;padding:4px">' +
         '<div class="repomar-shipbox" style="width:100%">' +
           '<div class="repomar-shipname">🚢 ' + b.buque + '</div>' +
