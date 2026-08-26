@@ -28926,32 +28926,39 @@ function _buildRepoMarCobertura() {
 
 
 // CSS de la página (una sola vez, inyectado con el primer render).
+// ⚠️ MEJORADO — a pedido: acercar la estética al reporte original
+// (sombras suaves, tarjeta de buque con encabezado de color como en la
+// referencia, esquinas redondeadas, franja lateral "CABOTAJE
+// CONFIRMADO", mejor jerarquía visual entre encabezados/celdas).
 function _repomarInjectCSS() {
   if (document.getElementById('repomar-css')) return;
   var css = `
     .repomar-wrap{padding:18px 20px 40px}
     .repomar-title{font-size:16px;font-weight:800;color:var(--txt);margin-bottom:2px}
-    .repomar-subtitle{font-size:11.5px;color:var(--txt3);margin-bottom:14px}
+    .repomar-subtitle{font-size:11.5px;color:var(--txt3);margin-bottom:16px}
     .repomar-scroll{overflow-x:auto;padding-bottom:8px}
-    .repomar-grid{position:relative;min-width:1180px}
+    .repomar-grid{position:relative;min-width:1220px;background:var(--card);border-radius:10px;box-shadow:0 1px 3px rgba(0,0,0,.08);overflow:hidden;padding:2px}
     .repomar-svg{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;overflow:visible}
     .repomar-row{display:grid;align-items:stretch}
-    .repomar-cell{padding:6px 8px;border:1px solid var(--bdr);font-size:11.5px;display:flex;align-items:center;justify-content:center;text-align:center;background:var(--card);min-height:30px}
-    .repomar-labelcell{justify-content:flex-start;font-weight:700;color:var(--txt2);font-size:10.5px;text-transform:uppercase;letter-spacing:.03em;background:var(--bg3);border:1px solid var(--bdr)}
-    .repomar-planthead{font-weight:800;color:#fff;background:#0071A4;border-color:#0071A4;font-size:11.5px}
-    .repomar-cell-crit{background:#DC271C;color:#fff;font-weight:700;border-color:#DC271C}
-    .repomar-cell-ok{color:var(--txt);font-weight:600}
-    .repomar-cell-empty{background:var(--bg2,var(--card));color:var(--txt3)}
-    .repomar-divider{height:16px}
-    .repomar-ships{position:relative;row-gap:10px}
-    .repomar-shipbox{background:#eef4f8;border:1.5px solid #0071A4;border-radius:6px;padding:8px 10px;font-size:11px;margin:4px 2px}
-    .repomar-shipname{font-weight:800;color:#0071A4;font-size:12.5px;margin-bottom:3px}
-    .repomar-shipcargo{color:var(--txt2);font-family:var(--mono);font-size:10.5px;line-height:1.5}
-    .repomar-shipzarpe{margin-top:5px;background:#fff;border:1px solid var(--bdr);border-radius:4px;padding:3px 6px;font-size:10px;font-weight:700;color:var(--txt2)}
-    .repomar-legbox{background:#fff;border:1.5px solid #2563eb;border-radius:5px;padding:4px 6px;font-size:10px;margin:3px 2px;position:relative;z-index:2}
+    .repomar-cell{padding:7px 8px;border:1px solid var(--bdr);font-size:11.5px;display:flex;align-items:center;justify-content:center;text-align:center;background:var(--card);min-height:32px}
+    .repomar-labelcell{justify-content:flex-start;font-weight:700;color:#fff;font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;background:#0071A4;border-color:#0071A4}
+    .repomar-planthead{font-weight:800;color:#fff;background:#003a56;border-color:#003a56;font-size:11.5px;letter-spacing:.02em}
+    .repomar-headerrow .repomar-labelcell{background:#003a56;border-color:#003a56}
+    .repomar-cell-crit{background:#DC271C;color:#fff;font-weight:700;border-color:#c02016}
+    .repomar-cell-ok{color:var(--txt);font-weight:700;background:#eef7ee}
+    .repomar-cell-empty{background:var(--bg3,var(--card));color:var(--txt3);font-size:10.5px}
+    .repomar-divider{height:22px;position:relative}
+    .repomar-divider::after{content:'';position:absolute;left:0;right:0;top:50%;height:1px;background:linear-gradient(90deg,transparent,var(--bdr) 10%,var(--bdr) 90%,transparent)}
+    .repomar-ships-label{font-size:10px;font-weight:800;letter-spacing:.08em;color:var(--txt3);text-transform:uppercase;padding:0 4px 6px}
+    .repomar-ships{position:relative;row-gap:14px}
+    .repomar-shipbox{background:#fff;border:1px solid var(--bdr);border-radius:8px;font-size:11px;margin:4px 2px;box-shadow:0 1px 4px rgba(0,113,164,.12);overflow:hidden}
+    .repomar-shipname{font-weight:800;color:#fff;background:#0071A4;font-size:12px;padding:5px 10px;letter-spacing:.02em}
+    .repomar-shipcargo{color:var(--txt2);font-family:var(--mono);font-size:10.5px;line-height:1.6;padding:7px 10px 3px}
+    .repomar-shipzarpe{margin:6px 10px 8px;background:#fff7e6;border:1px solid #f0c869;border-radius:4px;padding:3px 8px;font-size:10px;font-weight:700;color:#8a6416;display:inline-block}
+    .repomar-legbox{background:#fff;border:1.5px solid #2563eb;border-radius:6px;padding:5px 7px;font-size:10px;margin:3px 2px;position:relative;z-index:2;box-shadow:0 1px 3px rgba(37,99,235,.18)}
     .repomar-legdate{font-weight:800;color:#2563eb;font-size:10px}
     .repomar-legprod{color:var(--txt2);font-family:var(--mono);font-size:9.5px;margin-top:1px}
-    .repomar-legbox.completado{border-color:#16a34a}
+    .repomar-legbox.completado{border-color:#16a34a;box-shadow:0 1px 3px rgba(22,163,74,.18)}
     .repomar-legbox.completado .repomar-legdate{color:#16a34a}
     .repomar-empty-msg{padding:30px;text-align:center;color:var(--txt3);font-size:13px}
   `;
@@ -29029,7 +29036,14 @@ window.renderPRepoMar = function() {
         var chips = legsAqui.map(function(l) {
           var esCompletado = l.estado === 'COMPLETADO';
           var etiqueta = esCompletado ? 'T.D.' : 'E.T.A.';
-          return '<div class="repomar-legbox' + (esCompletado ? ' completado' : '') + '" data-buque="' + b.buque + '" data-viaje="' + (b.viaje||'') + '">' +
+          // ⚠️ AGREGADO — a pedido: data-leg-idx identifica la posición
+          // CRONOLÓGICA real de esta escala dentro del itinerario del
+          // buque (b.legs ya viene ordenado por fecha_hasta) — necesario
+          // para que las flechas conecten escala 1 -> escala 2 -> escala
+          // 3 en el orden real del viaje, y no en el orden en que el
+          // navegador las encuentra en pantalla (que sigue la posición
+          // de columna/planta, no la secuencia real de la ruta).
+          return '<div class="repomar-legbox' + (esCompletado ? ' completado' : '') + '" data-buque="' + b.buque + '" data-viaje="' + (b.viaje||'') + '" data-leg-idx="' + b.legs.indexOf(l) + '">' +
             '<div class="repomar-legdate">' + etiqueta + ' ' + fmtCorta(l.fecha_hasta) + '</div>' +
             '<div class="repomar-legprod">' + l.producto + ': ' + l.vol.toFixed(1) + ' MB</div>' +
           '</div>';
@@ -29056,6 +29070,7 @@ window.renderPRepoMar = function() {
           '</div>' +
           filaCobertura(cob.actual, cob.actualDias) +
           '<div class="repomar-divider"></div>' +
+          '<div class="repomar-ships-label">🚢 CABOTAJE CONFIRMADO</div>' +
           '<div class="repomar-ships" id="repomar-ships">' + filasShips + '</div>' +
           '<div class="repomar-divider"></div>' +
           filaCobertura(cob.nueva) +
@@ -29085,16 +29100,31 @@ window.renderPRepoMar = function() {
       var shipBox = row.querySelector('.repomar-shipbox');
       if (!shipBox) return;
       var sRect = shipBox.getBoundingClientRect();
-      var x0 = sRect.right - gridRect.left;
-      var y0 = sRect.top + sRect.height/2 - gridRect.top;
-      var legs = row.querySelectorAll('.repomar-legbox[data-buque="' + b.buque + '"]');
-      legs.forEach(function(legEl) {
+      // ⚠️ CORREGIDO — bug real confirmado (visualmente se veía como si
+      // el buque volviera a Talara entre cada escala, en vez de seguir
+      // su ruta real): antes, CADA flecha salía siempre del mismo punto
+      // fijo (la caja del buque) — un patrón "en abanico", no la
+      // secuencia real del viaje. Ahora se ENCADENA: la escala 1 sale
+      // del buque, la escala 2 sale de donde terminó la escala 1, la
+      // escala 3 sale de donde terminó la escala 2 — seleccionando cada
+      // caja por su ORDEN CRONOLÓGICO real (b.legs, ya ordenado por
+      // fecha_hasta), no por el orden en que el navegador las encuentra
+      // en pantalla (que sigue la posición de columna, no la ruta).
+      var prevX = sRect.right - gridRect.left;
+      var prevY = sRect.top + sRect.height/2 - gridRect.top;
+      b.legs.forEach(function(leg, legIdx) {
+        var legEl = row.querySelector('.repomar-legbox[data-buque="' + b.buque + '"][data-leg-idx="' + legIdx + '"]');
+        if (!legEl) return;
         var lRect = legEl.getBoundingClientRect();
         var x1 = lRect.left - gridRect.left;
         var y1 = lRect.top + lRect.height/2 - gridRect.top;
-        var midX = (x0 + x1) / 2;
-        pathsHTML += '<path d="M' + x0 + ',' + y0 + ' Q' + midX + ',' + (Math.min(y0,y1)-25) + ' ' + x1 + ',' + y1 + '" ' +
+        var midX = (prevX + x1) / 2;
+        pathsHTML += '<path d="M' + prevX + ',' + prevY + ' Q' + midX + ',' + (Math.min(prevY,y1)-25) + ' ' + x1 + ',' + y1 + '" ' +
           'fill="none" stroke="#93c5fd" stroke-width="1.6" stroke-dasharray="4 3" marker-end="url(#repomar-arrow)"/>';
+        // El punto de salida de la SIGUIENTE flecha es el borde derecho
+        // de ESTA escala — así la ruta sigue avanzando hacia adelante.
+        prevX = lRect.right - gridRect.left;
+        prevY = y1;
       });
     });
     svg.innerHTML = '<defs><marker id="repomar-arrow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#93c5fd"/></marker></defs>' + pathsHTML;
