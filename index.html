@@ -29089,6 +29089,9 @@ function _repomarInjectCSS() {
     .repomar-cell-crit{background:#DC271C;color:#fff;font-weight:700;border-color:#c02016}
     .repomar-cell-ok{color:var(--txt);font-weight:700;background:#eef7ee}
     .repomar-cell-empty{background:var(--bg3,var(--card));color:var(--txt3);font-size:10.5px}
+    .repomar-cell-retorno-na{background:transparent!important;border-color:transparent!important}
+    .repomar-shipzarpe-pendiente{background:#f3f4f6!important;border-color:var(--bdr)!important;color:var(--txt3)!important}
+    .repomar-retorno-pendiente{font-size:9px;color:var(--txt3);text-align:center;padding:6px 2px;font-style:italic}
     .repomar-sectiontitle{background:#0071A4;color:#fff;font-size:10.5px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;padding:4px 10px;border:1px solid #0071A4}
     .repomar-divider{height:22px;position:relative}
     .repomar-divider::after{content:'';position:absolute;left:0;right:0;top:50%;height:1px;background:linear-gradient(90deg,transparent,var(--bdr) 10%,var(--bdr) 90%,transparent)}
@@ -29102,7 +29105,7 @@ function _repomarInjectCSS() {
     .repomar-shipzarpe{margin:6px 10px 8px;background:#fff7e6;border:1px solid #f0c869;border-radius:4px;padding:3px 8px;font-size:10px;font-weight:700;color:#8a6416;display:inline-block}
     .repomar-legbox{background:#fff;border:1.5px solid #2563eb;border-radius:6px;padding:5px 7px;font-size:10px;margin:3px 2px;position:relative;z-index:2;box-shadow:0 1px 3px rgba(37,99,235,.18)}
     .repomar-legdate{font-weight:800;color:#2563eb;font-size:10px}
-    .repomar-legprod{color:var(--txt2);font-family:var(--mono);font-size:9.5px;margin-top:1px}
+    .repomar-legprod{color:var(--txt2);font-family:var(--mono);font-size:9.5px;margin-top:1px;white-space:nowrap}
     .repomar-legbox.completado{border-color:#16a34a;box-shadow:0 1px 3px rgba(22,163,74,.18)}
     .repomar-legbox.completado .repomar-legdate{color:#16a34a}
     .repomar-legbox.en-terminal{border-color:#b45309;box-shadow:0 1px 3px rgba(180,83,9,.18)}
@@ -29160,7 +29163,7 @@ window.renderPRepoMar = function() {
       }).join('');
       return '<div class="repomar-row" style="grid-template-columns:' + cols + '">' +
         '<div class="repomar-cell repomar-labelcell">' + prod + '</div>' + celdas +
-        '<div class="repomar-cell repomar-cell-empty"></div>' +
+        '<div class="repomar-cell repomar-cell-retorno-na"></div>' +
         '</div>';
     }).join('');
   }
@@ -29194,7 +29197,7 @@ window.renderPRepoMar = function() {
   }
 
   var filaEncabezado = '<div class="repomar-row repomar-headerrow" style="grid-template-columns:' + cols + '">' +
-    '<div class="repomar-cell repomar-labelcell"></div>' +
+    '<div class="repomar-cell repomar-labelcell" style="background:transparent;border-color:transparent"></div>' +
     REPOMAR_PLANTAS.map(function(p){ return '<div class="repomar-cell repomar-planthead">' + p + '</div>'; }).join('') +
     '<div class="repomar-cell repomar-planthead">Retorno</div>' +
     '</div>';
@@ -29207,11 +29210,21 @@ window.renderPRepoMar = function() {
       }).join('<br>');
       // ⚠️ AMPLIADO — a pedido: origen (siempre Talara en esta flota) y
       // hora exacta de zarpe, no solo la fecha.
+      // ⚠️ AGREGADO — a pedido: si el buque TODAVÍA no ha zarpado
+      // (fecha_zarpe vacía en Posicionamiento de Naves — caso real
+      // confirmado: UCAYALI reportado como "EN TALARA", sin fecha de
+      // zarpe todavía porque sigue cargando), la caja quedaba vacía sin
+      // ninguna explicación, como si el dato faltara por error. Ahora
+      // se muestra un aviso honesto en su lugar — no hay nada que
+      // corregir en el código, es el estado real del buque.
+      var zarpeTxt = b.zarpe
+        ? '<div class="repomar-shipzarpe">Zarpó de ' + b.zarpeOrigen + ': ' + fmtCorta(b.zarpe) + fmtHora(b.zarpe) + '</div>'
+        : '<div class="repomar-shipzarpe repomar-shipzarpe-pendiente">Aún en Talara (cargando)</div>';
       var shipBox = '<div class="repomar-cell" style="align-items:flex-start;padding:4px">' +
         '<div class="repomar-shipbox" style="width:100%">' +
           '<div class="repomar-shipname">🚢 ' + b.buque + '</div>' +
           '<div class="repomar-shipcargo">' + (cargaTxt || 'Sin carga registrada') + '</div>' +
-          (b.zarpe ? '<div class="repomar-shipzarpe">Zarpó de ' + b.zarpeOrigen + ': ' + fmtCorta(b.zarpe) + fmtHora(b.zarpe) + '</div>' : '') +
+          zarpeTxt +
         '</div>' +
       '</div>';
       var legCells = REPOMAR_PLANTAS.map(function(planta) {
@@ -29248,16 +29261,17 @@ window.renderPRepoMar = function() {
         return '<div class="repomar-cell" style="background:transparent;border:none;flex-direction:column;padding:2px">' + chips + '</div>';
       }).join('');
       // ⚠️ AGREGADO — a pedido: recuadro de retorno estimado a Talara, a
-      // la derecha de todas las escalas. Solo se muestra si el próximo
-      // puerto de ETA del buque (según Posicionamiento de Naves) es
-      // efectivamente Talara — si todavía le quedan escalas de
-      // descarga pendientes, no hay una fecha de retorno conocida
-      // todavía y se muestra vacío, en vez de inventar una.
-      var retornoCell = '<div class="repomar-cell" style="background:transparent;border:none;padding:4px">' +
-        (b.retornoTalara
-          ? '<div class="repomar-legbox" style="border-color:#0071A4"><div class="repomar-legdate" style="color:#0071A4">Retorno Talara</div><div class="repomar-legprod">' + fmtCorta(b.retornoTalara) + fmtHora(b.retornoTalara) + '</div></div>'
-          : '') +
-        '</div>';
+      // la derecha de todas las escalas. Solo se muestra una fecha real
+      // si el próximo puerto de ETA del buque (según Posicionamiento de
+      // Naves) es efectivamente Talara. Si todavía no zarpó o le
+      // quedan escalas pendientes, se muestra un aviso corto en vez de
+      // dejar la celda vacía sin explicación (caso real confirmado:
+      // UCAYALI, todavía cargando en Talara, no tiene retorno estimado
+      // todavía — es el estado real, no falta ningún dato por corregir).
+      var retornoTxt = b.retornoTalara
+        ? '<div class="repomar-legbox" style="border-color:#0071A4"><div class="repomar-legdate" style="color:#0071A4">Retorno Talara</div><div class="repomar-legprod">' + fmtCorta(b.retornoTalara) + fmtHora(b.retornoTalara) + '</div></div>'
+        : '<div class="repomar-retorno-pendiente">Aún sin ETA de retorno</div>';
+      var retornoCell = '<div class="repomar-cell" style="background:transparent;border:none;padding:4px">' + retornoTxt + '</div>';
       return '<div class="repomar-row" data-ship-row="' + idx + '" style="grid-template-columns:' + cols + '">' + shipBox + legCells + retornoCell + '</div>';
     }).join('');
   } else {
@@ -29345,7 +29359,18 @@ window.renderPRepoMar = function() {
         var x1 = lRect.left - gridRect.left;
         var y1 = lRect.top + lRect.height/2 - gridRect.top;
         var midX = (prevX + x1) / 2;
-        pathsHTML += '<path d="M' + prevX + ',' + prevY + ' Q' + midX + ',' + (Math.min(prevY,y1)-25) + ' ' + x1 + ',' + y1 + '" ' +
+        // ⚠️ CORREGIDO — a pedido: la curva usaba una altura FIJA (25px)
+        // sin importar qué tan cerca estuvieran los dos puntos — entre
+        // plantas contiguas (poca distancia horizontal), esto hacía que
+        // la flecha se viera casi plana y "contraída", difícil de
+        // distinguir de una línea recta. Ahora la altura de la curva es
+        // proporcional a la distancia horizontal, con un mínimo de 30px
+        // (para que SIEMPRE se note como una curva, incluso entre
+        // columnas contiguas) y un máximo de 60px (para no exagerar en
+        // los tramos largos).
+        var distanciaHoriz = Math.abs(x1 - prevX);
+        var alturaCurva = Math.max(30, Math.min(60, distanciaHoriz * 0.15));
+        pathsHTML += '<path d="M' + prevX + ',' + prevY + ' Q' + midX + ',' + (Math.min(prevY,y1)-alturaCurva) + ' ' + x1 + ',' + y1 + '" ' +
           'fill="none" stroke="#93c5fd" stroke-width="1.6" stroke-dasharray="4 3" marker-end="url(#repomar-arrow)"/>';
         // El punto de salida de la SIGUIENTE flecha es el borde derecho
         // de ESTA escala — así la ruta sigue avanzando hacia adelante.
