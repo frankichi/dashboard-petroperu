@@ -29258,6 +29258,7 @@ function _repomarInjectCSS() {
     .repomar-divider{height:22px;position:relative}
     .repomar-divider::after{content:'';position:absolute;left:0;right:0;top:50%;height:1px;background:linear-gradient(90deg,transparent,var(--bdr) 10%,var(--bdr) 90%,transparent)}
     .repomar-ships-label{font-size:10px;font-weight:800;letter-spacing:.08em;color:var(--txt3);text-transform:uppercase;padding:0 4px 6px;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+    .repomar-retorno-titulo{font-size:10px;font-weight:800;letter-spacing:.06em;color:#0071A4;text-transform:uppercase;white-space:nowrap}
     .repomar-ships-legend{font-size:9.5px;font-weight:600;letter-spacing:0;text-transform:none;color:var(--txt3);display:flex;align-items:center;gap:5px}
     .repomar-legend-dot{width:8px;height:8px;border-radius:50%;display:inline-block;margin-left:8px}
     .repomar-ships{position:relative;row-gap:14px}
@@ -29383,10 +29384,19 @@ window.renderPRepoMar = function() {
     return pos.ubicacion;
   }
 
+  // ⚠️ CORREGIDO — a pedido: "Retorno" se veía como si fuera una planta
+  // más (mismo estilo azul que "Bayóvar", "Eten", etc.), cuando en
+  // realidad es una columna completamente distinta — no tiene cobertura
+  // ni pertenece a la lista de plantas. Ahora esa celda queda vacía en
+  // el encabezado (arriba y abajo, ya que filaEncabezado se reutiliza
+  // en ambos lugares) — el título real de esa columna se agrega aparte,
+  // como una etiqueta propia al mismo nivel que "CABOTAJE CONFIRMADO",
+  // directamente encima de los recuadros de retorno (ver más abajo,
+  // junto al bloque de buques).
   var filaEncabezado = '<div class="repomar-row repomar-headerrow" style="grid-template-columns:' + cols + '">' +
     '<div class="repomar-cell repomar-labelcell" style="background:transparent;border-color:transparent"></div>' +
     REPOMAR_PLANTAS.map(function(p){ return '<div class="repomar-cell repomar-planthead">' + p + '</div>'; }).join('') +
-    '<div class="repomar-cell repomar-planthead">Retorno</div>' +
+    '<div class="repomar-cell" style="background:transparent;border-color:transparent"></div>' +
     '</div>';
 
   var filasShips = '';
@@ -29510,7 +29520,19 @@ window.renderPRepoMar = function() {
             filaCobertura(cob.actual, cob.actualDias) +
           '</div>' +
           '<div class="repomar-divider"></div>' +
-          '<div class="repomar-ships-label">🚢 CABOTAJE CONFIRMADO</div>' +
+          // ⚠️ CORREGIDO — a pedido: "Retorno" ahora es un título propio,
+          // al mismo nivel que "CABOTAJE CONFIRMADO" pero alineado a la
+          // derecha, justo encima de los recuadros de retorno — usando
+          // la misma grilla compartida (`cols`) para que quede
+          // exactamente sobre esa columna, no como una planta más.
+          '<div class="repomar-row" style="grid-template-columns:' + cols + '">' +
+            '<div class="repomar-cell" style="grid-column:1/-2;justify-content:flex-start;background:transparent;border:none;padding:0 0 6px">' +
+              '<div class="repomar-ships-label">🚢 CABOTAJE CONFIRMADO</div>' +
+            '</div>' +
+            '<div class="repomar-cell" style="background:transparent;border:none;padding:0 4px 6px;align-items:flex-end;justify-content:center">' +
+              '<div class="repomar-retorno-titulo">↩ Retorno</div>' +
+            '</div>' +
+          '</div>' +
           '<div class="repomar-ships" id="repomar-ships">' + filasShips + '</div>' +
           '<div class="repomar-divider"></div>' +
           '<div class="repomar-covblock">' +
