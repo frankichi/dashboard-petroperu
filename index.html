@@ -16245,8 +16245,22 @@ window.handleCisternasFile = handleCisternasFile;
 window.sendCisternasToGS = sendCisternasToGS;
 window.clearCisternas = clearCisternas;
 function _parseCargasFecha(token, year, refMes) {
+  // ⚠️ CORREGIDO — bug real confirmado (MOCHE→Salaverry, UCAYALI→Conchán
+  // y otras filas del reporte del 26-ago salían con el mes equivocado,
+  // un mes ANTES de lo real): el PDF de Cargas de Naves usa "SET" como
+  // abreviatura de setiembre (convención en español), pero este
+  // diccionario solo reconocía "SEP" (inglés) — nunca usada en los
+  // reportes reales. Al no encontrar la clave, el código caía en el
+  // respaldo silencioso `||refMes` (el mes del REPORTE, no el mes real
+  // del token) — por eso septiembre se leía como si fuera el mes del
+  // reporte (agosto), corriendo TODAS las fechas un mes hacia atrás.
+  // Reproducido y confirmado con el PDF real: _parseCargasFecha("31-01/
+  // SET", "2026", "08") daba ["2026-07-31","2026-08-01"] en vez de
+  // ["2026-08-31","2026-09-01"]. Se agrega "SET" como alias de "09" sin
+  // quitar "SEP", por si algún reporte futuro llega a usar esa otra
+  // forma.
   var MESES = {ENE:'01',FEB:'02',MAR:'03',ABR:'04',MAY:'05',JUN:'06',
-               JUL:'07',AGO:'08',SEP:'09',OCT:'10',NOV:'11',DIC:'12'};
+               JUL:'07',AGO:'08',SEP:'09',SET:'09',OCT:'10',NOV:'11',DIC:'12'};
   token = (token||'').trim().toUpperCase();
   var mX = token.match(/^(\d{1,2})\/([A-Z]+)-(\d{1,2})\/([A-Z]+)/);
   if (mX) {
