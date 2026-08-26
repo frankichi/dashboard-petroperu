@@ -1096,7 +1096,15 @@ var _mapLibsLoaded=false;
 
   // 1. Vistas públicas: sin login
   var view = new URLSearchParams(window.location.search).get('view') || '';
-  var PUBLIC = ['executive','inventory-report','iqui-informe','puertos','rios','plan-dist','reset'];
+  // ⚠️ CORREGIDO — bug real confirmado: esta es la lista que REALMENTE
+  // bloquea fetchData y activa el formulario de login (corre ANTES que
+  // cualquier otra cosa, sincrónicamente, al parsear el body) — "repomar"
+  // nunca se había agregado, así que ?view=repomar seguía pidiendo
+  // usuario y contraseña aunque la intención era que fuera libre, igual
+  // que "executive". Hay una SEGUNDA lista más abajo en el archivo
+  // (_AUTH_PUBLIC_VIEWS) que solo afecta si se muestra el nombre de
+  // usuario en el topbar — esta de aquí es la que de verdad importa.
+  var PUBLIC = ['executive','inventory-report','iqui-informe','puertos','rios','plan-dist','reset','repomar'];
   if (PUBLIC.indexOf(view) >= 0) {
     document.getElementById(OVERLAY_ID).style.display = 'none';
     return;
@@ -3672,7 +3680,12 @@ window.IQUI_INFORME_MODE = IQUI_INFORME_MODE;
 //  · Valida contra la hoja `usuarios` de Google Sheets vía rdLogin.
 //  · El admin gestiona cuentas directamente en la hoja `usuarios`.
 // ═══════════════════════════════════════════════════════════════════════
-const _AUTH_PUBLIC_VIEWS = new Set(['executive','inventory-report','iqui-informe','puertos','rios','plan-dist','reset']);
+// ⚠️ CORREGIDO — bug real confirmado: "?view=repomar" pedía usuario y
+// contraseña como el resto del dashboard, aunque estaba pensado como
+// enlace libre para compartir (igual que "executive"). Esta lista es
+// la que decide qué vistas quedan EXENTAS del login — "repomar" nunca
+// se había agregado.
+const _AUTH_PUBLIC_VIEWS = new Set(['executive','inventory-report','iqui-informe','puertos','rios','plan-dist','reset','repomar']);
 const _IS_PUBLIC_VIEW = _AUTH_PUBLIC_VIEWS.has(URL_PARAMS.get('view') || '');
 
 // ── Sesión ────────────────────────────────────────────────────────────────
