@@ -3637,6 +3637,17 @@ const PLANTAS_18_OFICIALES = ['Talara','Piura','Eten','Salaverry','Chimbote','Su
 const URL_PARAMS    = new URLSearchParams(window.location.search);
 const EXECUTIVE_MODE = URL_PARAMS.get('view') === 'executive';
 window.EXECUTIVE_MODE = EXECUTIVE_MODE;
+// ⚠️ AGREGADO — a pedido: "Reposiciones Marítimas" como enlace
+// independiente para compartir, sin necesidad de dar acceso al
+// dashboard completo. Sigue el mismo patrón que EXECUTIVE_MODE
+// (?view=executive) — un parámetro de URL que, al detectarse, oculta
+// todo el resto de la interfaz (sidebar, topbar normal) y muestra
+// SOLO el cuadro de Reposiciones Marítimas a pantalla completa. Los
+// datos se siguen pidiendo en vivo al mismo backend — no es una
+// captura estática, cada persona que abra el enlace ve el estado
+// actual real.
+const REPOMAR_SHARE_MODE = URL_PARAMS.get('view') === 'repomar';
+window.REPOMAR_SHARE_MODE = REPOMAR_SHARE_MODE;
 // ⚠️ AGREGADO — a pedido: Vista Ejecutiva (panel gerencial) muestra las
 // cifras con 1 decimal; el resto del sistema (panel de control) sigue
 // con 2. Como ambos paneles comparten el mismo código (executive.html
@@ -4686,6 +4697,14 @@ async function fetchData(forceRefresh) {
       console.warn('[renderPResumen]', renderErr.message);
       try { if (typeof renderPTend === 'function') renderPTend(); } catch(e2) {}
     }
+    // ⚠️ AGREGADO — a pedido: enlace independiente para compartir
+    // "Reposiciones Marítimas" (?view=repomar). Punto INCONDICIONAL,
+    // que corre en cada ciclo de fetchData — no depende de la cadena
+    // asíncrona de simShips (que puede no dispararse siempre), así el
+    // enlace compartido siempre termina de dibujarse con datos frescos.
+    if (typeof REPOMAR_SHARE_MODE !== 'undefined' && REPOMAR_SHARE_MODE && typeof renderPRepoMar === 'function') {
+      try { renderPRepoMar(); } catch(eRepoMarShare) { console.warn('[RepoMarShare]', eRepoMarShare.message); }
+    }
     if (!simInited && typeof _simAutoLoadFromGS === 'function') {
       simInited = true;  // marca para que renderPE no re-dispare
       _simAutoLoadFromGS().then(function() {
@@ -4700,6 +4719,7 @@ async function fetchData(forceRefresh) {
           if (activeP.id === 'p2' && typeof renderP2 === 'function') renderP2();
         }
         if (activeP && activeP.id === 'pDec' && typeof renderPDec === 'function') renderPDec();
+        if (activeP && activeP.id === 'pRepoMar' && typeof renderPRepoMar === 'function') renderPRepoMar();
       }).catch(function(err) {
         console.warn('[BOOT] No se pudo cargar simShips:', err && err.message);
       });
@@ -20423,6 +20443,7 @@ document.addEventListener('DOMContentLoaded', () => {
   initTheme();
   if (typeof initExecutiveMode === 'function') initExecutiveMode();
   if (typeof initInventoryReportMode === 'function') initInventoryReportMode();
+  if (typeof initRepoMarShareMode === 'function') initRepoMarShareMode();
   if (typeof initIquiInformeMode === 'function') initIquiInformeMode();
   if (typeof initPuertosViewMode === 'function') initPuertosViewMode();
   if (typeof initRiosViewMode === 'function') initRiosViewMode();
@@ -20457,6 +20478,45 @@ function initInventoryReportMode() {
   var rpt=document.createElement('div'); rpt.id='inv-report-root';
   rpt.innerHTML='<div style="display:flex;align-items:center;justify-content:center;height:100vh;flex-direction:column;gap:12px;color:#6b7280"><div style="font-size:32px">\u23f3</div><div style="font-size:14px;font-weight:600">Cargando datos\u2026</div></div>';
   document.body.insertBefore(rpt,document.body.firstChild);
+}
+// ⚠️ AGREGADO — a pedido: enlace independiente para compartir
+// "Reposiciones Marítimas" (?view=repomar), sin necesidad de dar
+// acceso al dashboard completo. Sigue el MISMO patrón ya probado que
+// initInventoryReportMode (arriba) — oculta el sidebar/topbar normales
+// y muestra solo el contenido pedido — pero, a diferencia de ese caso,
+// REUTILIZA el contenedor #pRepoMar ya existente (en vez de crear uno
+// nuevo) marcándolo como la página "activa" con el mismo mecanismo de
+// clases que ya usa el resto del dashboard (.page.active) — así
+// renderPRepoMar() y todos sus enganches ya construidos (redibujado al
+// llegar _navPosData, etc.) funcionan sin duplicar ninguna lógica.
+function initRepoMarShareMode() {
+  if (!REPOMAR_SHARE_MODE) return;
+  document.body.classList.add('repomar-share-mode');
+  var sidebar = document.getElementById('sidebar');
+  var topbar = document.querySelector('.topbar');
+  if (sidebar) sidebar.style.display = 'none';
+  if (topbar) topbar.style.display = 'none';
+  document.querySelectorAll('.page.active').forEach(function(p) { p.classList.remove('active'); });
+  var pagina = document.getElementById('pRepoMar');
+  if (pagina) pagina.classList.add('active');
+  // Barra superior propia — con la identidad de Petroperú y créditos de
+  // Franco, para que quede visible en el enlace compartido sin
+  // necesidad de dar acceso al resto del dashboard.
+  var barra = document.createElement('div');
+  barra.className = 'repomar-share-topbar';
+  barra.innerHTML =
+    '<div class="repomar-share-topbar-left">' +
+      '<div class="repomar-share-logo">⛽</div>' +
+      '<div>' +
+        '<div class="repomar-share-t1">PETRÓLEOS DEL PERÚ S.A.</div>' +
+        '<div class="repomar-share-t2">Gerencia de Planeamiento Operacional · Reposiciones Marítimas</div>' +
+      '</div>' +
+    '</div>' +
+    '<div class="repomar-share-topbar-right">' +
+      '<span class="repomar-share-live"><span class="repomar-live-dot"></span>En vivo</span>' +
+      '<a href="' + window.location.origin + window.location.pathname + '" target="_blank" class="repomar-share-fulllink">Abrir dashboard completo ↗</a>' +
+    '</div>';
+  document.body.insertBefore(barra, document.body.firstChild);
 }
 function renderInventoryReport() {
   if (!INVENTORY_REPORT_MODE) return;
@@ -29154,9 +29214,30 @@ function _buildRepoMarCobertura(buques) {
 function _repomarInjectCSS() {
   if (document.getElementById('repomar-css')) return;
   var css = `
-    .repomar-wrap{padding:18px 20px 40px}
-    .repomar-title{font-size:16px;font-weight:800;color:var(--txt);margin-bottom:2px}
-    .repomar-subtitle{font-size:11.5px;color:var(--txt3);margin-bottom:16px}
+    /* ═══ Barra superior del enlace compartido (?view=repomar) ═══ */
+    .repomar-share-topbar{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:14px 28px;background:linear-gradient(90deg,#003a56 0%,#0071A4 100%);color:#fff;box-shadow:0 2px 14px rgba(0,58,86,.3);position:sticky;top:0;z-index:1000;font-family:'Inter',system-ui,sans-serif}
+    .repomar-share-topbar-left{display:flex;align-items:center;gap:14px}
+    .repomar-share-logo{width:42px;height:42px;background:#fff;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;box-shadow:0 1px 4px rgba(0,0,0,.2)}
+    .repomar-share-t1{font-size:13px;font-weight:800;letter-spacing:.06em;text-transform:uppercase}
+    .repomar-share-t2{font-size:11px;color:rgba(255,255,255,.8);margin-top:1px}
+    .repomar-share-topbar-right{display:flex;align-items:center;gap:16px}
+    .repomar-share-live{display:flex;align-items:center;gap:6px;font-size:11px;font-weight:700;color:rgba(255,255,255,.9);letter-spacing:.03em}
+    .repomar-live-dot{width:7px;height:7px;border-radius:50%;background:#22c55e;box-shadow:0 0 0 0 rgba(34,197,94,.7);animation:repomarPulse 2s infinite}
+    @keyframes repomarPulse{0%{box-shadow:0 0 0 0 rgba(34,197,94,.55)}70%{box-shadow:0 0 0 7px rgba(34,197,94,0)}100%{box-shadow:0 0 0 0 rgba(34,197,94,0)}}
+    .repomar-share-fulllink{font-size:11px;color:#fff;text-decoration:none;background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.3);padding:6px 13px;border-radius:6px;font-weight:600;transition:background .15s;white-space:nowrap}
+    .repomar-share-fulllink:hover{background:rgba(255,255,255,.24)}
+    body.repomar-share-mode #app-layout{height:100vh}
+    body.repomar-share-mode #pRepoMar{height:calc(100vh - 71px)}
+
+    /* ═══ Encabezado y botón de compartir ═══ */
+    .repomar-wrap{padding:22px 26px 44px;max-width:1400px;margin:0 auto}
+    .repomar-headerbar{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:18px;flex-wrap:wrap}
+    .repomar-title{font-size:19px;font-weight:800;color:var(--txt);letter-spacing:-.01em;display:flex;align-items:center;gap:9px}
+    .repomar-subtitle{font-size:11.5px;color:var(--txt3);margin-top:3px}
+    .repomar-share-btn{background:linear-gradient(90deg,#0071A4,#003a56);color:#fff;border:none;padding:9px 18px;border-radius:8px;font-size:11.5px;font-weight:700;letter-spacing:.02em;cursor:pointer;display:inline-flex;align-items:center;gap:7px;box-shadow:0 2px 8px rgba(0,113,164,.3);transition:all .15s;white-space:nowrap;flex-shrink:0;font-family:inherit}
+    .repomar-share-btn:hover{filter:brightness(1.1);transform:translateY(-1px);box-shadow:0 4px 12px rgba(0,113,164,.4)}
+    .repomar-credit-footer{margin-top:22px;padding-top:14px;border-top:1px solid var(--bdr);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;font-size:10.5px;color:var(--txt3)}
+    .repomar-credit-footer strong{color:var(--txt2);font-weight:700}
     .repomar-scroll{overflow-x:auto;padding-bottom:8px}
     .repomar-grid{position:relative;min-width:1220px;background:var(--card);border-radius:10px;box-shadow:0 1px 3px rgba(0,0,0,.08);overflow:hidden;padding:2px 2px 2px 26px}
     .repomar-covblock{position:relative}
@@ -29198,6 +29279,30 @@ function _repomarInjectCSS() {
   style.textContent = css;
   document.head.appendChild(style);
 }
+
+// ⚠️ AGREGADO — a pedido: botón "Compartir enlace" en Reposiciones
+// Marítimas. Copia al portapapeles la URL actual + "?view=repomar" —
+// el mismo patrón que ?view=executive, pero para esta página
+// específica. Quien reciba el enlace ve SOLO este cuadro, en vivo, sin
+// necesidad de acceso al resto del dashboard.
+function _repomarCompartir() {
+  var url = window.location.origin + window.location.pathname + '?view=repomar';
+  var mostrarConfirmacion = function() {
+    var btn = document.querySelector('.repomar-share-btn');
+    if (!btn) return;
+    var textoOriginal = btn.innerHTML;
+    btn.innerHTML = '✅ Enlace copiado';
+    setTimeout(function() { btn.innerHTML = textoOriginal; }, 2000);
+  };
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(url).then(mostrarConfirmacion).catch(function() {
+      window.prompt('Copia este enlace:', url);
+    });
+  } else {
+    window.prompt('Copia este enlace:', url);
+  }
+}
+window._repomarCompartir = _repomarCompartir;
 
 window.renderPRepoMar = function() {
   _repomarInjectCSS();
@@ -29380,8 +29485,14 @@ window.renderPRepoMar = function() {
 
   host.innerHTML =
     '<div class="repomar-wrap">' +
-      '<div class="repomar-title">🚢 Reposiciones Marítimas y Coberturas Proyectadas</div>' +
-      '<div class="repomar-subtitle">Al ' + fmtCorta(fechaRef) + ' · generado en vivo desde Cargas de Naves, Posicionamiento de Naves y Cobertura por planta</div>' +
+      '<div class="repomar-headerbar">' +
+        '<div>' +
+          '<div class="repomar-title">🚢 Reposiciones Marítimas y Coberturas Proyectadas</div>' +
+          '<div class="repomar-subtitle">Al ' + fmtCorta(fechaRef) + ' · generado en vivo desde Cargas de Naves, Posicionamiento de Naves y Cobertura por planta</div>' +
+        '</div>' +
+        (typeof REPOMAR_SHARE_MODE !== 'undefined' && REPOMAR_SHARE_MODE ? '' :
+        '<button class="repomar-share-btn" onclick="_repomarCompartir()">🔗 Compartir enlace</button>') +
+      '</div>' +
       '<div class="repomar-scroll">' +
         '<div class="repomar-grid" id="repomar-grid">' +
           '<svg class="repomar-svg" id="repomar-svg"></svg>' +
@@ -29408,6 +29519,10 @@ window.renderPRepoMar = function() {
           '</div>' +
           filaEncabezado +
         '</div>' +
+      '</div>' +
+      '<div class="repomar-credit-footer">' +
+        '<span>Petróleos del Perú S.A. · Gerencia de Planeamiento Operacional (GPLO)</span>' +
+        '<span>Desarrollado por <strong>Franco Urcia Castillo</strong></span>' +
       '</div>' +
     '</div>';
 
