@@ -1440,6 +1440,10 @@ textarea.pd-inp{resize:vertical;min-height:44px;font-family:var(--sans)}
     <span class="sb-icon"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" width="16" height="16"><rect x="2" y="14" width="4" height="4" rx="0.5"/><rect x="8" y="10" width="4" height="8" rx="0.5"/><rect x="14" y="6" width="4" height="12" rx="0.5"/><path d="M2 2l4 4 4-3 4 2 4-4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
     <span class="sb-label">Inv. Nacional</span>
   </button>
+  <button class="sb-item" data-pid="pRepoMar" onclick="showPage('pRepoMar',this)" title="Reposiciones Marítimas y Coberturas Proyectadas">
+    <span class="sb-icon">🚢</span>
+    <span class="sb-label">Reposiciones Marítimas</span>
+  </button>
   <button class="sb-item" data-pid="pTend" onclick="showPage('pTend',this)" title="Tendencia de Inventario">
     <span class="sb-icon"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" width="16" height="16"><polyline points="2,14 6,10 10,12 14,7 18,4" stroke-linecap="round" stroke-linejoin="round"/><line x1="2" y1="18" x2="18" y2="18" stroke-linecap="round"/></svg></span>
     <span class="sb-label">Tendencia Inv.</span>
@@ -1536,6 +1540,7 @@ textarea.pd-inp{resize:vertical;min-height:44px;font-family:var(--sans)}
 <div id="pA"       class="page"><div id="pA-content" style="height:100%;display:flex;flex-direction:column"></div></div>
 <div id="pDec"     class="page"><div id="pDec-content"></div></div>
 <div id="pInv"     class="page"><div id="pInv-content"></div></div>
+<div id="pRepoMar" class="page"><div id="pRepoMar-content"></div></div>
 <div id="pTend"    class="page"><div id="pTend-content"></div></div>
 <div id="pPronEv"  class="page"><div id="pPronEv-content"></div></div>
 <div id="p2"       class="page"><div id="p2-content"></div></div>
@@ -4308,6 +4313,7 @@ function rerenderActivePage() {
     case 'pD':      renderPD(); break;
     case 'pE':      renderPE(); break;
     case 'pInv':    if (typeof renderPInv === 'function') renderPInv(); break;
+    case 'pRepoMar': if (typeof renderPRepoMar === 'function') renderPRepoMar(); break;
     case 'pProg':   renderPProg(); break;
     case 'pUpload': renderPUpload(); break;
     case 'pDec':    if (typeof renderPDec === 'function') renderPDec(); break;
@@ -5161,6 +5167,7 @@ function showPage(id, tab) {
     case 'pProg':   renderPProg(); break;
     case 'pUpload': renderPUpload(); break;
     case 'pInv':    renderPInv(); break;
+    case 'pRepoMar': if(typeof renderPRepoMar==='function') renderPRepoMar(); break;
     case 'pIqui':   if(typeof renderPIqui==='function') renderPIqui(); break;
     case 'pSegD':   if(typeof renderPSegD==='function') renderPSegD(); break;
     case 'pComent': if(typeof renderPComent==='function') renderPComent(); break;
@@ -28787,6 +28794,291 @@ el.innerHTML = `
     }
   };
 })();
+
+// ══════════════════════════════════════════════════════════════════════
+// ║  🚢 REPOSICIONES MARÍTIMAS Y COBERTURAS PROYECTADAS                 ║
+// ║  Página nueva — a pedido: mismo formato que el reporte manual       ║
+// ║  "Reposiciones Marítimas y Coberturas Proyectadas" que se armaba a  ║
+// ║  mano, ahora generado en vivo desde los datos ya existentes         ║
+// ║  (cargas_naves + posicionamiento_naves + cobertura por planta).     ║
+// ══════════════════════════════════════════════════════════════════════
+
+// Plantas costeras relevantes para cabotaje marítimo, ordenadas de norte
+// a sur (igual que el reporte de referencia). Bayóvar es un terminal de
+// carga (origen), no una planta con inventario propio — se muestra como
+// columna de contexto geográfico, sin filas de cobertura.
+const REPOMAR_PLANTAS = ['Bayóvar','Eten','Salaverry','Chimbote','Supe','Callao','Conchán','Pisco','Mollendo','Ilo'];
+const REPOMAR_PRODUCTOS = ['Diesel','G. Regular','G. Premium','TA1'];
+
+function _repomarNormPuerto(t) {
+  return (t || '').trim().toUpperCase()
+    .replace(/[ÁÀ]/g,'A').replace(/[ÉÈ]/g,'E').replace(/[ÍÌ]/g,'I').replace(/[ÓÒ]/g,'O').replace(/[ÚÙ]/g,'U');
+}
+
+// Suma N días hábiles (sin domingos ni feriados) a una fecha base —
+// misma convención que _diasHabilesEntreFechas, usada para calcular la
+// "nueva cobertura" tras sumar los días que aporta la reposición.
+function _repomarSumarDiasHabiles(fechaBase, n) {
+  if (!fechaBase || !n) return fechaBase || '';
+  var p = fechaBase.split('-').map(Number);
+  var d = Date.UTC(p[0], p[1]-1, p[2]);
+  var restantes = Math.round(n);
+  var iter = 0;
+  while (restantes > 0 && iter < 400) {
+    d += 86400000; iter++;
+    var dt = new Date(d);
+    var fechaIter = dt.toISOString().slice(0, 10);
+    var esDomingo = dt.getUTCDay() === 0;
+    var esFeriado = typeof _execEsFeriado === 'function' && !!_execEsFeriado(fechaIter);
+    if (!esDomingo && !esFeriado) restantes--;
+  }
+  return new Date(d).toISOString().slice(0, 10);
+}
+
+// Reconstruye la lista de buques con cabotaje vigente y su itinerario
+// completo (todas sus escalas, en todas las plantas), a partir de los
+// bt_lista ya calculados por planta+producto — cada fila de RAW solo
+// conoce SU planta, así que hay que recorrer todas para juntar el
+// itinerario completo de cada buque.
+function _buildRepoMarBuques() {
+  var buquesMap = {}; // "BUQUE|VIAJE" -> { buque, viaje, legs:[], cargaInicial:{} }
+  var fechaRef = (typeof currentDate !== 'undefined' && currentDate) ? currentDate : new Date().toISOString().slice(0,10);
+
+  REPOMAR_PLANTAS.forEach(function(planta) {
+    (PRODUCTOS_POR_PLANTA_EXEC[planta] || []).forEach(function(producto) {
+      var fila = null;
+      if (typeof _invConProyeccion === 'function') {
+        try { fila = _invConProyeccion(planta, producto, fechaRef); }
+        catch(eProy) { console.warn('[RepoMar] _invConProyeccion falló para ' + planta + '|' + producto + ':', eProy.message); }
+      }
+      if (!fila || !fila.bt_lista) return;
+      var lista;
+      try { lista = JSON.parse(fila.bt_lista); } catch(e) { return; }
+      lista.forEach(function(n) {
+        if (n.estado === 'COMPLETADO') return; // el diagrama muestra cabotaje EN CAMINO, no lo ya recibido
+        var key = n.buque.toUpperCase() + '|' + (n.viaje || '—');
+        if (!buquesMap[key]) buquesMap[key] = { buque: n.buque, viaje: n.viaje, legs: [], cargaInicial: {} };
+        var yaExiste = buquesMap[key].legs.some(function(l) {
+          return l.terminalNorm === _repomarNormPuerto(n.terminal) && l.producto === n.producto && l.fecha_hasta === n.fecha_hasta;
+        });
+        if (!yaExiste) {
+          buquesMap[key].legs.push({
+            terminal: planta, terminalNorm: _repomarNormPuerto(n.terminal),
+            producto: n.producto, vol: n.vol, fecha_hasta: n.fecha_hasta, estado: n.estado
+          });
+          buquesMap[key].cargaInicial[n.producto] = (buquesMap[key].cargaInicial[n.producto] || 0) + n.vol;
+        }
+      });
+    });
+  });
+
+  var buques = Object.keys(buquesMap).map(function(k){ return buquesMap[k]; });
+  buques.forEach(function(b) {
+    b.legs.sort(function(a, c) { return (a.fecha_hasta||'').localeCompare(c.fecha_hasta||''); });
+    var pos = (typeof _navPosData !== 'undefined' && _navPosData) ? _navPosData[b.buque.toUpperCase()] : null;
+    b.zarpe = pos && pos.fecha_zarpe ? pos.fecha_zarpe.slice(0,10) : '';
+    b.retornoTalara = ''; // no hay dato estructurado de retorno estimado; se omite si no existe
+  });
+  // Ordenar por fecha de zarpe (los que salieron primero, arriba) —
+  // coincide con el orden del reporte de referencia.
+  buques.sort(function(a, c) { return (a.zarpe||'9999').localeCompare(c.zarpe||'9999'); });
+  return buques;
+}
+
+// Cobertura actual y proyectada (tras sumar la reposición pendiente) por
+// planta+producto — reutiliza reposicionInfoPlanta / fecha_cobertura ya
+// calculados en el resto del dashboard, para no duplicar esa lógica.
+function _buildRepoMarCobertura() {
+  var actual = {}, nueva = {};
+  var fechaRef = (typeof currentDate !== 'undefined' && currentDate) ? currentDate : new Date().toISOString().slice(0,10);
+  REPOMAR_PLANTAS.forEach(function(planta) {
+    (PRODUCTOS_POR_PLANTA_EXEC[planta] || []).forEach(function(producto) {
+      var key = planta + '|' + producto;
+      var fila = null;
+      if (typeof _invConProyeccion === 'function') {
+        try { fila = _invConProyeccion(planta, producto, fechaRef); }
+        catch(eProy) { console.warn('[RepoMar] _invConProyeccion falló para ' + planta + '|' + producto + ':', eProy.message); }
+      }
+      if (!fila) return;
+      actual[key] = fila.fecha_cobertura || '';
+      var dias = 0;
+      if (typeof reposicionInfoPlanta === 'function') {
+        try {
+          var rep = reposicionInfoPlanta(planta, producto);
+          dias = (rep && rep.diasRepos) || 0;
+        } catch(e) {}
+      }
+      nueva[key] = (dias > 0 && actual[key]) ? _repomarSumarDiasHabiles(actual[key], dias) : actual[key];
+    });
+  });
+  return { actual: actual, nueva: nueva };
+}
+
+// CSS de la página (una sola vez, inyectado con el primer render).
+function _repomarInjectCSS() {
+  if (document.getElementById('repomar-css')) return;
+  var css = `
+    .repomar-wrap{padding:18px 20px 40px}
+    .repomar-title{font-size:16px;font-weight:800;color:var(--txt);margin-bottom:2px}
+    .repomar-subtitle{font-size:11.5px;color:var(--txt3);margin-bottom:14px}
+    .repomar-scroll{overflow-x:auto;padding-bottom:8px}
+    .repomar-grid{position:relative;min-width:1180px}
+    .repomar-svg{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;overflow:visible}
+    .repomar-row{display:grid;align-items:stretch}
+    .repomar-cell{padding:6px 8px;border:1px solid var(--bdr);font-size:11.5px;display:flex;align-items:center;justify-content:center;text-align:center;background:var(--card);min-height:30px}
+    .repomar-labelcell{justify-content:flex-start;font-weight:700;color:var(--txt2);font-size:10.5px;text-transform:uppercase;letter-spacing:.03em;background:var(--bg3);border:1px solid var(--bdr)}
+    .repomar-planthead{font-weight:800;color:#fff;background:#0071A4;border-color:#0071A4;font-size:11.5px}
+    .repomar-cell-crit{background:#DC271C;color:#fff;font-weight:700;border-color:#DC271C}
+    .repomar-cell-ok{color:var(--txt);font-weight:600}
+    .repomar-cell-empty{background:var(--bg2,var(--card));color:var(--txt3)}
+    .repomar-divider{height:16px}
+    .repomar-ships{position:relative;row-gap:10px}
+    .repomar-shipbox{background:#eef4f8;border:1.5px solid #0071A4;border-radius:6px;padding:8px 10px;font-size:11px;margin:4px 2px}
+    .repomar-shipname{font-weight:800;color:#0071A4;font-size:12.5px;margin-bottom:3px}
+    .repomar-shipcargo{color:var(--txt2);font-family:var(--mono);font-size:10.5px;line-height:1.5}
+    .repomar-shipzarpe{margin-top:5px;background:#fff;border:1px solid var(--bdr);border-radius:4px;padding:3px 6px;font-size:10px;font-weight:700;color:var(--txt2)}
+    .repomar-legbox{background:#fff;border:1.5px solid #2563eb;border-radius:5px;padding:4px 6px;font-size:10px;margin:3px 2px;position:relative;z-index:2}
+    .repomar-legdate{font-weight:800;color:#2563eb;font-size:10px}
+    .repomar-legprod{color:var(--txt2);font-family:var(--mono);font-size:9.5px;margin-top:1px}
+    .repomar-legbox.completado{border-color:#16a34a}
+    .repomar-legbox.completado .repomar-legdate{color:#16a34a}
+    .repomar-empty-msg{padding:30px;text-align:center;color:var(--txt3);font-size:13px}
+  `;
+  var style = document.createElement('style');
+  style.id = 'repomar-css';
+  style.textContent = css;
+  document.head.appendChild(style);
+}
+
+window.renderPRepoMar = function() {
+  _repomarInjectCSS();
+  var host = document.getElementById('pRepoMar-content');
+  if (!host) return;
+
+  var cob = _buildRepoMarCobertura();
+  var buques = _buildRepoMarBuques();
+  var fechaRef = (typeof currentDate !== 'undefined' && currentDate) ? currentDate : new Date().toISOString().slice(0,10);
+  var cols = '170px repeat(' + REPOMAR_PLANTAS.length + ', minmax(100px, 1fr))';
+
+  function fmtCorta(f) {
+    if (!f) return '—';
+    var p = f.slice(0,10).split('-');
+    return p[2] + '/' + p[1] + '/' + p[0].slice(2);
+  }
+
+  function filaCobertura(mapa) {
+    return REPOMAR_PRODUCTOS.map(function(prod) {
+      var celdas = REPOMAR_PLANTAS.map(function(planta) {
+        var aplica = (PRODUCTOS_POR_PLANTA_EXEC[planta] || []).indexOf(prod) !== -1;
+        if (!aplica) return '<div class="repomar-cell repomar-cell-empty">—</div>';
+        var fecha = mapa[planta + '|' + prod];
+        if (!fecha) return '<div class="repomar-cell repomar-cell-empty">s/d</div>';
+        var dias = _diasHabilesEntreFechas(fechaRef, fecha).length;
+        var critico = dias <= 10;
+        return '<div class="repomar-cell ' + (critico ? 'repomar-cell-crit' : 'repomar-cell-ok') + '">' + fmtCorta(fecha) + '</div>';
+      }).join('');
+      return '<div class="repomar-row" style="grid-template-columns:' + cols + '">' +
+        '<div class="repomar-cell repomar-labelcell">' + prod + '</div>' + celdas +
+        '</div>';
+    }).join('');
+  }
+
+  var filaEncabezado = '<div class="repomar-row repomar-headerrow" style="grid-template-columns:' + cols + '">' +
+    '<div class="repomar-cell repomar-labelcell"></div>' +
+    REPOMAR_PLANTAS.map(function(p){ return '<div class="repomar-cell repomar-planthead">' + p + '</div>'; }).join('') +
+    '</div>';
+
+  var filasShips = '';
+  if (buques.length) {
+    filasShips = buques.map(function(b, idx) {
+      var cargaTxt = Object.keys(b.cargaInicial).map(function(prod) {
+        return prod + ': ' + b.cargaInicial[prod].toFixed(1) + ' MB';
+      }).join('<br>');
+      var shipBox = '<div class="repomar-cell" style="align-items:flex-start;padding:4px">' +
+        '<div class="repomar-shipbox" style="width:100%">' +
+          '<div class="repomar-shipname">🚢 ' + b.buque + '</div>' +
+          '<div class="repomar-shipcargo">' + (cargaTxt || 'Sin carga registrada') + '</div>' +
+          (b.zarpe ? '<div class="repomar-shipzarpe">Zarpó: ' + fmtCorta(b.zarpe) + '</div>' : '') +
+        '</div>' +
+      '</div>';
+      var legCells = REPOMAR_PLANTAS.map(function(planta) {
+        var legsAqui = b.legs.filter(function(l){ return l.terminal === planta; });
+        if (!legsAqui.length) return '<div class="repomar-cell" style="background:transparent;border:none"></div>';
+        var chips = legsAqui.map(function(l) {
+          var esCompletado = l.estado === 'COMPLETADO';
+          var etiqueta = esCompletado ? 'T.D.' : 'E.T.A.';
+          return '<div class="repomar-legbox' + (esCompletado ? ' completado' : '') + '" data-buque="' + b.buque + '" data-viaje="' + (b.viaje||'') + '">' +
+            '<div class="repomar-legdate">' + etiqueta + ' ' + fmtCorta(l.fecha_hasta) + '</div>' +
+            '<div class="repomar-legprod">' + l.producto + ': ' + l.vol.toFixed(1) + ' MB</div>' +
+          '</div>';
+        }).join('');
+        return '<div class="repomar-cell" style="background:transparent;border:none;flex-direction:column;padding:2px">' + chips + '</div>';
+      }).join('');
+      return '<div class="repomar-row" data-ship-row="' + idx + '" style="grid-template-columns:' + cols + '">' + shipBox + legCells + '</div>';
+    }).join('');
+  } else {
+    filasShips = '<div class="repomar-empty-msg">No hay cabotaje marítimo vigente en este momento (todas las entregas ya se completaron, o no hay ninguna reportada en Cargas de Naves).</div>';
+  }
+
+  host.innerHTML =
+    '<div class="repomar-wrap">' +
+      '<div class="repomar-title">🚢 Reposiciones Marítimas y Coberturas Proyectadas</div>' +
+      '<div class="repomar-subtitle">Al ' + fmtCorta(fechaRef) + ' · generado en vivo desde Cargas de Naves, Posicionamiento de Naves y Cobertura por planta</div>' +
+      '<div class="repomar-scroll">' +
+        '<div class="repomar-grid" id="repomar-grid">' +
+          '<svg class="repomar-svg" id="repomar-svg"></svg>' +
+          filaEncabezado +
+          '<div class="repomar-row" style="grid-template-columns:' + cols + '">' +
+            '<div class="repomar-cell repomar-labelcell" style="background:#0071A4;color:#fff">FECHA COBERTURA</div>' +
+            REPOMAR_PLANTAS.map(function(){ return '<div class="repomar-cell" style="background:#0071A4;border-color:#0071A4"></div>'; }).join('') +
+          '</div>' +
+          filaCobertura(cob.actual) +
+          '<div class="repomar-divider"></div>' +
+          '<div class="repomar-ships" id="repomar-ships">' + filasShips + '</div>' +
+          '<div class="repomar-divider"></div>' +
+          filaCobertura(cob.nueva) +
+          '<div class="repomar-row" style="grid-template-columns:' + cols + '">' +
+            '<div class="repomar-cell repomar-labelcell" style="background:#0071A4;color:#fff">NUEVA COBERTURA</div>' +
+            REPOMAR_PLANTAS.map(function(){ return '<div class="repomar-cell" style="background:#0071A4;border-color:#0071A4"></div>'; }).join('') +
+          '</div>' +
+          filaEncabezado +
+        '</div>' +
+      '</div>' +
+    '</div>';
+
+  // Dibuja las flechas curvas conectando cada buque con sus escalas —
+  // se hace DESPUÉS de insertar el HTML, midiendo posiciones reales en
+  // pantalla (igual patrón que otros overlays SVG del dashboard).
+  requestAnimationFrame(function() {
+    var grid = document.getElementById('repomar-grid');
+    var svg = document.getElementById('repomar-svg');
+    if (!grid || !svg) return;
+    var gridRect = grid.getBoundingClientRect();
+    svg.setAttribute('width', gridRect.width);
+    svg.setAttribute('height', gridRect.height);
+    var pathsHTML = '';
+    buques.forEach(function(b, idx) {
+      var row = grid.querySelector('[data-ship-row="' + idx + '"]');
+      if (!row) return;
+      var shipBox = row.querySelector('.repomar-shipbox');
+      if (!shipBox) return;
+      var sRect = shipBox.getBoundingClientRect();
+      var x0 = sRect.right - gridRect.left;
+      var y0 = sRect.top + sRect.height/2 - gridRect.top;
+      var legs = row.querySelectorAll('.repomar-legbox[data-buque="' + b.buque + '"]');
+      legs.forEach(function(legEl) {
+        var lRect = legEl.getBoundingClientRect();
+        var x1 = lRect.left - gridRect.left;
+        var y1 = lRect.top + lRect.height/2 - gridRect.top;
+        var midX = (x0 + x1) / 2;
+        pathsHTML += '<path d="M' + x0 + ',' + y0 + ' Q' + midX + ',' + (Math.min(y0,y1)-25) + ' ' + x1 + ',' + y1 + '" ' +
+          'fill="none" stroke="#93c5fd" stroke-width="1.6" stroke-dasharray="4 3" marker-end="url(#repomar-arrow)"/>';
+      });
+    });
+    svg.innerHTML = '<defs><marker id="repomar-arrow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#93c5fd"/></marker></defs>' + pathsHTML;
+  });
+};
+
 </script>
 <script>
 // ⚠️ CAMBIADO — SheetJS (XLSX) ahora se embebe directamente (igual que
