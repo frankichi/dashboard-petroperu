@@ -28905,8 +28905,26 @@ function _buildRepoMarBuques() {
   buques.forEach(function(b) {
     b.legs.sort(function(a, c) { return (a.fecha_hasta||'').localeCompare(c.fecha_hasta||''); });
     var pos = (typeof _navPosData !== 'undefined' && _navPosData) ? _navPosData[b.buque.toUpperCase()] : null;
-    b.zarpe = pos && pos.fecha_zarpe ? pos.fecha_zarpe.slice(0,10) : '';
-    b.retornoTalara = ''; // no hay dato estructurado de retorno estimado; se omite si no existe
+    // ⚠️ AMPLIADO — a pedido: origen y hora de zarpe (antes solo se
+    // guardaba la fecha). fecha_zarpe ya viene con hora completa desde
+    // el backend (normalizeFechaHora) — se conserva tal cual, sin
+    // recortar, para que el render pueda mostrar la hora exacta. El
+    // origen siempre es Talara en esta flota (nunca ningún otro puerto
+    // despacha cabotaje hacia las plantas — ver nota en Code.gs sobre
+    // por qué "Talara" nunca es un terminal RECEPTOR).
+    b.zarpe = pos && pos.fecha_zarpe ? pos.fecha_zarpe : '';
+    b.zarpeOrigen = 'Talara';
+    // ⚠️ AGREGADO — a pedido: fecha estimada de retorno a Talara. El
+    // backend ya calcula, junto a la rotación real de cada buque, cuál
+    // es su PRÓXIMO puerto de ETA (puerto_eta/fecha_eta) — si ese
+    // próximo puerto es la propia Talara (el buque ya terminó sus
+    // escalas de descarga y viene de regreso a cargar de nuevo), se usa
+    // esa fecha como el retorno estimado. Si el próximo puerto de ETA
+    // es OTRO terminal (todavía le quedan escalas de descarga
+    // pendientes), no hay todavía una fecha de retorno conocida — se
+    // deja vacío en vez de inventar una, para no mostrar un dato falso.
+    var proximoPuertoEsTalara = pos && pos.puerto_eta && pos.puerto_eta.toUpperCase().indexOf('TALARA') !== -1;
+    b.retornoTalara = proximoPuertoEsTalara ? (pos.fecha_eta || '') : '';
   });
   // Ordenar por fecha de zarpe (los que salieron primero, arriba) —
   // coincide con el orden del reporte de referencia.
@@ -29002,7 +29020,9 @@ function _repomarInjectCSS() {
     .repomar-title{font-size:16px;font-weight:800;color:var(--txt);margin-bottom:2px}
     .repomar-subtitle{font-size:11.5px;color:var(--txt3);margin-bottom:16px}
     .repomar-scroll{overflow-x:auto;padding-bottom:8px}
-    .repomar-grid{position:relative;min-width:1220px;background:var(--card);border-radius:10px;box-shadow:0 1px 3px rgba(0,0,0,.08);overflow:hidden;padding:2px}
+    .repomar-grid{position:relative;min-width:1220px;background:var(--card);border-radius:10px;box-shadow:0 1px 3px rgba(0,0,0,.08);overflow:hidden;padding:2px 2px 2px 26px}
+    .repomar-covblock{position:relative}
+    .repomar-covblock-vlabel{position:absolute;left:-24px;top:0;bottom:0;width:22px;background:#0071A4;color:#fff;writing-mode:vertical-rl;transform:rotate(180deg);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:800;letter-spacing:.08em;border-radius:4px 0 0 4px}
     .repomar-svg{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;overflow:visible}
     .repomar-row{display:grid;align-items:stretch}
     .repomar-cell{padding:7px 8px;border:1px solid var(--bdr);font-size:11.5px;display:flex;align-items:center;justify-content:center;text-align:center;background:var(--card);min-height:32px}
@@ -29028,6 +29048,7 @@ function _repomarInjectCSS() {
     .repomar-legprod{color:var(--txt2);font-family:var(--mono);font-size:9.5px;margin-top:1px}
     .repomar-legbox.completado{border-color:#16a34a;box-shadow:0 1px 3px rgba(22,163,74,.18)}
     .repomar-legbox.completado .repomar-legdate{color:#16a34a}
+    .repomar-legbox.en-terminal{border-color:#b45309;box-shadow:0 1px 3px rgba(180,83,9,.18)}
     .repomar-empty-msg{padding:30px;text-align:center;color:var(--txt3);font-size:13px}
   `;
   var style = document.createElement('style');
@@ -29044,7 +29065,13 @@ window.renderPRepoMar = function() {
   var buques = _buildRepoMarBuques();
   var cob = _buildRepoMarCobertura(buques);
   var fechaRef = (typeof currentDate !== 'undefined' && currentDate) ? currentDate : new Date().toISOString().slice(0,10);
-  var cols = '170px repeat(' + REPOMAR_PLANTAS.length + ', minmax(100px, 1fr))';
+  // ⚠️ AGREGADO — a pedido: una columna extra al final, reservada para
+  // el recuadro de "retorno estimado a Talara" en las filas de buques.
+  // Se agrega a la grilla COMPARTIDA (misma usada por encabezado,
+  // cobertura y buques) para que las columnas de planta sigan alineadas
+  // exactamente igual entre todos los bloques — en las filas que no la
+  // necesitan, queda simplemente vacía.
+  var cols = '170px repeat(' + REPOMAR_PLANTAS.length + ', minmax(100px, 1fr)) 130px';
 
   function fmtCorta(f) {
     if (!f) return '—';
@@ -29076,13 +29103,43 @@ window.renderPRepoMar = function() {
       }).join('');
       return '<div class="repomar-row" style="grid-template-columns:' + cols + '">' +
         '<div class="repomar-cell repomar-labelcell">' + prod + '</div>' + celdas +
+        '<div class="repomar-cell repomar-cell-empty"></div>' +
         '</div>';
     }).join('');
+  }
+
+  function fmtHora(f) {
+    if (!f || f.indexOf('T') === -1) return '';
+    return ' ' + f.split('T')[1].slice(0,5);
+  }
+
+  // ⚠️ AGREGADO — a pedido: si el buque ya llegó de verdad al
+  // terminal/planta de esta escala (según el reporte diario de
+  // Posicionamiento de Naves más reciente), el recuadro debe mostrar el
+  // estado REAL reportado (ej. "AMARRADO EN CONCHÁN", "DESCARGANDO EN
+  // CONCHÁN") en vez de seguir diciendo "E.T.A." como si todavía
+  // estuviera en camino. Se considera "ya llegó" cuando la ubicación
+  // actual del buque menciona este terminal y NO empieza con
+  // "NAVEGANDO" (que sí sigue significando "en camino hacia allá,
+  // todavía no llegó").
+  function _repomarEstadoRealEnTerminal(buque, terminalNorm) {
+    var pos = (typeof _navPosData !== 'undefined' && _navPosData) ? _navPosData[buque.toUpperCase()] : null;
+    if (!pos || !pos.ubicacion) return null;
+    // ⚠️ CORREGIDO — bug propio confirmado con prueba: pos.ubicacion trae
+    // el nombre del terminal CON tilde ("AMARRADO EN CONCHÁN"), pero
+    // terminalNorm (via _repomarNormPuerto) llega SIN tilde ("CONCHAN")
+    // — la comparación nunca coincidía. Se normaliza también la
+    // ubicación antes de comparar, con la misma función.
+    var ubic = _repomarNormPuerto(pos.ubicacion);
+    if (ubic.indexOf(terminalNorm) === -1) return null;
+    if (ubic.indexOf('NAVEGANDO') === 0) return null; // todavía en camino, no ha llegado
+    return pos.ubicacion;
   }
 
   var filaEncabezado = '<div class="repomar-row repomar-headerrow" style="grid-template-columns:' + cols + '">' +
     '<div class="repomar-cell repomar-labelcell"></div>' +
     REPOMAR_PLANTAS.map(function(p){ return '<div class="repomar-cell repomar-planthead">' + p + '</div>'; }).join('') +
+    '<div class="repomar-cell repomar-planthead">Retorno</div>' +
     '</div>';
 
   var filasShips = '';
@@ -29091,11 +29148,13 @@ window.renderPRepoMar = function() {
       var cargaTxt = Object.keys(b.cargaInicial).map(function(prod) {
         return prod + ': ' + b.cargaInicial[prod].toFixed(1) + ' MB';
       }).join('<br>');
+      // ⚠️ AMPLIADO — a pedido: origen (siempre Talara en esta flota) y
+      // hora exacta de zarpe, no solo la fecha.
       var shipBox = '<div class="repomar-cell" style="align-items:flex-start;padding:4px">' +
         '<div class="repomar-shipbox" style="width:100%">' +
           '<div class="repomar-shipname">🚢 ' + b.buque + '</div>' +
           '<div class="repomar-shipcargo">' + (cargaTxt || 'Sin carga registrada') + '</div>' +
-          (b.zarpe ? '<div class="repomar-shipzarpe">Zarpó: ' + fmtCorta(b.zarpe) + '</div>' : '') +
+          (b.zarpe ? '<div class="repomar-shipzarpe">Zarpó de ' + b.zarpeOrigen + ': ' + fmtCorta(b.zarpe) + fmtHora(b.zarpe) + '</div>' : '') +
         '</div>' +
       '</div>';
       var legCells = REPOMAR_PLANTAS.map(function(planta) {
@@ -29103,7 +29162,20 @@ window.renderPRepoMar = function() {
         if (!legsAqui.length) return '<div class="repomar-cell" style="background:transparent;border:none"></div>';
         var chips = legsAqui.map(function(l) {
           var esCompletado = l.estado === 'COMPLETADO';
-          var etiqueta = esCompletado ? 'T.D.' : 'E.T.A.';
+          // ⚠️ CORREGIDO — a pedido: antes el recuadro siempre decía
+          // "E.T.A." mientras no estuviera COMPLETADO, sin importar si
+          // el buque ya había llegado físicamente (amarrado,
+          // descargando, etc.) — un estado intermedio real que
+          // Posicionamiento de Naves sí reporta a diario, pero que el
+          // diagrama ignoraba. Ahora, si el buque ya está reportado
+          // como presente en este terminal (no solo "navegando a"), se
+          // muestra ese estado real tal cual viene del reporte diario,
+          // en vez de un ETA que ya no tiene sentido.
+          var estadoReal = !esCompletado ? _repomarEstadoRealEnTerminal(b.buque, l.terminalNorm) : null;
+          var etiqueta = esCompletado ? 'T.D.' : (estadoReal ? '' : 'E.T.A.');
+          var lineaEstado = estadoReal
+            ? '<div class="repomar-legdate" style="color:#b45309">' + estadoReal.split('\n')[0] + '</div>'
+            : '<div class="repomar-legdate">' + etiqueta + ' ' + fmtCorta(l.fecha_hasta) + '</div>';
           // ⚠️ AGREGADO — a pedido: data-leg-idx identifica la posición
           // CRONOLÓGICA real de esta escala dentro del itinerario del
           // buque (b.legs ya viene ordenado por fecha_hasta) — necesario
@@ -29111,14 +29183,25 @@ window.renderPRepoMar = function() {
           // 3 en el orden real del viaje, y no en el orden en que el
           // navegador las encuentra en pantalla (que sigue la posición
           // de columna/planta, no la secuencia real de la ruta).
-          return '<div class="repomar-legbox' + (esCompletado ? ' completado' : '') + '" data-buque="' + b.buque + '" data-viaje="' + (b.viaje||'') + '" data-leg-idx="' + b.legs.indexOf(l) + '">' +
-            '<div class="repomar-legdate">' + etiqueta + ' ' + fmtCorta(l.fecha_hasta) + '</div>' +
+          return '<div class="repomar-legbox' + (esCompletado ? ' completado' : (estadoReal ? ' en-terminal' : '')) + '" data-buque="' + b.buque + '" data-viaje="' + (b.viaje||'') + '" data-leg-idx="' + b.legs.indexOf(l) + '">' +
+            lineaEstado +
             '<div class="repomar-legprod">' + l.producto + ': ' + l.vol.toFixed(1) + ' MB</div>' +
           '</div>';
         }).join('');
         return '<div class="repomar-cell" style="background:transparent;border:none;flex-direction:column;padding:2px">' + chips + '</div>';
       }).join('');
-      return '<div class="repomar-row" data-ship-row="' + idx + '" style="grid-template-columns:' + cols + '">' + shipBox + legCells + '</div>';
+      // ⚠️ AGREGADO — a pedido: recuadro de retorno estimado a Talara, a
+      // la derecha de todas las escalas. Solo se muestra si el próximo
+      // puerto de ETA del buque (según Posicionamiento de Naves) es
+      // efectivamente Talara — si todavía le quedan escalas de
+      // descarga pendientes, no hay una fecha de retorno conocida
+      // todavía y se muestra vacío, en vez de inventar una.
+      var retornoCell = '<div class="repomar-cell" style="background:transparent;border:none;padding:4px">' +
+        (b.retornoTalara
+          ? '<div class="repomar-legbox" style="border-color:#0071A4"><div class="repomar-legdate" style="color:#0071A4">Retorno Talara</div><div class="repomar-legprod">' + fmtCorta(b.retornoTalara) + fmtHora(b.retornoTalara) + '</div></div>'
+          : '') +
+        '</div>';
+      return '<div class="repomar-row" data-ship-row="' + idx + '" style="grid-template-columns:' + cols + '">' + shipBox + legCells + retornoCell + '</div>';
     }).join('');
   } else {
     filasShips = '<div class="repomar-empty-msg">No hay cabotaje marítimo vigente en este momento (todas las entregas ya se completaron, o no hay ninguna reportada en Cargas de Naves).</div>';
@@ -29132,19 +29215,26 @@ window.renderPRepoMar = function() {
         '<div class="repomar-grid" id="repomar-grid">' +
           '<svg class="repomar-svg" id="repomar-svg"></svg>' +
           filaEncabezado +
-          // ⚠️ CORREGIDO — a pedido: la fila "FECHA COBERTURA" ocupaba
-          // una fila entera de la grilla (11 celdas, la mayoría vacías,
-          // solo decorativas) — espacio vertical desperdiciado. Ahora es
-          // una barra angosta de una sola línea, sin repetir las
-          // columnas de planta (ya están arriba, en el encabezado).
-          '<div class="repomar-sectiontitle">FECHA COBERTURA</div>' +
-          filaCobertura(cob.actual, cob.actualDias) +
+          // ⚠️ CORREGIDO — a pedido: "FECHA COBERTURA"/"NUEVA COBERTURA"
+          // ahora van como una franja vertical angosta al costado
+          // izquierdo del bloque (usando el margen ya reservado del
+          // contenedor), en vez de una barra horizontal — gana espacio
+          // vertical sin desalinear ninguna columna de planta (las
+          // columnas siguen siendo exactamente las mismas en todos los
+          // bloques, el margen adicional se reservó de forma pareja en
+          // TODO el contenedor, no solo aquí).
+          '<div class="repomar-covblock">' +
+            '<div class="repomar-covblock-vlabel">FECHA COBERTURA</div>' +
+            filaCobertura(cob.actual, cob.actualDias) +
+          '</div>' +
           '<div class="repomar-divider"></div>' +
-          '<div class="repomar-ships-label">🚢 CABOTAJE CONFIRMADO <span class="repomar-ships-legend"><span class="repomar-legend-dot" style="background:#2563eb"></span>En camino (E.T.A.) <span class="repomar-legend-dot" style="background:#16a34a"></span>Recibido en los últimos 5 días (T.D.)</span></div>' +
+          '<div class="repomar-ships-label">🚢 CABOTAJE CONFIRMADO <span class="repomar-ships-legend"><span class="repomar-legend-dot" style="background:#2563eb"></span>En camino <span class="repomar-legend-dot" style="background:#16a34a"></span>Recibido en los últimos 5 días</span></div>' +
           '<div class="repomar-ships" id="repomar-ships">' + filasShips + '</div>' +
           '<div class="repomar-divider"></div>' +
-          '<div class="repomar-sectiontitle">NUEVA COBERTURA</div>' +
-          filaCobertura(cob.nueva) +
+          '<div class="repomar-covblock">' +
+            '<div class="repomar-covblock-vlabel">NUEVA COBERTURA</div>' +
+            filaCobertura(cob.nueva) +
+          '</div>' +
           filaEncabezado +
         '</div>' +
       '</div>' +
