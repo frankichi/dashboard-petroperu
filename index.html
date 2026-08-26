@@ -28975,10 +28975,22 @@ function _buildRepoMarCobertura(buques) {
   var fechaRef = (typeof currentDate !== 'undefined' && currentDate) ? currentDate : new Date().toISOString().slice(0,10);
 
   var volPendientePorKey = {};
+  // ⚠️ AGREGADO — a pedido: fecha de llegada más próxima (la más
+  // temprana entre todas las escalas pendientes) por planta+producto —
+  // necesaria para detectar si hay un "quiebre" (inventario en cero)
+  // ANTES de que llegue la reposición, y así no seguir contando la
+  // cobertura como si el inventario nunca hubiera llegado a cero.
+  var primeraLlegadaPorKey = {};
   (buques || []).forEach(function(b) {
     b.legs.forEach(function(leg) {
       var key = leg.terminal + '|' + leg.producto;
       volPendientePorKey[key] = (volPendientePorKey[key] || 0) + (leg.vol || 0);
+      if (leg.estado !== 'COMPLETADO' && leg.fecha_hasta) {
+        var fechaLlegada = leg.fecha_hasta.slice(0,10);
+        if (!primeraLlegadaPorKey[key] || fechaLlegada < primeraLlegadaPorKey[key]) {
+          primeraLlegadaPorKey[key] = fechaLlegada;
+        }
+      }
     });
   });
 
@@ -29000,8 +29012,41 @@ function _buildRepoMarCobertura(buques) {
       var pronDiario = fila.pron > 0 ? fila.pron : (fila.vfact > 0 ? fila.vfact : 0);
       var volPendiente = volPendientePorKey[key] || 0;
       var diasRepos = (pronDiario > 0 && volPendiente > 0) ? Math.floor(volPendiente / pronDiario) : 0;
-      var diasTotalNueva = diasHoy + diasRepos;
-      nueva[key] = !hayDatoValido ? '' : (diasTotalNueva > 0 ? cobCalcFecha(fechaRef, diasTotalNueva) : fechaRef);
+
+      // ⚠️ CORREGIDO — bug real confirmado (Conchán·Diesel: la cobertura
+      // actual quiebra el 29-ago, pero UCAYALI recién llega el 01-set —
+      // 3 días de quiebre real en el medio que la fórmula anterior
+      // ignoraba por completo, sumando los días de reposición directo
+      // sobre la fecha de hoy como si el inventario nunca hubiera
+      // llegado a cero). Si la fecha de llegada del buque es POSTERIOR
+      // a cuando la cobertura actual se agota, el inventario pasa por
+      // CERO antes de que llegue la reposición — en ese caso, la nueva
+      // cobertura ya no se cuenta desde HOY, se cuenta desde la fecha
+      // de LLEGADA del buque (que es cuando realmente vuelve a haber
+      // inventario), usando el pronóstico aprobado del mes como tasa de
+      // consumo desde ese punto en adelante — tal como se atendería la
+      // planta en la realidad una vez que ya tiene stock de nuevo. Si
+      // el buque llega ANTES o el mismo día en que se agotaría, no hay
+      // quiebre real — se sigue sumando directo sobre la cobertura
+      // actual, sin este ajuste.
+      var fechaLlegada = primeraLlegadaPorKey[key];
+      var diasTotalNueva;
+      var fechaBaseNueva;
+      if (diasRepos > 0 && fechaLlegada) {
+        var diasHastaLlegada = Math.round((new Date(fechaLlegada + 'T12:00:00') - new Date(fechaRef + 'T12:00:00')) / 86400000);
+        var hayQuiebreAntes = diasHoy < diasHastaLlegada;
+        if (hayQuiebreAntes) {
+          fechaBaseNueva = fechaLlegada;
+          diasTotalNueva = diasRepos;
+        } else {
+          fechaBaseNueva = fechaRef;
+          diasTotalNueva = diasHoy + diasRepos;
+        }
+      } else {
+        fechaBaseNueva = fechaRef;
+        diasTotalNueva = diasHoy + diasRepos;
+      }
+      nueva[key] = !hayDatoValido ? '' : (diasTotalNueva > 0 ? cobCalcFecha(fechaBaseNueva, diasTotalNueva) : (fechaBaseNueva === fechaLlegada ? fechaLlegada : fechaRef));
     });
   });
   return { actual: actual, actualDias: actualDias, nueva: nueva };
@@ -29243,7 +29288,19 @@ window.renderPRepoMar = function() {
   // Dibuja las flechas curvas conectando cada buque con sus escalas —
   // se hace DESPUÉS de insertar el HTML, midiendo posiciones reales en
   // pantalla (igual patrón que otros overlays SVG del dashboard).
-  requestAnimationFrame(function() {
+  // ⚠️ CORREGIDO — bug real confirmado: las flechas solo se dibujaban
+  // UNA VEZ, justo después del render — si la persona hacía zoom o
+  // cambiaba el tamaño de la ventana después, las coordenadas medidas
+  // en ese momento ya no correspondían a la posición real en pantalla,
+  // y las flechas quedaban apuntando a un lugar equivocado. Ahora la
+  // función queda guardada (window._repomarDrawArrows) y se vuelve a
+  // ejecutar automáticamente ante cualquier 'resize' (que el navegador
+  // dispara también al hacer zoom con Ctrl+rueda o Ctrl+/-), con un
+  // pequeño debounce para no redibujar en cada pixel mientras el
+  // usuario todavía está haciendo zoom. Se quita cualquier listener
+  // anterior antes de agregar uno nuevo, para no acumular listeners
+  // duplicados cada vez que se re-renderiza esta página.
+  window._repomarDrawArrows = function() {
     var grid = document.getElementById('repomar-grid');
     var svg = document.getElementById('repomar-svg');
     if (!grid || !svg) return;
@@ -29285,7 +29342,15 @@ window.renderPRepoMar = function() {
       });
     });
     svg.innerHTML = '<defs><marker id="repomar-arrow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#93c5fd"/></marker></defs>' + pathsHTML;
-  });
+  };
+  requestAnimationFrame(window._repomarDrawArrows);
+  if (window._repomarResizeHandler) window.removeEventListener('resize', window._repomarResizeHandler);
+  var _repomarResizeTimer = null;
+  window._repomarResizeHandler = function() {
+    clearTimeout(_repomarResizeTimer);
+    _repomarResizeTimer = setTimeout(window._repomarDrawArrows, 120);
+  };
+  window.addEventListener('resize', window._repomarResizeHandler);
 };
 
 </script>
