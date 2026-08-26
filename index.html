@@ -28855,7 +28855,22 @@ function _buildRepoMarBuques() {
       var lista;
       try { lista = JSON.parse(fila.bt_lista); } catch(e) { return; }
       lista.forEach(function(n) {
-        if (n.estado === 'COMPLETADO') return; // el diagrama muestra cabotaje EN CAMINO, no lo ya recibido
+        // ⚠️ CORREGIDO — a pedido: antes se ocultaba CUALQUIER entrega
+        // COMPLETADO sin importar cuándo se completó — un buque que
+        // acababa de descargar (como UCAYALI en Conchán) desaparecía
+        // del diagrama de un día para otro, sin dejar ningún rastro de
+        // que la entrega sí llegó. Ahora se sigue mostrando durante los
+        // 5 días posteriores a completarse (con estilo distinto: "T.D."
+        // en vez de "E.T.A.", borde verde en vez de azul — ver CSS), y
+        // recién después de esa ventana se deja de mostrar, para no
+        // saturar el diagrama con entregas de hace semanas.
+        if (n.estado === 'COMPLETADO') {
+          var fechaCompletado = (n.fecha_hasta || '').slice(0, 10);
+          var diasDesdeCompletado = fechaCompletado
+            ? Math.round((new Date(fechaRef + 'T12:00:00') - new Date(fechaCompletado + 'T12:00:00')) / 86400000)
+            : 999;
+          if (diasDesdeCompletado > 5 || diasDesdeCompletado < 0) return;
+        }
         var key = n.buque.toUpperCase() + '|' + (n.viaje || '—');
         if (!buquesMap[key]) buquesMap[key] = { buque: n.buque, viaje: n.viaje, legs: [], cargaInicial: {} };
         var yaExiste = buquesMap[key].legs.some(function(l) {
@@ -28986,7 +29001,9 @@ function _repomarInjectCSS() {
     .repomar-sectiontitle{background:#0071A4;color:#fff;font-size:10.5px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;padding:4px 10px;border:1px solid #0071A4}
     .repomar-divider{height:22px;position:relative}
     .repomar-divider::after{content:'';position:absolute;left:0;right:0;top:50%;height:1px;background:linear-gradient(90deg,transparent,var(--bdr) 10%,var(--bdr) 90%,transparent)}
-    .repomar-ships-label{font-size:10px;font-weight:800;letter-spacing:.08em;color:var(--txt3);text-transform:uppercase;padding:0 4px 6px}
+    .repomar-ships-label{font-size:10px;font-weight:800;letter-spacing:.08em;color:var(--txt3);text-transform:uppercase;padding:0 4px 6px;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+    .repomar-ships-legend{font-size:9.5px;font-weight:600;letter-spacing:0;text-transform:none;color:var(--txt3);display:flex;align-items:center;gap:5px}
+    .repomar-legend-dot{width:8px;height:8px;border-radius:50%;display:inline-block;margin-left:8px}
     .repomar-ships{position:relative;row-gap:14px}
     .repomar-shipbox{background:#fff;border:1px solid var(--bdr);border-radius:8px;font-size:11px;margin:4px 2px;box-shadow:0 1px 4px rgba(0,113,164,.12);overflow:hidden}
     .repomar-shipname{font-weight:800;color:#fff;background:#0071A4;font-size:12px;padding:5px 10px;letter-spacing:.02em}
@@ -29109,7 +29126,7 @@ window.renderPRepoMar = function() {
           '<div class="repomar-sectiontitle">FECHA COBERTURA</div>' +
           filaCobertura(cob.actual, cob.actualDias) +
           '<div class="repomar-divider"></div>' +
-          '<div class="repomar-ships-label">🚢 CABOTAJE CONFIRMADO</div>' +
+          '<div class="repomar-ships-label">🚢 CABOTAJE CONFIRMADO <span class="repomar-ships-legend"><span class="repomar-legend-dot" style="background:#2563eb"></span>En camino (E.T.A.) <span class="repomar-legend-dot" style="background:#16a34a"></span>Recibido en los últimos 5 días (T.D.)</span></div>' +
           '<div class="repomar-ships" id="repomar-ships">' + filasShips + '</div>' +
           '<div class="repomar-divider"></div>' +
           '<div class="repomar-sectiontitle">NUEVA COBERTURA</div>' +
