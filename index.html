@@ -20494,29 +20494,24 @@ function initRepoMarShareMode() {
   document.body.classList.add('repomar-share-mode');
   var sidebar = document.getElementById('sidebar');
   var topbar = document.querySelector('.topbar');
+  // ⚠️ AGREGADO — a pedido: "ship-ops-bar" es una barra que el dashboard
+  // normal activa dinámicamente durante la carga de datos (independiente
+  // del sidebar/topbar, que sí se ocultaban desde el principio) — es
+  // la segunda "cinta" que se colaba en el enlace compartido. Se oculta
+  // igual que ya hace initInventoryReportMode para este mismo caso.
+  var shipOpsBar = document.getElementById('ship-ops-bar');
   if (sidebar) sidebar.style.display = 'none';
   if (topbar) topbar.style.display = 'none';
+  if (shipOpsBar) shipOpsBar.style.display = 'none';
   document.querySelectorAll('.page.active').forEach(function(p) { p.classList.remove('active'); });
   var pagina = document.getElementById('pRepoMar');
   if (pagina) pagina.classList.add('active');
-  // Barra superior propia — con la identidad de Petroperú y créditos de
-  // Franco, para que quede visible en el enlace compartido sin
-  // necesidad de dar acceso al resto del dashboard.
-  var barra = document.createElement('div');
-  barra.className = 'repomar-share-topbar';
-  barra.innerHTML =
-    '<div class="repomar-share-topbar-left">' +
-      '<div class="repomar-share-logo">⛽</div>' +
-      '<div>' +
-        '<div class="repomar-share-t1">PETRÓLEOS DEL PERÚ S.A.</div>' +
-        '<div class="repomar-share-t2">Gerencia de Planeamiento Operacional · Reposiciones Marítimas</div>' +
-      '</div>' +
-    '</div>' +
-    '<div class="repomar-share-topbar-right">' +
-      '<span class="repomar-share-live"><span class="repomar-live-dot"></span>En vivo</span>' +
-      '<a href="' + window.location.origin + window.location.pathname + '" target="_blank" class="repomar-share-fulllink">Abrir dashboard completo ↗</a>' +
-    '</div>';
-  document.body.insertBefore(barra, document.body.firstChild);
+  // ⚠️ QUITADO — a pedido: la barra superior con marca de Petroperú se
+  // veía como una "cinta" extra, redundante con el título que ya trae
+  // la propia página. Se retiró por completo — el enlace ahora
+  // simplemente muestra el cuadro de Reposiciones Marítimas, sin
+  // ninguna barra adicional encima. Los créditos y el título ya se
+  // muestran dentro del propio contenido (ver renderPRepoMar).
 }
 function renderInventoryReport() {
   if (!INVENTORY_REPORT_MODE) return;
@@ -29214,30 +29209,23 @@ function _buildRepoMarCobertura(buques) {
 function _repomarInjectCSS() {
   if (document.getElementById('repomar-css')) return;
   var css = `
-    /* ═══ Barra superior del enlace compartido (?view=repomar) ═══ */
-    .repomar-share-topbar{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:14px 28px;background:linear-gradient(90deg,#003a56 0%,#0071A4 100%);color:#fff;box-shadow:0 2px 14px rgba(0,58,86,.3);position:sticky;top:0;z-index:1000;font-family:'Inter',system-ui,sans-serif}
-    .repomar-share-topbar-left{display:flex;align-items:center;gap:14px}
-    .repomar-share-logo{width:42px;height:42px;background:#fff;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;box-shadow:0 1px 4px rgba(0,0,0,.2)}
-    .repomar-share-t1{font-size:13px;font-weight:800;letter-spacing:.06em;text-transform:uppercase}
-    .repomar-share-t2{font-size:11px;color:rgba(255,255,255,.8);margin-top:1px}
-    .repomar-share-topbar-right{display:flex;align-items:center;gap:16px}
-    .repomar-share-live{display:flex;align-items:center;gap:6px;font-size:11px;font-weight:700;color:rgba(255,255,255,.9);letter-spacing:.03em}
-    .repomar-live-dot{width:7px;height:7px;border-radius:50%;background:#22c55e;box-shadow:0 0 0 0 rgba(34,197,94,.7);animation:repomarPulse 2s infinite}
-    @keyframes repomarPulse{0%{box-shadow:0 0 0 0 rgba(34,197,94,.55)}70%{box-shadow:0 0 0 7px rgba(34,197,94,0)}100%{box-shadow:0 0 0 0 rgba(34,197,94,0)}}
-    .repomar-share-fulllink{font-size:11px;color:#fff;text-decoration:none;background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.3);padding:6px 13px;border-radius:6px;font-weight:600;transition:background .15s;white-space:nowrap}
-    .repomar-share-fulllink:hover{background:rgba(255,255,255,.24)}
+    /* ═══ Enlace compartido (?view=repomar) — sin barra propia, solo
+       ajustes de layout para que el cuadro ocupe toda la pantalla ═══ */
     body.repomar-share-mode #app-layout{height:100vh}
-    body.repomar-share-mode #pRepoMar{height:calc(100vh - 71px)}
+    body.repomar-share-mode #ship-ops-bar{display:none!important}
+    body.repomar-share-mode #pRepoMar{height:100vh}
+    .repomar-live-dot{width:7px;height:7px;border-radius:50%;background:#22c55e;box-shadow:0 0 0 0 rgba(34,197,94,.7);animation:repomarPulse 2s infinite;display:inline-block;margin-right:5px}
+    @keyframes repomarPulse{0%{box-shadow:0 0 0 0 rgba(34,197,94,.55)}70%{box-shadow:0 0 0 7px rgba(34,197,94,0)}100%{box-shadow:0 0 0 0 rgba(34,197,94,0)}}
 
     /* ═══ Encabezado y botón de compartir ═══ */
     .repomar-wrap{padding:22px 26px 44px;max-width:1400px;margin:0 auto}
     .repomar-headerbar{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:18px;flex-wrap:wrap}
     .repomar-title{font-size:19px;font-weight:800;color:var(--txt);letter-spacing:-.01em;display:flex;align-items:center;gap:9px}
     .repomar-subtitle{font-size:11.5px;color:var(--txt3);margin-top:3px}
+    .repomar-credit-top{font-size:10px;color:var(--txt3);margin-top:6px;display:flex;align-items:center}
+    .repomar-credit-top strong{color:var(--txt2);font-weight:700}
     .repomar-share-btn{background:linear-gradient(90deg,#0071A4,#003a56);color:#fff;border:none;padding:9px 18px;border-radius:8px;font-size:11.5px;font-weight:700;letter-spacing:.02em;cursor:pointer;display:inline-flex;align-items:center;gap:7px;box-shadow:0 2px 8px rgba(0,113,164,.3);transition:all .15s;white-space:nowrap;flex-shrink:0;font-family:inherit}
     .repomar-share-btn:hover{filter:brightness(1.1);transform:translateY(-1px);box-shadow:0 4px 12px rgba(0,113,164,.4)}
-    .repomar-credit-footer{margin-top:22px;padding-top:14px;border-top:1px solid var(--bdr);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;font-size:10.5px;color:var(--txt3)}
-    .repomar-credit-footer strong{color:var(--txt2);font-weight:700}
     .repomar-scroll{overflow-x:auto;padding-bottom:8px}
     .repomar-grid{position:relative;min-width:1220px;background:var(--card);border-radius:10px;box-shadow:0 1px 3px rgba(0,0,0,.08);overflow:hidden;padding:2px 2px 2px 26px}
     .repomar-covblock{position:relative}
@@ -29499,6 +29487,10 @@ window.renderPRepoMar = function() {
         '<div>' +
           '<div class="repomar-title">🚢 Reposiciones Marítimas y Coberturas Proyectadas</div>' +
           '<div class="repomar-subtitle">Al ' + fmtCorta(fechaRef) + ' · generado en vivo desde Cargas de Naves, Posicionamiento de Naves y Cobertura por planta</div>' +
+          // ⚠️ MOVIDO — a pedido: los créditos ahora van arriba, junto
+          // al título (antes solo estaban al pie de página) — igual de
+          // visibles en el dashboard normal y en el enlace compartido.
+          '<div class="repomar-credit-top"><span class="repomar-live-dot"></span>Petróleos del Perú S.A. · GPLO · Desarrollado por <strong>Franco Urcia Castillo</strong></div>' +
         '</div>' +
         (typeof REPOMAR_SHARE_MODE !== 'undefined' && REPOMAR_SHARE_MODE ? '' :
         '<button class="repomar-share-btn" onclick="_repomarCompartir()">🔗 Compartir enlace</button>') +
@@ -29541,10 +29533,6 @@ window.renderPRepoMar = function() {
           '</div>' +
           filaEncabezado +
         '</div>' +
-      '</div>' +
-      '<div class="repomar-credit-footer">' +
-        '<span>Petróleos del Perú S.A. · Gerencia de Planeamiento Operacional (GPLO)</span>' +
-        '<span>Desarrollado por <strong>Franco Urcia Castillo</strong></span>' +
       '</div>' +
     '</div>';
 
