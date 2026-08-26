@@ -28936,7 +28936,28 @@ function _buildRepoMarBuques() {
     // pendientes), no hay todavía una fecha de retorno conocida — se
     // deja vacío en vez de inventar una, para no mostrar un dato falso.
     var proximoPuertoEsTalara = pos && pos.puerto_eta && pos.puerto_eta.toUpperCase().indexOf('TALARA') !== -1;
-    b.retornoTalara = proximoPuertoEsTalara ? (pos.fecha_eta || '') : '';
+    var retornoPropuesto = proximoPuertoEsTalara ? (pos.fecha_eta || '') : '';
+    // ⚠️ CORREGIDO — bug real confirmado (MOCHE: Posicionamiento de
+    // Naves decía "retorno a Talara el 27-ago", pero Cargas de Naves
+    // todavía tiene una escala PENDIENTE en Salaverry con ETA 01-set —
+    // ¡el buque no puede volver a Talara ANTES de terminar una entrega
+    // que todavía no hizo! Mismo tipo de desfase que ya se corrigió
+    // antes para el T.D. de URUBAMBA: Posicionamiento de Naves puede no
+    // haberse actualizado todavía para reflejar una escala agregada
+    // recientemente a Cargas de Naves. Ahora se valida: el retorno
+    // propuesto solo se usa si es POSTERIOR (o igual) a la última
+    // escala PENDIENTE de este buque — si es anterior, es
+    // matemáticamente imposible que sea real, y se descarta.
+    var ultimaEscalaPendiente = null;
+    b.legs.forEach(function(l) {
+      if (l.estado !== 'COMPLETADO' && l.fecha_hasta) {
+        var f = l.fecha_hasta.slice(0,10);
+        if (!ultimaEscalaPendiente || f > ultimaEscalaPendiente) ultimaEscalaPendiente = f;
+      }
+    });
+    var retornoEsValido = !ultimaEscalaPendiente || !retornoPropuesto || retornoPropuesto.slice(0,10) >= ultimaEscalaPendiente;
+    b.retornoTalara = retornoEsValido ? retornoPropuesto : '';
+    b.ultimaEscalaPendienteFecha = ultimaEscalaPendiente; // para mostrar un mensaje útil si el retorno no es confiable todavía
     // ⚠️ AGREGADO — a pedido: si el buque TODAVÍA no zarpó, mostrar su
     // estado real y actual en Talara (cargando, amarrado, fondeado,
     // etc.) en vez de un mensaje genérico — usando los mismos campos
@@ -29339,9 +29360,17 @@ window.renderPRepoMar = function() {
       // escala con este recuadro cuando sí hay una fecha real — así
       // queda claro que es la continuación de la misma ruta, no un
       // elemento aparte.
+      // ⚠️ AMPLIADO — a pedido: si el retorno no es confiable todavía
+      // (se descartó por ser anterior a una escala pendiente — ver
+      // _buildRepoMarBuques), el mensaje ahora dice explícitamente
+      // después de qué escala se sabrá el retorno, en vez de un aviso
+      // genérico sin contexto.
+      var mensajeRetornoPendiente = b.ultimaEscalaPendienteFecha
+        ? 'Se sabrá tras completar su última escala (' + fmtCorta(b.ultimaEscalaPendienteFecha) + ')'
+        : 'Aún sin ETA de retorno';
       var retornoTxt = b.retornoTalara
         ? '<div class="repomar-legbox" data-retorno-cell="' + idx + '" style="border-color:#0071A4"><div class="repomar-legdate" style="color:#0071A4">Retorno Talara</div><div class="repomar-legprod">' + fmtCorta(b.retornoTalara) + fmtHora(b.retornoTalara) + '</div></div>'
-        : '<div class="repomar-retorno-pendiente">Aún sin ETA de retorno</div>';
+        : '<div class="repomar-retorno-pendiente">' + mensajeRetornoPendiente + '</div>';
       var retornoCell = '<div class="repomar-cell" style="background:transparent;border:none;padding:4px">' + retornoTxt + '</div>';
       return '<div class="repomar-row repomar-ship-inner-row" data-ship-row="' + idx + '" style="grid-template-columns:' + cols + '">' + shipBox + legCells + retornoCell + '</div>';
     }).join('');
@@ -29370,7 +29399,7 @@ window.renderPRepoMar = function() {
             filaCobertura(cob.actual, cob.actualDias) +
           '</div>' +
           '<div class="repomar-divider"></div>' +
-          '<div class="repomar-ships-label">🚢 CABOTAJE CONFIRMADO <span class="repomar-ships-legend"><span class="repomar-legend-dot" style="background:#2563eb"></span>En camino <span class="repomar-legend-dot" style="background:#16a34a"></span>Recibido en los últimos 5 días</span></div>' +
+          '<div class="repomar-ships-label">🚢 CABOTAJE CONFIRMADO</div>' +
           '<div class="repomar-ships" id="repomar-ships">' + filasShips + '</div>' +
           '<div class="repomar-divider"></div>' +
           '<div class="repomar-covblock">' +
@@ -29430,17 +29459,17 @@ window.renderPRepoMar = function() {
         var x1 = lRect.left - gridRect.left;
         var y1 = lRect.top + lRect.height/2 - gridRect.top;
         var midX = (prevX + x1) / 2;
-        // ⚠️ CORREGIDO — a pedido: la curva usaba una altura FIJA (25px)
-        // sin importar qué tan cerca estuvieran los dos puntos — entre
-        // plantas contiguas (poca distancia horizontal), esto hacía que
-        // la flecha se viera casi plana y "contraída", difícil de
-        // distinguir de una línea recta. Ahora la altura de la curva es
-        // proporcional a la distancia horizontal, con un mínimo de 30px
-        // (para que SIEMPRE se note como una curva, incluso entre
-        // columnas contiguas) y un máximo de 60px (para no exagerar en
-        // los tramos largos).
+        // ⚠️ CAMBIADO — a pedido: el criterio se invirtió respecto al
+        // fix anterior. Ahora se busca lo contrario: entre plantas
+        // CONTIGUAS (poca distancia), una flecha casi DIRECTA (recta),
+        // reservando la curva marcada para las plantas más alejadas —
+        // así se distingue de un vistazo qué escalas están cerca entre
+        // sí y cuáles requieren un tramo largo de navegación. Sin
+        // ningún piso mínimo (a diferencia de antes): la altura crece
+        // proporcional a la distancia, tope en 50px para no exagerar en
+        // los tramos más largos.
         var distanciaHoriz = Math.abs(x1 - prevX);
-        var alturaCurva = Math.max(30, Math.min(60, distanciaHoriz * 0.15));
+        var alturaCurva = Math.min(50, distanciaHoriz * 0.12);
         pathsHTML += '<path d="M' + prevX + ',' + prevY + ' Q' + midX + ',' + (Math.min(prevY,y1)-alturaCurva) + ' ' + x1 + ',' + y1 + '" ' +
           'fill="none" stroke="#93c5fd" stroke-width="1.6" stroke-dasharray="4 3" marker-end="url(#repomar-arrow)"/>';
         // El punto de salida de la SIGUIENTE flecha es el borde derecho
@@ -29459,7 +29488,7 @@ window.renderPRepoMar = function() {
         var xR = rRect.left - gridRect.left;
         var yR = rRect.top + rRect.height/2 - gridRect.top;
         var midXR = (prevX + xR) / 2;
-        var alturaCurvaR = Math.max(30, Math.min(60, Math.abs(xR - prevX) * 0.15));
+        var alturaCurvaR = Math.min(50, Math.abs(xR - prevX) * 0.12);
         pathsHTML += '<path d="M' + prevX + ',' + prevY + ' Q' + midXR + ',' + (Math.min(prevY,yR)-alturaCurvaR) + ' ' + xR + ',' + yR + '" ' +
           'fill="none" stroke="#0071A4" stroke-width="1.6" stroke-dasharray="4 3" marker-end="url(#repomar-arrow-retorno)"/>';
       }
