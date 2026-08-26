@@ -28947,23 +28947,51 @@ function _buildRepoMarBuques() {
     // disponible: ETC si ya lo hay, si no la hora en que empezó a
     // cargar, si no cuándo amarró, si no cuándo fondeó — el primero que
     // exista, de más específico a más general.
+    // ⚠️ CORREGIDO — bug real confirmado: `estado_nav` NO es un estado
+    // corto — trae el REPORTE DIARIO COMPLETO en texto libre, con
+    // saltos de línea (nombre del buque, arribo, amarre, rotación,
+    // I.C., E.T.C., etc., todo junto). Usarlo tal cual volcaba un
+    // párrafo entero dentro de la cajita del buque — ilegible. Ahora se
+    // extrae solo lo útil: la SEGUNDA línea (después del nombre del
+    // buque, que siempre es la primera) es consistentemente el estado
+    // corto y legible ("CARGANDO EN TALARA", "AMARRADO EN MU2",
+    // "FONDEADO", etc.) — y se busca aparte, con una expresión regular,
+    // la línea de "E.T.C." (Estimado Término de Carga) para sacar solo
+    // esa fecha/hora, combinándola con el mes/año del propio reporte
+    // (el texto libre solo trae día/hora, sin mes, ej. "26/08:00 HRS.").
     if (!b.zarpe) {
-      var estadoBase = (pos && (pos.estado_nav || pos.ubicacion)) || 'En Talara';
-      var detalle = '';
-      // Formato corto local — mismas funciones que usa el render, pero
-      // reproducidas aquí porque _buildRepoMarBuques() es una función
-      // aparte y no comparte alcance con las auxiliares de
-      // renderPRepoMar().
       var _fmtC = function(f) { if (!f) return '—'; var p = f.slice(0,10).split('-'); return p[2]+'/'+p[1]+'/'+p[0].slice(2); };
       var _fmtH = function(f) { if (!f || f.indexOf('T') === -1) return ''; return ' ' + f.split('T')[1].slice(0,5); };
-      if (pos && pos.fecha_et_operaciones) {
-        detalle = 'ETC: ' + _fmtC(pos.fecha_et_operaciones) + _fmtH(pos.fecha_et_operaciones);
-      } else if (pos && pos.fecha_inicio_carga && !pos.fecha_termino_carga) {
-        detalle = 'Cargando desde: ' + _fmtC(pos.fecha_inicio_carga) + _fmtH(pos.fecha_inicio_carga);
-      } else if (pos && pos.fecha_amarro) {
-        detalle = 'Amarró: ' + _fmtC(pos.fecha_amarro) + _fmtH(pos.fecha_amarro);
-      } else if (pos && pos.fecha_fondeo) {
-        detalle = 'Fondeó: ' + _fmtC(pos.fecha_fondeo) + _fmtH(pos.fecha_fondeo);
+      var estadoBase = 'En Talara';
+      var detalle = '';
+      if (pos && pos.estado_nav) {
+        var lineas = pos.estado_nav.split('\n').map(function(l){ return l.trim(); }).filter(Boolean);
+        if (lineas[0] && lineas[0].toUpperCase() === b.buque.toUpperCase()) lineas.shift();
+        if (lineas[0]) estadoBase = lineas[0];
+        var fechaReporte = (pos.fecha || fechaRef || '').slice(0,7); // "AAAA-MM"
+        lineas.forEach(function(l) {
+          if (detalle) return;
+          var m = l.match(/E\.T\.C\.[^:]*:\s*(\d{1,2})\/(\d{1,2}):(\d{2})/i);
+          if (m && fechaReporte) {
+            var dia = String(m[1]).padStart(2,'0'), hora = String(m[2]).padStart(2,'0'), min = m[3];
+            detalle = 'ETC: ' + dia + '/' + fechaReporte.slice(5,7) + ' ' + hora + ':' + min;
+          }
+        });
+      } else if (pos && pos.ubicacion) {
+        estadoBase = pos.ubicacion;
+      }
+      // Si no se encontró un ETC dentro del texto libre, se usa el
+      // mismo respaldo de antes (fechas estructuradas, si existen).
+      if (!detalle) {
+        if (pos && pos.fecha_et_operaciones) {
+          detalle = 'ETC: ' + _fmtC(pos.fecha_et_operaciones) + _fmtH(pos.fecha_et_operaciones);
+        } else if (pos && pos.fecha_inicio_carga && !pos.fecha_termino_carga) {
+          detalle = 'Cargando desde: ' + _fmtC(pos.fecha_inicio_carga) + _fmtH(pos.fecha_inicio_carga);
+        } else if (pos && pos.fecha_amarro) {
+          detalle = 'Amarró: ' + _fmtC(pos.fecha_amarro) + _fmtH(pos.fecha_amarro);
+        } else if (pos && pos.fecha_fondeo) {
+          detalle = 'Fondeó: ' + _fmtC(pos.fecha_fondeo) + _fmtH(pos.fecha_fondeo);
+        }
       }
       b.estadoActualPreZarpe = estadoBase + (detalle ? ' · ' + detalle : '');
     } else {
@@ -29131,6 +29159,7 @@ function _repomarInjectCSS() {
     .repomar-ships-legend{font-size:9.5px;font-weight:600;letter-spacing:0;text-transform:none;color:var(--txt3);display:flex;align-items:center;gap:5px}
     .repomar-legend-dot{width:8px;height:8px;border-radius:50%;display:inline-block;margin-left:8px}
     .repomar-ships{position:relative;row-gap:14px}
+    .repomar-ship-inner-row{background:linear-gradient(90deg,rgba(37,99,235,.03),rgba(37,99,235,.03) 85%,transparent);border-radius:8px}
     .repomar-shipbox{background:#fff;border:1px solid var(--bdr);border-radius:8px;font-size:11px;margin:4px 2px;box-shadow:0 1px 4px rgba(0,113,164,.12);overflow:hidden}
     .repomar-shipname{font-weight:800;color:#fff;background:#0071A4;font-size:12px;padding:5px 10px;letter-spacing:.02em}
     .repomar-shipcargo{color:var(--txt2);font-family:var(--mono);font-size:10.5px;line-height:1.6;padding:7px 10px 3px}
@@ -29303,11 +29332,18 @@ window.renderPRepoMar = function() {
       // dejar la celda vacía sin explicación (caso real confirmado:
       // UCAYALI, todavía cargando en Talara, no tiene retorno estimado
       // todavía — es el estado real, no falta ningún dato por corregir).
+      // ⚠️ MEJORADO — a pedido: se veía "disperso", como una caja
+      // flotando sola muy a la derecha, sin ninguna relación visual con
+      // el resto de la fila. Se agrega data-retorno-cell para que la
+      // flecha final (dibujada más abajo) también conecte la última
+      // escala con este recuadro cuando sí hay una fecha real — así
+      // queda claro que es la continuación de la misma ruta, no un
+      // elemento aparte.
       var retornoTxt = b.retornoTalara
-        ? '<div class="repomar-legbox" style="border-color:#0071A4"><div class="repomar-legdate" style="color:#0071A4">Retorno Talara</div><div class="repomar-legprod">' + fmtCorta(b.retornoTalara) + fmtHora(b.retornoTalara) + '</div></div>'
+        ? '<div class="repomar-legbox" data-retorno-cell="' + idx + '" style="border-color:#0071A4"><div class="repomar-legdate" style="color:#0071A4">Retorno Talara</div><div class="repomar-legprod">' + fmtCorta(b.retornoTalara) + fmtHora(b.retornoTalara) + '</div></div>'
         : '<div class="repomar-retorno-pendiente">Aún sin ETA de retorno</div>';
       var retornoCell = '<div class="repomar-cell" style="background:transparent;border:none;padding:4px">' + retornoTxt + '</div>';
-      return '<div class="repomar-row" data-ship-row="' + idx + '" style="grid-template-columns:' + cols + '">' + shipBox + legCells + retornoCell + '</div>';
+      return '<div class="repomar-row repomar-ship-inner-row" data-ship-row="' + idx + '" style="grid-template-columns:' + cols + '">' + shipBox + legCells + retornoCell + '</div>';
     }).join('');
   } else {
     filasShips = '<div class="repomar-empty-msg">No hay cabotaje marítimo vigente en este momento (todas las entregas ya se completaron, o no hay ninguna reportada en Cargas de Naves).</div>';
@@ -29412,8 +29448,26 @@ window.renderPRepoMar = function() {
         prevX = lRect.right - gridRect.left;
         prevY = y1;
       });
+      // ⚠️ AGREGADO — a pedido: conectar también la ÚLTIMA escala con el
+      // recuadro de "Retorno Talara" (cuando hay una fecha real), para
+      // que se vea como la continuación natural de la misma ruta — antes
+      // el recuadro de retorno quedaba "flotando" muy a la derecha, sin
+      // ninguna conexión visual con el resto del recorrido del buque.
+      var retornoEl = row.querySelector('.repomar-legbox[data-retorno-cell="' + idx + '"]');
+      if (retornoEl) {
+        var rRect = retornoEl.getBoundingClientRect();
+        var xR = rRect.left - gridRect.left;
+        var yR = rRect.top + rRect.height/2 - gridRect.top;
+        var midXR = (prevX + xR) / 2;
+        var alturaCurvaR = Math.max(30, Math.min(60, Math.abs(xR - prevX) * 0.15));
+        pathsHTML += '<path d="M' + prevX + ',' + prevY + ' Q' + midXR + ',' + (Math.min(prevY,yR)-alturaCurvaR) + ' ' + xR + ',' + yR + '" ' +
+          'fill="none" stroke="#0071A4" stroke-width="1.6" stroke-dasharray="4 3" marker-end="url(#repomar-arrow-retorno)"/>';
+      }
     });
-    svg.innerHTML = '<defs><marker id="repomar-arrow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#93c5fd"/></marker></defs>' + pathsHTML;
+    svg.innerHTML = '<defs>' +
+      '<marker id="repomar-arrow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#93c5fd"/></marker>' +
+      '<marker id="repomar-arrow-retorno" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#0071A4"/></marker>' +
+      '</defs>' + pathsHTML;
   };
   requestAnimationFrame(window._repomarDrawArrows);
   if (window._repomarResizeHandler) window.removeEventListener('resize', window._repomarResizeHandler);
