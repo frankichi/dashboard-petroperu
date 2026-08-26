@@ -29592,17 +29592,18 @@ window.renderPRepoMar = function() {
         var x1 = lRect.left - gridRect.left;
         var y1 = lRect.top + lRect.height/2 - gridRect.top;
         var midX = (prevX + x1) / 2;
-        // ⚠️ CAMBIADO — a pedido: el criterio se invirtió respecto al
-        // fix anterior. Ahora se busca lo contrario: entre plantas
-        // CONTIGUAS (poca distancia), una flecha casi DIRECTA (recta),
-        // reservando la curva marcada para las plantas más alejadas —
-        // así se distingue de un vistazo qué escalas están cerca entre
-        // sí y cuáles requieren un tramo largo de navegación. Sin
-        // ningún piso mínimo (a diferencia de antes): la altura crece
-        // proporcional a la distancia, tope en 50px para no exagerar en
-        // los tramos más largos.
+        // ⚠️ CORREGIDO — bug real confirmado (captura de pantalla): con
+        // el ajuste anterior ("casi directa entre plantas contiguas"),
+        // cuando dos recuadros quedaban muy pegados (ej. Eten 31/08 y
+        // Salaverry 01/09, una al lado de la otra) la altura de la
+        // curva se volvía tan chica que la flecha prácticamente
+        // desaparecía — no quedaba espacio visible para distinguirla de
+        // una línea recta entre dos cajas casi tocándose. Ahora hay un
+        // mínimo generoso (38px) que garantiza un arco visible por
+        // arriba SIEMPRE, sin importar qué tan cerca estén los
+        // recuadros — creciendo hasta 55px para los tramos más largos.
         var distanciaHoriz = Math.abs(x1 - prevX);
-        var alturaCurva = Math.min(50, distanciaHoriz * 0.12);
+        var alturaCurva = Math.max(38, Math.min(55, distanciaHoriz * 0.15));
         pathsHTML += '<path d="M' + prevX + ',' + prevY + ' Q' + midX + ',' + (Math.min(prevY,y1)-alturaCurva) + ' ' + x1 + ',' + y1 + '" ' +
           'fill="none" stroke="#93c5fd" stroke-width="1.6" stroke-dasharray="4 3" marker-end="url(#repomar-arrow)"/>';
         // El punto de salida de la SIGUIENTE flecha es el borde derecho
@@ -29621,7 +29622,7 @@ window.renderPRepoMar = function() {
         var xR = rRect.left - gridRect.left;
         var yR = rRect.top + rRect.height/2 - gridRect.top;
         var midXR = (prevX + xR) / 2;
-        var alturaCurvaR = Math.min(50, Math.abs(xR - prevX) * 0.12);
+        var alturaCurvaR = Math.max(38, Math.min(55, Math.abs(xR - prevX) * 0.15));
         pathsHTML += '<path d="M' + prevX + ',' + prevY + ' Q' + midXR + ',' + (Math.min(prevY,yR)-alturaCurvaR) + ' ' + xR + ',' + yR + '" ' +
           'fill="none" stroke="#0071A4" stroke-width="1.6" stroke-dasharray="4 3" marker-end="url(#repomar-arrow-retorno)"/>';
       }
