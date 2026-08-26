@@ -4659,6 +4659,18 @@ async function fetchData(forceRefresh) {
           renderP1();
           updateEventTicker();
           if (typeof _updateShipOpsBar === 'function') _updateShipOpsBar();
+          // ⚠️ AGREGADO — bug real confirmado: Reposiciones Marítimas
+          // usa el zarpe/retorno de _navPosData, pero se dibuja ANTES
+          // de que este fetch (asíncrono) termine — la primera vez que
+          // se entra a esa página, esos datos todavía no habían
+          // llegado. Igual que ya se hace arriba para renderP1/
+          // renderVistaEjecutivaSimple, se vuelve a dibujar sola en
+          // cuanto el dato está disponible, SOLO si es la página que la
+          // persona tiene abierta en este momento.
+          (function() {
+            var activePageEl = document.querySelector('.page.active');
+            if (activePageEl && activePageEl.id === 'pRepoMar' && typeof renderPRepoMar === 'function') renderPRepoMar();
+          })();
         }).catch(() => { if (!_navPosData) _navPosData = {}; });
     }
     cobComputeBadgeQuick();
