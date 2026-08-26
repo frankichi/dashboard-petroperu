@@ -28886,10 +28886,17 @@ function _buildRepoMarBuques() {
 }
 
 // Cobertura actual y proyectada (tras sumar la reposición pendiente) por
-// planta+producto — reutiliza reposicionInfoPlanta / fecha_cobertura ya
-// calculados en el resto del dashboard, para no duplicar esa lógica.
+// planta+producto.
+// ⚠️ CORREGIDO — bug real confirmado: la primera versión leía
+// `fila.fecha_cobertura` directamente, pero ese campo nunca se calcula
+// en el frontend — depende de una columna de la hoja de Google Sheets
+// que casi nunca está llena (mostraba "s/d" en casi todas las celdas).
+// Ahora se CALCULA con las mismas funciones canónicas que usa el resto
+// del dashboard (cobSystemDays/cobCalcFecha — la misma fórmula que la
+// tabla de Coberturas, el ticker, el mapa, etc.), en vez de depender de
+// un dato que rara vez existe.
 function _buildRepoMarCobertura() {
-  var actual = {}, nueva = {};
+  var actual = {}, actualDias = {}, nueva = {};
   var fechaRef = (typeof currentDate !== 'undefined' && currentDate) ? currentDate : new Date().toISOString().slice(0,10);
   REPOMAR_PLANTAS.forEach(function(planta) {
     (PRODUCTOS_POR_PLANTA_EXEC[planta] || []).forEach(function(producto) {
@@ -28897,22 +28904,26 @@ function _buildRepoMarCobertura() {
       var fila = null;
       if (typeof _invConProyeccion === 'function') {
         try { fila = _invConProyeccion(planta, producto, fechaRef); }
-        catch(eProy) { console.warn('[RepoMar] _invConProyeccion falló para ' + planta + '|' + producto + ':', eProy.message); }
+        catch(eProy) { console.warn('[RepoMar] _invConProyeccion falló para ' + key + ':', eProy.message); }
       }
       if (!fila) return;
-      actual[key] = fila.fecha_cobertura || '';
-      var dias = 0;
+      var diasHoy = (typeof cobSystemDays === 'function') ? cobSystemDays(fila) : 0;
+      actualDias[key] = diasHoy;
+      actual[key] = (diasHoy > 0 && typeof cobCalcFecha === 'function') ? cobCalcFecha(fechaRef, diasHoy) : '';
+      var diasRepos = 0;
       if (typeof reposicionInfoPlanta === 'function') {
         try {
           var rep = reposicionInfoPlanta(planta, producto);
-          dias = (rep && rep.diasRepos) || 0;
+          diasRepos = (rep && rep.diasRepos) || 0;
         } catch(e) {}
       }
-      nueva[key] = (dias > 0 && actual[key]) ? _repomarSumarDiasHabiles(actual[key], dias) : actual[key];
+      var diasTotalNueva = diasHoy + diasRepos;
+      nueva[key] = (diasTotalNueva > 0 && typeof cobCalcFecha === 'function') ? cobCalcFecha(fechaRef, diasTotalNueva) : actual[key];
     });
   });
-  return { actual: actual, nueva: nueva };
+  return { actual: actual, actualDias: actualDias, nueva: nueva };
 }
+
 
 // CSS de la página (una sola vez, inyectado con el primer render).
 function _repomarInjectCSS() {
@@ -28966,14 +28977,25 @@ window.renderPRepoMar = function() {
     return p[2] + '/' + p[1] + '/' + p[0].slice(2);
   }
 
-  function filaCobertura(mapa) {
+  function filaCobertura(mapa, diasMapa) {
     return REPOMAR_PRODUCTOS.map(function(prod) {
       var celdas = REPOMAR_PLANTAS.map(function(planta) {
         var aplica = (PRODUCTOS_POR_PLANTA_EXEC[planta] || []).indexOf(prod) !== -1;
         if (!aplica) return '<div class="repomar-cell repomar-cell-empty">—</div>';
         var fecha = mapa[planta + '|' + prod];
         if (!fecha) return '<div class="repomar-cell repomar-cell-empty">s/d</div>';
-        var dias = _diasHabilesEntreFechas(fechaRef, fecha).length;
+        // ⚠️ CORREGIDO — antes recalculaba los días con
+        // _diasHabilesEntreFechas (días HÁBILES), pero la fecha viene
+        // de cobCalcFecha (días CALENDARIO, sin descontar domingos ni
+        // feriados) — mezclar ambos criterios podía mostrar "crítico"
+        // de forma inconsistente con el resto del dashboard. Si hay un
+        // conteo de días ya calculado con la fórmula canónica
+        // (diasMapa), se usa ese directamente; si no, se aproxima con
+        // la diferencia de fechas en días calendario, para que ambos
+        // caminos midan lo mismo.
+        var dias = diasMapa && diasMapa[planta + '|' + prod] != null
+          ? diasMapa[planta + '|' + prod]
+          : Math.round((new Date(fecha + 'T12:00:00') - new Date(fechaRef + 'T12:00:00')) / 86400000);
         var critico = dias <= 10;
         return '<div class="repomar-cell ' + (critico ? 'repomar-cell-crit' : 'repomar-cell-ok') + '">' + fmtCorta(fecha) + '</div>';
       }).join('');
@@ -29032,7 +29054,7 @@ window.renderPRepoMar = function() {
             '<div class="repomar-cell repomar-labelcell" style="background:#0071A4;color:#fff">FECHA COBERTURA</div>' +
             REPOMAR_PLANTAS.map(function(){ return '<div class="repomar-cell" style="background:#0071A4;border-color:#0071A4"></div>'; }).join('') +
           '</div>' +
-          filaCobertura(cob.actual) +
+          filaCobertura(cob.actual, cob.actualDias) +
           '<div class="repomar-divider"></div>' +
           '<div class="repomar-ships" id="repomar-ships">' + filasShips + '</div>' +
           '<div class="repomar-divider"></div>' +
