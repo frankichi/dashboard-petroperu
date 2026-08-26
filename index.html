@@ -28887,17 +28887,54 @@ function _buildRepoMarBuques() {
 
 // Cobertura actual y proyectada (tras sumar la reposición pendiente) por
 // planta+producto.
-// ⚠️ CORREGIDO — bug real confirmado: la primera versión leía
-// `fila.fecha_cobertura` directamente, pero ese campo nunca se calcula
-// en el frontend — depende de una columna de la hoja de Google Sheets
-// que casi nunca está llena (mostraba "s/d" en casi todas las celdas).
-// Ahora se CALCULA con las mismas funciones canónicas que usa el resto
-// del dashboard (cobSystemDays/cobCalcFecha — la misma fórmula que la
-// tabla de Coberturas, el ticker, el mapa, etc.), en vez de depender de
-// un dato que rara vez existe.
-function _buildRepoMarCobertura() {
+// ⚠️ CORREGIDO (1ra vuelta) — bug real confirmado: la primera versión
+// leía `fila.fecha_cobertura` directamente, pero ese campo nunca se
+// calcula en el frontend — depende de una columna de la hoja de Google
+// Sheets que casi nunca está llena (mostraba "s/d" en casi todas las
+// celdas). Ahora se CALCULA con las mismas funciones canónicas que usa
+// el resto del dashboard (cobSystemDays/cobCalcFecha).
+//
+// ⚠️ CORREGIDO (2da vuelta) — bug real confirmado: "nueva cobertura"
+// siempre mostraba la MISMA fecha que "cobertura actual" — nunca
+// cambiaba. Causa: reposicionInfoPlanta() es una función ANIDADA dentro
+// de otro closure (_buildCoberturaSectionHTML) — no es accesible desde
+// aquí. El try/catch atrapaba el ReferenceError en silencio y
+// `diasRepos` quedaba SIEMPRE en 0. Ahora el volumen pendiente se suma
+// directamente desde `buques` (ya reconstruido por
+// _buildRepoMarBuques, con las mismas escalas que se ven en el
+// diagrama) — sin depender de ninguna función externa.
+//
+// ⚠️ AGREGADO — a pedido, regla de negocio real: para la reposición y
+// la cobertura NUEVA se usa siempre el PRONÓSTICO (fila.pron), nunca la
+// venta factible ajustada manualmente (fila.vfact) — porque cuando el
+// operador ajusta la demanda a mano para que la cobertura actual
+// "aterrice" justo en la fecha en que llega el buque, ese ajuste deja
+// de aplicar en cuanto el buque efectivamente descarga: la planta vuelve
+// a atenderse con el pronóstico como mínimo. La cobertura ACTUAL (la de
+// arriba) sí sigue usando cobSystemDays tal cual (con el ajuste vigente,
+// si lo hay), ya que esa fila describe la situación de HOY.
+//
+// ⚠️ AGREGADO — bug real confirmado (Ilo·G.Premium: inv=0.107,
+// vfact=0.87 → 0.107/0.87=0.12 → redondea a 0 días): una cobertura que
+// redondea a 0 (inventario crítico, a punto de agotarse) se descartaba
+// igual que "sin dato" y mostraba "s/d" — engañoso, ya que SÍ hay un
+// dato real, y es el peor caso posible (cobertura de HOY). Ahora se
+// distingue: si hay una lectura de inventario válida (aunque dé 0 días),
+// se muestra la fecha de HOY; solo se muestra "s/d" cuando genuinamente
+// no hay ningún dato (inv, vfact Y pron en cero — caso real confirmado:
+// Callao·TA1).
+function _buildRepoMarCobertura(buques) {
   var actual = {}, actualDias = {}, nueva = {};
   var fechaRef = (typeof currentDate !== 'undefined' && currentDate) ? currentDate : new Date().toISOString().slice(0,10);
+
+  var volPendientePorKey = {};
+  (buques || []).forEach(function(b) {
+    b.legs.forEach(function(leg) {
+      var key = leg.terminal + '|' + leg.producto;
+      volPendientePorKey[key] = (volPendientePorKey[key] || 0) + (leg.vol || 0);
+    });
+  });
+
   REPOMAR_PLANTAS.forEach(function(planta) {
     (PRODUCTOS_POR_PLANTA_EXEC[planta] || []).forEach(function(producto) {
       var key = planta + '|' + producto;
@@ -28907,18 +28944,17 @@ function _buildRepoMarCobertura() {
         catch(eProy) { console.warn('[RepoMar] _invConProyeccion falló para ' + key + ':', eProy.message); }
       }
       if (!fila) return;
+
       var diasHoy = (typeof cobSystemDays === 'function') ? cobSystemDays(fila) : 0;
+      var hayDatoValido = (fila.inv > 0) || (fila.vfact > 0) || (fila.pron > 0);
       actualDias[key] = diasHoy;
-      actual[key] = (diasHoy > 0 && typeof cobCalcFecha === 'function') ? cobCalcFecha(fechaRef, diasHoy) : '';
-      var diasRepos = 0;
-      if (typeof reposicionInfoPlanta === 'function') {
-        try {
-          var rep = reposicionInfoPlanta(planta, producto);
-          diasRepos = (rep && rep.diasRepos) || 0;
-        } catch(e) {}
-      }
+      actual[key] = !hayDatoValido ? '' : (diasHoy > 0 ? cobCalcFecha(fechaRef, diasHoy) : fechaRef);
+
+      var pronDiario = fila.pron > 0 ? fila.pron : (fila.vfact > 0 ? fila.vfact : 0);
+      var volPendiente = volPendientePorKey[key] || 0;
+      var diasRepos = (pronDiario > 0 && volPendiente > 0) ? Math.floor(volPendiente / pronDiario) : 0;
       var diasTotalNueva = diasHoy + diasRepos;
-      nueva[key] = (diasTotalNueva > 0 && typeof cobCalcFecha === 'function') ? cobCalcFecha(fechaRef, diasTotalNueva) : actual[key];
+      nueva[key] = !hayDatoValido ? '' : (diasTotalNueva > 0 ? cobCalcFecha(fechaRef, diasTotalNueva) : fechaRef);
     });
   });
   return { actual: actual, actualDias: actualDias, nueva: nueva };
@@ -28947,6 +28983,7 @@ function _repomarInjectCSS() {
     .repomar-cell-crit{background:#DC271C;color:#fff;font-weight:700;border-color:#c02016}
     .repomar-cell-ok{color:var(--txt);font-weight:700;background:#eef7ee}
     .repomar-cell-empty{background:var(--bg3,var(--card));color:var(--txt3);font-size:10.5px}
+    .repomar-sectiontitle{background:#0071A4;color:#fff;font-size:10.5px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;padding:4px 10px;border:1px solid #0071A4}
     .repomar-divider{height:22px;position:relative}
     .repomar-divider::after{content:'';position:absolute;left:0;right:0;top:50%;height:1px;background:linear-gradient(90deg,transparent,var(--bdr) 10%,var(--bdr) 90%,transparent)}
     .repomar-ships-label{font-size:10px;font-weight:800;letter-spacing:.08em;color:var(--txt3);text-transform:uppercase;padding:0 4px 6px}
@@ -28973,8 +29010,8 @@ window.renderPRepoMar = function() {
   var host = document.getElementById('pRepoMar-content');
   if (!host) return;
 
-  var cob = _buildRepoMarCobertura();
   var buques = _buildRepoMarBuques();
+  var cob = _buildRepoMarCobertura(buques);
   var fechaRef = (typeof currentDate !== 'undefined' && currentDate) ? currentDate : new Date().toISOString().slice(0,10);
   var cols = '170px repeat(' + REPOMAR_PLANTAS.length + ', minmax(100px, 1fr))';
 
@@ -29064,20 +29101,19 @@ window.renderPRepoMar = function() {
         '<div class="repomar-grid" id="repomar-grid">' +
           '<svg class="repomar-svg" id="repomar-svg"></svg>' +
           filaEncabezado +
-          '<div class="repomar-row" style="grid-template-columns:' + cols + '">' +
-            '<div class="repomar-cell repomar-labelcell" style="background:#0071A4;color:#fff">FECHA COBERTURA</div>' +
-            REPOMAR_PLANTAS.map(function(){ return '<div class="repomar-cell" style="background:#0071A4;border-color:#0071A4"></div>'; }).join('') +
-          '</div>' +
+          // ⚠️ CORREGIDO — a pedido: la fila "FECHA COBERTURA" ocupaba
+          // una fila entera de la grilla (11 celdas, la mayoría vacías,
+          // solo decorativas) — espacio vertical desperdiciado. Ahora es
+          // una barra angosta de una sola línea, sin repetir las
+          // columnas de planta (ya están arriba, en el encabezado).
+          '<div class="repomar-sectiontitle">FECHA COBERTURA</div>' +
           filaCobertura(cob.actual, cob.actualDias) +
           '<div class="repomar-divider"></div>' +
           '<div class="repomar-ships-label">🚢 CABOTAJE CONFIRMADO</div>' +
           '<div class="repomar-ships" id="repomar-ships">' + filasShips + '</div>' +
           '<div class="repomar-divider"></div>' +
+          '<div class="repomar-sectiontitle">NUEVA COBERTURA</div>' +
           filaCobertura(cob.nueva) +
-          '<div class="repomar-row" style="grid-template-columns:' + cols + '">' +
-            '<div class="repomar-cell repomar-labelcell" style="background:#0071A4;color:#fff">NUEVA COBERTURA</div>' +
-            REPOMAR_PLANTAS.map(function(){ return '<div class="repomar-cell" style="background:#0071A4;border-color:#0071A4"></div>'; }).join('') +
-          '</div>' +
           filaEncabezado +
         '</div>' +
       '</div>' +
