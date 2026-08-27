@@ -50,7 +50,7 @@ body{font-family:var(--sans);font-size:13px;background:var(--bg);color:var(--txt
 .repomar-ship-inner-row{background:linear-gradient(90deg,rgba(37,99,235,.03),rgba(37,99,235,.03) 85%,transparent);border-radius:8px}
 .repomar-shipbox{background:#fff;border:1px solid var(--bdr);border-radius:8px;font-size:11px;margin:4px 2px;box-shadow:0 1px 4px rgba(0,113,164,.12);overflow:hidden}
 .repomar-shipname{font-weight:800;color:#fff;background:#0071A4;font-size:12px;padding:5px 10px;letter-spacing:.02em}
-.repomar-shipcargo{color:var(--txt2);font-family:var(--mono);font-size:10.5px;line-height:1.6;padding:7px 10px 3px}
+.repomar-shipcargo{color:var(--txt2);font-family:var(--mono);font-size:10px;line-height:1.7;padding:7px 10px 3px;white-space:nowrap}
 .repomar-shipzarpe{margin:6px 10px 8px;background:#fff7e6;border:1px solid #f0c869;border-radius:4px;padding:3px 8px;font-size:10px;font-weight:700;color:#8a6416;display:inline-block}
 .repomar-shipzarpe-pendiente{background:#f3f4f6!important;border-color:var(--bdr)!important;color:var(--txt3)!important}
 .repomar-retorno-pendiente{font-size:9px;color:var(--txt3);text-align:center;padding:6px 2px;font-style:italic}
@@ -102,6 +102,29 @@ function fmtCorta(f) {
 function fmtHora(f) {
   if (!f || f.indexOf('T') === -1) return '';
   return ' ' + f.split('T')[1].slice(0,5);
+}
+
+// ⚠️ AGREGADO — a pedido: agrupar las escalas de un buque por
+// terminal+fecha+estado — antes cada producto que un buque descarga en
+// la MISMA planta el MISMO día se dibujaba como una caja aparte. Ahora
+// se combinan en UNA sola caja, con un encabezado de fecha/estado único
+// y todos los productos listados adentro. Se usa tanto en el render
+// como en el dibujo de flechas, para que ambos coincidan exactamente.
+function _repomarAgruparEscalas(legs) {
+  var grupos = [];
+  var porClave = {};
+  (legs || []).forEach(function(l) {
+    var clave = l.terminal + '|' + l.fecha_hasta + '|' + l.estado;
+    if (!porClave[clave]) {
+      porClave[clave] = {
+        terminal: l.terminal, fecha_hasta: l.fecha_hasta, estado: l.estado,
+        estadoRealEnTerminal: l.estadoRealEnTerminal, productos: []
+      };
+      grupos.push(porClave[clave]);
+    }
+    porClave[clave].productos.push({ producto: l.producto, vol: l.vol });
+  });
+  return grupos;
 }
 
 // Popup informativo al pasar el mouse — usa el detalle de inventario
@@ -184,7 +207,7 @@ function render(data) {
   var host = document.getElementById('repomar-content');
   var subtitle = document.getElementById('repomar-subtitle');
   var plantas = data.plantas, productos = data.productos, buques = data.buques || [];
-  var cols = '170px repeat(' + plantas.length + ', minmax(100px, 1fr)) 130px';
+  var cols = '200px repeat(' + plantas.length + ', minmax(100px, 1fr)) 130px';
   _repomarDetalleInv = data.detalleInventario || {};
 
   subtitle.textContent = 'Al ' + fmtCorta(data.fechaRef) + ' · generado en vivo desde Cargas de Naves, Posicionamiento de Naves y Cobertura por planta';
@@ -211,19 +234,26 @@ function render(data) {
           zarpeTxt +
         '</div>' +
       '</div>';
+      // ⚠️ CORREGIDO — a pedido: agrupar por terminal+fecha ANTES de
+      // dibujar — varios productos que llegan a la MISMA planta el
+      // MISMO día ahora comparten una sola caja.
+      var grupos = _repomarAgruparEscalas(b.legs);
       var legCells = plantas.map(function(planta) {
-        var legsAqui = (b.legs || []).filter(function(l){ return l.terminal === planta; });
-        if (!legsAqui.length) return '<div class="repomar-cell" style="background:transparent;border:none"></div>';
-        var chips = legsAqui.map(function(l) {
-          var esCompletado = l.estado === 'COMPLETADO';
-          var estadoReal = !esCompletado ? l.estadoRealEnTerminal : null;
+        var gruposAqui = grupos.filter(function(g){ return g.terminal === planta; });
+        if (!gruposAqui.length) return '<div class="repomar-cell" style="background:transparent;border:none"></div>';
+        var chips = gruposAqui.map(function(g) {
+          var esCompletado = g.estado === 'COMPLETADO';
+          var estadoReal = !esCompletado ? g.estadoRealEnTerminal : null;
           var etiqueta = esCompletado ? 'T.D.' : (estadoReal ? '' : 'E.T.A.');
           var lineaEstado = estadoReal
             ? '<div class="repomar-legdate" style="color:#b45309">' + estadoReal.split(String.fromCharCode(10))[0] + '</div>'
-            : '<div class="repomar-legdate">' + etiqueta + ' ' + fmtCorta(l.fecha_hasta) + '</div>';
-          return '<div class="repomar-legbox' + (esCompletado ? ' completado' : (estadoReal ? ' en-terminal' : '')) + '" data-buque="' + b.buque + '" data-leg-idx="' + b.legs.indexOf(l) + '">' +
+            : '<div class="repomar-legdate">' + etiqueta + ' ' + fmtCorta(g.fecha_hasta) + '</div>';
+          var lineasProductos = g.productos.map(function(p) {
+            return '<div class="repomar-legprod">' + p.producto + ': ' + p.vol.toFixed(1) + ' MB</div>';
+          }).join('');
+          return '<div class="repomar-legbox' + (esCompletado ? ' completado' : (estadoReal ? ' en-terminal' : '')) + '" data-buque="' + b.buque + '" data-leg-idx="' + grupos.indexOf(g) + '">' +
             lineaEstado +
-            '<div class="repomar-legprod">' + l.producto + ': ' + l.vol.toFixed(1) + ' MB</div>' +
+            lineasProductos +
           '</div>';
         }).join('');
         return '<div class="repomar-cell" style="background:transparent;border:none;flex-direction:column;padding:2px">' + chips + '</div>';
@@ -292,8 +322,11 @@ function drawArrows(buques) {
     // a la derecha del anterior.
     var prevX = sRect.left + sRect.width/2 - gridRect.left;
     var prevY = sRect.top - gridRect.top;
-    (b.legs || []).forEach(function(leg, legIdx) {
-      var legEl = row.querySelector('.repomar-legbox[data-buque="' + b.buque + '"][data-leg-idx="' + legIdx + '"]');
+    // ⚠️ CORREGIDO — a pedido: iterar sobre los GRUPOS combinados
+    // (terminal+fecha), no sobre cada escala individual.
+    var gruposDibujo = _repomarAgruparEscalas(b.legs);
+    gruposDibujo.forEach(function(g, grupoIdx) {
+      var legEl = row.querySelector('.repomar-legbox[data-buque="' + b.buque + '"][data-leg-idx="' + grupoIdx + '"]');
       if (!legEl) return;
       var lRect = legEl.getBoundingClientRect();
       var x1 = lRect.left + lRect.width/2 - gridRect.left;

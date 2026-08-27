@@ -28933,6 +28933,32 @@ function fmtHora(f) {
   return ' ' + f.split('T')[1].slice(0,5);
 }
 
+// ⚠️ AGREGADO — a pedido: agrupar las escalas de un buque por
+// terminal+fecha+estado — antes cada producto que un buque descarga en
+// la MISMA planta el MISMO día se dibujaba como una caja aparte (3
+// cajas apiladas para URUBAMBA en Conchán, por ejemplo). Ahora se
+// combinan en UNA sola caja, con un encabezado de fecha/estado único y
+// todos los productos listados adentro. Es una función GLOBAL (no vive
+// dentro de renderPRepoMar) para que tanto el render como el dibujo de
+// flechas usen exactamente el mismo agrupamiento — mismo criterio,
+// mismos índices, sin duplicar la lógica.
+function _repomarAgruparEscalas(legs) {
+  var grupos = [];
+  var porClave = {};
+  (legs || []).forEach(function(l) {
+    var clave = l.terminal + '|' + l.fecha_hasta + '|' + l.estado;
+    if (!porClave[clave]) {
+      porClave[clave] = {
+        terminal: l.terminal, terminalNorm: l.terminalNorm, fecha_hasta: l.fecha_hasta,
+        estado: l.estado, productos: []
+      };
+      grupos.push(porClave[clave]);
+    }
+    porClave[clave].productos.push({ producto: l.producto, vol: l.vol });
+  });
+  return grupos; // ya en orden cronológico, porque legs ya venía ordenado y push conserva el orden de aparición
+}
+
 // Suma N días hábiles (sin domingos ni feriados) a una fecha base —
 // misma convención que _diasHabilesEntreFechas, usada para calcular la
 // "nueva cobertura" tras sumar los días que aporta la reposición.
@@ -29409,7 +29435,7 @@ function _repomarInjectCSS() {
     .repomar-ship-inner-row{background:linear-gradient(90deg,rgba(37,99,235,.03),rgba(37,99,235,.03) 85%,transparent);border-radius:8px}
     .repomar-shipbox{background:#fff;border:1px solid var(--bdr);border-radius:8px;font-size:11px;margin:4px 2px;box-shadow:0 1px 4px rgba(0,113,164,.12);overflow:hidden}
     .repomar-shipname{font-weight:800;color:#fff;background:#0071A4;font-size:12px;padding:5px 10px;letter-spacing:.02em}
-    .repomar-shipcargo{color:var(--txt2);font-family:var(--mono);font-size:10.5px;line-height:1.6;padding:7px 10px 3px}
+    .repomar-shipcargo{color:var(--txt2);font-family:var(--mono);font-size:10px;line-height:1.7;padding:7px 10px 3px;white-space:nowrap}
     .repomar-shipzarpe{margin:6px 10px 8px;background:#fff7e6;border:1px solid #f0c869;border-radius:4px;padding:3px 8px;font-size:10px;font-weight:700;color:#8a6416;display:inline-block}
     .repomar-legbox{background:#fff;border:1.5px solid #2563eb;border-radius:6px;padding:5px 7px;font-size:10px;margin:3px 2px;position:relative;z-index:2;box-shadow:0 1px 3px rgba(37,99,235,.18)}
     .repomar-legdate{font-weight:800;color:#2563eb;font-size:10px}
@@ -29562,7 +29588,7 @@ window.renderPRepoMar = function() {
   // cobertura y buques) para que las columnas de planta sigan alineadas
   // exactamente igual entre todos los bloques — en las filas que no la
   // necesitan, queda simplemente vacía.
-  var cols = '170px repeat(' + REPOMAR_PLANTAS.length + ', minmax(100px, 1fr)) 130px';
+  var cols = '200px repeat(' + REPOMAR_PLANTAS.length + ', minmax(100px, 1fr)) 130px';
 
   function filaCobertura(mapa, diasMapa, tipo) {
     return REPOMAR_PRODUCTOS.map(function(prod) {
@@ -29663,11 +29689,16 @@ window.renderPRepoMar = function() {
           zarpeTxt +
         '</div>' +
       '</div>';
+      // ⚠️ CORREGIDO — a pedido: agrupar por terminal+fecha ANTES de
+      // dibujar — varios productos que llegan a la MISMA planta el
+      // MISMO día ahora comparten una sola caja, con un encabezado de
+      // fecha/estado único, en vez de una caja por producto.
+      var grupos = _repomarAgruparEscalas(b.legs);
       var legCells = REPOMAR_PLANTAS.map(function(planta) {
-        var legsAqui = b.legs.filter(function(l){ return l.terminal === planta; });
-        if (!legsAqui.length) return '<div class="repomar-cell" style="background:transparent;border:none"></div>';
-        var chips = legsAqui.map(function(l) {
-          var esCompletado = l.estado === 'COMPLETADO';
+        var gruposAqui = grupos.filter(function(g){ return g.terminal === planta; });
+        if (!gruposAqui.length) return '<div class="repomar-cell" style="background:transparent;border:none"></div>';
+        var chips = gruposAqui.map(function(g) {
+          var esCompletado = g.estado === 'COMPLETADO';
           // ⚠️ CORREGIDO — a pedido: antes el recuadro siempre decía
           // "E.T.A." mientras no estuviera COMPLETADO, sin importar si
           // el buque ya había llegado físicamente (amarrado,
@@ -29677,21 +29708,21 @@ window.renderPRepoMar = function() {
           // como presente en este terminal (no solo "navegando a"), se
           // muestra ese estado real tal cual viene del reporte diario,
           // en vez de un ETA que ya no tiene sentido.
-          var estadoReal = !esCompletado ? _repomarEstadoRealEnTerminal(b.buque, l.terminalNorm) : null;
+          var estadoReal = !esCompletado ? _repomarEstadoRealEnTerminal(b.buque, g.terminalNorm) : null;
           var etiqueta = esCompletado ? 'T.D.' : (estadoReal ? '' : 'E.T.A.');
           var lineaEstado = estadoReal
             ? '<div class="repomar-legdate" style="color:#b45309">' + estadoReal.split('\n')[0] + '</div>'
-            : '<div class="repomar-legdate">' + etiqueta + ' ' + fmtCorta(l.fecha_hasta) + '</div>';
-          // ⚠️ AGREGADO — a pedido: data-leg-idx identifica la posición
-          // CRONOLÓGICA real de esta escala dentro del itinerario del
-          // buque (b.legs ya viene ordenado por fecha_hasta) — necesario
-          // para que las flechas conecten escala 1 -> escala 2 -> escala
-          // 3 en el orden real del viaje, y no en el orden en que el
-          // navegador las encuentra en pantalla (que sigue la posición
-          // de columna/planta, no la secuencia real de la ruta).
-          return '<div class="repomar-legbox' + (esCompletado ? ' completado' : (estadoReal ? ' en-terminal' : '')) + '" data-buque="' + b.buque + '" data-viaje="' + (b.viaje||'') + '" data-leg-idx="' + b.legs.indexOf(l) + '">' +
+            : '<div class="repomar-legdate">' + etiqueta + ' ' + fmtCorta(g.fecha_hasta) + '</div>';
+          // ⚠️ AGREGADO — a pedido: data-leg-idx ahora identifica el
+          // GRUPO (no la escala individual) — necesario para que las
+          // flechas conecten grupo 1 -> grupo 2 -> grupo 3 en el orden
+          // real del viaje, ya con los productos combinados.
+          var lineasProductos = g.productos.map(function(p) {
+            return '<div class="repomar-legprod">' + p.producto + ': ' + p.vol.toFixed(1) + ' MB</div>';
+          }).join('');
+          return '<div class="repomar-legbox' + (esCompletado ? ' completado' : (estadoReal ? ' en-terminal' : '')) + '" data-buque="' + b.buque + '" data-leg-idx="' + grupos.indexOf(g) + '">' +
             lineaEstado +
-            '<div class="repomar-legprod">' + l.producto + ': ' + l.vol.toFixed(1) + ' MB</div>' +
+            lineasProductos +
           '</div>';
         }).join('');
         return '<div class="repomar-cell" style="background:transparent;border:none;flex-direction:column;padding:2px">' + chips + '</div>';
@@ -29828,8 +29859,14 @@ window.renderPRepoMar = function() {
       // correctamente por arriba de ambos.
       var prevX = sRect.left + sRect.width/2 - gridRect.left;
       var prevY = sRect.top - gridRect.top;
-      b.legs.forEach(function(leg, legIdx) {
-        var legEl = row.querySelector('.repomar-legbox[data-buque="' + b.buque + '"][data-leg-idx="' + legIdx + '"]');
+      // ⚠️ CORREGIDO — a pedido: iterar sobre los GRUPOS (terminal+fecha
+      // combinados), no sobre cada escala individual — así la flecha
+      // conecta caja combinada con caja combinada, en vez de intentar
+      // dibujar una flecha extra hacia una escala que ya no tiene su
+      // propia caja separada (ahora vive dentro de una caja compartida).
+      var gruposDibujo = _repomarAgruparEscalas(b.legs);
+      gruposDibujo.forEach(function(g, grupoIdx) {
+        var legEl = row.querySelector('.repomar-legbox[data-buque="' + b.buque + '"][data-leg-idx="' + grupoIdx + '"]');
         if (!legEl) return;
         var lRect = legEl.getBoundingClientRect();
         var x1 = lRect.left + lRect.width/2 - gridRect.left;
