@@ -29255,11 +29255,24 @@ function _repomarInjectCSS() {
     .repomar-row{display:grid;align-items:stretch}
     .repomar-cell{padding:7px 8px;border:1px solid var(--bdr);font-size:11.5px;display:flex;align-items:center;justify-content:center;text-align:center;background:var(--card);min-height:32px}
     .repomar-labelcell{justify-content:flex-start;font-weight:700;color:#fff;font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;background:#0071A4;border-color:#0071A4}
+    /* ⚠️ AGREGADO — a pedido: color distintivo por producto, en vez del
+       mismo azul para las 4 filas — así se distingue de un vistazo cuál
+       fila es cuál sin tener que leer el texto cada vez. */
+    .repomar-labelcell[data-prod="Diesel"]{background:#0071A4;border-color:#0071A4}
+    .repomar-labelcell[data-prod="G. Regular"]{background:#c2410c;border-color:#c2410c}
+    .repomar-labelcell[data-prod="G. Premium"]{background:#7c3aed;border-color:#7c3aed}
+    .repomar-labelcell[data-prod="TA1"]{background:#0d9488;border-color:#0d9488}
     .repomar-planthead{font-weight:800;color:#fff;background:#003a56;border-color:#003a56;font-size:11.5px;letter-spacing:.02em}
     .repomar-headerrow .repomar-labelcell{background:#003a56;border-color:#003a56}
-    .repomar-cell-crit{background:#DC271C;color:#fff;font-weight:700;border-color:#c02016}
-    .repomar-cell-ok{color:var(--txt);font-weight:700;background:#eef7ee}
+    .repomar-cell-crit{background:#DC271C;color:#fff;font-weight:700;border-color:#c02016;cursor:help}
+    .repomar-cell-ok{color:var(--txt);font-weight:700;background:#eef7ee;cursor:help}
     .repomar-cell-empty{background:var(--bg3,var(--card));color:var(--txt3);font-size:10.5px}
+    /* ── Popup informativo al pasar el mouse sobre una celda de cobertura ── */
+    .repomar-cov-tip{position:fixed;z-index:5000;background:#0d1a2e;color:#fff;border-radius:8px;padding:10px 13px;font-size:11px;line-height:1.7;box-shadow:0 6px 24px rgba(0,0,0,.35);pointer-events:none;min-width:190px;display:none;font-family:var(--sans,inherit)}
+    .repomar-cov-tip b{color:#fff;font-size:11.5px;display:block;margin-bottom:4px;border-bottom:1px solid rgba(255,255,255,.15);padding-bottom:4px}
+    .repomar-cov-tip .rct-row{display:flex;justify-content:space-between;gap:14px}
+    .repomar-cov-tip .rct-lbl{color:rgba(255,255,255,.65)}
+    .repomar-cov-tip .rct-val{font-family:var(--mono);font-weight:700}
     .repomar-cell-retorno-na{background:transparent!important;border-color:transparent!important}
     .repomar-shipzarpe-pendiente{background:#f3f4f6!important;border-color:var(--bdr)!important;color:var(--txt3)!important}
     .repomar-retorno-pendiente{font-size:9px;color:var(--txt3);text-align:center;padding:6px 2px;font-style:italic}
@@ -29288,9 +29301,61 @@ function _repomarInjectCSS() {
   style.id = 'repomar-css';
   style.textContent = css;
   document.head.appendChild(style);
+  if (!document.getElementById('repomar-cov-tip')) {
+    var tip = document.createElement('div');
+    tip.id = 'repomar-cov-tip';
+    tip.className = 'repomar-cov-tip';
+    document.body.appendChild(tip);
+  }
 }
 
-// ⚠️ AGREGADO — a pedido: botón "Compartir enlace" en Reposiciones
+// ⚠️ AGREGADO — a pedido: popup informativo al pasar el mouse sobre
+// cada celda de cobertura — muestra inventario actual, capacidad,
+// vacío, pronóstico aprobado del mes y venta factible, para esa
+// planta+producto específica, sin tener que salir de esta página a
+// buscar el dato en otro lado.
+function _repomarMostrarTip(evt) {
+  var el = evt.currentTarget;
+  var planta = el.getAttribute('data-planta');
+  var prod = el.getAttribute('data-prod');
+  var fechaRef = (typeof currentDate !== 'undefined' && currentDate) ? currentDate : new Date().toISOString().slice(0,10);
+  var fila = null;
+  if (typeof _invConProyeccion === 'function') {
+    try { fila = _invConProyeccion(planta, prod, fechaRef); } catch(e) {}
+  }
+  var tip = document.getElementById('repomar-cov-tip');
+  if (!tip) return;
+  var inv = fila ? (fila.inv || 0) : 0;
+  var pron = fila ? (fila.pron || 0) : 0;
+  var vfact = fila ? (fila.vfact || 0) : 0;
+  var capacidad = (typeof getCapacidad === 'function') ? (getCapacidad(planta, prod) || 0) : 0;
+  var vacio = capacidad > 0 ? Math.max(0, capacidad - inv) : 0;
+  tip.innerHTML =
+    '<b>' + planta + ' · ' + prod + '</b>' +
+    '<div class="rct-row"><span class="rct-lbl">Inventario actual</span><span class="rct-val">' + inv.toFixed(1) + ' MB</span></div>' +
+    '<div class="rct-row"><span class="rct-lbl">Capacidad</span><span class="rct-val">' + (capacidad > 0 ? capacidad.toFixed(1) + ' MB' : 's/d') + '</span></div>' +
+    '<div class="rct-row"><span class="rct-lbl">Vacío</span><span class="rct-val">' + (capacidad > 0 ? vacio.toFixed(1) + ' MB' : 's/d') + '</span></div>' +
+    '<div class="rct-row"><span class="rct-lbl">Pronóstico aprobado</span><span class="rct-val">' + pron.toFixed(2) + ' MB/d</span></div>' +
+    '<div class="rct-row"><span class="rct-lbl">Venta factible</span><span class="rct-val">' + vfact.toFixed(2) + ' MB/d</span></div>';
+  tip.style.display = 'block';
+  _repomarMoverTip(evt);
+}
+function _repomarMoverTip(evt) {
+  var tip = document.getElementById('repomar-cov-tip');
+  if (!tip || tip.style.display !== 'block') return;
+  var x = evt.clientX + 14, y = evt.clientY + 14;
+  var vw = window.innerWidth, vh = window.innerHeight;
+  var tipW = tip.offsetWidth || 200, tipH = tip.offsetHeight || 140;
+  if (x + tipW > vw) x = evt.clientX - tipW - 14;
+  if (y + tipH > vh) y = evt.clientY - tipH - 14;
+  tip.style.left = x + 'px';
+  tip.style.top = y + 'px';
+}
+function _repomarOcultarTip() {
+  var tip = document.getElementById('repomar-cov-tip');
+  if (tip) tip.style.display = 'none';
+}
+
 // Marítimas. Copia al portapapeles la URL actual + "?view=repomar" —
 // el mismo patrón que ?view=executive, pero para esta página
 // específica. Quien reciba el enlace ve SOLO este cuadro, en vivo, sin
@@ -29356,10 +29421,13 @@ window.renderPRepoMar = function() {
           ? diasMapa[planta + '|' + prod]
           : Math.round((new Date(fecha + 'T12:00:00') - new Date(fechaRef + 'T12:00:00')) / 86400000);
         var critico = dias <= 10;
-        return '<div class="repomar-cell ' + (critico ? 'repomar-cell-crit' : 'repomar-cell-ok') + '">' + fmtCorta(fecha) + '</div>';
+        // ⚠️ AGREGADO — a pedido: data-planta/data-prod para que el
+        // popup informativo (al pasar el mouse) sepa qué inventario
+        // buscar — ver _repomarMostrarTip más abajo.
+        return '<div class="repomar-cell ' + (critico ? 'repomar-cell-crit' : 'repomar-cell-ok') + '" data-planta="' + planta + '" data-prod="' + prod + '" onmouseenter="_repomarMostrarTip(event)" onmouseleave="_repomarOcultarTip()" onmousemove="_repomarMoverTip(event)">' + fmtCorta(fecha) + '</div>';
       }).join('');
       return '<div class="repomar-row" style="grid-template-columns:' + cols + '">' +
-        '<div class="repomar-cell repomar-labelcell">' + prod + '</div>' + celdas +
+        '<div class="repomar-cell repomar-labelcell" data-prod="' + prod + '">' + prod + '</div>' + celdas +
         '<div class="repomar-cell repomar-cell-retorno-na"></div>' +
         '</div>';
     }).join('');
