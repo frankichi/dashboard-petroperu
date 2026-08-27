@@ -28940,10 +28940,73 @@ function _repomarSumarDiasHabiles(fechaBase, n) {
 // bt_lista ya calculados por planta+producto — cada fila de RAW solo
 // conoce SU planta, así que hay que recorrer todas para juntar el
 // itinerario completo de cada buque.
+// ⚠️ AGREGADO — a pedido: carga el mapa COMPLETO de buques (todos los
+// productos, no solo los que tienen cobertura — Nafta Reformada,
+// Residual Asfáltico, Crudo Oriente, etc.) desde el endpoint dedicado
+// del backend. Es una petición aparte porque el resto del dashboard
+// solo trae bt_lista filtrado por producto dentro de cada fila de
+// inventario — este endpoint no depende de eso. Se carga UNA vez y se
+// guarda en caché; si la persona está viendo "Reposiciones Marítimas"
+// cuando termina de llegar, se vuelve a dibujar sola con los datos ya
+// completos (mismo patrón que ya se usa para _navPosData).
+window._repomarBTMapCompletoCache = null;
+window._repomarBTMapCompletoPendiente = false;
+function _repomarFetchBTMapCompleto() {
+  if (window._repomarBTMapCompletoCache || window._repomarBTMapCompletoPendiente) return;
+  window._repomarBTMapCompletoPendiente = true;
+  fetch(CONFIG.API_URL + '?action=getBTMapCompleto', { method: 'GET', redirect: 'follow' })
+    .then(function(r) { return r.ok ? r.json() : []; })
+    .then(function(naves) {
+      window._repomarBTMapCompletoCache = Array.isArray(naves) ? naves : [];
+      window._repomarBTMapCompletoPendiente = false;
+      var activePageEl = document.querySelector('.page.active');
+      if (activePageEl && activePageEl.id === 'pRepoMar' && typeof renderPRepoMar === 'function') renderPRepoMar();
+    })
+    .catch(function() { window._repomarBTMapCompletoPendiente = false; });
+}
+
 function _buildRepoMarBuques() {
   var buquesMap = {}; // "BUQUE|VIAJE" -> { buque, viaje, legs:[], cargaInicial:{} }
   var fechaRef = (typeof currentDate !== 'undefined' && currentDate) ? currentDate : new Date().toISOString().slice(0,10);
+  _repomarFetchBTMapCompleto(); // dispara la carga si todavía no se pidió
 
+  // ⚠️ CORREGIDO — bug real confirmado: antes se recorría "por cada
+  // planta, por cada producto CON COBERTURA" — cualquier producto que
+  // viaja solo como insumo de refinería (sin fila de inventario propia)
+  // nunca se alcanzaba a mirar, y esa parte de la carga del buque
+  // desaparecía del diagrama. Si el mapa completo (todos los
+  // productos) ya llegó, se usa ese directamente — matcheando terminal
+  // por nombre normalizado contra REPOMAR_PLANTAS, igual que hace el
+  // backend. Mientras tanto (primer render, antes de que la petición
+  // aparte termine), se usa el camino viejo como resultado provisional,
+  // para no dejar la página vacía esos primeros instantes.
+  if (window._repomarBTMapCompletoCache) {
+    var plantaPorNormalizado = {};
+    REPOMAR_PLANTAS.forEach(function(p) { plantaPorNormalizado[_repomarNormPuerto(p)] = p; });
+    window._repomarBTMapCompletoCache.forEach(function(n) {
+      var planta = plantaPorNormalizado[_repomarNormPuerto(n.terminal)];
+      if (!planta) return;
+      if (n.estado === 'COMPLETADO') {
+        var fechaCompletado = (n.fecha_hasta || '').slice(0, 10);
+        var diasDesdeCompletado = fechaCompletado
+          ? Math.round((new Date(fechaRef + 'T12:00:00') - new Date(fechaCompletado + 'T12:00:00')) / 86400000)
+          : 999;
+        if (diasDesdeCompletado > 5 || diasDesdeCompletado < 0) return;
+      }
+      var key = n.buque.toUpperCase() + '|' + (n.viaje || '—');
+      if (!buquesMap[key]) buquesMap[key] = { buque: n.buque, viaje: n.viaje, legs: [], cargaInicial: {} };
+      var yaExiste = buquesMap[key].legs.some(function(l) {
+        return l.terminalNorm === _repomarNormPuerto(n.terminal) && l.producto === n.producto && l.fecha_hasta === n.fecha_hasta;
+      });
+      if (!yaExiste) {
+        buquesMap[key].legs.push({
+          terminal: planta, terminalNorm: _repomarNormPuerto(n.terminal),
+          producto: n.producto, vol: n.vol, fecha_hasta: n.fecha_hasta, estado: n.estado
+        });
+        buquesMap[key].cargaInicial[n.producto] = (buquesMap[key].cargaInicial[n.producto] || 0) + n.vol;
+      }
+    });
+  } else {
   REPOMAR_PLANTAS.forEach(function(planta) {
     (PRODUCTOS_POR_PLANTA_EXEC[planta] || []).forEach(function(producto) {
       var fila = null;
@@ -28986,6 +29049,7 @@ function _buildRepoMarBuques() {
       });
     });
   });
+  }
 
   var buques = Object.keys(buquesMap).map(function(k){ return buquesMap[k]; });
   buques.forEach(function(b) {
@@ -29290,7 +29354,7 @@ function _repomarInjectCSS() {
        mismo azul para las 4 filas — así se distingue de un vistazo cuál
        fila es cuál sin tener que leer el texto cada vez. */
     .repomar-labelcell[data-prod="Diesel"]{background:#0071A4;border-color:#0071A4}
-    .repomar-labelcell[data-prod="G. Regular"]{background:#c2410c;border-color:#c2410c}
+    .repomar-labelcell[data-prod="G. Regular"]{background:#ca8a04;border-color:#ca8a04}
     .repomar-labelcell[data-prod="G. Premium"]{background:#7c3aed;border-color:#7c3aed}
     .repomar-labelcell[data-prod="TA1"]{background:#0d9488;border-color:#0d9488}
     .repomar-planthead{font-weight:800;color:#fff;background:#003a56;border-color:#003a56;font-size:11.5px;letter-spacing:.02em}
@@ -29346,6 +29410,11 @@ function _repomarInjectCSS() {
 // planta+producto específica, sin tener que salir de esta página a
 // buscar el dato en otro lado.
 function _repomarMostrarTip(evt) {
+  // ⚠️ AGREGADO — red de seguridad adicional: todo el cuerpo va dentro
+  // de un try/catch — así, aunque algo inesperado falle, el popup
+  // simplemente no se actualiza (en vez de quedar invisible para
+  // siempre sin ningún aviso, que era lo que pasaba antes).
+  try {
   var el = evt.currentTarget;
   var planta = el.getAttribute('data-planta');
   var prod = el.getAttribute('data-prod');
@@ -29374,13 +29443,25 @@ function _repomarMostrarTip(evt) {
     // negocio ya aplicada al cálculo de la fecha.
     var det = (window._repomarCobDetalleNueva || {})[planta + '|' + prod];
     if (det) {
+      // ⚠️ CORREGIDO — bug real confirmado: si algún campo del detalle
+      // venía undefined (por cualquier motivo), llamar a .toFixed()
+      // directamente sobre undefined lanzaba un error de JS que
+      // interrumpía la función ANTES de llegar a mostrar el popup — la
+      // consecuencia visible era "no aparece nada", sin ningún aviso.
+      // Ahora cada valor numérico tiene un respaldo explícito (|| 0)
+      // antes de formatearlo, para que el popup SIEMPRE se muestre,
+      // incluso si algún dato puntual faltara.
+      var vDespRepo = det.volDespuesRepo != null ? det.volDespuesRepo : 0;
+      var vPend = det.volPendiente != null ? det.volPendiente : 0;
+      var pAprob = det.pronAprobado != null ? det.pronAprobado : 0;
+      var dHasta = det.diasHastaLlegada != null ? det.diasHastaLlegada : 0;
       tip.innerHTML =
         '<b>' + planta + ' · ' + prod + ' — tras la reposición</b>' +
-        '<div class="rct-row"><span class="rct-lbl">Llega el</span><span class="rct-val">' + fmtCorta(det.fechaLlegada) + ' (+' + det.diasHastaLlegada + 'd)</span></div>' +
-        '<div class="rct-row"><span class="rct-lbl">Volumen que repone</span><span class="rct-val">' + det.volPendiente.toFixed(1) + ' MB</span></div>' +
-        '<div class="rct-row"><span class="rct-lbl">Volumen después de repo</span><span class="rct-val">' + det.volDespuesRepo.toFixed(1) + ' MB</span></div>' +
+        '<div class="rct-row"><span class="rct-lbl">Llega el</span><span class="rct-val">' + fmtCorta(det.fechaLlegada) + ' (+' + dHasta + 'd)</span></div>' +
+        '<div class="rct-row"><span class="rct-lbl">Volumen que repone</span><span class="rct-val">' + vPend.toFixed(1) + ' MB</span></div>' +
+        '<div class="rct-row"><span class="rct-lbl">Volumen después de repo</span><span class="rct-val">' + vDespRepo.toFixed(1) + ' MB</span></div>' +
         '<div class="rct-row"><span class="rct-lbl">Vacío después de repo</span><span class="rct-val">' + (det.vacioDespuesRepo != null ? det.vacioDespuesRepo.toFixed(1) + ' MB' : 's/d') + '</span></div>' +
-        '<div class="rct-row"><span class="rct-lbl">Pronóstico aprobado</span><span class="rct-val">' + det.pronAprobado.toFixed(2) + ' MB/d</span></div>' +
+        '<div class="rct-row"><span class="rct-lbl">Pronóstico aprobado</span><span class="rct-val">' + pAprob.toFixed(2) + ' MB/d</span></div>' +
         '<div style="margin-top:5px;font-size:9.5px;color:rgba(255,255,255,.6);font-style:italic">A partir de la reposición, la venta factible deja de aplicar — la planta se atiende con el pronóstico aprobado.</div>';
     } else {
       tip.innerHTML = '<b>' + planta + ' · ' + prod + '</b><div class="rct-row"><span class="rct-lbl">Sin reposición pendiente</span></div>' +
@@ -29398,6 +29479,7 @@ function _repomarMostrarTip(evt) {
   }
   tip.style.display = 'block';
   _repomarMoverTip(evt);
+  } catch(errTip) { console.warn('[RepoMar tooltip]', errTip.message); }
 }
 function _repomarMoverTip(evt) {
   var tip = document.getElementById('repomar-cov-tip');
