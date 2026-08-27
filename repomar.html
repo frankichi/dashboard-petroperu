@@ -10,17 +10,17 @@
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 html,body{height:100%}
 body{font-family:var(--sans);font-size:13px;background:var(--bg);color:var(--txt);-webkit-font-smoothing:antialiased}
-.repomar-wrap{padding:24px 26px 50px;max-width:1400px;margin:0 auto}
+.repomar-wrap{padding:24px 26px 50px;max-width:1680px;margin:0 auto}
 .repomar-headerbar{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:6px;flex-wrap:wrap}
 .repomar-title{font-size:20px;font-weight:800;color:var(--txt);letter-spacing:-.01em;display:flex;align-items:center;gap:9px}
 .repomar-subtitle{font-size:11.5px;color:var(--txt3);margin-top:3px}
 .repomar-credit-top{font-size:11px;color:var(--txt3);margin-top:8px;display:flex;align-items:center}
 .repomar-credit-top strong{color:var(--txt2);font-weight:700}
-.repomar-credit-logo{width:30px;height:30px;border-radius:7px;object-fit:cover;margin-right:9px;flex-shrink:0;box-shadow:0 1px 4px rgba(0,0,0,.18)}
+.repomar-credit-logo{width:52px;height:52px;border-radius:10px;object-fit:cover;margin-right:12px;flex-shrink:0;box-shadow:0 2px 6px rgba(0,0,0,.22)}
 .repomar-live-dot{width:7px;height:7px;border-radius:50%;background:#22c55e;box-shadow:0 0 0 0 rgba(34,197,94,.7);animation:repomarPulse 2s infinite;display:inline-block;margin:0 7px 0 2px}
 @keyframes repomarPulse{0%{box-shadow:0 0 0 0 rgba(34,197,94,.55)}70%{box-shadow:0 0 0 7px rgba(34,197,94,0)}100%{box-shadow:0 0 0 0 rgba(34,197,94,0)}}
 .repomar-scroll{overflow-x:auto;padding-bottom:8px;margin-top:18px}
-.repomar-grid{position:relative;min-width:1220px;background:var(--card);border-radius:10px;box-shadow:0 1px 3px rgba(0,0,0,.08);overflow:hidden;padding:2px 2px 2px 26px}
+.repomar-grid{position:relative;min-width:1450px;background:var(--card);border-radius:10px;box-shadow:0 1px 3px rgba(0,0,0,.08);overflow:hidden;padding:2px 2px 2px 26px}
 .repomar-covblock{position:relative}
 .repomar-covblock-vlabel{position:absolute;left:-24px;top:0;bottom:0;width:22px;background:#0071A4;color:#fff;writing-mode:vertical-rl;transform:rotate(180deg);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:800;letter-spacing:.08em;border-radius:4px 0 0 4px}
 .repomar-svg{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;overflow:visible}
@@ -284,30 +284,38 @@ function drawArrows(buques) {
     var shipBox = row.querySelector('.repomar-shipbox');
     if (!shipBox) return;
     var sRect = shipBox.getBoundingClientRect();
-    var prevX = sRect.right - gridRect.left;
-    var prevY = sRect.top + sRect.height/2 - gridRect.top;
+    // ⚠️ CORREGIDO — bug real confirmado (la flecha salía como un lazo
+    // torcido cuando la siguiente escala quedaba a la IZQUIERDA de la
+    // anterior en pantalla — por ejemplo, un cabotaje que va de sur a
+    // norte). Ahora el punto de conexión es el CENTRO SUPERIOR de cada
+    // caja, sin importar si el siguiente punto queda a la izquierda o
+    // a la derecha del anterior.
+    var prevX = sRect.left + sRect.width/2 - gridRect.left;
+    var prevY = sRect.top - gridRect.top;
     (b.legs || []).forEach(function(leg, legIdx) {
       var legEl = row.querySelector('.repomar-legbox[data-buque="' + b.buque + '"][data-leg-idx="' + legIdx + '"]');
       if (!legEl) return;
       var lRect = legEl.getBoundingClientRect();
-      var x1 = lRect.left - gridRect.left;
-      var y1 = lRect.top + lRect.height/2 - gridRect.top;
+      var x1 = lRect.left + lRect.width/2 - gridRect.left;
+      var y1 = lRect.top - gridRect.top;
       var midX = (prevX + x1) / 2;
       var distanciaHoriz = Math.abs(x1 - prevX);
       var alturaCurva = Math.max(38, Math.min(55, distanciaHoriz * 0.15));
-      pathsHTML += '<path d="M' + prevX + ',' + prevY + ' Q' + midX + ',' + (Math.min(prevY,y1)-alturaCurva) + ' ' + x1 + ',' + y1 + '" ' +
+      var controlY = Math.min(prevY, y1) - alturaCurva;
+      pathsHTML += '<path d="M' + prevX + ',' + prevY + ' Q' + midX + ',' + controlY + ' ' + x1 + ',' + y1 + '" ' +
         'fill="none" stroke="#93c5fd" stroke-width="1.6" stroke-dasharray="4 3" marker-end="url(#repomar-arrow)"/>';
-      prevX = lRect.right - gridRect.left;
+      prevX = x1;
       prevY = y1;
     });
     var retornoEl = row.querySelector('.repomar-legbox[data-retorno-cell="' + idx + '"]');
     if (retornoEl) {
       var rRect = retornoEl.getBoundingClientRect();
-      var xR = rRect.left - gridRect.left;
-      var yR = rRect.top + rRect.height/2 - gridRect.top;
+      var xR = rRect.left + rRect.width/2 - gridRect.left;
+      var yR = rRect.top - gridRect.top;
       var midXR = (prevX + xR) / 2;
       var alturaCurvaR = Math.max(38, Math.min(55, Math.abs(xR - prevX) * 0.15));
-      pathsHTML += '<path d="M' + prevX + ',' + prevY + ' Q' + midXR + ',' + (Math.min(prevY,yR)-alturaCurvaR) + ' ' + xR + ',' + yR + '" ' +
+      var controlYR = Math.min(prevY, yR) - alturaCurvaR;
+      pathsHTML += '<path d="M' + prevX + ',' + prevY + ' Q' + midXR + ',' + controlYR + ' ' + xR + ',' + yR + '" ' +
         'fill="none" stroke="#0071A4" stroke-width="1.6" stroke-dasharray="4 3" marker-end="url(#repomar-arrow-retorno)"/>';
     }
   });
