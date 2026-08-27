@@ -112,6 +112,7 @@ function _repomarMostrarTip(evt) {
   var el = evt.currentTarget;
   var planta = el.getAttribute('data-planta');
   var prod = el.getAttribute('data-prod');
+  var tipo = el.getAttribute('data-tipo');
   var d = _repomarDetalleInv[planta + '|' + prod];
   var tip = document.getElementById('repomar-cov-tip');
   if (!tip) return;
@@ -120,13 +121,29 @@ function _repomarMostrarTip(evt) {
   var vfact = d ? (d.vfact || 0) : 0;
   var capacidad = d ? (d.capacidad || 0) : 0;
   var vacio = d ? (d.vacio || 0) : 0;
-  tip.innerHTML =
-    '<b>' + planta + ' \u00b7 ' + prod + '</b>' +
-    '<div class="rct-row"><span class="rct-lbl">Inventario actual</span><span class="rct-val">' + inv.toFixed(1) + ' MB</span></div>' +
-    '<div class="rct-row"><span class="rct-lbl">Capacidad</span><span class="rct-val">' + (capacidad > 0 ? capacidad.toFixed(1) + ' MB' : 's/d') + '</span></div>' +
-    '<div class="rct-row"><span class="rct-lbl">Vac\u00edo</span><span class="rct-val">' + (capacidad > 0 ? vacio.toFixed(1) + ' MB' : 's/d') + '</span></div>' +
-    '<div class="rct-row"><span class="rct-lbl">Pron\u00f3stico aprobado</span><span class="rct-val">' + pron.toFixed(2) + ' MB/d</span></div>' +
-    '<div class="rct-row"><span class="rct-lbl">Venta factible</span><span class="rct-val">' + vfact.toFixed(2) + ' MB/d</span></div>';
+
+  if (tipo === 'nueva' && d && d.fechaLlegada && d.volDespuesRepo != null) {
+    // ⚠️ AGREGADO — a pedido: en "Nueva Cobertura", el popup muestra el
+    // volumen PROYECTADO tras la reposición (ya calculado por el
+    // backend en detalleInventario — ver handleGetRepoMarData en
+    // Code.gs), no el inventario de hoy.
+    tip.innerHTML =
+      '<b>' + planta + ' \u00b7 ' + prod + ' \u2014 tras la reposici\u00f3n</b>' +
+      '<div class="rct-row"><span class="rct-lbl">Llega el</span><span class="rct-val">' + fmtCorta(d.fechaLlegada) + ' (+' + d.diasHastaLlegada + 'd)</span></div>' +
+      '<div class="rct-row"><span class="rct-lbl">Volumen que repone</span><span class="rct-val">' + d.volPendiente.toFixed(1) + ' MB</span></div>' +
+      '<div class="rct-row"><span class="rct-lbl">Volumen despu\u00e9s de repo</span><span class="rct-val">' + d.volDespuesRepo.toFixed(1) + ' MB</span></div>' +
+      '<div class="rct-row"><span class="rct-lbl">Vac\u00edo despu\u00e9s de repo</span><span class="rct-val">' + (d.vacioDespuesRepo != null ? d.vacioDespuesRepo.toFixed(1) + ' MB' : 's/d') + '</span></div>' +
+      '<div class="rct-row"><span class="rct-lbl">Pron\u00f3stico aprobado</span><span class="rct-val">' + pron.toFixed(2) + ' MB/d</span></div>' +
+      '<div style="margin-top:5px;font-size:9.5px;color:rgba(255,255,255,.6);font-style:italic">A partir de la reposici\u00f3n, la venta factible deja de aplicar \u2014 la planta se atiende con el pron\u00f3stico aprobado.</div>';
+  } else {
+    tip.innerHTML =
+      '<b>' + planta + ' \u00b7 ' + prod + '</b>' +
+      '<div class="rct-row"><span class="rct-lbl">Inventario actual</span><span class="rct-val">' + inv.toFixed(1) + ' MB</span></div>' +
+      '<div class="rct-row"><span class="rct-lbl">Capacidad</span><span class="rct-val">' + (capacidad > 0 ? capacidad.toFixed(1) + ' MB' : 's/d') + '</span></div>' +
+      '<div class="rct-row"><span class="rct-lbl">Vac\u00edo</span><span class="rct-val">' + (capacidad > 0 ? vacio.toFixed(1) + ' MB' : 's/d') + '</span></div>' +
+      '<div class="rct-row"><span class="rct-lbl">Pron\u00f3stico aprobado</span><span class="rct-val">' + pron.toFixed(2) + ' MB/d</span></div>' +
+      '<div class="rct-row"><span class="rct-lbl">Venta factible</span><span class="rct-val">' + vfact.toFixed(2) + ' MB/d</span></div>';
+  }
   tip.style.display = 'block';
   _repomarMoverTip(evt);
 }
@@ -146,7 +163,7 @@ function _repomarOcultarTip() {
   if (tip) tip.style.display = 'none';
 }
 
-function filaCobertura(cols, plantas, productos, productosPorPlanta, mapa) {
+function filaCobertura(cols, plantas, productos, productosPorPlanta, mapa, tipo) {
   return productos.map(function(prod) {
     var celdas = plantas.map(function(planta) {
       var aplica = (productosPorPlanta[planta] || []).indexOf(prod) !== -1;
@@ -154,7 +171,7 @@ function filaCobertura(cols, plantas, productos, productosPorPlanta, mapa) {
       var info = mapa[planta + '|' + prod];
       if (!info || !info.fecha) return '<div class="repomar-cell repomar-cell-empty">s/d</div>';
       var critico = info.dias <= 10;
-      return '<div class="repomar-cell ' + (critico ? 'repomar-cell-crit' : 'repomar-cell-ok') + '" data-planta="' + planta + '" data-prod="' + prod + '" onmouseenter="_repomarMostrarTip(event)" onmouseleave="_repomarOcultarTip()" onmousemove="_repomarMoverTip(event)">' + fmtCorta(info.fecha) + '</div>';
+      return '<div class="repomar-cell ' + (critico ? 'repomar-cell-crit' : 'repomar-cell-ok') + '" data-planta="' + planta + '" data-prod="' + prod + '" data-tipo="' + tipo + '" onmouseenter="_repomarMostrarTip(event)" onmouseleave="_repomarOcultarTip()" onmousemove="_repomarMoverTip(event)">' + fmtCorta(info.fecha) + '</div>';
     }).join('');
     return '<div class="repomar-row" style="grid-template-columns:' + cols + '">' +
       '<div class="repomar-cell repomar-labelcell" data-prod="' + prod + '">' + prod + '</div>' + celdas +
@@ -230,7 +247,7 @@ function render(data) {
       filaEncabezado +
       '<div class="repomar-covblock">' +
         '<div class="repomar-covblock-vlabel">FECHA COBERTURA</div>' +
-        filaCobertura(cols, plantas, productos, data.productosPorPlanta, data.coberturaActual) +
+        filaCobertura(cols, plantas, productos, data.productosPorPlanta, data.coberturaActual, 'actual') +
       '</div>' +
       '<div class="repomar-divider"></div>' +
       '<div class="repomar-row" style="grid-template-columns:' + cols + '">' +
@@ -245,7 +262,7 @@ function render(data) {
       '<div class="repomar-divider"></div>' +
       '<div class="repomar-covblock">' +
         '<div class="repomar-covblock-vlabel">NUEVA COBERTURA</div>' +
-        filaCobertura(cols, plantas, productos, data.productosPorPlanta, data.coberturaNueva) +
+        filaCobertura(cols, plantas, productos, data.productosPorPlanta, data.coberturaNueva, 'nueva') +
       '</div>' +
       filaEncabezado +
     '</div></div>';

@@ -29139,6 +29139,7 @@ function _buildRepoMarBuques() {
 // Callao·TA1).
 function _buildRepoMarCobertura(buques) {
   var actual = {}, actualDias = {}, nueva = {};
+  var detalleNueva = {}; // volumen/vacío proyectado tras la reposición, para el popup — ver más abajo
   var fechaRef = (typeof currentDate !== 'undefined' && currentDate) ? currentDate : new Date().toISOString().slice(0,10);
 
   var volPendientePorKey = {};
@@ -29171,14 +29172,19 @@ function _buildRepoMarCobertura(buques) {
       }
       if (!fila) return;
 
+      // ⚠️ CORREGIDO — a pedido: "pronóstico aprobado" ahora sale de
+      // pronDiarioAprobado (la misma fuente que ya usa cobSystemDays
+      // internamente como respaldo, y la misma que usa Coberturas), no
+      // de fila.pron directo — que en varios casos salía vacío/0.
+      var pronAprobado = (typeof pronDiarioAprobado === 'function') ? (pronDiarioAprobado(fila) || 0) : (fila.pron || 0);
+
       var diasHoy = (typeof cobSystemDays === 'function') ? cobSystemDays(fila) : 0;
-      var hayDatoValido = (fila.inv > 0) || (fila.vfact > 0) || (fila.pron > 0);
+      var hayDatoValido = (fila.inv > 0) || (fila.vfact > 0) || (pronAprobado > 0);
       actualDias[key] = diasHoy;
       actual[key] = !hayDatoValido ? '' : (diasHoy > 0 ? cobCalcFecha(fechaRef, diasHoy) : fechaRef);
 
-      var pronDiario = fila.pron > 0 ? fila.pron : (fila.vfact > 0 ? fila.vfact : 0);
       var volPendiente = volPendientePorKey[key] || 0;
-      var diasRepos = (pronDiario > 0 && volPendiente > 0) ? Math.floor(volPendiente / pronDiario) : 0;
+      var diasRepos = (pronAprobado > 0 && volPendiente > 0) ? Math.floor(volPendiente / pronAprobado) : 0;
 
       // ⚠️ CORREGIDO — bug real confirmado (Conchán·Diesel: la cobertura
       // actual quiebra el 29-ago, pero UCAYALI recién llega el 01-set —
@@ -29214,9 +29220,34 @@ function _buildRepoMarCobertura(buques) {
         diasTotalNueva = diasHoy + diasRepos;
       }
       nueva[key] = !hayDatoValido ? '' : (diasTotalNueva > 0 ? cobCalcFecha(fechaBaseNueva, diasTotalNueva) : (fechaBaseNueva === fechaLlegada ? fechaLlegada : fechaRef));
+
+      // ⚠️ AGREGADO — a pedido: volumen proyectado DESPUÉS de que llegue
+      // la reposición — para el popup de "Nueva Cobertura". Se proyecta
+      // el inventario actual hacia adelante (con la tasa de consumo de
+      // HOY) hasta el día en que arriba el buque, con un piso en 0 — y
+      // desde ahí se suma el volumen que trae la reposición. La tasa de
+      // consumo usada para proyectar ES la de hoy (venta factible si
+      // está fijada, si no el pronóstico) — pero a partir de la llegada,
+      // la venta factible deja de aplicar y la planta se atiende con el
+      // pronóstico aprobado, la misma regla de negocio ya usada arriba.
+      if (fechaLlegada && volPendiente > 0) {
+        var diasHastaLlegadaCalc = Math.round((new Date(fechaLlegada + 'T12:00:00') - new Date(fechaRef + 'T12:00:00')) / 86400000);
+        var tasaActual = fila.vfact > 0 ? fila.vfact : pronAprobado;
+        var capacidad = (typeof getCapacidad === 'function') ? (getCapacidad(planta, producto) || 0) : 0;
+        var volProyectadoAlLlegar = Math.max(0, (fila.inv || 0) - (tasaActual * Math.max(0, diasHastaLlegadaCalc)));
+        var volDespuesRepo = volProyectadoAlLlegar + volPendiente;
+        detalleNueva[key] = {
+          volDespuesRepo: volDespuesRepo,
+          vacioDespuesRepo: capacidad > 0 ? Math.max(0, capacidad - volDespuesRepo) : null,
+          fechaLlegada: fechaLlegada,
+          diasHastaLlegada: diasHastaLlegadaCalc,
+          volPendiente: volPendiente,
+          pronAprobado: pronAprobado
+        };
+      }
     });
   });
-  return { actual: actual, actualDias: actualDias, nueva: nueva };
+  return { actual: actual, actualDias: actualDias, nueva: nueva, detalleNueva: detalleNueva };
 }
 
 
@@ -29318,6 +29349,7 @@ function _repomarMostrarTip(evt) {
   var el = evt.currentTarget;
   var planta = el.getAttribute('data-planta');
   var prod = el.getAttribute('data-prod');
+  var tipo = el.getAttribute('data-tipo');
   var fechaRef = (typeof currentDate !== 'undefined' && currentDate) ? currentDate : new Date().toISOString().slice(0,10);
   var fila = null;
   if (typeof _invConProyeccion === 'function') {
@@ -29326,17 +29358,44 @@ function _repomarMostrarTip(evt) {
   var tip = document.getElementById('repomar-cov-tip');
   if (!tip) return;
   var inv = fila ? (fila.inv || 0) : 0;
-  var pron = fila ? (fila.pron || 0) : 0;
+  var pron = (fila && typeof pronDiarioAprobado === 'function') ? (pronDiarioAprobado(fila) || 0) : 0;
   var vfact = fila ? (fila.vfact || 0) : 0;
   var capacidad = (typeof getCapacidad === 'function') ? (getCapacidad(planta, prod) || 0) : 0;
   var vacio = capacidad > 0 ? Math.max(0, capacidad - inv) : 0;
-  tip.innerHTML =
-    '<b>' + planta + ' · ' + prod + '</b>' +
-    '<div class="rct-row"><span class="rct-lbl">Inventario actual</span><span class="rct-val">' + inv.toFixed(1) + ' MB</span></div>' +
-    '<div class="rct-row"><span class="rct-lbl">Capacidad</span><span class="rct-val">' + (capacidad > 0 ? capacidad.toFixed(1) + ' MB' : 's/d') + '</span></div>' +
-    '<div class="rct-row"><span class="rct-lbl">Vacío</span><span class="rct-val">' + (capacidad > 0 ? vacio.toFixed(1) + ' MB' : 's/d') + '</span></div>' +
-    '<div class="rct-row"><span class="rct-lbl">Pronóstico aprobado</span><span class="rct-val">' + pron.toFixed(2) + ' MB/d</span></div>' +
-    '<div class="rct-row"><span class="rct-lbl">Venta factible</span><span class="rct-val">' + vfact.toFixed(2) + ' MB/d</span></div>';
+
+  if (tipo === 'nueva') {
+    // ⚠️ AGREGADO — a pedido: en las celdas de "Nueva Cobertura", el
+    // popup muestra el volumen PROYECTADO tras la reposición (no el
+    // inventario de hoy) — calculado restando el pronóstico de los días
+    // que faltan para que llegue el buque, con un piso en 0, y sumando
+    // el volumen que trae la reposición. También el vacío resultante, y
+    // se aclara que la venta factible deja de aplicar (pasa a usarse el
+    // pronóstico aprobado) a partir de ese punto — misma regla de
+    // negocio ya aplicada al cálculo de la fecha.
+    var det = (window._repomarCobDetalleNueva || {})[planta + '|' + prod];
+    if (det) {
+      tip.innerHTML =
+        '<b>' + planta + ' · ' + prod + ' — tras la reposición</b>' +
+        '<div class="rct-row"><span class="rct-lbl">Llega el</span><span class="rct-val">' + fmtCorta(det.fechaLlegada) + ' (+' + det.diasHastaLlegada + 'd)</span></div>' +
+        '<div class="rct-row"><span class="rct-lbl">Volumen que repone</span><span class="rct-val">' + det.volPendiente.toFixed(1) + ' MB</span></div>' +
+        '<div class="rct-row"><span class="rct-lbl">Volumen después de repo</span><span class="rct-val">' + det.volDespuesRepo.toFixed(1) + ' MB</span></div>' +
+        '<div class="rct-row"><span class="rct-lbl">Vacío después de repo</span><span class="rct-val">' + (det.vacioDespuesRepo != null ? det.vacioDespuesRepo.toFixed(1) + ' MB' : 's/d') + '</span></div>' +
+        '<div class="rct-row"><span class="rct-lbl">Pronóstico aprobado</span><span class="rct-val">' + det.pronAprobado.toFixed(2) + ' MB/d</span></div>' +
+        '<div style="margin-top:5px;font-size:9.5px;color:rgba(255,255,255,.6);font-style:italic">A partir de la reposición, la venta factible deja de aplicar — la planta se atiende con el pronóstico aprobado.</div>';
+    } else {
+      tip.innerHTML = '<b>' + planta + ' · ' + prod + '</b><div class="rct-row"><span class="rct-lbl">Sin reposición pendiente</span></div>' +
+        '<div class="rct-row"><span class="rct-lbl">Inventario actual</span><span class="rct-val">' + inv.toFixed(1) + ' MB</span></div>' +
+        '<div class="rct-row"><span class="rct-lbl">Pronóstico aprobado</span><span class="rct-val">' + pron.toFixed(2) + ' MB/d</span></div>';
+    }
+  } else {
+    tip.innerHTML =
+      '<b>' + planta + ' · ' + prod + '</b>' +
+      '<div class="rct-row"><span class="rct-lbl">Inventario actual</span><span class="rct-val">' + inv.toFixed(1) + ' MB</span></div>' +
+      '<div class="rct-row"><span class="rct-lbl">Capacidad</span><span class="rct-val">' + (capacidad > 0 ? capacidad.toFixed(1) + ' MB' : 's/d') + '</span></div>' +
+      '<div class="rct-row"><span class="rct-lbl">Vacío</span><span class="rct-val">' + (capacidad > 0 ? vacio.toFixed(1) + ' MB' : 's/d') + '</span></div>' +
+      '<div class="rct-row"><span class="rct-lbl">Pronóstico aprobado</span><span class="rct-val">' + pron.toFixed(2) + ' MB/d</span></div>' +
+      '<div class="rct-row"><span class="rct-lbl">Venta factible</span><span class="rct-val">' + vfact.toFixed(2) + ' MB/d</span></div>';
+  }
   tip.style.display = 'block';
   _repomarMoverTip(evt);
 }
@@ -29386,6 +29445,7 @@ window.renderPRepoMar = function() {
 
   var buques = _buildRepoMarBuques();
   var cob = _buildRepoMarCobertura(buques);
+  window._repomarCobDetalleNueva = cob.detalleNueva; // para el popup de "Nueva Cobertura"
   var fechaRef = (typeof currentDate !== 'undefined' && currentDate) ? currentDate : new Date().toISOString().slice(0,10);
   // ⚠️ AGREGADO — a pedido: una columna extra al final, reservada para
   // el recuadro de "retorno estimado a Talara" en las filas de buques.
@@ -29401,7 +29461,7 @@ window.renderPRepoMar = function() {
     return p[2] + '/' + p[1] + '/' + p[0].slice(2);
   }
 
-  function filaCobertura(mapa, diasMapa) {
+  function filaCobertura(mapa, diasMapa, tipo) {
     return REPOMAR_PRODUCTOS.map(function(prod) {
       var celdas = REPOMAR_PLANTAS.map(function(planta) {
         var aplica = (PRODUCTOS_POR_PLANTA_EXEC[planta] || []).indexOf(prod) !== -1;
@@ -29421,10 +29481,11 @@ window.renderPRepoMar = function() {
           ? diasMapa[planta + '|' + prod]
           : Math.round((new Date(fecha + 'T12:00:00') - new Date(fechaRef + 'T12:00:00')) / 86400000);
         var critico = dias <= 10;
-        // ⚠️ AGREGADO — a pedido: data-planta/data-prod para que el
-        // popup informativo (al pasar el mouse) sepa qué inventario
-        // buscar — ver _repomarMostrarTip más abajo.
-        return '<div class="repomar-cell ' + (critico ? 'repomar-cell-crit' : 'repomar-cell-ok') + '" data-planta="' + planta + '" data-prod="' + prod + '" onmouseenter="_repomarMostrarTip(event)" onmouseleave="_repomarOcultarTip()" onmousemove="_repomarMoverTip(event)">' + fmtCorta(fecha) + '</div>';
+        // ⚠️ AGREGADO — a pedido: data-planta/data-prod/data-tipo para
+        // que el popup informativo (al pasar el mouse) sepa qué
+        // inventario buscar y si mostrar el detalle ACTUAL o el
+        // proyectado tras la reposición — ver _repomarMostrarTip.
+        return '<div class="repomar-cell ' + (critico ? 'repomar-cell-crit' : 'repomar-cell-ok') + '" data-planta="' + planta + '" data-prod="' + prod + '" data-tipo="' + tipo + '" onmouseenter="_repomarMostrarTip(event)" onmouseleave="_repomarOcultarTip()" onmousemove="_repomarMoverTip(event)">' + fmtCorta(fecha) + '</div>';
       }).join('');
       return '<div class="repomar-row" style="grid-template-columns:' + cols + '">' +
         '<div class="repomar-cell repomar-labelcell" data-prod="' + prod + '">' + prod + '</div>' + celdas +
@@ -29598,7 +29659,7 @@ window.renderPRepoMar = function() {
           // TODO el contenedor, no solo aquí).
           '<div class="repomar-covblock">' +
             '<div class="repomar-covblock-vlabel">FECHA COBERTURA</div>' +
-            filaCobertura(cob.actual, cob.actualDias) +
+            filaCobertura(cob.actual, cob.actualDias, 'actual') +
           '</div>' +
           '<div class="repomar-divider"></div>' +
           // ⚠️ CORREGIDO — a pedido: "Retorno" ahora es un título propio,
@@ -29618,7 +29679,7 @@ window.renderPRepoMar = function() {
           '<div class="repomar-divider"></div>' +
           '<div class="repomar-covblock">' +
             '<div class="repomar-covblock-vlabel">NUEVA COBERTURA</div>' +
-            filaCobertura(cob.nueva) +
+            filaCobertura(cob.nueva, null, 'nueva') +
           '</div>' +
           filaEncabezado +
         '</div>' +
