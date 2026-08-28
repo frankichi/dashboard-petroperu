@@ -17,6 +17,10 @@ body{font-family:var(--sans);font-size:13px;background:var(--bg);color:var(--txt
 .repomar-credit-top{font-size:11px;color:var(--txt3);margin-top:8px;display:flex;align-items:center}
 .repomar-credit-top strong{color:var(--txt2);font-weight:700}
 .repomar-credit-logo{width:52px;height:52px;border-radius:10px;object-fit:cover;margin-right:12px;flex-shrink:0;box-shadow:0 2px 6px rgba(0,0,0,.22)}
+.repomar-modo-switch{display:flex;gap:2px;background:#eef1f6;padding:3px;border-radius:9px;flex-shrink:0}
+.repomar-modo-btn{border:none;background:transparent;color:var(--txt3);font-size:11.5px;font-weight:700;padding:8px 14px;border-radius:7px;cursor:pointer;font-family:inherit;transition:all .15s;white-space:nowrap}
+.repomar-modo-btn.activo{background:#fff;color:#0071A4;box-shadow:0 1px 3px rgba(0,0,0,.12)}
+.repomar-modo-btn:not(.activo):hover{color:var(--txt2)}
 .repomar-live-dot{width:7px;height:7px;border-radius:50%;background:#22c55e;box-shadow:0 0 0 0 rgba(34,197,94,.7);animation:repomarPulse 2s infinite;display:inline-block;margin:0 7px 0 2px}
 @keyframes repomarPulse{0%{box-shadow:0 0 0 0 rgba(34,197,94,.55)}70%{box-shadow:0 0 0 7px rgba(34,197,94,0)}100%{box-shadow:0 0 0 0 rgba(34,197,94,0)}}
 .repomar-scroll{overflow-x:auto;padding-bottom:8px;margin-top:18px}
@@ -78,6 +82,10 @@ body{font-family:var(--sans);font-size:13px;background:var(--bg);color:var(--txt
         <span class="repomar-live-dot"></span>Petróleos del Perú S.A. · Desarrollado por <strong>Franco Urcia Castillo</strong>
       </div>
     </div>
+    <div class="repomar-modo-switch">
+      <button id="repomar-btn-confirmado" class="repomar-modo-btn activo" onclick="_repomarCambiarModo('confirmado')">🚢 Cabotaje Confirmado</button>
+      <button id="repomar-btn-proyectado" class="repomar-modo-btn" onclick="_repomarCambiarModo('proyectado')">📋 Cabotaje Proyectado</button>
+    </div>
   </div>
   <div id="repomar-content">
     <div class="repomar-loading"><div class="repomar-loading-spinner"></div>Cargando datos en vivo…</div>
@@ -93,6 +101,17 @@ body{font-family:var(--sans);font-size:13px;background:var(--bg);color:var(--txt
 // servidor — ver handleGetRepoMarData() en Code.gs.
 var API_URL = 'https://script.google.com/macros/s/AKfycbwL5Gec0EmZgha2rNUaORMDT6MBuouyIlV07tlMpQo9O1YcgkiWJdoQUmIafMQhF2kgUg/exec';
 var REFRESH_MS = 5 * 60 * 1000;
+
+// ⚠️ AGREGADO — a pedido: alternar entre "Cabotaje Confirmado" y
+// "Cabotaje Proyectado" sin volver a pedir datos al servidor — ambos
+// escenarios ya vienen en la misma respuesta de getRepoMarData.
+window._repomarModoActivo = 'confirmado';
+function _repomarCambiarModo(modo) {
+  window._repomarModoActivo = modo;
+  document.getElementById('repomar-btn-confirmado').classList.toggle('activo', modo === 'confirmado');
+  document.getElementById('repomar-btn-proyectado').classList.toggle('activo', modo === 'proyectado');
+  if (window._repomarUltimosDatos) render(window._repomarUltimosDatos);
+}
 
 function fmtCorta(f) {
   if (!f) return '—';
@@ -204,9 +223,23 @@ function filaCobertura(cols, plantas, productos, productosPorPlanta, mapa, tipo)
 }
 
 function render(data) {
+  window._repomarUltimosDatos = data; // guardado para poder redibujar sin volver a pedir al servidor
   var host = document.getElementById('repomar-content');
   var subtitle = document.getElementById('repomar-subtitle');
-  var plantas = data.plantas, productos = data.productos, buques = data.buques || [];
+  var plantas = data.plantas, productos = data.productos;
+  // ⚠️ AGREGADO — a pedido: modo "Cabotaje Proyectado" — usa los
+  // buques programados en el Simulador BT (no cargas_naves real
+  // todavía) y encadena la cobertura sobre la NUEVA COBERTURA del
+  // cabotaje confirmado (ya calculada por el backend en
+  // handleGetRepoMarData) — "si además de lo confirmado, también se
+  // concretan estos otros buques, ¿hasta cuándo llegaría?".
+  var modo = window._repomarModoActivo || 'confirmado';
+  var buques = modo === 'proyectado' ? (data.buquesProyectados || []) : (data.buques || []);
+  var coberturaArriba = modo === 'proyectado' ? data.coberturaNueva : data.coberturaActual;
+  var coberturaAbajo = modo === 'proyectado' ? data.coberturaProyectada : data.coberturaNueva;
+  var tituloArriba = modo === 'proyectado' ? 'COBERTURA CONFIRMADA (base)' : 'FECHA COBERTURA';
+  var tituloAbajo = modo === 'proyectado' ? 'COBERTURA PROYECTADA' : 'NUEVA COBERTURA';
+  var tituloBuques = modo === 'proyectado' ? '📋 CABOTAJE PROYECTADO (Simulador BT — aún no confirmado)' : '🚢 CABOTAJE CONFIRMADO';
   var cols = '200px repeat(' + plantas.length + ', minmax(100px, 1fr)) 130px';
   _repomarDetalleInv = data.detalleInventario || {};
 
@@ -276,13 +309,13 @@ function render(data) {
       '<svg class="repomar-svg" id="repomar-svg"></svg>' +
       filaEncabezado +
       '<div class="repomar-covblock">' +
-        '<div class="repomar-covblock-vlabel">FECHA COBERTURA</div>' +
-        filaCobertura(cols, plantas, productos, data.productosPorPlanta, data.coberturaActual, 'actual') +
+        '<div class="repomar-covblock-vlabel">' + tituloArriba + '</div>' +
+        filaCobertura(cols, plantas, productos, data.productosPorPlanta, coberturaArriba, 'actual') +
       '</div>' +
       '<div class="repomar-divider"></div>' +
       '<div class="repomar-row" style="grid-template-columns:' + cols + '">' +
         '<div class="repomar-cell" style="grid-column:1/-2;justify-content:flex-start;background:transparent;border:none;padding:0 0 6px">' +
-          '<div class="repomar-ships-label">🚢 CABOTAJE CONFIRMADO</div>' +
+          '<div class="repomar-ships-label">' + tituloBuques + '</div>' +
         '</div>' +
         '<div class="repomar-cell" style="background:transparent;border:none;padding:0 4px 6px;align-items:flex-end;justify-content:center">' +
           '<div class="repomar-retorno-titulo">↩ Retorno</div>' +
@@ -291,8 +324,8 @@ function render(data) {
       '<div class="repomar-ships" id="repomar-ships">' + filasShips + '</div>' +
       '<div class="repomar-divider"></div>' +
       '<div class="repomar-covblock">' +
-        '<div class="repomar-covblock-vlabel">NUEVA COBERTURA</div>' +
-        filaCobertura(cols, plantas, productos, data.productosPorPlanta, data.coberturaNueva, 'nueva') +
+        '<div class="repomar-covblock-vlabel">' + tituloAbajo + '</div>' +
+        filaCobertura(cols, plantas, productos, data.productosPorPlanta, coberturaAbajo, 'nueva') +
       '</div>' +
       filaEncabezado +
     '</div></div>';
