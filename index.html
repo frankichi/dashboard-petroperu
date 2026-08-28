@@ -14290,8 +14290,9 @@ async function simLoadFromGS() {
     const url = CONFIG.API_URL + '?action=getSimData';
     const resp = await fetch(url, {method:'GET', redirect:'follow'});
     if (!resp.ok) throw new Error('HTTP ' + resp.status);
-    const rows = await resp.json();
-    if (!rows || !rows.length) {
+    const data = await resp.json();
+    const rows = data.rows || [];
+    if (!data.found || !rows.length) {
       alert('No hay simulaciones guardadas en Google Sheets.');
       if (btn) { btn.textContent='↺ Recargar GS'; btn.disabled=false; }
       return;
@@ -14393,10 +14394,25 @@ async function _simAutoLoadFromGS() {
     const url = CONFIG.API_URL + '?action=getSimData';
     const resp = await fetch(url, {method:'GET', redirect:'follow'});
     if (!resp.ok) throw new Error('HTTP ' + resp.status);
-    const rows = await resp.json();
-    if (!rows || !rows.length) {
-      console.log('[SIM] Sin simulación guardada, cargando datos en vivo');
+    const data = await resp.json();
+    const rows = data.rows || [];
+    // ⚠️ CORREGIDO — bug real confirmado ("UCAYALI2 sigue apareciendo
+    // aunque lo borre"): antes, si no había filas guardadas, SIEMPRE se
+    // asumía "nunca se guardó nada" y se regeneraban buques desde el
+    // inventario en vivo — sin distinguir eso de "el usuario vació la
+    // simulación a propósito" (que también da 0 filas). Ahora
+    // data.found le dice al frontend si SÍ hubo un guardado explícito
+    // (aunque esté vacío) — en ese caso, se respeta el vacío, sin volver
+    // a traer buques de la nada.
+    if (!data.found) {
+      console.log('[SIM] Sin simulación guardada nunca, cargando datos en vivo');
       simLoad();
+      renderPE();
+      return;
+    }
+    if (!rows.length) {
+      console.log('[SIM] Simulación guardada vacía a propósito — se respeta, sin regenerar desde datos en vivo');
+      simShips = []; simNextId = 1; simActiveId = null;
       renderPE();
       return;
     }
