@@ -10568,9 +10568,16 @@ function renderPA() {
     _leafletMap = L.map('peruLeafletMap', {
       center: [-9.5, -75.5], zoom: 6, minZoom: 5, maxZoom: 14,
     });
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
-      attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors © <a href="https://carto.com/attributions">CARTO</a>',
-      subdomains: 'abcd', maxZoom: 19
+    // ⚠️ CORREGIDO — bug real confirmado: CARTO retiró el acceso libre a
+    // sus mapas base tipo raster (basemaps.cartocdn.com) — desde esta
+    // semana piden una API key que nunca configuramos, y el mapa
+    // mostraba el aviso "API KEY REQUIRED" repetido como fondo en vez
+    // del mapa real. Se reemplaza por OpenStreetMap estándar — la
+    // opción gratuita más confiable y usada universalmente, sin
+    // ninguna clave ni límite de uso para este volumen de tráfico.
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+      subdomains: 'abc', maxZoom: 19
     }).addTo(_leafletMap);
     // ⚠️ AGREGADO — a pedido: capa independiente para los puntos de
     // planta, con su propio interruptor (igual que ya existía para
@@ -11853,11 +11860,13 @@ function _renderCisMap(records) {
       if (!el) return;
       _cisMap = L.map('cisMap', {zoomControl:true, scrollWheelZoom:true, preferCanvas:true})
         .setView([-9, -76], 5);
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png', {
-      maxZoom: 19, subdomains: 'abcd', attribution: '© OpenStreetMap, © CARTO'
-    }).addTo(_cisMap);
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}{r}.png', {
-      maxZoom: 19, subdomains: 'abcd'
+    // ⚠️ CORREGIDO — mismo problema real confirmado (CARTO retiró sus
+    // mapas base gratuitos, ahora piden API key) — reemplazado por
+    // OpenStreetMap estándar. Se simplifica a una sola capa (antes eran
+    // 2: base sin etiquetas + etiquetas aparte) porque OSM ya incluye
+    // las etiquetas integradas, no ofrece esa técnica de separación.
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19, subdomains: 'abc', attribution: '© OpenStreetMap contributors'
     }).addTo(_cisMap);
     var flows = {};
     records.forEach(function(r) {
@@ -27146,8 +27155,14 @@ function renderExecMapa(plantaSeleccionada) {
 
   _execLeafletMap = L.map('exec-mapa-container', { zoomControl: true, attributionControl: false })
     .setView([-9.2, -75.0], 5.2);
-  L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
-    maxZoom: 10, minZoom: 4
+  // ⚠️ CORREGIDO — bug real confirmado (captura de pantalla: el mapa de
+  // Vista Ejecutiva se veía completamente en blanco, solo con los
+  // puntos rojos flotando sin ningún fondo) — CARTO retiró el acceso
+  // libre a sus mapas base, y sin fondo el mapa simplemente no
+  // renderizaba nada visible. Reemplazado por OpenStreetMap estándar,
+  // sin necesidad de ninguna API key.
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 10, minZoom: 4, subdomains: 'abc', attribution: '© OpenStreetMap contributors'
   }).addTo(_execLeafletMap);
 
   // Instalaciones a mapear como UN solo punto: las plantas de ventas
