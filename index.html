@@ -14291,8 +14291,17 @@ async function simLoadFromGS() {
     const resp = await fetch(url, {method:'GET', redirect:'follow'});
     if (!resp.ok) throw new Error('HTTP ' + resp.status);
     const data = await resp.json();
-    const rows = data.rows || [];
-    if (!data.found || !rows.length) {
+    // ⚠️ AGREGADO — a pedido: compatibilidad temporal con el formato
+    // VIEJO del backend (un arreglo suelto) mientras se confirma que
+    // Code.gs ya se volvió a desplegar con el formato nuevo
+    // ({found,rows}) — sin esto, si el backend en producción todavía
+    // es el viejo, data.rows sale undefined y la recarga se queda
+    // colgada o falla en silencio, sin importar qué tan bien esté el
+    // frontend.
+    const esFormatoViejo = Array.isArray(data);
+    const found = esFormatoViejo ? (data.length > 0) : !!data.found;
+    const rows = esFormatoViejo ? data : (data.rows || []);
+    if (!found || !rows.length) {
       alert('No hay simulaciones guardadas en Google Sheets.');
       if (btn) { btn.textContent='↺ Recargar GS'; btn.disabled=false; }
       return;
@@ -14395,7 +14404,16 @@ async function _simAutoLoadFromGS() {
     const resp = await fetch(url, {method:'GET', redirect:'follow'});
     if (!resp.ok) throw new Error('HTTP ' + resp.status);
     const data = await resp.json();
-    const rows = data.rows || [];
+    // ⚠️ AGREGADO — a pedido: compatibilidad temporal con el formato
+    // VIEJO del backend (un arreglo suelto) mientras se confirma que
+    // Code.gs ya se volvió a desplegar con el formato nuevo
+    // ({found,rows}) — con el backend viejo, el comportamiento vuelve
+    // a ser el de antes (no distingue "vacío a propósito" de "nunca se
+    // guardó"), pero al menos no se rompe ni se queda colgado — apenas
+    // se despliegue el backend nuevo, el fix completo entra en vigor.
+    const esFormatoViejo = Array.isArray(data);
+    const found = esFormatoViejo ? true : !!data.found; // el formato viejo no distingue, se asume que sí se encontró (igual que antes)
+    const rows = esFormatoViejo ? data : (data.rows || []);
     // ⚠️ CORREGIDO — bug real confirmado ("UCAYALI2 sigue apareciendo
     // aunque lo borre"): antes, si no había filas guardadas, SIEMPRE se
     // asumía "nunca se guardó nada" y se regeneraban buques desde el
@@ -14404,7 +14422,7 @@ async function _simAutoLoadFromGS() {
     // data.found le dice al frontend si SÍ hubo un guardado explícito
     // (aunque esté vacío) — en ese caso, se respeta el vacío, sin volver
     // a traer buques de la nada.
-    if (!data.found) {
+    if (!found) {
       console.log('[SIM] Sin simulación guardada nunca, cargando datos en vivo');
       simLoad();
       renderPE();
