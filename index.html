@@ -8378,6 +8378,23 @@ let cobDespRealOverrides = {};   // planta|producto → vreal (Desp. Real, escri
 let cobEditMode = false;         // unified: when true, INV + DESPACHO + VFACT all editable
 let cobPronPanelOpen = false;
 let cobCollapsed = {};
+// ⚠️ AGREGADO — a pedido: red de seguridad adicional para no perder
+// ediciones de Coberturas sin guardar — ya existía un aviso al cambiar
+// de FECHA con cambios pendientes, pero no había ninguno al cerrar la
+// pestaña o navegar a otra URL directamente (ej. si alguien cierra el
+// navegador pensando que ya guardó, o hace clic en un enlace externo).
+window.addEventListener('beforeunload', function(e) {
+  var pendientes = 0;
+  try {
+    pendientes = Object.keys(cobOverrides||{}).length + Object.keys(cobInvOverrides||{}).length
+               + Object.keys(cobDespachoOverrides||{}).length + Object.keys(cobDespRealOverrides||{}).length;
+  } catch(err) {}
+  if (pendientes > 0) {
+    e.preventDefault();
+    e.returnValue = ''; // los navegadores modernos ignoran el texto personalizado, pero igual muestran su propio aviso
+    return '';
+  }
+});
 function cobSafeId(planta, producto) { return (planta + '_' + producto).replace(/[^a-zA-Z0-9_]/g, '_'); }
 function cobDaysBetween(a, b) {
   if (!a || !b) return null;
@@ -9045,6 +9062,13 @@ async function cobSaveToGS() {
       if (statusEl) { statusEl.textContent = '❌ Error al guardar: ' + msgError; statusEl.style.color = 'var(--red)'; }
       if (btn) btn.disabled = false;
       console.error('[CobSave] Falló el guardado:', fallos);
+      // ⚠️ AGREGADO — a pedido: el texto de estado (chiquito, al lado del
+      // botón) es fácil de no ver si la persona ya movió la vista o hizo
+      // otra cosa mientras se guardaba. Un fallo real de guardado —
+      // sobre todo en Coberturas, donde perder un día de datos es serio
+      // — necesita algo IMPOSIBLE de pasar por alto, no solo un texto
+      // que puede quedar fuera de la vista.
+      alert('❌ El guardado de Coberturas falló:\n\n' + msgError + '\n\nLos cambios NO se guardaron en Sheets — vuelve a intentar. Si el error persiste, avisa con este mensaje exacto.');
       return;
     }
     vfactRecords.forEach(function(rec) {
@@ -9100,6 +9124,11 @@ async function cobSaveToGS() {
     console.error('[CobSave]', err);
     if (statusEl) { statusEl.textContent = '❌ ' + err.message; statusEl.style.color = 'var(--red)'; }
     if (btn) btn.disabled = false;
+    // ⚠️ AGREGADO — a pedido: mismo motivo que el caso anterior — un
+    // error de red/inesperado durante el guardado de Coberturas es
+    // demasiado importante para quedar solo en un texto chiquito que
+    // se puede pasar por alto.
+    alert('❌ El guardado de Coberturas falló inesperadamente:\n\n' + err.message + '\n\nLos cambios probablemente NO se guardaron en Sheets — vuelve a intentar.');
   }
 }
 function cobToggleEdit() {
@@ -9810,7 +9839,22 @@ function _renderP2Body() {
     + '<button class="upload-btn upload-btn-secondary" onclick="cobTogglePron()" style="font-size:10px;padding:6px 16px">Cerrar</button></div></div>'
     + '<div class="cob-pron-panel' + (cobRefPanelOpen ? ' open' : '') + '" id="cob-ref-panel">'
     + '<div style="font-size:11px;font-weight:700;color:var(--txt)">\uD83C\uDFED Inventarios de Refiner\u00eda (sumar al inventario de Planta de Ventas)</div>'
-    + '<div style="font-size:9px;color:var(--txt3);margin-top:2px">Ingresa los vol\u00famenes de los reportes diarios de refiner\u00eda. Se sumar\u00e1n al inventario de cada planta por producto.</div>'
+    // ⚠️ CORREGIDO — a pedido: bug real confirmado (Franco reportó
+    // "Conchán e Iquitos no guardan", cuando en realidad SÍ se estaban
+    // guardando — pero en la planta EQUIVOCADA). Este panel, pese a
+    // llamarse "Inventarios Refinería", nunca escribe en las filas
+    // "Refinería Talara/Conchán/Iquitos" — cobGetRefineryAdj() suma el
+    // valor ingresado aquí al inventario de la planta NORMAL (Talara,
+    // Conchán, Iquitos), no de la refinería como entidad separada. La
+    // nota anterior (9px, fácil de pasar por alto) no dejaba esto lo
+    // suficientemente claro. Ahora hay un aviso explícito, imposible de
+    // no ver, aclarando exactamente qué SÍ hace y qué NO hace esta
+    // herramienta — con instrucciones directas de a dónde ir si lo que
+    // se necesita es editar "Refinería X" como entidad propia.
+    + '<div style="background:#fff3cd;border:1px solid #f0c869;border-radius:6px;padding:8px 11px;margin-top:8px;font-size:10px;color:#5c4a1a;line-height:1.5">'
+    + '<strong>⚠️ Importante:</strong> lo que ingreses aquí se SUMA al inventario de la <strong>planta de ventas</strong> (Talara, Conchán o Iquitos) — <u>NO actualiza</u> las filas separadas "Refinería Talara/Conchán/Iquitos" que ves en la tabla de Coberturas. Para editar esas filas directamente, ciérralo y usa "✏️ Editar" sobre la celda V.Factible de esa fila.'
+    + '</div>'
+    + '<div style="font-size:9px;color:var(--txt3);margin-top:6px">Ingresa los vol\u00famenes de los reportes diarios de refiner\u00eda. Se sumar\u00e1n al inventario de cada planta por producto.</div>'
     + '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;margin-top:12px">'
     + '<div style="background:var(--card2);border:1px solid var(--bdr);border-radius:8px;padding:14px">'
     + '<div style="font-size:12px;font-weight:800;color:var(--txt);margin-bottom:8px">\uD83C\uDFED Ref. Talara</div>'
