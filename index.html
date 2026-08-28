@@ -15883,6 +15883,18 @@ async function handleFluvialPDF(file, fechaOverride) {
     var currentRoute = null;     // 'IQUITOS-PUCALLPA', 'IQUITOS-YURIMAGUAS', 'IQUITOS-SARAMURO'
     var currentPusher = null;    // 'EF REY 12', etc.
     var pendingAF = null;        // Cuando encontramos "AF X" sin (Y MB) en la misma línea, guardamos para combinar
+    // ⚠️ AGREGADO — bug real confirmado en la prueba de extremo a
+    // extremo: la tabla "BAHIA IQUITOS-EMBARCACIONES DISPONIBLES" no
+    // tiene su propia cabecera de ruta/empujador — así que las
+    // barcazas ociosas ahí (ej. AF RÍO AMPIYACU) heredaban el
+    // empujador/ruta de la ÚLTIMA sección de viaje activo procesada
+    // antes. Al momento de agrupar en convoyes (mismo empujador+ruta =
+    // 1 convoy), esto las fusionaba con un viaje NAVEGANDO real,
+    // perdiendo su estado DISPONIBLE por completo. Ahora se detecta
+    // explícitamente la entrada a esta sección y se resetea el
+    // contexto — así cada barcaza disponible queda en su propio
+    // convoy, nunca mezclada con uno activo.
+    var enSeccionBahiaDisponibles = false;
     var KNOWN_AFS = [
       'RIO URUBAMBA','RIO YARAPA','RIO PISQUI','LAGUNAS','RIO PUTUMAYO',
       'RIO AMPIYACU','RIO YAVARI','RIO TAHUAYO','SARAMURO',
@@ -15899,31 +15911,92 @@ async function handleFluvialPDF(file, fechaOverride) {
     var barcazaByKey = {};
     rowTexts.forEach(function(line, lineIdx) {
       var L = line.toUpperCase().replace(/\|/g, ' ');
+      if (/BAHIA\s+IQUITOS.*EMBARCACIONES\s+DISPONIBLES/.test(L)) {
+        enSeccionBahiaDisponibles = true;
+        currentPusher = 'BAHÍA IQUITOS'; // clave propia, distinta de cualquier empujador real
+        currentRoute = null;
+        return;
+      }
       if (/RUTA:.*IQUITOS.*PUCALLPA/.test(L))    { currentRoute = 'IQUITOS-PUCALLPA';    return; }
       if (/RUTA:.*IQUITOS.*YURIMAGUAS/.test(L))  { currentRoute = 'IQUITOS-YURIMAGUAS';  return; }
       if (/RUTA:.*IQUITOS.*SARAMURO/.test(L))    { currentRoute = 'IQUITOS-SARAMURO';    return; }
-      var efM = L.match(/EF\s+(REY\s+\d+|NAUTA|CIUDAD\s+IQUITOS)[\s-]+(\d+)\s*HP/);
+      // ⚠️ CORREGIDO — bug real confirmado probando contra el texto
+      // exacto del PDF real que enviaste: el regex anterior exigía
+      // "EF " pegado al nombre, "CIUDAD IQUITOS" sin la palabra "DE" en
+      // medio, y solo números — así que 3 empujadores REALES de tu
+      // reporte nunca se reconocían: "CIUDAD DE IQUITOS-4050 HP" (la
+      // tabla principal no lleva "EF" y sí lleva "DE"), "EF CIUDAD
+      // IQUITOS 4050 HP" (la tabla de avisos sí lleva "EF" pero no
+      // "DE" — el mismo empujador aparece escrito de 2 formas
+      // distintas en el mismo PDF) y "REY I-900 HP" (usa el número
+      // romano I, no el número 11 de "REY 11"). Sin currentPusher
+      // correcto, las barcazas de esas 3 secciones (AF RÍO YARAPA, AF
+      // RÍO PUTUMAYO, AF RIO YAVARI) quedaban agrupadas bajo el
+      // empujador equivocado (el último que sí se había reconocido
+      // antes en el texto).
+      // ⚠️ AGREGADO — bug real confirmado en la prueba integral: "MF
+      // JENNIFER 1-760 HP" es una cabecera de sección tan válida como
+      // "EF REY 7-900 HP" (misma función: agrupa las barcazas de abajo,
+      // en este caso MF JENNIFER 1 y AF SOPHIA), pero el prefijo "MF" y
+      // el nombre "JENNIFER" no estaban contemplados — el empujador se
+      // quedaba pegado en el de la sección anterior, y ambas barcazas
+      // de SEA SAC quedaban agrupadas bajo el empujador equivocado.
+      var efM = L.match(/(?:(EF|MF)\s+)?(REY\s+(?:[IVX]+|\d+)|NAUTA|CIUDAD\s+(?:DE\s+)?IQUITOS|JENNIFER\s*\d*)[\s-]+(\d+)\s*HP/);
       if (efM) {
-        currentPusher = 'EF ' + efM[1].replace(/\s+/g, ' ').trim();
+        // ⚠️ AGREGADO — a pedido: el mismo empujador aparece escrito de
+        // 2 formas distintas en el mismo PDF ("CIUDAD DE IQUITOS" en la
+        // tabla principal, "CIUDAD IQUITOS" — sin "DE" — en la tabla de
+        // avisos de avería) — se normaliza a un solo nombre canónico
+        // para que no se traten como 2 empujadores diferentes.
+        var pusherNombre = efM[2].replace(/\s+/g, ' ').trim().replace('CIUDAD DE IQUITOS', 'CIUDAD IQUITOS');
+        // ⚠️ CORREGIDO — a pedido: se preserva el prefijo real (EF/MF)
+        // cuando el texto lo trae explícito — "MF JENNIFER 1" es una
+        // motonave, no un empujador, y quedaba mal etiquetado. Cuando
+        // el texto no trae ningún prefijo (ej. "CIUDAD DE IQUITOS-4050
+        // HP" en la tabla principal), se asume "EF" por defecto — es
+        // el único tipo que aparece así, sin prefijo, en este reporte.
+        currentPusher = (efM[1] || 'EF') + ' ' + pusherNombre;
         if (!data.empujadores.some(function(e) { return e.nombre === currentPusher; })) {
-          data.empujadores.push({nombre: currentPusher, hp: parseInt(efM[2]), ruta: currentRoute});
+          data.empujadores.push({nombre: currentPusher, hp: parseInt(efM[3]), ruta: currentRoute});
         }
         return;
       }
-      var afM = L.match(/(?:^|\s)AF\s+([A-ZÁÉÍÓÚÑ ]{3,40}?)(?:\s*\(|\s*$|\s+\d|\s+-)/);
+      // ⚠️ AGREGADO — bug real confirmado: "MF JENNIFER 1" (con volumen
+      // propio, 6.0 MB) es una barcaza tan real como cualquier "AF ..."
+      // — el PDF usa el prefijo "MF" (motonave fluvial) en vez de "AF"
+      // para este vehículo específico, y el regex solo reconocía "AF".
+      var afM = L.match(/(?:^|\s)(AF|MF)\s+([A-ZÁÉÍÓÚÑ. ]{3,40}?)(?:\s*\(|\s*$|\s+\d|\s+-)/);
       var afName = null;
+      var afPrefijo = 'AF';
+      // ⚠️ CORREGIDO — bug real confirmado probando contra el texto
+      // exacto del PDF real: al final SIEMPRE se exigía que el nombre
+      // estuviera en KNOWN_AFS (una lista fija hardcodeada) — incluso
+      // cuando afM ya había encontrado un "AF <nombre>" inequívoco en
+      // el texto. Como KNOWN_AFS no tenía "SOPHIA" (una barcaza real
+      // de este reporte, ni siquiera estaba en la lista) y tampoco
+      // reconocía nombres abreviados como "R. PISQUI" o "PTO. AMERICA"
+      // (la lista solo tenía las formas completas "RIO PISQUI"/"PUERTO
+      // AMERICA"), esas 3 barcazas reales se descartaban en silencio.
+      // Ahora, si el regex directo "AF <nombre>" ya encontró una
+      // coincidencia clara, se confía en ese resultado sin exigir que
+      // además figure en la lista fija — la lista solo se sigue usando
+      // como respaldo para el caso contrario (una línea que menciona el
+      // nombre SIN el prefijo "AF ", ej. una continuación de fila).
+      var afConfirmado = false;
       if (afM) {
-        afName = _normAFName(afM[1]);
+        afName = _normAFName(afM[2]);
+        afPrefijo = afM[1];
+        afConfirmado = true;
       } else {
         for (var k = 0; k < KNOWN_AFS.length; k++) {
           var kn = KNOWN_AFS[k];
           if (L === kn || L.indexOf(kn + ' ') === 0 || L.indexOf(' ' + kn) >= 0) {
             var re = new RegExp('(^|\\s)' + kn.replace(/ /g, '\\s+') + '(\\s|$)');
-            if (re.test(L)) { afName = kn; break; }
+            if (re.test(L)) { afName = kn; afConfirmado = true; break; }
           }
         }
       }
-      if (afName && KNOWN_AFS.indexOf(afName) >= 0) {
+      if (afName && afConfirmado) {
         var capM = L.match(/\((\d+(?:[.,]\d+)?)\s*MB\)/);
         var cap = capM ? parseFloat(capM[1].replace(',','.')) : null;
         var allMB = line.match(/(\d+(?:[.,]\d+)?)\s*MB(?!\))/g) || [];
@@ -15941,7 +16014,12 @@ async function handleFluvialPDF(file, fechaOverride) {
         var destM = L.match(/\b(IQUITOS|PUCALLPA|YURIMAGUAS|SARAMURO|ESTACION\s*1\s*-\s*SARAMURO|ESTACI[ÓO]N\s*\d+)\b/);
         var destino = destM ? destM[1].replace(/\s+/g,' ').trim().replace('ESTACION','ESTACIÓN') : '';
         var fechas = line.match(/\d{2}\/\d{2}\/\d{4}/g) || [];
-        var nombreCompleto = 'AF ' + afName;
+        // ⚠️ CORREGIDO — a pedido: antes se hardcodeaba "AF " sin
+        // importar el prefijo real detectado — así que "MF JENNIFER 1"
+        // terminaba mal etiquetado como "AF JENNIFER 1" en todo el
+        // resto del sistema (mapa, popups, etc.), un nombre que no
+        // corresponde a ninguna barcaza real del reporte.
+        var nombreCompleto = afPrefijo + ' ' + afName;
         var keyBz = (currentPusher || '?') + '|' + nombreCompleto + '|' + (currentRoute || '?');
         if (!barcazaByKey[keyBz]) {
           barcazaByKey[keyBz] = {
