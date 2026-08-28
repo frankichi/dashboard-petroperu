@@ -4782,6 +4782,14 @@ async function fetchData(forceRefresh) {
           // Destino real = último tramo de la ruta (no siempre Iquitos)
           var partes = rutaStr.split('-').map(function(p){ return _fluvNormPlanta(p); }).filter(Boolean);
           var destinoReal = partes.length ? partes[partes.length-1] : 'Iquitos';
+          // ⚠️ AGREGADO — a pedido: "cargado" explícito para poder
+          // colorear la ruta según sentido de carga — un viaje que
+          // TERMINA en Iquitos viene CARGADO desde el puerto/planta
+          // (trae crudo/producto a la refinería); uno que SALE de
+          // Iquitos hacia una planta va VACÍO (se reposiciona para la
+          // próxima carga). Es la misma lógica que ya calculaba
+          // "direccion", solo que ahora con un nombre explícito para
+          // no depender de interpretar "IDA"/"RETORNO".
           return {
             id:        r.id||'',
             af:        r.barcaza||'',
@@ -4799,6 +4807,7 @@ async function fetchData(forceRefresh) {
             eta_arribo:r.arribo_iquitos||r.eta_yurimaguas||r.arribo_plan||'',
             destino:   destinoReal,
             direccion: (destinoReal === 'Iquitos') ? 'RETORNO' : 'IDA',
+            cargado:   destinoReal === 'Iquitos',
             // ⚠️ AGREGADO — el reporte PDF trae comentarios
             // importantes (estado de navegación, averías, etc.) que
             // el backend ya envía (campo obs), pero se estaban
@@ -4806,11 +4815,29 @@ async function fetchData(forceRefresh) {
             obs:       r.obs||''
           };
         });
-        console.log('[BOOT] Barcazas fluviales:', arr.length);
+        // ⚠️ CORREGIDO — bug real confirmado (captura de pantalla: el
+        // mapa mostraba 25 "barcazas fluviales" cuando el reporte diario
+        // real de Transporte Fluvial Selva solo reporta ~14 embarcaciones
+        // activas ese día): el fetch traía TODO lo guardado en la hoja
+        // (viajes de meses anteriores, completados, pendientes, todo
+        // junto), sin filtrar por estado. Ahora la lista que alimenta las
+        // RUTAS del mapa se limita a estado=NAVEGANDO — exactamente lo
+        // que el reporte diario también muestra como "en tránsito hoy".
+        // Las que están DISPONIBLE (ociosas en la bahía de Iquitos, sin
+        // viaje activo) se separan aparte — se dibujan distinto (ver
+        // renderPA), no como una ruta.
+        window._fluvialBargesDisponibles = window._fluvialBarges.filter(function(b) {
+          return (b.estado || '').toUpperCase().indexOf('DISPONIBLE') >= 0;
+        });
+        window._fluvialBarges = window._fluvialBarges.filter(function(b) {
+          return (b.estado || '').toUpperCase() === 'NAVEGANDO';
+        });
+        console.log('[BOOT] Barcazas fluviales NAVEGANDO:', window._fluvialBarges.length, '· Disponibles en bahía:', window._fluvialBargesDisponibles.length, '(de', arr.length, 'filas totales en la hoja)');
         var activePage = document.querySelector('.page.active');
         if (activePage && activePage.id === 'pA' && typeof renderPA === 'function') _loadMapLibs(function(){ renderPA(); });
       } else {
         window._fluvialBarges = [];
+        window._fluvialBargesDisponibles = [];
         console.log('[BOOT] Respuesta fluvial no es array, usando []');
       }
     }
@@ -10839,6 +10866,7 @@ function renderPA() {
             producto: bz.producto || '',
             destino:  bz.destino || '',
             direccion:direccion,
+            cargado:  bz.cargado,
             prods:    bz.producto ? [bz.producto + (bz.volMB ? ' ' + bz.volMB + ' MB' : '')] : [],
             isFluvialFromReport: true,
             estado:   bz.estado || '',
@@ -11142,8 +11170,17 @@ function renderPA() {
       if (SKIP_SHIP_NAMES.indexOf((name||'').toUpperCase().trim()) >= 0) return;
       var isFluvial = ship.isFluvialFromReport || isFluvialShip(name, ship.stops);
       var esCabotaje = !isFluvial && _esFlotaCabotaje(name);
+      // ⚠️ CORREGIDO — a pedido: las barcazas fluviales ahora se
+      // colorean según el SENTIDO de carga, no de forma secuencial
+      // (que no distinguía nada). Verde = viene CARGADA hacia Iquitos
+      // (trae crudo/producto desde el puerto/planta a la refinería).
+      // Ámbar/naranja = va VACÍA desde Iquitos hacia una planta
+      // (reposicionándose para la próxima carga) — la misma
+      // distinción que ya existía en ship.direccion/ship.cargado, solo
+      // que ahora sí se refleja en el color de la línea, no solo en un
+      // texto dentro del popup.
       var color = isFluvial
-        ? SHIP_COLORS_FLUVIAL[fIdx++ % SHIP_COLORS_FLUVIAL.length]
+        ? (ship.cargado === false ? '#d97706' : '#059669')
         : esCabotaje
           ? SHIP_COLORS_CABOTAJE[cIdx++ % SHIP_COLORS_CABOTAJE.length]
           : SHIP_COLORS_IMPORTACION[mIdx++ % SHIP_COLORS_IMPORTACION.length];
@@ -11215,7 +11252,16 @@ function renderPA() {
         estadoBadge = '<span style="background:'+stCol+'22;border:1px solid '+stCol+';color:'+stCol+';padding:3px 10px;border-radius:11px;font-size:10px;font-weight:800;letter-spacing:.06em;display:inline-block;margin-top:5px;margin-right:5px">● ' + ship.estado + '</span>';
       }
       var dirBadge = '';
-      if (ship.direccion) {
+      // ⚠️ CORREGIDO — a pedido: mostrar "CARGADO"/"VACÍO" en vez de
+      // "IDA"/"RETORNO" — más claro para leer de un vistazo qué
+      // significa cada tramo, con el mismo color ya usado en la línea
+      // del mapa (verde=cargado, ámbar=vacío) para que coincidan.
+      if (isFluvial && ship.cargado != null) {
+        var dirCol = ship.cargado ? '#059669' : '#d97706';
+        var dirIcon = ship.cargado ? '⛽' : '○';
+        var dirTxt = ship.cargado ? 'CARGADO → IQUITOS' : 'VACÍO → PLANTA';
+        dirBadge = '<span style="background:'+dirCol+'22;border:1px solid '+dirCol+';color:'+dirCol+';padding:3px 10px;border-radius:11px;font-size:10px;font-weight:800;letter-spacing:.06em;display:inline-block;margin-top:5px">' + dirIcon + ' ' + dirTxt + '</span>';
+      } else if (ship.direccion) {
         var dirCol = ship.direccion === 'IDA' ? '#fb923c' : '#22d3ee';
         var dirIcon = ship.direccion === 'IDA' ? '→' : '⤴';
         dirBadge = '<span style="background:'+dirCol+'22;border:1px solid '+dirCol+';color:'+dirCol+';padding:3px 10px;border-radius:11px;font-size:10px;font-weight:800;letter-spacing:.06em;display:inline-block;margin-top:5px">' + dirIcon + ' ' + ship.direccion + '</span>';
@@ -11521,6 +11567,42 @@ function renderPA() {
     if (typeof window._mapShowMaritime === 'undefined') window._mapShowMaritime = true;
     if (typeof window._mapShowFluvial  === 'undefined') window._mapShowFluvial  = true;
     if (typeof window._mapShowPlants   === 'undefined') window._mapShowPlants   = true;
+    // ⚠️ AGREGADO — a pedido: barcazas DISPONIBLES (ociosas, sin viaje
+    // activo) en la bahía de Iquitos — antes desaparecían del mapa por
+    // completo (no tenían ruta, así que nunca pasaban el chequeo de
+    // "al menos 2 paradas"). Ahora se dibujan como un marcador ancla
+    // gris propio, distinto de las rutas en curso, agrupados alrededor
+    // del punto de Iquitos para que no queden exactamente superpuestos.
+    if (typeof window._fluvialBargesDisponibles !== 'undefined' && Array.isArray(window._fluvialBargesDisponibles) && window._fluvialBargesDisponibles.length) {
+      var iqMeta = PLANT_META['Iquitos'];
+      if (iqMeta) {
+        window._fluvialBargesDisponibles.forEach(function(bz, idxDisp) {
+          var jitterAng = (idxDisp / Math.max(1, window._fluvialBargesDisponibles.length)) * Math.PI * 2;
+          var jLat = iqMeta.lat + Math.sin(jitterAng) * 0.10 - 0.06;
+          var jLng = iqMeta.lng + Math.cos(jitterAng) * 0.10 + 0.06;
+          var popupDisp = '<div style="background:#0f172a;color:#e2e8f0;padding:0;min-width:220px;border-radius:8px;overflow:hidden;font-family:Inter,system-ui;box-shadow:0 12px 32px rgba(0,0,0,.5)">'
+            + '<div style="background:linear-gradient(135deg,#64748b,rgba(0,0,0,.4));padding:10px 13px 11px">'
+            +   '<div style="font-size:9px;font-weight:700;color:rgba(255,255,255,.75);text-transform:uppercase;letter-spacing:.08em">Barcaza disponible</div>'
+            +   '<div style="font-size:14px;font-weight:800;color:#fff;margin-top:2px">⚓ ' + (bz.af || '—') + '</div>'
+            +   '<span style="background:#64748b22;border:1px solid #64748b;color:#cbd5e1;padding:3px 10px;border-radius:11px;font-size:10px;font-weight:800;letter-spacing:.06em;display:inline-block;margin-top:5px">● OCIOSA EN BAHÍA</span>'
+            + '</div>'
+            + '<div style="padding:9px 13px 11px;font-size:11px;line-height:1.7">'
+            +   (bz.capMB ? '<div><span style="color:#94a3b8">Capacidad:</span> ' + bz.capMB + ' MB</div>' : '')
+            +   (bz.producto ? '<div><span style="color:#94a3b8">Último producto:</span> ' + bz.producto + '</div>' : '')
+            +   (bz.obs ? '<div style="margin-top:6px;padding-top:6px;border-top:1px solid rgba(255,255,255,.12);color:#cbd5e1">' + escapeHtml(bz.obs) + '</div>' : '')
+            + '</div></div>';
+          L.marker([jLat, jLng], {
+            icon: L.divIcon({
+              className: '', iconSize: [26,26], iconAnchor: [13,13],
+              html: '<div style="width:26px;height:26px;border-radius:50%;background:#64748b;border:2px solid #fff;display:flex;align-items:center;justify-content:center;font-size:13px;box-shadow:0 2px 6px rgba(0,0,0,.35)">⚓</div>'
+            }),
+            zIndexOffset: 500
+          }).bindTooltip('<div style="font-size:11px"><b>⚓ ' + (bz.af || '—') + '</b><br><span style="color:#94a3b8">Disponible en bahía Iquitos</span></div>', {className:'ship-route-tip'})
+            .bindPopup(popupDisp, {className:'ship-popup', maxWidth:280, autoPan:true})
+            .addTo(fluvialLayer);
+        });
+      }
+    }
     if (window._mapShowMaritime) maritimeLayer.addTo(_leafletMap);
     if (window._mapShowFluvial)  fluvialLayer.addTo(_leafletMap);
     if (window._mapShowPlants)   plantsLayer.addTo(_leafletMap);
