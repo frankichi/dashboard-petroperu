@@ -14301,9 +14301,27 @@ async function simLoadFromGS() {
     const esFormatoViejo = Array.isArray(data);
     const found = esFormatoViejo ? (data.length > 0) : !!data.found;
     const rows = esFormatoViejo ? data : (data.rows || []);
-    if (!found || !rows.length) {
+    // ⚠️ CORREGIDO — bug real confirmado ("UCAYALI2 sigue apareciendo al
+    // presionar Recargar GS", incluso con el backend ya desplegado):
+    // cuando la simulación guardada está vacía A PROPÓSITO (found=true,
+    // rows=[] — el caso correcto tras borrar el único buque), esta
+    // función SÍ limpiaba simShips en memoria (línea de arriba, al
+    // inicio), pero mostraba una alerta ENGAÑOSA ("no hay simulaciones
+    // guardadas", cuando en realidad sí la hay, solo que vacía) y
+    // salía SIN volver a dibujar la pantalla — así que la pantalla se
+    // quedaba mostrando lo que había ANTES del clic (UCAYALI2), aunque
+    // por dentro ya estuviera vacío. Ahora se distinguen los 2 casos:
+    // "nunca se guardó nada" (sí muestra la alerta) vs "se guardó
+    // vacío a propósito" (se respeta el vacío y SÍ se redibuja).
+    if (!found) {
       alert('No hay simulaciones guardadas en Google Sheets.');
       if (btn) { btn.textContent='↺ Recargar GS'; btn.disabled=false; }
+      return;
+    }
+    if (!rows.length) {
+      console.log('[SIM] Simulación guardada vacía a propósito — se respeta');
+      if (btn) { btn.textContent='↺ Recargar GS'; btn.disabled=false; }
+      renderPE();
       return;
     }
     console.log('[SIM] Cargando ' + rows.length + ' filas de GS');
