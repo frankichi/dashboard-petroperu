@@ -14643,6 +14643,11 @@ function renderPE() {
   const dateStr = currentDate ? fmtDate(currentDate) : '—';
   document.getElementById('pE-content').innerHTML = '<div class="sim-page">'
     + '<div class="sim-toolbar">'
+    // ⚠️ AGREGADO — a pedido: botón directo para volver a Reposiciones
+    // Marítimas — antes había que buscar la opción en el menú lateral,
+    // que no siempre es evidente cuando se llega aquí desde el botón
+    // "Programar buques" de esa misma página.
+    + '<button class="sim-btn sim-btn-ghost" onclick="showPage(\'pRepoMar\')" title="Volver a Reposiciones Marítimas" style="display:flex;align-items:center;gap:5px">← Reposiciones Marítimas</button>'
     + '<div class="sim-toolbar-title">🛳️ Simulador de Embarques BT</div>'
     + '<button class="sim-btn sim-btn-primary" onclick="simAddShip()">+ Nuevo Buque</button>'
     + '<button class="sim-btn sim-btn-ghost" onclick="simExportCSV()">⬇ CSV</button>'
