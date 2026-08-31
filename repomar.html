@@ -213,7 +213,7 @@ function _repomarMostrarTip(evt) {
     // Code.gs), no el inventario de hoy.
     tip.innerHTML =
       '<b>' + planta + ' \u00b7 ' + prod + ' \u2014 tras la reposici\u00f3n</b>' +
-      restrBloque +
+      '<div class="rct-restr-ok">\u2713 Tras la reposici\u00f3n, la venta vuelve al pron\u00f3stico aprobado</div>' +
       '<div class="rct-row"><span class="rct-lbl">Llega el</span><span class="rct-val">' + fmtCorta(d.fechaLlegada) + ' (+' + d.diasHastaLlegada + 'd)</span></div>' +
       '<div class="rct-row"><span class="rct-lbl">Volumen que repone</span><span class="rct-val">' + d.volPendiente.toFixed(1) + ' MB</span></div>' +
       '<div class="rct-row"><span class="rct-lbl">Volumen despu\u00e9s de repo</span><span class="rct-val">' + d.volDespuesRepo.toFixed(1) + ' MB</span></div>' +
@@ -263,7 +263,15 @@ function filaCobertura(cols, plantas, productos, productosPorPlanta, mapa, tipo)
       // criterio que ya usa la página de Restricciones, para que
       // ambos lugares cuenten la misma historia.
       var detInfo = _repomarDetalleInv[planta + '|' + prod];
-      var restringido = detInfo && detInfo.pron > 0 && detInfo.vfact > 0 && detInfo.vfact < detInfo.pron;
+      // ⚠️ CORREGIDO — a pedido: el resaltado de restricción SOLO debe
+      // aplicar en "FECHA COBERTURA" (tipo='actual') — en "NUEVA
+      // COBERTURA" (tipo='nueva') la Venta Factible YA SE NORMALIZA al
+      // pronóstico aprobado en cuanto llega la reposición (misma regla
+      // de negocio que ya usa el popup — ver el texto "A partir de la
+      // reposición, la venta factible deja de aplicar"). Marcar esa
+      // celda como restringida sería contradecir lo que el propio
+      // popup explica: ahí ya no hay restricción, por definición.
+      var restringido = tipo === 'actual' && detInfo && detInfo.pron > 0 && detInfo.vfact > 0 && detInfo.vfact < detInfo.pron;
       return '<div class="repomar-cell ' + (critico ? 'repomar-cell-crit' : 'repomar-cell-ok') + (restringido ? ' repomar-cell-restr' : '') + '" data-planta="' + planta + '" data-prod="' + prod + '" data-tipo="' + tipo + '" onmouseenter="_repomarMostrarTip(event)" onmouseleave="_repomarOcultarTip()" onmousemove="_repomarMoverTip(event)" title="' + (restringido ? 'Venta factible por debajo del pronóstico' : '') + '">' + fmtCorta(info.fecha) + '</div>';
     }).join('');
     return '<div class="repomar-row" style="grid-template-columns:' + cols + '">' +

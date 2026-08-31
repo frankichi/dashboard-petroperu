@@ -30262,7 +30262,7 @@ function _repomarMostrarTip(evt) {
       var dHasta = det.diasHastaLlegada != null ? det.diasHastaLlegada : 0;
       tip.innerHTML =
         '<b>' + planta + ' · ' + prod + ' — tras la reposición</b>' +
-        restrBloque +
+        '<div class="rct-restr-ok">✓ Tras la reposición, la venta vuelve al pronóstico aprobado</div>' +
         '<div class="rct-row"><span class="rct-lbl">Llega el</span><span class="rct-val">' + fmtCorta(det.fechaLlegada) + ' (+' + dHasta + 'd)</span></div>' +
         '<div class="rct-row"><span class="rct-lbl">Volumen que repone</span><span class="rct-val">' + vPend.toFixed(1) + ' MB</span></div>' +
         '<div class="rct-row"><span class="rct-lbl">Volumen después de repo</span><span class="rct-val">' + vDespRepo.toFixed(1) + ' MB</span></div>' +
@@ -30423,8 +30423,15 @@ window.renderPRepoMar = function() {
         // necesidad de pasar el mouse) cuando esa planta+producto tiene
         // una restricción activa (Venta Factible < Pronóstico) — mismo
         // criterio que ya usa Restricciones y el popup de esta celda.
+        // ⚠️ CORREGIDO — a pedido: SOLO en "FECHA COBERTURA"
+        // (tipo='actual') — en "NUEVA COBERTURA" (tipo='nueva') la
+        // Venta Factible ya se normaliza al pronóstico aprobado en
+        // cuanto llega la reposición (misma regla que ya explica el
+        // popup: "a partir de la reposición, la venta factible deja de
+        // aplicar"). Marcar esa celda como restringida contradiría lo
+        // que el propio popup dice ahí mismo.
         var restringido = false;
-        if (typeof _invConProyeccion === 'function') {
+        if (tipo === 'actual' && typeof _invConProyeccion === 'function') {
           try {
             var filaRestr = _invConProyeccion(planta, prod, fechaRef);
             var pronRestr = (filaRestr && typeof pronDiarioAprobado === 'function') ? (pronDiarioAprobado(filaRestr) || 0) : 0;
