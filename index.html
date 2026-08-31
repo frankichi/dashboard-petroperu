@@ -25368,11 +25368,16 @@ function _renderVistaEjecutivaSimpleImpl() {
   if (window._execPeriod === undefined) window._execPeriod = 7;   // 7 | 15 | 30 | 'mensual'
   if (window._execPlanta === undefined) window._execPlanta = 'Nacional';
   if (window._execProducto === undefined || window._execProducto === 'Todos') window._execProducto = 'Diesel';
-  // El mapa arranca OCULTO por defecto — solo se muestra cuando el
-  // usuario presiona "Mostrar mapa" (toggleExecMapa). Una vez que decide
-  // mostrarlo u ocultarlo, esa elección se respeta en refrescos
-  // posteriores de esta misma sesión.
-  if (window._execMapaOculto === undefined) window._execMapaOculto = true;
+  // ⚠️ CORREGIDO — bug real confirmado ("en el dashboard gerencial no se
+  // ve el mapa del Perú, en el panel principal sí"): el mapa de Vista
+  // Ejecutiva estaba configurado para arrancar OCULTO por defecto — el
+  // usuario tenía que presionar "Mostrar mapa" manualmente para verlo,
+  // a diferencia del panel principal, donde el mapa siempre se muestra
+  // automáticamente. Se cambia el valor por defecto a visible, para que
+  // el comportamiento sea consistente entre ambos paneles — el usuario
+  // sigue pudiendo ocultarlo con el mismo botón si lo prefiere, esa
+  // elección se sigue respetando en refrescos posteriores.
+  if (window._execMapaOculto === undefined) window._execMapaOculto = false;
 
   // ⚠️ CORREGIDO — bug real confirmado: Supe despachaba volúmenes reales
   // pero muy chicos (ej. 0.024 MB) — con solo 1 decimal (DEC=1 en modo
