@@ -7652,7 +7652,16 @@ function renderPR() {
         const cobN = (inv>0&&pr>0) ? Math.floor(inv/pr) : 0;
         const cobR = (inv>0&&vf>0) ? Math.floor(inv/vf) : 0;
         const dias = Math.max(0, cobR-cobN);
-        const newDate = dias > 0 ? new Date(new Date(currentDate+'T12:00:00').getTime()+dias*864e5) : null;
+        // ⚠️ CORREGIDO — bug real confirmado: "Nueva fecha cob." sumaba
+        // solo los DÍAS GANADOS (cobR-cobN) a la fecha de hoy, en vez de
+        // sumar la cobertura RESTRINGIDA completa (cobR) — eso adelantaba
+        // la fecha varios días respecto a la real (ej. Eten Diesel: cobR
+        // 11d se mostraba como si fuera el 05-set en vez del 10-set,
+        // porque sumaba 6d en vez de 11d). Coberturas y RepoMar SIEMPRE
+        // calculan la fecha como hoy + días totales de cobertura (nunca
+        // como "solo lo ganado") — esta página tiene que usar el mismo
+        // criterio para que las 3 vistas sean coherentes entre sí.
+        const newDate = cobR > 0 ? new Date(new Date(currentDate+'T12:00:00').getTime()+cobR*864e5) : null;
         const sev = pct > 50 ? 'red' : pct > 30 ? 'orange' : 'yellow';
         const sevLbl = pct > 50 ? 'Crítico' : pct > 30 ? 'Recorte' : 'Leve';
         const gapCol = sev==='red'?'#ef4444':sev==='orange'?'#f97316':'#f59e0b';
