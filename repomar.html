@@ -365,8 +365,11 @@ function drawArrows(buques) {
     // norte). Ahora el punto de conexión es el CENTRO SUPERIOR de cada
     // caja, sin importar si el siguiente punto queda a la izquierda o
     // a la derecha del anterior.
+    // Punto de partida: CENTRO de la caja (no el borde superior) — a pedido,
+    // para que la primera flecha no arranque "muy confusa" desde el borde
+    // y en su lugar salga desde el medio de la caja del buque.
     var prevX = sRect.left + sRect.width/2 - gridRect.left;
-    var prevY = sRect.top - gridRect.top;
+    var prevY = sRect.top + sRect.height/2 - gridRect.top;
     // ⚠️ CORREGIDO — a pedido: iterar sobre los GRUPOS combinados
     // (terminal+fecha), no sobre cada escala individual.
     var gruposDibujo = _repomarAgruparEscalas(b.legs);
