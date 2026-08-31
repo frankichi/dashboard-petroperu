@@ -29476,6 +29476,35 @@ function _repomarFetchBTMapCompleto() {
     .catch(function() { window._repomarBTMapCompletoPendiente = false; });
 }
 
+// ⚠️ AGREGADO — a pedido: refresco manual, visible en ambos modos
+// (Confirmado y Proyectado). La página YA NO se refresca sola en cada
+// interacción — solo con el auto-refresh general del dashboard o al
+// presionar este botón. Vuelve a pedir _navPosData (posicionamiento) y
+// getBTMapCompleto — con force=1 para saltar la caché de 60s del
+// servidor, porque si la persona pidió explícitamente lo más nuevo, no
+// tiene sentido hacerla esperar hasta que esa caché expire sola.
+function _repomarActualizarManualInterno() {
+  var btn = document.getElementById('repomar-btn-actualizar');
+  if (btn) { btn.disabled = true; btn.classList.add('girando'); }
+  var pNav = fetch(CONFIG.API_URL + '?action=getNavesPositioning', { method: 'GET', redirect: 'follow' })
+    .then(function(r) { return r.ok ? r.json() : []; })
+    .then(function(nd) {
+      _navPosData = {};
+      (Array.isArray(nd) ? nd : []).forEach(function(r) { if (r.buque) _navPosData[r.buque.toUpperCase()] = r; });
+    })
+    .catch(function(err) { console.warn('[RepoMar] actualizar navPos:', err.message); });
+  var pBT = fetch(CONFIG.API_URL + '?action=getBTMapCompleto&force=1', { method: 'GET', redirect: 'follow' })
+    .then(function(r) { return r.ok ? r.json() : []; })
+    .then(function(naves) { window._repomarBTMapCompletoCache = Array.isArray(naves) ? naves : []; })
+    .catch(function(err) { console.warn('[RepoMar] actualizar BTMapCompleto:', err.message); });
+  Promise.all([pNav, pBT]).then(function() {
+    window._repomarUltimaActualizacion = new Date().toLocaleTimeString('es-PE', {hour:'2-digit', minute:'2-digit'});
+    if (typeof renderPRepoMar === 'function') renderPRepoMar(); // reemplaza el botón por uno limpio (no disabled)
+  }).catch(function() {
+    if (btn) { btn.disabled = false; btn.classList.remove('girando'); } // solo hace falta si renderPRepoMar no llegó a correr
+  });
+}
+
 function _buildRepoMarBuques() {
   var buquesMap = {}; // "BUQUE|VIAJE" -> { buque, viaje, legs:[], cargaInicial:{} }
   // ⚠️ CORREGIDO — bug real confirmado: URUBAMBA no aparecía porque
@@ -29916,6 +29945,10 @@ function _repomarInjectCSS() {
     .repomar-modo-btn.activo{background:#fff;color:#0071A4;box-shadow:0 1px 3px rgba(0,0,0,.12)}
     .repomar-modo-btn:not(.activo):hover{color:var(--txt2)}
     .repomar-programar-btn{background:#fff;color:#0071A4;border:1.5px solid #0071A4;padding:8px 16px;border-radius:8px;font-size:11.5px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap;transition:all .15s}
+    .repomar-programar-btn:disabled{opacity:.6;cursor:default}
+    .repomar-programar-btn.girando #repomar-actualizar-icono{display:inline-block;animation:repomarLiveDot2Spin .8s linear infinite}
+    @keyframes repomarLiveDot2Spin{to{transform:rotate(360deg)}}
+    .repomar-lastupdate{font-size:9.5px;color:var(--txt3)}
     .repomar-programar-btn:hover{background:#eef7fc}
     .repomar-scroll{overflow-x:auto;padding-bottom:8px}
     .repomar-grid{position:relative;min-width:1450px;background:var(--card);border-radius:10px;box-shadow:0 1px 3px rgba(0,0,0,.08);overflow:hidden;padding:2px 2px 2px 26px}
@@ -30469,10 +30502,17 @@ window.renderPRepoMar = function() {
           (modo === 'proyectado' && !(typeof REPOMAR_SHARE_MODE !== 'undefined' && REPOMAR_SHARE_MODE)
             ? '<button class="repomar-programar-btn" style="border-color:#dc2626;color:#dc2626" onclick="_repomarVaciarProyectado()" title="Borra por completo el Cabotaje Proyectado actual, para armar una proyección nueva desde cero">🗑️ Vaciar proyección</button>'
             : '') +
+          // ⚠️ AGREGADO — a pedido: refresco manual del estado — visible
+          // en AMBOS modos (Confirmado y Proyectado) porque vive en la
+          // barra superior, fuera del interruptor de modo. Antes la
+          // única forma de ver el estado más nuevo sin esperar el
+          // auto-refresh era recargar la página entera.
+          '<button id="repomar-btn-actualizar" class="repomar-programar-btn" onclick="_repomarActualizarManualInterno()" title="Volver a pedir el estado más reciente sin recargar la página"><span id="repomar-actualizar-icono">🔄</span> Actualizar estado</button>' +
           (typeof REPOMAR_SHARE_MODE !== 'undefined' && REPOMAR_SHARE_MODE ? '' :
           '<button class="repomar-share-btn" onclick="_repomarCompartir()">🔗 Compartir enlace</button>') +
         '</div>' +
       '</div>' +
+      (window._repomarUltimaActualizacion ? '<div class="repomar-lastupdate" style="padding:0 4px 8px">Última actualización: ' + window._repomarUltimaActualizacion + '</div>' : '') +
       '<div class="repomar-scroll">' +
         '<div class="repomar-grid" id="repomar-grid">' +
           '<svg class="repomar-svg" id="repomar-svg"></svg>' +
