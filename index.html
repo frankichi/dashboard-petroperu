@@ -29957,6 +29957,8 @@ function _repomarInjectCSS() {
        dirige la mirada; animarlo todo la dispersa. */
     .repomar-legbox.en-vivo{border-color:#0071A4;animation:repomarLivePulse 2.4s ease-out infinite}
     .repomar-legbox.en-vivo.completado{border-color:#0071A4}
+    .repomar-shipbox.en-vivo{border-color:#0071A4;animation:repomarLivePulseBox 2.4s ease-out infinite}
+    @keyframes repomarLivePulseBox{0%{box-shadow:0 1px 4px rgba(0,113,164,.12),0 0 0 0 rgba(0,113,164,.35)}65%{box-shadow:0 1px 4px rgba(0,113,164,.12),0 0 0 8px rgba(0,113,164,0)}100%{box-shadow:0 1px 4px rgba(0,113,164,.12),0 0 0 0 rgba(0,113,164,0)}}
     @keyframes repomarLivePulse{
       0%{box-shadow:0 0 0 0 rgba(0,113,164,.38)}
       65%{box-shadow:0 0 0 9px rgba(0,113,164,0)}
@@ -29967,6 +29969,7 @@ function _repomarInjectCSS() {
     @keyframes repomarLiveDot{0%,100%{opacity:1}50%{opacity:.25}}
     @media (prefers-reduced-motion: reduce){
       .repomar-legbox.en-vivo{animation:none;box-shadow:0 0 0 3px rgba(0,113,164,.22)}
+      .repomar-shipbox.en-vivo{animation:none;box-shadow:0 1px 4px rgba(0,113,164,.12),0 0 0 3px rgba(0,113,164,.22)}
       .repomar-livedot{animation:none}
     }
     .repomar-empty-msg{padding:30px;text-align:center;color:var(--txt3);font-size:13px}
@@ -30308,10 +30311,17 @@ window.renderPRepoMar = function() {
       var zarpeTxt = b.zarpe
         ? '<div class="repomar-shipzarpe">Zarpó de ' + b.zarpeOrigen + ': ' + fmtCorta(b.zarpe) + fmtHora(b.zarpe) + '</div>'
         : '<div class="repomar-shipzarpe repomar-shipzarpe-pendiente">' + (b.estadoActualPreZarpe || 'Aún en Talara') + '</div>';
+      // ⚠️ AGREGADO — a pedido: mismo indicador "en vivo" del resto del
+      // diagrama, aplicado ahora a la caja del BUQUE (no a un terminal
+      // de destino) cuando todavía no zarpó — Talara es el origen y no
+      // tiene su propia columna en la grilla, así que la caja del buque
+      // hace las veces de "recuadro del puerto" en este caso.
+      var enVivoEnTalara = !b.zarpe;
       var shipBox = '<div class="repomar-cell" style="align-items:flex-start;padding:4px">' +
-        '<div class="repomar-shipbox" style="width:100%">' +
+        '<div class="repomar-shipbox' + (enVivoEnTalara ? ' en-vivo' : '') + '" style="width:100%">' +
           '<div class="repomar-shipname">🚢 ' + b.buque + '</div>' +
           '<div class="repomar-shipcargo">' + (cargaTxt || 'Sin carga registrada') + '</div>' +
+          (enVivoEnTalara ? '<div class="repomar-livepill" style="margin:0 10px 4px">' + '<span class="repomar-livedot"></span>En puerto</div>' : '') +
           zarpeTxt +
         '</div>' +
       '</div>';
