@@ -958,13 +958,17 @@ body.light .restr-kpi{background:#fff;box-shadow:0 1px 4px rgba(10,30,70,.05)}
 .restr-toolbar{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;flex-wrap:wrap;margin:0 22px 16px}
 .restr-explain{flex:1;min-width:260px;max-width:640px;font-size:11px;color:var(--txt3);line-height:1.6}
 .restr-explain strong{color:var(--txt2)}
-.restr-cards-wrap{padding:0 22px 26px;display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px;align-items:stretch}
-.restr-planta-chip{display:flex;flex-direction:column;justify-content:center;gap:4px;padding:12px 15px;background:var(--acc2)0f;border:1px dashed var(--acc2)55;border-radius:10px}
+.restr-cards-wrap{padding:0 22px 26px;display:flex;flex-wrap:wrap;gap:14px;align-items:flex-start}
+.restr-plantacard{flex:0 1 auto;max-width:100%;background:var(--card);border:1px solid var(--bdr);border-radius:12px;overflow:hidden}
+body.light .restr-plantacard{background:#fff;box-shadow:0 1px 4px rgba(10,30,70,.05)}
+.restr-plantacard-head{display:flex;align-items:baseline;gap:8px;padding:10px 14px;background:var(--card2);border-bottom:1px solid var(--bdr);white-space:nowrap}
 .restr-plantacard-name{font-size:13.5px;font-weight:800;color:var(--txt);letter-spacing:-.01em}
 .restr-plantacard-count{font-size:10px;color:var(--txt3)}
-.restr-plantacard-gain{align-self:flex-start;margin-top:2px;font-size:10px;font-weight:700;color:var(--acc2);background:var(--acc)14;border:1px solid var(--acc)35;border-radius:20px;padding:2px 9px}
-.restr-row{background:var(--card2);border:1px solid var(--bdr)66;border-radius:10px;padding:13px 15px;display:flex;flex-direction:column;gap:10px;transition:border-color .15s}
+.restr-plantacard-gain{margin-left:auto;font-size:10px;font-weight:700;color:var(--acc2);background:var(--acc)14;border:1px solid var(--acc)35;border-radius:20px;padding:2px 9px;white-space:nowrap}
+.restr-plantacard-body{display:flex;flex-wrap:wrap;gap:10px;padding:12px 14px}
+.restr-row{width:225px;background:var(--card2);border:1px solid var(--bdr)66;border-radius:10px;padding:13px 15px;display:flex;flex-direction:column;gap:10px;transition:border-color .15s}
 .restr-row:hover{border-color:var(--bdr2)}
+@media(max-width:700px){.restr-plantacard{flex-basis:100%}.restr-row{width:100%}}
 body.light .restr-row{background:#f8fafc}
 .restr-row-prod{display:flex;align-items:center;gap:9px}
 .restr-prod-name{font-size:13px;font-weight:800;color:var(--txt)}
@@ -7718,23 +7722,26 @@ function renderPR() {
           </div>
         </div>`;
       }).join('');
-      // ⚠️ CORREGIDO — a pedido: antes cada planta armaba su PROPIA
-      // grilla (un contenedor aparte) — si tenía solo 1-2 productos, el
-      // resto de esa fila quedaba vacío sin que nada la ocupara, aunque
-      // la siguiente planta sí tuviera espacio de sobra. Ahora la
-      // "ficha" de planta es una tarjeta más DENTRO de la misma grilla
-      // continua que las tarjetas de producto (ver .restr-cards-wrap,
-      // que ahora es el único grid) — es del mismo tamaño que una
-      // tarjeta, NO fuerza un salto de fila, así que la siguiente
-      // planta puede empezar en la misma fila si queda espacio. Se
-      // distingue por estilo (borde punteado + fondo tenue) en vez de
-      // por un salto de línea que desperdicie espacio.
-      const chip = `<div class="restr-planta-chip">
-        <span class="restr-plantacard-name">${planta}</span>
-        <span class="restr-plantacard-count">${nProds} producto${nProds!==1?'s':''} con restricción</span>
-        ${dLabel?`<span class="restr-plantacard-gain">hasta ${dLabel} de cobertura</span>`:''}
+      // ⚠️ CORREGIDO — a pedido (2da vuelta): mezclar la ficha de
+      // planta y las tarjetas de producto en una sola grilla plana
+      // ahorraba espacio pero se veía desordenado — no quedaba claro
+      // qué tarjeta pertenecía a qué planta, porque ambas competían
+      // por el mismo flujo de casillas. Se vuelve a la "caja por
+      // planta" (con su propio encabezado, clara de leer), pero ahora
+      // el ANCHO de cada caja depende de CUÁNTOS productos tiene
+      // adentro (flex, no una fila de ancho completo fijo) — así una
+      // planta con 1 producto ocupa solo el espacio de 1 tarjeta, y la
+      // siguiente planta puede empezar en la misma fila si queda
+      // espacio (ver .restr-cards-wrap, ahora flex-wrap). Se sigue sin
+      // desperdiciar espacio, pero sin perder la agrupación visual.
+      return `<div class="restr-plantacard">
+        <div class="restr-plantacard-head">
+          <span class="restr-plantacard-name">${planta}</span>
+          <span class="restr-plantacard-count">${nProds} producto${nProds!==1?'s':''}</span>
+          ${dLabel?`<span class="restr-plantacard-gain">hasta ${dLabel}</span>`:''}
+        </div>
+        <div class="restr-plantacard-body">${tRows}</div>
       </div>`;
-      return chip + tRows;
     }).join('');
   }
   const nRestr   = restrictList.length;
