@@ -88,7 +88,7 @@ body{font-family:var(--sans);font-size:13px;background:var(--bg);color:var(--txt
     </div>
   </div>
   <div id="repomar-content">
-    <div class="repomar-loading"><div class="repomar-loading-spinner"></div>Cargando datos en vivo…</div>
+    <div class="repomar-loading" id="repomar-loading-inicial"><div class="repomar-loading-spinner"></div>Cargando datos en vivo…</div>
   </div>
 </div>
 <div id="repomar-cov-tip" class="repomar-cov-tip"></div>
@@ -407,18 +407,56 @@ function drawArrows(buques) {
 }
 
 var _lastBuques = [];
-function cargarDatos() {
+var REPOMAR_CACHE_KEY = 'repomar_cache_v1';
+
+// ⚠️ AGREGADO — a pedido: el splash "Cargando datos en vivo…" se sentía
+// lento porque CADA carga (la inicial y cada refresh de 5 min) esperaba
+// la respuesta completa del backend (Apps Script en frío puede tardar
+// varios segundos) antes de mostrar cualquier cosa. Ahora, si hay un
+// resultado previo guardado en este navegador (localStorage), se
+// renderiza YA — sin esperar red — y el fetch real corre en paralelo
+// por detrás, reemplazando la vista en cuanto llega. El splash con
+// spinner solo se ve la primerísima vez que alguien abre el enlace en
+// un navegador nuevo, sin caché previa.
+function _repomarLeerCache() {
+  try {
+    var raw = localStorage.getItem(REPOMAR_CACHE_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch (e) { return null; }
+}
+function _repomarGuardarCache(data) {
+  try { localStorage.setItem(REPOMAR_CACHE_KEY, JSON.stringify({ data: data, ts: Date.now() })); }
+  catch (e) { /* localStorage lleno o bloqueado — no es crítico, solo no habrá caché */ }
+}
+
+function cargarDatos(esSilencioso) {
   fetch(API_URL + '?action=getRepoMarData', { method: 'GET', redirect: 'follow' })
     .then(function(r) { return r.ok ? r.json() : Promise.reject(new Error('HTTP ' + r.status)); })
-    .then(function(data) { _lastBuques = data.buques || []; render(data); })
+    .then(function(data) {
+      _lastBuques = data.buques || [];
+      render(data);
+      _repomarGuardarCache(data);
+    })
     .catch(function(err) {
+      // En refresh silencioso (ya hay algo en pantalla) no se pisa la
+      // vista actual con un error — se deja lo último bueno visible y
+      // se reintenta en el próximo ciclo.
+      if (esSilencioso) { if (window.console && console.warn) console.warn('repomar refresh:', err.message); return; }
       document.getElementById('repomar-content').innerHTML =
         '<div class="repomar-error">No se pudo cargar la información en este momento.<br><span style="font-size:11px;color:var(--txt3)">' + err.message + '</span></div>';
     });
 }
 
-cargarDatos();
-setInterval(cargarDatos, REFRESH_MS);
+var _repomarCacheado = _repomarLeerCache();
+if (_repomarCacheado && _repomarCacheado.data) {
+  _lastBuques = _repomarCacheado.data.buques || [];
+  render(_repomarCacheado.data);
+  cargarDatos(true); // refresca por detrás sin volver a mostrar el spinner
+} else {
+  cargarDatos(false);
+}
+setInterval(function() { cargarDatos(true); }, REFRESH_MS);
 window.addEventListener('resize', function() {
   clearTimeout(window._repomarResizeTimer);
   window._repomarResizeTimer = setTimeout(function() { drawArrows(_lastBuques); }, 120);
