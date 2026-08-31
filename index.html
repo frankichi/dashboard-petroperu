@@ -30435,7 +30435,15 @@ window.renderPRepoMar = function() {
             '<button id="repomar-btn-confirmado" class="repomar-modo-btn' + (modo!=='proyectado'?' activo':'') + '" onclick="_repomarCambiarModoLocal(\'confirmado\')">🚢 Cabotaje Confirmado</button>' +
             '<button id="repomar-btn-proyectado" class="repomar-modo-btn' + (modo==='proyectado'?' activo':'') + '" onclick="_repomarCambiarModoLocal(\'proyectado\')">📋 Cabotaje Proyectado</button>' +
           '</div>' +
-          '<button class="repomar-programar-btn" onclick="showPage(\'pE\')" title="Ir al Simulador BT para programar movimientos de buques">➕ Programar buques</button>' +
+          // ⚠️ CORREGIDO — a pedido: "Programar buques" abre el
+          // Simulador BT interno (showPage('pE')) — una herramienta de
+          // trabajo, no algo que le corresponda a la vista gerencial
+          // compartida (?view=repomar), pensada solo para lectura por
+          // gerencia/jefaturas. Se oculta con el mismo criterio ya
+          // usado para "Compartir enlace" — solo aparece en el panel
+          // principal (dashboard interno con sesión).
+          (typeof REPOMAR_SHARE_MODE !== 'undefined' && REPOMAR_SHARE_MODE ? '' :
+          '<button class="repomar-programar-btn" onclick="showPage(\'pE\')" title="Ir al Simulador BT para programar movimientos de buques">➕ Programar buques</button>') +
           (typeof REPOMAR_SHARE_MODE !== 'undefined' && REPOMAR_SHARE_MODE ? '' :
           '<button class="repomar-share-btn" onclick="_repomarCompartir()">🔗 Compartir enlace</button>') +
         '</div>' +
