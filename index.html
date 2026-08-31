@@ -29448,7 +29448,18 @@ function _repomarFetchBTMapCompleto() {
 
 function _buildRepoMarBuques() {
   var buquesMap = {}; // "BUQUE|VIAJE" -> { buque, viaje, legs:[], cargaInicial:{} }
-  var fechaRef = (typeof currentDate !== 'undefined' && currentDate) ? currentDate : new Date().toISOString().slice(0,10);
+  // ⚠️ CORREGIDO — bug real confirmado: URUBAMBA no aparecía porque
+  // fechaRef usaba `currentDate` (la fecha GLOBAL del dashboard, que es
+  // el último día con "cierre" suficiente de inventario — para las
+  // tablas de Registro Diario/Cobertura eso está bien, pero acá no
+  // aplica). "Reposiciones Marítimas" es tracking EN VIVO de naves, no
+  // una vista histórica — necesita la fecha real de HOY siempre, sin
+  // importar qué día esté seleccionado en el resto del dashboard.
+  // Con currentDate desfasado (ej. 29/08 mientras hoy es 31/08),
+  // diasDesdeCompletado salía NEGATIVO para una entrega recién
+  // completada el 31/08 → el filtro "diasDesdeCompletado < 0" la
+  // descartaba por completo, como si nunca hubiera ocurrido.
+  var fechaRef = new Date().toISOString().slice(0,10);
   _repomarFetchBTMapCompleto(); // dispara la carga si todavía no se pidió
 
   // ⚠️ CORREGIDO — bug real confirmado: antes se recorría "por cada
