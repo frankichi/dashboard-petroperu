@@ -1585,14 +1585,24 @@ var _solPrevPendingCount = -1; // -1 = aún no cargado, evita toast en la primer
 
 function _solLoad(_isRetry) {
   var sess = window._dashSession || {};
-  if (!sess.token) { console.warn('[solicitudes] sin token de sesión aún'); return; }
+  // ⚠️ CORREGIDO — a pedido: antes esta función no devolvía nada
+  // aprovechable — quien la llamaba (ej. tras aprobar una solicitud)
+  // no tenía forma de saber CUÁNDO terminó de verdad, y tenía que
+  // adivinar con un setTimeout de tiempo fijo. Si la respuesta tardaba
+  // más que ese tiempo fijo (arranque en frío de Apps Script, conexión
+  // lenta), el panel se redibujaba con datos VIEJOS — la solicitud
+  // aprobada seguía viéndose como pendiente por un rato, dando la
+  // sensación de que "demora en desaparecer la notificación". Ahora
+  // devuelve la promesa real — quien la llame puede encadenar con
+  // .then() y saber con certeza cuándo los datos ya están frescos.
+  if (!sess.token) { console.warn('[solicitudes] sin token de sesión aún'); return Promise.resolve(); }
   // No usar CONFIG.API_URL aquí: esta función puede ejecutarse muy temprano
   // en la carga (desde el flujo de login inline), antes de que el script
   // llegue a la declaración "const CONFIG = {...}" más abajo — acceder a
   // un const antes de su línea de declaración lanza ReferenceError (zona
   // muerta temporal). Se usa la URL directa como referencia segura.
   var API_URL_SAFE = 'https://script.google.com/macros/s/AKfycbwL5Gec0EmZgha2rNUaORMDT6MBuouyIlV07tlMpQo9O1YcgkiWJdoQUmIafMQhF2kgUg/exec';
-  fetch(API_URL_SAFE + '?action=getTodasSolicitudes&token=' + sess.token, {redirect:'follow'})
+  return fetch(API_URL_SAFE + '?action=getTodasSolicitudes&token=' + sess.token, {redirect:'follow'})
     .then(function(r){ return r.text(); })
     .then(function(txt) {
       var data;
@@ -1603,7 +1613,7 @@ function _solLoad(_isRetry) {
         // Reintentar una vez antes de rendirse.
         if (!_isRetry) {
           console.warn('[solicitudes] respuesta no-JSON (cold start), reintentando en 1.2s...');
-          setTimeout(function(){ _solLoad(true); }, 1200);
+          return new Promise(function(resolve) { setTimeout(resolve, 1200); }).then(function(){ return _solLoad(true); });
         } else {
           console.warn('[solicitudes] respuesta no-JSON tras reintento, se omite esta carga.');
         }
@@ -1625,7 +1635,7 @@ function _solLoad(_isRetry) {
       console.log('[solicitudes] cargadas: ' + _solCache.length + ' (filas en sheet: ' + ((data._debug && data._debug.filas_sheet) || 0) + ')');
       _solUpdateBadge();
     }).catch(function(e){
-      if (!_isRetry) { setTimeout(function(){ _solLoad(true); }, 1200); }
+      if (!_isRetry) { return new Promise(function(resolve) { setTimeout(resolve, 1200); }).then(function(){ return _solLoad(true); }); }
       else console.warn('[solicitudes] error de red', e);
     });
 }
@@ -1815,12 +1825,23 @@ function _solResponder(id, aprobado) {
   }).then(function(r){ return r.json(); })
   .then(function(res) {
     if (res.success) {
-      _solLoad();
-      setTimeout(_solRenderPanel, 600);
-      if (aprobado && typeof _refreshAllData === 'function') {
-        // Refrescar todo el dashboard: coberturas, gráficos, seguimiento
-        setTimeout(_refreshAllData, 800);
-      }
+      // ⚠️ CORREGIDO — bug real confirmado ("demora en registrarse la
+      // actualización para que desaparezca la notificación"): antes se
+      // llamaba a _solLoad() y, sin esperar a que terminara de verdad,
+      // se redibujaba el panel 600ms después (un tiempo fijo adivinado)
+      // — si la respuesta tardaba más (arranque en frío de Apps Script,
+      // conexión lenta), el panel mostraba datos viejos, y la solicitud
+      // recién aprobada seguía apareciendo como pendiente por un rato.
+      // Ahora se encadena con el .then() real de _solLoad() — el panel
+      // se redibuja EXACTAMENTE cuando los datos frescos ya llegaron,
+      // ni un instante antes.
+      _solLoad().then(function() {
+        _solRenderPanel();
+        if (aprobado && typeof _refreshAllData === 'function') {
+          // Refrescar todo el dashboard: coberturas, gráficos, seguimiento
+          _refreshAllData();
+        }
+      });
     } else {
       alert(res.message || 'No se pudo procesar la solicitud.');
       if (btn) { btn.disabled = false; btn.textContent = aprobado ? '\u2713 Aprobar y aplicar' : '\u2715 Rechazar'; }
@@ -1831,7 +1852,7 @@ function _solResponder(id, aprobado) {
   });
 }
 
-// Auto-load solicitudes: reintenta hasta que haya sesión, luego cada 30s
+// Auto-load solicitudes: reintenta hasta que haya sesión, luego cada 10s
 (function _solAutoPoll() {
   var tries = 0;
   var kick = setInterval(function() {
@@ -1840,7 +1861,13 @@ function _solResponder(id, aprobado) {
     if (sess.token) {
       clearInterval(kick);
       _solLoad();
-      setInterval(_solLoad, 30000); // cada 30 segundos
+      // ⚠️ CORREGIDO — a pedido: "las notificaciones sean más veloces" —
+      // antes se sondeaba cada 30 segundos, así que una solicitud nueva
+      // (una planta pidiendo una corrección) podía tardar hasta medio
+      // minuto en aparecer en el Panel de Control. Bajado a 10 segundos
+      // — sigue siendo un sondeo liviano (una sola llamada GET), no
+      // representa una carga significativa extra para el backend.
+      setInterval(_solLoad, 10000); // cada 10 segundos
     } else if (tries > 40) { // ~20s máx esperando sesión
       clearInterval(kick);
     }

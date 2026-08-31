@@ -1056,7 +1056,14 @@ function rdGet(action, params) {
   if (RD.rol === 'admin' && RD.plantaAdminVista) extra.plantaAdmin = RD.plantaAdminVista;
   var qs = new URLSearchParams(Object.assign(extra, params || {}));
   var ctrl = new AbortController();
-  var tid  = setTimeout(function(){ ctrl.abort(); }, 15000);
+  // ⚠️ CORREGIDO — bug real confirmado ("No se pudo cargar tu reporte"):
+  // este límite era de solo 15 segundos, la MITAD que rdPost (30s) —
+  // sin ninguna razón real para que leer sea más rápido que guardar.
+  // Un arranque en frío de Google Apps Script (normal tras un rato sin
+  // uso) puede tardar más de 15s perfectamente bien — la petición se
+  // abortaba sola, aunque el backend hubiera respondido bien un segundo
+  // después. Ahora usa el mismo margen que rdPost.
+  var tid  = setTimeout(function(){ ctrl.abort(); }, 30000);
   return fetch(API_URL + '?' + qs.toString(), { method: 'GET', redirect: 'follow', cache: 'no-store', signal: ctrl.signal })
     .then(function(r) { clearTimeout(tid); return r.json(); })
     .catch(function(e) { clearTimeout(tid); throw e; });
@@ -2149,9 +2156,39 @@ function rdRefreshMiReporte() {
     if (usarLoaderCompleto) rdShowLoader(false); else rdShowLoaderLocal(false);
     if (res.success) window._rdMiReporteCache[cacheKey] = res;
     _rdAplicarReporteResp(res, hoy);
-  }).catch(() => {
-    if (usarLoaderCompleto) rdShowLoader(false); else rdShowLoaderLocal(false);
-    rdToast('No se pudo cargar tu reporte', 'error');
+  }).catch(function(errPrimerIntento) {
+    // ⚠️ AGREGADO — bug real confirmado ("No se pudo cargar tu
+    // reporte", pantalla vacía sin ninguna acción posible): antes, ante
+    // CUALQUIER falla (timeout, arranque en frío de Apps Script,
+    // hipo de red), se mostraba un aviso que desaparece solo a los
+    // pocos segundos y la sección de "Existencias por producto" se
+    // quedaba completamente vacía, sin ningún botón para volver a
+    // intentar — la única salida era recargar toda la página a mano.
+    // Ahora se reintenta automáticamente UNA vez (mismo patrón ya usado
+    // en otras partes de este archivo para el arranque en frío) — la
+    // mayoría de estos fallos son pasajeros y el reintento solo basta.
+    // Si el segundo intento TAMBIÉN falla, recién ahí se muestra un
+    // botón real de "Reintentar" dentro de la propia sección, en vez
+    // de dejarla vacía.
+    console.warn('[rdRefreshMiReporte] primer intento falló, reintentando en 1.5s...', errPrimerIntento);
+    return new Promise(function(resolve) { setTimeout(resolve, 1500); }).then(function() {
+      return rdGet('rdGetMiReporte', { token: RD.token, fecha: hoy }).then(res => {
+        if (usarLoaderCompleto) rdShowLoader(false); else rdShowLoaderLocal(false);
+        if (res.success) window._rdMiReporteCache[cacheKey] = res;
+        _rdAplicarReporteResp(res, hoy);
+      });
+    }).catch(function() {
+      if (usarLoaderCompleto) rdShowLoader(false); else rdShowLoaderLocal(false);
+      rdToast('No se pudo cargar tu reporte', 'error');
+      var cont = document.getElementById('prodRows');
+      if (cont) {
+        cont.innerHTML =
+          '<div style="padding:28px 16px;text-align:center;color:#7a8699">' +
+            '<div style="font-size:13px;margin-bottom:12px">No se pudo cargar el reporte de esta fecha. Puede ser una demora pasajera de conexión.</div>' +
+            '<button onclick="rdRefreshMiReporte()" style="background:#c8102e;color:#fff;border:none;padding:9px 20px;border-radius:8px;font-size:12.5px;font-weight:700;cursor:pointer">🔄 Reintentar</button>' +
+          '</div>';
+      }
+    });
   });
 }
 
@@ -4054,6 +4091,30 @@ function rdLoadCatalogo() {
     if (!res.success) return;
     RD.plantas = res.plantas; RD.productosPorPlanta = res.productosPorPlanta;
     RD.refinerias = res.refinerias || [];
+    // ⚠️ AGREGADO — bug real confirmado: la selección "ver como planta"
+    // del admin (🛠️) se guarda en localStorage y se reutiliza para
+    // siempre entre sesiones, sin ninguna verificación de que ese
+    // valor siga siendo válido. Si quedó guardado con un nombre que ya
+    // no coincide exactamente con la lista actual del servidor (ej.
+    // de una versión anterior del sistema, antes de alguna corrección
+    // de nombres), el filtro RD_PLANTAS.indexOf(...) del backend lo
+    // descartaba en silencio — el admin seguía viendo el selector como
+    // si estuviera "en esa planta", pero el servidor en realidad
+    // ignoraba la selección por completo, tratando cualquier guardado
+    // como si fuera de su propia cuenta (ej. "Administrador", que no
+    // es una planta real) — bloqueando el guardado sin ningún aviso
+    // claro de por qué. Ahora se detecta apenas se carga el catálogo:
+    // si el valor guardado ya no aparece en la lista actual, se limpia
+    // automáticamente y se avisa con claridad, en vez de fallar en
+    // silencio.
+    if (RD.plantaAdminVista && RD.plantas.indexOf(RD.plantaAdminVista) === -1) {
+      var _plantaVistaVieja = RD.plantaAdminVista;
+      RD.plantaAdminVista = '';
+      localStorage.removeItem('rd_planta_admin_vista');
+      setTimeout(function() {
+        rdToast('⚠️ Tu selección de "ver como ' + _plantaVistaVieja + '" ya no era válida y se limpió — vuelve a elegir la planta en el menú 🛠️ de arriba antes de reportar.', 'error');
+      }, 500);
+    }
     const sel = document.getElementById('regPlanta');
     sel.innerHTML = '<option value="">Selecciona tu instalación…</option>' +
       res.plantas.map(p => '<option value="' + p + '">' + plantaLabel(p) + '</option>').join('');
