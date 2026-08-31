@@ -29542,6 +29542,16 @@ function _buildRepoMarBuques() {
   }
 
   var buques = Object.keys(buquesMap).map(function(k){ return buquesMap[k]; });
+  // ⚠️ AGREGADO — a pedido: diagnóstico de por qué un buque puntual no
+  // aparece en este módulo interno (que arma los datos en JS, distinto
+  // del backend). Abrir la consola del navegador en esta vista y
+  // escribir: window._repomarUltimoBuild — muestra qué rama se usó
+  // (cache completo vs. respaldo por producto) y la lista de buques
+  // que quedó armada en este paso, antes de cualquier filtro posterior.
+  window._repomarUltimoBuild = {
+    fuente: window._repomarBTMapCompletoCache ? 'cache_completo (getBTMapCompleto)' : 'respaldo_por_producto (bt_lista, solo productos con cobertura)',
+    buques: buques.map(function(b){ return b.buque; })
+  };
   buques.forEach(function(b) {
     b.legs.sort(function(a, c) { return (a.fecha_hasta||'').localeCompare(c.fecha_hasta||''); });
     var pos = (typeof _navPosData !== 'undefined' && _navPosData) ? _navPosData[b.buque.toUpperCase()] : null;
@@ -30403,8 +30413,13 @@ window.renderPRepoMar = function() {
       // destino, sin importar si el siguiente punto queda a la
       // izquierda o a la derecha del anterior, el arco se dibuja
       // correctamente por arriba de ambos.
+      // Punto de partida: CENTRO de la caja (no el borde superior) — a
+      // pedido, para que la primera flecha no arranque "muy confusa"
+      // desde el borde y en su lugar salga desde el medio de la caja
+      // del buque (mismo fix ya aplicado en repomar.html — este módulo
+      // interno tiene su propia copia de drawArrows, independiente).
       var prevX = sRect.left + sRect.width/2 - gridRect.left;
-      var prevY = sRect.top - gridRect.top;
+      var prevY = sRect.top + sRect.height/2 - gridRect.top;
       // ⚠️ CORREGIDO — a pedido: iterar sobre los GRUPOS (terminal+fecha
       // combinados), no sobre cada escala individual — así la flecha
       // conecta caja combinada con caja combinada, en vez de intentar
