@@ -28074,6 +28074,22 @@ function getCapacidad(planta, producto) {
   const key = planta + '|' + producto;
   if (window.capMap && window.capMap[key] && window.capMap[key].cap > 0)
     return window.capMap[key].cap;
+  // ⚠️ CORREGIDO — bug real confirmado y grave (Mollendo · G. Premium:
+  // el dashboard mostraba "vacío 13.8 MB" cuando el último E&D subido
+  // decía 8.8 MB): esta función SOLO revisaba dos fuentes — window.capMap
+  // (una caché que vive solo en memoria del navegador, y solo se llena
+  // si la MISMA persona subió el E&D en ESA misma sesión — vacía para
+  // cualquier otra persona, o tras recargar la página) y STATIC_CAP,
+  // una tabla FIJA escrita directamente en el código, congelada en el
+  // valor que tenía el día que se escribió (25 MB para este caso), sin
+  // ninguna conexión con la hoja real 'capacidad_referencia'. Nunca
+  // consultaba _capRefCache — la MISMA fuente real del servidor que
+  // getFondos() (justo abajo) sí usa correctamente, y que ya se
+  // actualiza sola con cada carga de E&D. Ahora se prioriza esa fuente
+  // real ANTES de caer en la tabla fija — 25-(8.494+2.727)=13.78≈13.8,
+  // el número exacto reportado, confirmando esta causa con certeza.
+  var _refEntryCap = (typeof _capRefIndexed === 'function') ? _capRefIndexed()[key] : null;
+  if (_refEntryCap && _refEntryCap.capacidad > 0) return _refEntryCap.capacidad;
   if (STATIC_CAP[key]) return STATIC_CAP[key];
   const norm = producto.replace('G. ','Gasolina ').replace('G.','Gasolina');
   if (STATIC_CAP[planta + '|' + norm]) return STATIC_CAP[planta + '|' + norm];
