@@ -14332,6 +14332,23 @@ function simExportCSV() {
   a.download = 'sim_bt_'+(currentDate||'hoy')+'.csv';
   a.click();
 }
+// ⚠️ AGREGADO — a pedido: vaciado TOTAL y directo del Cabotaje
+// Proyectado, accesible desde la propia vista de Reposiciones
+// Marítimas (no solo desde el Simulador BT) — para generar una
+// proyección nueva sin arrastrar restos de la anterior. Borrar buques
+// uno por uno en el Simulador y olvidar el paso de "Guardar en GS" es
+// justamente la causa real confirmada de que una proyección vieja
+// siga reapareciendo tras recargar: en memoria ya estaba vacía, pero
+// nunca se persistió ese vacío en Sheets, así que la próxima carga
+// volvía a traer la simulación guardada anterior. Esta función hace
+// los 2 pasos SIEMPRE juntos, sin dejar ese hueco.
+async function _repomarVaciarProyectado() {
+  if (!confirm('Esto borra POR COMPLETO el Cabotaje Proyectado actual (todos los buques del Simulador BT), para que puedas armar una proyección nueva desde cero.\n\n¿Confirmas que quieres vaciarlo?')) return;
+  simShips = []; simNextId = 1; simActiveId = null; simInited = true;
+  await simSaveToGS(); // persiste el vacío en Google Sheets (mismo camino ya probado — ver simSaveToGS)
+  if (typeof renderPE === 'function') renderPE();
+  if (typeof renderPRepoMar === 'function') renderPRepoMar();
+}
 async function simSaveToGS() {
   const btn = document.getElementById('sim-save-btn');
   if (btn) { btn.textContent='⏳ Guardando...'; btn.disabled=true; }
@@ -30444,6 +30461,14 @@ window.renderPRepoMar = function() {
           // principal (dashboard interno con sesión).
           (typeof REPOMAR_SHARE_MODE !== 'undefined' && REPOMAR_SHARE_MODE ? '' :
           '<button class="repomar-programar-btn" onclick="showPage(\'pE\')" title="Ir al Simulador BT para programar movimientos de buques">➕ Programar buques</button>') +
+          // ⚠️ AGREGADO — a pedido: vaciado total del Cabotaje
+          // Proyectado, directo desde esta vista — solo visible en modo
+          // "proyectado" y solo en el panel principal (misma regla que
+          // "Programar buques": no le corresponde a la vista gerencial
+          // compartida, que es de solo lectura).
+          (modo === 'proyectado' && !(typeof REPOMAR_SHARE_MODE !== 'undefined' && REPOMAR_SHARE_MODE)
+            ? '<button class="repomar-programar-btn" style="border-color:#dc2626;color:#dc2626" onclick="_repomarVaciarProyectado()" title="Borra por completo el Cabotaje Proyectado actual, para armar una proyección nueva desde cero">🗑️ Vaciar proyección</button>'
+            : '') +
           (typeof REPOMAR_SHARE_MODE !== 'undefined' && REPOMAR_SHARE_MODE ? '' :
           '<button class="repomar-share-btn" onclick="_repomarCompartir()">🔗 Compartir enlace</button>') +
         '</div>' +
