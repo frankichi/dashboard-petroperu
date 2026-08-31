@@ -201,7 +201,7 @@ function _repomarMostrarTip(evt) {
   // página de Restricciones, para que ambos lugares digan lo mismo.
   var hayRestriccion = pron > 0 && vfact > 0 && vfact < pron;
   var pctRestr = hayRestriccion ? Math.round((1 - vfact/pron) * 100) : 0;
-  var diasGanadosPopup = (hayRestriccion && inv > 0) ? Math.max(0, Math.floor(inv/vfact) - Math.floor(inv/pron)) : 0;
+  var diasGanadosPopup = (hayRestriccion && inv > 0) ? Math.max(0, Math.round(inv/vfact) - Math.round(inv/pron)) : 0;
   var restrBloque = hayRestriccion
     ? '<div class="rct-restr-warn">\u2702\ufe0f Restricci\u00f3n activa \u2014 Venta Factible <b>' + pctRestr + '% por debajo</b> del pron\u00f3stico' + (diasGanadosPopup > 0 ? ' \u00b7 <b>+' + diasGanadosPopup + 'd</b> de cobertura ganados' : '') + '</div>'
     : (pron > 0 && vfact > 0 ? '<div class="rct-restr-ok">\u2713 Sin restricci\u00f3n \u2014 venta al ritmo del pron\u00f3stico</div>' : '');

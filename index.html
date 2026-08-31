@@ -6997,8 +6997,8 @@ function renderP1() {
           const pron    = pronDiarioAprobado(r);
           const vfact   = r.vfact || 0;
           const inv     = r.inv || 0;
-          const cobNorm = pron > 0 ? Math.floor(inv / pron) : 0;
-          const cobRestr = vfact > 0 ? Math.floor(inv / vfact) : cobNorm;
+          const cobNorm = pron > 0 ? Math.round(inv / pron) : 0;
+          const cobRestr = vfact > 0 ? Math.round(inv / vfact) : cobNorm;
           const diasGanados = Math.max(0, cobRestr - cobNorm);
           const redPct      = pron > 0 ? ((pron - vfact) / pron * 100) : 0;
           const pronPct     = Math.min(100, pron   / maxPron * 100);
@@ -7480,7 +7480,7 @@ function renderP1() {
           <div style="font-size:9.5px;text-transform:uppercase;letter-spacing:.5px;color:var(--txt3);margin-top:2px">Reducción promedio</div>
         </div>
         <div style="background:var(--bg3);border:1px solid var(--bdr);border-radius:10px;padding:12px;text-align:center">
-          <div style="font-size:26px;font-weight:800;color:#60a5fa">${(() => { const vals=restrictList.map(r=>{const p=pronDiarioAprobado(r);const vf=r.vfact||0;const inv=r.inv||0;if(!vf||!p||!inv)return 0;return Math.max(0,Math.floor(inv/vf)-Math.floor(inv/p));}).filter(v=>v>0); return vals.length?Math.round(vals.reduce((a,b)=>a+b,0)/vals.length)+'d':'—'; })()}</div>
+          <div style="font-size:26px;font-weight:800;color:#60a5fa">${(() => { const vals=restrictList.map(r=>{const p=pronDiarioAprobado(r);const vf=r.vfact||0;const inv=r.inv||0;if(!vf||!p||!inv)return 0;return Math.max(0,Math.round(inv/vf)-Math.round(inv/p));}).filter(v=>v>0); return vals.length?Math.round(vals.reduce((a,b)=>a+b,0)/vals.length)+'d':'—'; })()}</div>
           <div style="font-size:9.5px;text-transform:uppercase;letter-spacing:.5px;color:var(--txt3);margin-top:2px">Días ganados prom.</div>
         </div>
       </div>
@@ -7621,7 +7621,7 @@ function renderPR() {
         const pr =pronDiarioAprobado(r);
         const vf = r.vfact || 0, inv = r.inv || 0;
         if (!vf||!pr||!inv) return mx;
-        return Math.max(mx, Math.max(0, Math.floor(inv/vf) - Math.floor(inv/pr)));
+        return Math.max(mx, Math.max(0, Math.round(inv/vf) - Math.round(inv/pr)));
       }, 0);
       return {planta, rows, diasGanadosPl};
     }).sort((a,b) => {
@@ -7649,8 +7649,8 @@ function renderPR() {
         const pr  =pronDiarioAprobado(r);
         const vf  = r.vfact || 0, inv = r.inv || 0;
         const pct = pr > 0 ? Math.round((1-vf/pr)*100) : 0;
-        const cobN = (inv>0&&pr>0) ? Math.floor(inv/pr) : 0;
-        const cobR = (inv>0&&vf>0) ? Math.floor(inv/vf) : 0;
+        const cobN = (inv>0&&pr>0) ? Math.round(inv/pr) : 0;
+        const cobR = (inv>0&&vf>0) ? Math.round(inv/vf) : 0;
         const dias = Math.max(0, cobR-cobN);
         // ⚠️ CORREGIDO — bug real confirmado: "Nueva fecha cob." sumaba
         // solo los DÍAS GANADOS (cobR-cobN) a la fecha de hoy, en vez de
@@ -7757,7 +7757,7 @@ function renderPR() {
   const nPlantas = new Set(restrictList.map(r=>r.planta)).size;
   const redVals  = restrictList.map(r=>{const p=pronDiarioAprobado(r),vf=r.vfact||0;return p>0&&vf>0?Math.round((1-vf/p)*100):0;}).filter(v=>v>0);
   const redProm  = redVals.length ? redVals.reduce((a,b)=>a+b,0)/redVals.length : 0;
-  const diasVals = restrictList.map(r=>{const p=pronDiarioAprobado(r),vf=r.vfact||0,inv=r.inv||0;return (!vf||!p||!inv)?0:Math.max(0,Math.floor(inv/vf)-Math.floor(inv/p));}).filter(v=>v>0);
+  const diasVals = restrictList.map(r=>{const p=pronDiarioAprobado(r),vf=r.vfact||0,inv=r.inv||0;return (!vf||!p||!inv)?0:Math.max(0,Math.round(inv/vf)-Math.round(inv/p));}).filter(v=>v>0);
   const promDias = diasVals.length ? Math.round(diasVals.reduce((a,b)=>a+b,0)/diasVals.length) : 0;
   // ⚠️ AGREGADO — a pedido: resumen ejecutivo de una línea al tope de la
   // página — identifica la planta de mayor impacto (más días ganados)
@@ -7768,7 +7768,7 @@ function renderPR() {
   restrictList.forEach(r => {
     const p = pronDiarioAprobado(r), vf = r.vfact||0, inv = r.inv||0;
     if (!vf||!p||!inv) return;
-    const d = Math.max(0, Math.floor(inv/vf) - Math.floor(inv/p));
+    const d = Math.max(0, Math.round(inv/vf) - Math.round(inv/p));
     if (!porPlantaMax[r.planta] || d > porPlantaMax[r.planta]) porPlantaMax[r.planta] = d;
   });
   const topPlantaEntry = Object.entries(porPlantaMax).sort((a,b)=>b[1]-a[1])[0];
@@ -9187,7 +9187,7 @@ async function cobSaveToGS() {
       // VFact vienen con un dato atípico.
       if (r && ov.vfact > 0) {
         var invParaHorizonte = cobGetInv(r);
-        var diasHorizonte = invParaHorizonte > 0 ? Math.floor(invParaHorizonte / ov.vfact) : 0;
+        var diasHorizonte = invParaHorizonte > 0 ? Math.round(invParaHorizonte / ov.vfact) : 0;
         diasHorizonte = Math.max(0, Math.min(60, diasHorizonte));
         for (var _dh = 1; _dh <= diasHorizonte; _dh++) {
           var _fechaFutura = cobCalcFecha(fechaObjetivo, _dh);
@@ -28468,8 +28468,8 @@ function _asegurarCapRefCache(fnRerender) {
         const pron   = pronDiarioAprobado(r);
         const vf  = r.vfact || 0;
         const inv = (typeof cobGetInv === 'function') ? cobGetInv(r) : (r.inv || 0);
-        const cobNorm  = pron > 0 ? Math.floor(inv / pron)  : 0;
-        const cobRestr = vf   > 0 ? Math.floor(inv / vf)    : cobNorm;
+        const cobNorm  = pron > 0 ? Math.round(inv / pron)  : 0;
+        const cobRestr = vf   > 0 ? Math.round(inv / vf)    : cobNorm;
         const cob = cobRestr > 0 ? cobRestr
                   : cobNorm  > 0 ? cobNorm
                   : (r.cob   > 1 ? Math.round(r.cob) : 0);  // r.cob > 1 para filtrar valores inconsistentes
@@ -30254,7 +30254,7 @@ function _repomarMostrarTip(evt) {
   // debajo del pronóstico) — mismo criterio que ya usa Restricciones.
   var hayRestriccion = pron > 0 && vfact > 0 && vfact < pron;
   var pctRestr = hayRestriccion ? Math.round((1 - vfact/pron) * 100) : 0;
-  var diasGanadosPopup = (hayRestriccion && inv > 0) ? Math.max(0, Math.floor(inv/vfact) - Math.floor(inv/pron)) : 0;
+  var diasGanadosPopup = (hayRestriccion && inv > 0) ? Math.max(0, Math.round(inv/vfact) - Math.round(inv/pron)) : 0;
   var restrBloque = hayRestriccion
     ? '<div class="rct-restr-warn">✂️ Restricción activa — Venta Factible <b>' + pctRestr + '% por debajo</b> del pronóstico' + (diasGanadosPopup > 0 ? ' · <b>+' + diasGanadosPopup + 'd</b> de cobertura ganados' : '') + '</div>'
     : (pron > 0 && vfact > 0 ? '<div class="rct-restr-ok">✓ Sin restricción — venta al ritmo del pronóstico</div>' : '');
