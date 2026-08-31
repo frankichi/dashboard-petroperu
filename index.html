@@ -30095,7 +30095,28 @@ window.renderPRepoMar = function() {
   // todavía no llegó").
   function _repomarEstadoRealEnTerminal(buque, terminalNorm) {
     var pos = (typeof _navPosData !== 'undefined' && _navPosData) ? _navPosData[buque.toUpperCase()] : null;
-    if (!pos || !pos.ubicacion) return null;
+    if (!pos) return null;
+    // ⚠️ AGREGADO — mismo fix que en el backend (handleGetRepoMarData):
+    // detecta el patrón "INGRESARÁ A [terminal] A LA SALIDA DEL BT
+    // [otro buque]" dentro del texto libre de estado_nav — un caso real
+    // confirmado (UCAYALI mostraba "E.T.A. 02/09/26" para Conchán,
+    // cuando en realidad ya está FONDEADO en bahía Callao, esperando
+    // que el BT URUBAMBA desocupe el muelle — ya no hay ningún
+    // "estimado" que mostrar). Se revisa PRIMERO, antes del chequeo de
+    // ubicación simple de más abajo — el buque puede estar fondeado en
+    // un punto que ni siquiera contiene el nombre del terminal de
+    // destino (Callao ≠ Conchán como texto), así que ese chequeo por sí
+    // solo nunca lo hubiera detectado.
+    if (pos.estado_nav) {
+      var mEsperaCli = pos.estado_nav.toUpperCase().match(/INGRESAR[ÁA]\s+A\s+(?:TSM\s+)?([A-ZÁÉÍÓÚÑ0-9\s]+?)\s+A\s+LA\s+SALIDA\s+DEL\s+B[\/\.]?T\s+([A-ZÁÉÍÓÚÑ0-9\s]+)/);
+      if (mEsperaCli) {
+        var terminalEsperaNorm = _repomarNormPuerto(mEsperaCli[1].trim());
+        if (terminalEsperaNorm.indexOf(terminalNorm) !== -1) {
+          return 'Fondeado \u2014 ingresar\u00e1 a la salida del B/T ' + mEsperaCli[2].trim();
+        }
+      }
+    }
+    if (!pos.ubicacion) return null;
     // ⚠️ CORREGIDO — bug propio confirmado con prueba: pos.ubicacion trae
     // el nombre del terminal CON tilde ("AMARRADO EN CONCHÁN"), pero
     // terminalNorm (via _repomarNormPuerto) llega SIN tilde ("CONCHAN")
