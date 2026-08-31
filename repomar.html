@@ -291,12 +291,24 @@ function render(data) {
         }).join('');
         return '<div class="repomar-cell" style="background:transparent;border:none;flex-direction:column;padding:2px">' + chips + '</div>';
       }).join('');
-      var mensajeRetornoPendiente = b.ultimaEscalaPendienteFecha
-        ? 'Se sabrá tras completar su última escala (' + fmtCorta(b.ultimaEscalaPendienteFecha) + ')'
-        : 'Aún sin ETA de retorno';
-      var retornoTxt = b.retornoTalara
-        ? '<div class="repomar-legbox" data-retorno-cell="' + idx + '" style="border-color:#0071A4"><div class="repomar-legdate" style="color:#0071A4">Retorno Talara</div><div class="repomar-legprod">' + fmtCorta(b.retornoTalara) + fmtHora(b.retornoTalara) + '</div></div>'
-        : '<div class="repomar-retorno-pendiente">' + mensajeRetornoPendiente + '</div>';
+      // ⚠️ CORREGIDO — a pedido: antes, sin un E.T.A. real confirmado,
+      // se mostraba un mensaje ambiguo sin ninguna fecha sobre la cual
+      // planificar. Ahora, si el backend pudo estimar el retorno (tabla
+      // de distancias + 1 día de estadía), se muestra esa fecha
+      // proyectada — con un estilo visual distinto (ámbar, ~) para que
+      // quede claro que es una ESTIMACIÓN, no un dato confirmado como
+      // el retorno real (azul, sin el ~).
+      var retornoTxt;
+      if (b.retornoTalara) {
+        retornoTxt = '<div class="repomar-legbox" data-retorno-cell="' + idx + '" style="border-color:#0071A4"><div class="repomar-legdate" style="color:#0071A4">Retorno Talara</div><div class="repomar-legprod">' + fmtCorta(b.retornoTalara) + fmtHora(b.retornoTalara) + '</div></div>';
+      } else if (b.retornoEstimado) {
+        retornoTxt = '<div class="repomar-legbox" data-retorno-cell="' + idx + '" style="border-color:#d97706;border-style:dashed" title="Estimado con la tabla de distancias — última escala + 1 día de estadía + días de navegación hasta Talara. No es un E.T.A. confirmado."><div class="repomar-legdate" style="color:#d97706">~ Retorno Talara (est.)</div><div class="repomar-legprod">' + fmtCorta(b.retornoEstimado) + '</div></div>';
+      } else {
+        var mensajeRetornoPendiente = b.ultimaEscalaPendienteFecha
+          ? 'Se sabrá tras completar su última escala (' + fmtCorta(b.ultimaEscalaPendienteFecha) + ')'
+          : 'Aún sin ETA de retorno';
+        retornoTxt = '<div class="repomar-retorno-pendiente">' + mensajeRetornoPendiente + '</div>';
+      }
       var retornoCell = '<div class="repomar-cell" style="background:transparent;border:none;padding:4px">' + retornoTxt + '</div>';
       return '<div class="repomar-row repomar-ship-inner-row" data-ship-row="' + idx + '" style="grid-template-columns:' + cols + '">' + shipBox + legCells + retornoCell + '</div>';
     }).join('');

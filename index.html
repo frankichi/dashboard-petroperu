@@ -29257,6 +29257,31 @@ function _repomarNormPuerto(t) {
     .replace(/[ÁÀ]/g,'A').replace(/[ÉÈ]/g,'E').replace(/[ÍÌ]/g,'I').replace(/[ÓÒ]/g,'O').replace(/[ÚÙ]/g,'U');
 }
 
+// ⚠️ AGREGADO — a pedido: mismo mecanismo que el backend
+// (handleGetRepoMarData) — tabla de distancias en horas hacia Talara,
+// de la "Tabla de Distancias" oficial de la flota, y la estimación de
+// retorno cuando todavía no hay un E.T.A. real confirmado por
+// Posicionamiento de Naves. Se duplica acá porque esta vista
+// (Reposiciones Marítimas dentro del panel principal) calcula todo del
+// lado del cliente, con su propia copia de esta lógica — nunca pasa
+// por handleGetRepoMarData (ese endpoint es exclusivo del enlace
+// público repomar.html).
+var REPOMAR_DIST_A_TALARA_HORAS = {
+  'BAYOVAR': 7, 'ETEN': 15, 'SALAVERRY': 23, 'CHIMBOTE': 27, 'SUPE': 36,
+  'CALLAO': 42, 'CONCHAN': 44, 'PISCO': 52, 'MOLLENDO': 78, 'ILO': 82
+};
+function _repomarEstimarRetorno(terminalNorm, fechaUltimaEscala) {
+  if (!terminalNorm || !fechaUltimaEscala) return '';
+  var horas = REPOMAR_DIST_A_TALARA_HORAS[terminalNorm];
+  if (!horas) return '';
+  var diasViaje = Math.ceil(horas / 24);
+  var diasTotal = 1 + diasViaje;
+  var p = fechaUltimaEscala.slice(0, 10).split('-').map(Number);
+  var d = new Date(Date.UTC(p[0], p[1] - 1, p[2]));
+  d.setUTCDate(d.getUTCDate() + diasTotal);
+  return d.toISOString().slice(0, 10);
+}
+
 // ⚠️ CORREGIDO — bug real confirmado ("fmtCorta is not defined" en la
 // consola cada vez que se pasaba el mouse sobre una celda de
 // cobertura): estas 2 funciones vivían DENTRO de renderPRepoMar (una
@@ -29551,16 +29576,21 @@ function _buildRepoMarBuques() {
     // propuesto solo se usa si es POSTERIOR (o igual) a la última
     // escala PENDIENTE de este buque — si es anterior, es
     // matemáticamente imposible que sea real, y se descarta.
-    var ultimaEscalaPendiente = null;
+    var ultimaEscalaPendiente = null, _terminalUltimaEscalaCliente = null;
     b.legs.forEach(function(l) {
       if (l.estado !== 'COMPLETADO' && l.fecha_hasta) {
         var f = l.fecha_hasta.slice(0,10);
-        if (!ultimaEscalaPendiente || f > ultimaEscalaPendiente) ultimaEscalaPendiente = f;
+        if (!ultimaEscalaPendiente || f > ultimaEscalaPendiente) { ultimaEscalaPendiente = f; _terminalUltimaEscalaCliente = l.terminalNorm; }
       }
     });
     var retornoEsValido = !ultimaEscalaPendiente || !retornoPropuesto || retornoPropuesto.slice(0,10) >= ultimaEscalaPendiente;
     b.retornoTalara = retornoEsValido ? retornoPropuesto : '';
     b.ultimaEscalaPendienteFecha = ultimaEscalaPendiente; // para mostrar un mensaje útil si el retorno no es confiable todavía
+    // ⚠️ AGREGADO — a pedido: si no hay E.T.A. real, estimar el retorno
+    // con la tabla de distancias — ver _repomarEstimarRetorno arriba.
+    b.retornoEstimado = (!b.retornoTalara && ultimaEscalaPendiente)
+      ? _repomarEstimarRetorno(_terminalUltimaEscalaCliente, ultimaEscalaPendiente)
+      : '';
     // ⚠️ AGREGADO — a pedido: si el buque TODAVÍA no zarpó, mostrar su
     // estado real y actual en Talara (cargando, amarrado, fondeado,
     // etc.) en vez de un mensaje genérico — usando los mismos campos
@@ -30229,12 +30259,22 @@ window.renderPRepoMar = function() {
       // _buildRepoMarBuques), el mensaje ahora dice explícitamente
       // después de qué escala se sabrá el retorno, en vez de un aviso
       // genérico sin contexto.
-      var mensajeRetornoPendiente = b.ultimaEscalaPendienteFecha
-        ? 'Se sabrá tras completar su última escala (' + fmtCorta(b.ultimaEscalaPendienteFecha) + ')'
-        : 'Aún sin ETA de retorno';
-      var retornoTxt = b.retornoTalara
-        ? '<div class="repomar-legbox" data-retorno-cell="' + idx + '" style="border-color:#0071A4"><div class="repomar-legdate" style="color:#0071A4">Retorno Talara</div><div class="repomar-legprod">' + fmtCorta(b.retornoTalara) + fmtHora(b.retornoTalara) + '</div></div>'
-        : '<div class="repomar-retorno-pendiente">' + mensajeRetornoPendiente + '</div>';
+      var retornoTxt;
+      if (b.retornoTalara) {
+        retornoTxt = '<div class="repomar-legbox" data-retorno-cell="' + idx + '" style="border-color:#0071A4"><div class="repomar-legdate" style="color:#0071A4">Retorno Talara</div><div class="repomar-legprod">' + fmtCorta(b.retornoTalara) + fmtHora(b.retornoTalara) + '</div></div>';
+      } else if (b.retornoEstimado) {
+        // ⚠️ AGREGADO — a pedido: en vez del mensaje ambiguo "se sabrá
+        // tras completar su última escala", se muestra una fecha
+        // proyectada (tabla de distancias + 1 día de estadía) — con
+        // estilo visual distinto (ámbar, punteado, "~") para dejar
+        // claro que es una ESTIMACIÓN, no un E.T.A. confirmado.
+        retornoTxt = '<div class="repomar-legbox" data-retorno-cell="' + idx + '" style="border-color:#d97706;border-style:dashed" title="Estimado con la tabla de distancias — última escala + 1 día de estadía + días de navegación hasta Talara. No es un E.T.A. confirmado."><div class="repomar-legdate" style="color:#d97706">~ Retorno Talara (est.)</div><div class="repomar-legprod">' + fmtCorta(b.retornoEstimado) + '</div></div>';
+      } else {
+        var mensajeRetornoPendiente = b.ultimaEscalaPendienteFecha
+          ? 'Se sabrá tras completar su última escala (' + fmtCorta(b.ultimaEscalaPendienteFecha) + ')'
+          : 'Aún sin ETA de retorno';
+        retornoTxt = '<div class="repomar-retorno-pendiente">' + mensajeRetornoPendiente + '</div>';
+      }
       var retornoCell = '<div class="repomar-cell" style="background:transparent;border:none;padding:4px">' + retornoTxt + '</div>';
       return '<div class="repomar-row repomar-ship-inner-row" data-ship-row="' + idx + '" style="grid-template-columns:' + cols + '">' + shipBox + legCells + retornoCell + '</div>';
     }).join('');
