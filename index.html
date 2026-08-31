@@ -965,11 +965,11 @@ body.light .restr-plantacard{background:#fff;box-shadow:0 1px 4px rgba(10,30,70,
 .restr-plantacard-name{font-size:14.5px;font-weight:800;color:var(--txt);letter-spacing:-.01em}
 .restr-plantacard-count{font-size:10.5px;color:var(--txt3)}
 .restr-plantacard-gain{margin-left:auto;font-size:11px;font-weight:700;color:var(--acc2);background:var(--acc)14;border:1px solid var(--acc)35;border-radius:20px;padding:3px 11px}
-.restr-plantacard-body{display:flex;flex-direction:column}
-.restr-row{display:grid;grid-template-columns:1.5fr 1fr 1fr;gap:18px;align-items:center;padding:14px 18px;border-top:1px solid var(--bdr)44}
-.restr-plantacard-body .restr-row:first-child{border-top:none}
-@media(max-width:900px){.restr-row{grid-template-columns:1fr}}
-.restr-row-prod{display:flex;align-items:center;gap:9px;margin-bottom:7px}
+.restr-plantacard-body{display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:12px;padding:14px 18px}
+.restr-row{background:var(--card2);border:1px solid var(--bdr)66;border-radius:10px;padding:13px 15px;display:flex;flex-direction:column;gap:10px;transition:border-color .15s}
+.restr-row:hover{border-color:var(--bdr2)}
+body.light .restr-row{background:#f8fafc}
+.restr-row-prod{display:flex;align-items:center;gap:9px}
 .restr-prod-name{font-size:13px;font-weight:800;color:var(--txt)}
 .restr-sev-tag{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.3px;padding:2px 8px;border-radius:10px;border:1px solid}
 .restr-row-bar{display:flex;align-items:center;gap:10px}
@@ -979,15 +979,17 @@ body.light .restr-plantacard{background:#fff;box-shadow:0 1px 4px rgba(10,30,70,
 .restr-gauge-text{font-family:var(--mono);font-size:8.5px;font-weight:800;text-anchor:middle}
 .restr-bar-labels{display:flex;flex-direction:column;gap:2px;font-size:10px;color:var(--txt3)}
 .restr-bar-labels strong{font-family:var(--mono);font-size:11px}
-.restr-row-gain{display:flex;flex-direction:column;align-items:center;gap:5px;text-align:center}
-.restr-gain-cob{display:flex;align-items:center;gap:6px;font-family:var(--mono);font-size:12px;color:var(--txt3)}
-.restr-gain-arrow{color:var(--txt3);font-size:11px}
-.restr-gain-badge{font-size:13px;font-weight:800;color:#fff;background:linear-gradient(90deg,var(--acc),var(--acc2));border-radius:20px;padding:4px 14px;letter-spacing:-.01em;white-space:nowrap}
-.restr-row-side{display:flex;flex-direction:column;gap:6px;font-size:11.5px;color:var(--txt2);text-align:right}
-@media(max-width:900px){.restr-row-side{text-align:left}}
-.restr-side-lbl{display:block;font-size:8.5px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--txt3);margin-bottom:1px}
+.restr-row-foot{display:flex;align-items:center;justify-content:space-between;gap:10px;padding-top:9px;border-top:1px solid var(--bdr)55}
+.restr-gain-cob{display:flex;align-items:center;gap:5px;font-family:var(--mono);font-size:11px;color:var(--txt3);white-space:nowrap}
+.restr-gain-arrow{color:var(--txt3);font-size:10px}
+.restr-gain-badge{font-size:11.5px;font-weight:800;color:#fff;background:linear-gradient(90deg,var(--acc),var(--acc2));border-radius:20px;padding:3px 11px;letter-spacing:-.01em;white-space:nowrap}
+.restr-gain-badge.cero{background:var(--bg3);color:var(--txt3);font-weight:600}
+.restr-row-side{display:flex;flex-direction:column;gap:5px;font-size:11px;color:var(--txt2);text-align:right;min-width:0}
+.restr-side-lbl{display:block;font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--txt3);margin-bottom:1px}
 .restr-side-date{font-family:var(--mono);font-weight:700;color:var(--acc2)}
+.restr-side-bt{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .restr-side-bt strong{color:var(--txt)}
+.restr-side-empty{color:var(--txt3);font-size:10.5px}
 </style>
   <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
   <link rel="dns-prefetch" href="https://script.google.com">
@@ -7687,13 +7689,18 @@ function renderPR() {
           <path class="restr-gauge-fill" style="stroke:${gapCol}" stroke-dasharray="${pctAtendido}, 100" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"/>
           <text x="18" y="20.7" class="restr-gauge-text" style="fill:${gapCol}">${pctAtendido}%</text>
         </svg>`;
-        // ── Fila-tarjeta: reemplaza la tabla clásica por un registro
-        // horizontal con 3 bloques claros — qué pasa (producto+severidad
-        // y la barra demanda-vs-pronóstico), cuánto se gana (el dato que
-        // más le importa a gerencia, destacado en el centro), y qué lo
-        // sostiene (fecha nueva + el BT que trae la reposición). Sin
-        // líneas de grilla — el espaciado y el peso tipográfico hacen la
-        // jerarquía, no los bordes.
+        // ── Tarjeta compacta: apila 2 bloques — arriba, qué pasa
+        // (producto+severidad+anillo+demanda); abajo, un pie que junta
+        // cobertura ganada + fecha/reposición en una sola línea, que se
+        // acorta sola cuando no hay reposición que mostrar (0d,
+        // "—") en vez de reservar una columna entera vacía como antes.
+        const cobTxt = dias > 0
+          ? `<div class="restr-gain-cob">${cobN}d<span class="restr-gain-arrow">→</span><strong style="color:${gapCol}">${cobR}d</strong></div><div class="restr-gain-badge">+${dias}d</div>`
+          : `<div class="restr-gain-cob">${cobN}d<span class="restr-gain-arrow">·</span>sin cambio</div><div class="restr-gain-badge cero">+0d</div>`;
+        const sideTxt = (newDate || btName)
+          ? (newDate ? `<div class="restr-side-date"><span class="restr-side-lbl">Nueva fecha</span>${newDate.toLocaleDateString('es-PE',{day:'2-digit',month:'short'})}</div>` : '')
+            + (btName ? `<div class="restr-side-bt"><span class="restr-side-lbl">Reposición</span><strong>${btName}</strong> · ${btEta?fmtDate(btEta):'ETA —'}</div>` : '')
+          : `<div class="restr-side-empty">Sin reposición<br>asociada todavía</div>`;
         return `<div class="restr-row">
           <div class="restr-row-main">
             <div class="restr-row-prod">
@@ -7708,13 +7715,9 @@ function renderPR() {
               </div>
             </div>
           </div>
-          <div class="restr-row-gain">
-            <div class="restr-gain-cob"><span>${cobN}d</span><span class="restr-gain-arrow">→</span><span style="color:${gapCol};font-weight:800">${cobR}d</span></div>
-            <div class="restr-gain-badge">+${dias}d de cobertura</div>
-          </div>
-          <div class="restr-row-side">
-            <div class="restr-side-date"><span class="restr-side-lbl">Nueva fecha</span>${newDate?newDate.toLocaleDateString('es-PE',{day:'2-digit',month:'short'}):'—'}</div>
-            <div class="restr-side-bt">${btName?`<span class="restr-side-lbl">Reposición</span><strong>${btName}</strong> · ETA ${btEta?fmtDate(btEta):'—'}`:`<span class="restr-side-lbl">Reposición</span>—`}</div>
+          <div class="restr-row-foot">
+            ${cobTxt}
+            <div class="restr-row-side">${sideTxt}</div>
           </div>
         </div>`;
       }).join('');
