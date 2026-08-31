@@ -29948,6 +29948,27 @@ function _repomarInjectCSS() {
     .repomar-legbox.completado{border-color:#16a34a;box-shadow:0 1px 3px rgba(22,163,74,.18)}
     .repomar-legbox.completado .repomar-legdate{color:#16a34a}
     .repomar-legbox.en-terminal{border-color:#b45309;box-shadow:0 1px 3px rgba(180,83,9,.18)}
+    /* ⚠️ AGREGADO — a pedido: indicador "en vivo" — el recuadro del
+       terminal donde el buque está FÍSICAMENTE ahora (según el reporte
+       diario más reciente de Posicionamiento de Naves) pulsa con un
+       anillo suave en el azul corporativo, con una píldora "EN PUERTO"
+       y punto latiendo — estilo sala de control. Es el ÚNICO elemento
+       animado del módulo, a propósito: un solo punto de movimiento
+       dirige la mirada; animarlo todo la dispersa. */
+    .repomar-legbox.en-vivo{border-color:#0071A4;animation:repomarLivePulse 2.4s ease-out infinite}
+    .repomar-legbox.en-vivo.completado{border-color:#0071A4}
+    @keyframes repomarLivePulse{
+      0%{box-shadow:0 0 0 0 rgba(0,113,164,.38)}
+      65%{box-shadow:0 0 0 9px rgba(0,113,164,0)}
+      100%{box-shadow:0 0 0 0 rgba(0,113,164,0)}
+    }
+    .repomar-livepill{display:inline-flex;align-items:center;gap:5px;background:#0071A4;color:#fff;font-size:8.5px;font-weight:800;letter-spacing:.05em;padding:2px 7px;border-radius:999px;margin-bottom:3px;line-height:1;text-transform:uppercase}
+    .repomar-livedot{width:5px;height:5px;border-radius:50%;background:#8be3ae;animation:repomarLiveDot 1.15s ease-in-out infinite}
+    @keyframes repomarLiveDot{0%,100%{opacity:1}50%{opacity:.25}}
+    @media (prefers-reduced-motion: reduce){
+      .repomar-legbox.en-vivo{animation:none;box-shadow:0 0 0 3px rgba(0,113,164,.22)}
+      .repomar-livedot{animation:none}
+    }
     .repomar-empty-msg{padding:30px;text-align:center;color:var(--txt3);font-size:13px}
   `;
   var style = document.createElement('style');
@@ -30227,6 +30248,30 @@ window.renderPRepoMar = function() {
     return pos.ubicacion;
   }
 
+  // ⚠️ AGREGADO — a pedido: presencia FÍSICA del buque en un terminal,
+  // independiente del estado de la escala (E.T.A./T.D.) — es lo que
+  // enciende el indicador "en vivo" (recuadro pulsante + "EN PUERTO").
+  // Se apoya en el mismo reporte diario de Posicionamiento de Naves que
+  // ya alimenta _repomarEstadoRealEnTerminal, así que cambia solo
+  // cuando se sube un reporte nuevo — igual que el resto del módulo.
+  // Cubre 2 casos reales: (1) el buque está amarrado/descargando en el
+  // terminal aunque su escala ya figure COMPLETADO (URUBAMBA en
+  // Conchán tras terminar de descargar), y (2) está fondeado en bahía
+  // esperando ingresar a ese terminal ("ingresará a la salida del B/T
+  // X" — físicamente ya está ahí, a la espera de un muelle libre).
+  function _repomarBuquePresenteEnTerminal(buque, terminalNorm) {
+    var pos = (typeof _navPosData !== 'undefined' && _navPosData) ? _navPosData[buque.toUpperCase()] : null;
+    if (!pos) return false;
+    if (pos.estado_nav) {
+      var mEsperaViva = pos.estado_nav.toUpperCase().match(/INGRESAR[ÁA]\s+A\s+(?:TSM\s+)?([A-ZÁÉÍÓÚÑ0-9\s]+?)\s+A\s+LA\s+SALIDA\s+DEL\s+B[\/\.]?T\s+([A-ZÁÉÍÓÚÑ0-9\s]+)/);
+      if (mEsperaViva && _repomarNormPuerto(mEsperaViva[1].trim()).indexOf(terminalNorm) !== -1) return true;
+    }
+    if (!pos.ubicacion) return false;
+    var ubicViva = _repomarNormPuerto(pos.ubicacion);
+    if (ubicViva.indexOf('NAVEGANDO') === 0) return false;
+    return ubicViva.indexOf(terminalNorm) !== -1;
+  }
+
   // ⚠️ CORREGIDO — a pedido: "Retorno" se veía como si fuera una planta
   // más (mismo estilo azul que "Bayóvar", "Eten", etc.), cuando en
   // realidad es una columna completamente distinta — no tiene cobertura
@@ -30275,10 +30320,17 @@ window.renderPRepoMar = function() {
       // MISMO día ahora comparten una sola caja, con un encabezado de
       // fecha/estado único, en vez de una caja por producto.
       var grupos = _repomarAgruparEscalas(b.legs);
+      // ⚠️ AGREGADO — a pedido: indicador "en vivo" — se calcula UNA vez
+      // por planta si el buque está físicamente ahí ahora mismo, y solo
+      // el PRIMER recuadro de esa planta lleva la píldora "EN PUERTO"
+      // (si hay varios grupos apilados en la misma celda, uno solo
+      // pulsando basta — repetirlo sería ruido visual, no información).
       var legCells = REPOMAR_PLANTAS.map(function(planta) {
         var gruposAqui = grupos.filter(function(g){ return g.terminal === planta; });
         if (!gruposAqui.length) return '<div class="repomar-cell" style="background:transparent;border:none"></div>';
-        var chips = gruposAqui.map(function(g) {
+        var presenteEnPlanta = gruposAqui.length && _repomarBuquePresenteEnTerminal(b.buque, gruposAqui[0].terminalNorm);
+        var chips = gruposAqui.map(function(g, gIdxAqui) {
+          var esVivo = presenteEnPlanta && gIdxAqui === 0;
           var esCompletado = g.estado === 'COMPLETADO';
           // ⚠️ CORREGIDO — a pedido: antes el recuadro siempre decía
           // "E.T.A." mientras no estuviera COMPLETADO, sin importar si
@@ -30301,7 +30353,8 @@ window.renderPRepoMar = function() {
           var lineasProductos = g.productos.map(function(p) {
             return '<div class="repomar-legprod">' + p.producto + ': ' + p.vol.toFixed(1) + ' MB</div>';
           }).join('');
-          return '<div class="repomar-legbox' + (esCompletado ? ' completado' : (estadoReal ? ' en-terminal' : '')) + '" data-buque="' + b.buque + '" data-leg-idx="' + grupos.indexOf(g) + '">' +
+          return '<div class="repomar-legbox' + (esCompletado ? ' completado' : (estadoReal ? ' en-terminal' : '')) + (esVivo ? ' en-vivo' : '') + '" data-buque="' + b.buque + '" data-leg-idx="' + grupos.indexOf(g) + '">' +
+            (esVivo ? '<div class="repomar-livepill"><span class="repomar-livedot"></span>En puerto</div>' : '') +
             lineaEstado +
             lineasProductos +
           '</div>';

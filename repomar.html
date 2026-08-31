@@ -64,6 +64,16 @@ body{font-family:var(--sans);font-size:13px;background:var(--bg);color:var(--txt
 .repomar-legbox.completado{border-color:#16a34a;box-shadow:0 1px 3px rgba(22,163,74,.18)}
 .repomar-legbox.completado .repomar-legdate{color:#16a34a}
 .repomar-legbox.en-terminal{border-color:#b45309;box-shadow:0 1px 3px rgba(180,83,9,.18)}
+/* Indicador "en vivo" — terminal donde el buque está físicamente ahora,
+   según el reporte diario de Posicionamiento de Naves más reciente.
+   Único elemento animado del módulo, a propósito. */
+.repomar-legbox.en-vivo{border-color:#0071A4;animation:repomarLivePulse 2.4s ease-out infinite}
+.repomar-legbox.en-vivo.completado{border-color:#0071A4}
+@keyframes repomarLivePulse{0%{box-shadow:0 0 0 0 rgba(0,113,164,.38)}65%{box-shadow:0 0 0 9px rgba(0,113,164,0)}100%{box-shadow:0 0 0 0 rgba(0,113,164,0)}}
+.repomar-livepill{display:inline-flex;align-items:center;gap:5px;background:#0071A4;color:#fff;font-size:8.5px;font-weight:800;letter-spacing:.05em;padding:2px 7px;border-radius:999px;margin-bottom:3px;line-height:1;text-transform:uppercase}
+.repomar-livedot{width:5px;height:5px;border-radius:50%;background:#8be3ae;animation:repomarLiveDot 1.15s ease-in-out infinite}
+@keyframes repomarLiveDot{0%,100%{opacity:1}50%{opacity:.25}}
+@media (prefers-reduced-motion: reduce){.repomar-legbox.en-vivo{animation:none;box-shadow:0 0 0 3px rgba(0,113,164,.22)}.repomar-livedot{animation:none}}
 .repomar-empty-msg{padding:30px;text-align:center;color:var(--txt3);font-size:13px}
 .repomar-loading{padding:60px;text-align:center;color:var(--txt3)}
 .repomar-loading-spinner{width:36px;height:36px;border:3px solid var(--bdr);border-top-color:#0071A4;border-radius:50%;animation:repomarSpin 1s linear infinite;margin:0 auto 14px}
@@ -274,7 +284,14 @@ function render(data) {
       var legCells = plantas.map(function(planta) {
         var gruposAqui = grupos.filter(function(g){ return g.terminal === planta; });
         if (!gruposAqui.length) return '<div class="repomar-cell" style="background:transparent;border:none"></div>';
-        var chips = gruposAqui.map(function(g) {
+        // ⚠️ AGREGADO — a pedido: indicador "en vivo" — el backend manda
+        // en b.puertoActualPlanta la planta donde el buque está
+        // físicamente ahora (según el último reporte de Posicionamiento
+        // de Naves). Solo el PRIMER recuadro de esa planta lleva la
+        // píldora "EN PUERTO" y el pulso — uno solo basta.
+        var presenteEnPlanta = b.puertoActualPlanta === planta;
+        var chips = gruposAqui.map(function(g, gIdxAqui) {
+          var esVivo = presenteEnPlanta && gIdxAqui === 0;
           var esCompletado = g.estado === 'COMPLETADO';
           var estadoReal = !esCompletado ? g.estadoRealEnTerminal : null;
           var etiqueta = esCompletado ? 'T.D.' : (estadoReal ? '' : 'E.T.A.');
@@ -284,7 +301,8 @@ function render(data) {
           var lineasProductos = g.productos.map(function(p) {
             return '<div class="repomar-legprod">' + p.producto + ': ' + p.vol.toFixed(1) + ' MB</div>';
           }).join('');
-          return '<div class="repomar-legbox' + (esCompletado ? ' completado' : (estadoReal ? ' en-terminal' : '')) + '" data-buque="' + b.buque + '" data-leg-idx="' + grupos.indexOf(g) + '">' +
+          return '<div class="repomar-legbox' + (esCompletado ? ' completado' : (estadoReal ? ' en-terminal' : '')) + (esVivo ? ' en-vivo' : '') + '" data-buque="' + b.buque + '" data-leg-idx="' + grupos.indexOf(g) + '">' +
+            (esVivo ? '<div class="repomar-livepill"><span class="repomar-livedot"></span>En puerto</div>' : '') +
             lineaEstado +
             lineasProductos +
           '</div>';
