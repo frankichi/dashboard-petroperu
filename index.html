@@ -972,9 +972,12 @@ body.light .restr-plantacard{background:#fff;box-shadow:0 1px 4px rgba(10,30,70,
 .restr-row-prod{display:flex;align-items:center;gap:9px;margin-bottom:7px}
 .restr-prod-name{font-size:13px;font-weight:800;color:var(--txt)}
 .restr-sev-tag{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.3px;padding:2px 8px;border-radius:10px;border:1px solid}
-.restr-bar-track{background:var(--bg3);border-radius:4px;height:7px;overflow:hidden}
-.restr-bar-fact{height:100%;background:#22c55e;border-radius:4px}
-.restr-bar-labels{display:flex;justify-content:space-between;font-size:10px;color:var(--txt3);margin-top:4px}
+.restr-row-bar{display:flex;align-items:center;gap:10px}
+.restr-gauge{width:34px;height:34px;flex-shrink:0}
+.restr-gauge-bg{fill:none;stroke:var(--bg3);stroke-width:3.6}
+.restr-gauge-fill{fill:none;stroke-width:3.6;stroke-linecap:round;transition:stroke-dasharray .3s ease}
+.restr-gauge-text{font-family:var(--mono);font-size:8.5px;font-weight:800;text-anchor:middle}
+.restr-bar-labels{display:flex;flex-direction:column;gap:2px;font-size:10px;color:var(--txt3)}
 .restr-bar-labels strong{font-family:var(--mono);font-size:11px}
 .restr-row-gain{display:flex;flex-direction:column;align-items:center;gap:5px;text-align:center}
 .restr-gain-cob{display:flex;align-items:center;gap:6px;font-family:var(--mono);font-size:12px;color:var(--txt3)}
@@ -7618,7 +7621,24 @@ function renderPR() {
         return Math.max(mx, Math.max(0, Math.floor(inv/vf) - Math.floor(inv/pr)));
       }, 0);
       return {planta, rows, diasGanadosPl};
-    }).sort((a,b) => b.diasGanadosPl - a.diasGanadosPl);
+    }).sort((a,b) => {
+      // ⚠️ CORREGIDO — a pedido: antes se ordenaba por "más días
+      // ganados primero" — útil para ver impacto, pero gerencia lo
+      // lee como una lista desordenada porque no seguía ningún orden
+      // geográfico reconocible. Ahora sigue la misma secuencia
+      // norte→sur que ya usa el resto del dashboard (Timeline BT,
+      // Mapa Operaciones, etc.), para que sea fácil ubicar una planta
+      // sin tener que leer toda la lista.
+      const RESTR_PLANTA_ORDER = ['Talara','Piura','Eten','Salaverry','Chimbote','Supe','Callao',
+        'Conchán','Pisco','Mollendo','Ilo','Juliaca','Cusco','Pucallpa',
+        'Tarapoto','Yurimaguas','El Milagro','Iquitos'];
+      const ia = RESTR_PLANTA_ORDER.indexOf(a.planta);
+      const ib = RESTR_PLANTA_ORDER.indexOf(b.planta);
+      if (ia === -1 && ib === -1) return a.planta.localeCompare(b.planta);
+      if (ia === -1) return 1;
+      if (ib === -1) return -1;
+      return ia - ib;
+    });
     return plantas.map(({planta, rows, diasGanadosPl}) => {
       const nProds = rows.length;
       const dLabel = diasGanadosPl > 0 ? `+${diasGanadosPl}d` : '';
@@ -7634,9 +7654,39 @@ function renderPR() {
         const sevLbl = pct > 50 ? 'Crítico' : pct > 30 ? 'Recorte' : 'Leve';
         const gapCol = sev==='red'?'#ef4444':sev==='orange'?'#f97316':'#f59e0b';
         const barW   = Math.min(100, vf/pr*100);
-        const btRow  = today.find(x => x.planta===r.planta && x.producto===r.producto && ((x.bt&&x.vol_rep>0)||(x.bt2&&x.vol_rep_bt2>0)));
-        const btName = btRow ? (btRow.bt||btRow.bt2) : null;
-        const btEta  = btRow ? (btRow.fecha_reposicion||btRow.fecha_repos_bt2||'') : '';
+        // ⚠️ CORREGIDO — bug real confirmado: el BT/ETA de esta tarjeta
+        // salía de columnas del inventario (bt/fecha_reposicion), una
+        // fuente separada que puede quedar desactualizada — mientras
+        // que RepoMar arma su ETA en vivo desde Cargas de Naves +
+        // Posicionamiento de Naves (window._repomarBTMapCompletoCache,
+        // ya cargado de antemano — ver _repomarFetchBTMapCompleto en el
+        // arranque del dashboard). Se busca primero ahí — la MISMA
+        // fuente que ya usa RepoMar — y solo si no hay nada todavía en
+        // caché se recurre a la columna vieja del inventario, para no
+        // dejar la celda vacía mientras carga.
+        const btInfo = _restrBuscarReposicionReal(r.planta, r.producto);
+        var btName, btEta;
+        if (btInfo) { btName = btInfo.buque; btEta = btInfo.fecha_hasta; }
+        else {
+          const btRow = today.find(x => x.planta===r.planta && x.producto===r.producto && ((x.bt&&x.vol_rep>0)||(x.bt2&&x.vol_rep_bt2>0)));
+          btName = btRow ? (btRow.bt||btRow.bt2) : null;
+          btEta  = btRow ? (btRow.fecha_reposicion||btRow.fecha_repos_bt2||'') : '';
+        }
+        // ⚠️ CORREGIDO — a pedido: la barra lineal de "venta factible vs
+        // pronóstico" no se puede comparar de un vistazo entre filas,
+        // porque cada producto/planta tiene un volumen de pronóstico
+        // distinto (una barra al 90% de ancho en un producto de 0.2
+        // MBDC "se ve" igual de sana que una al 90% en uno de 12 MBDC,
+        // aunque el impacto real sea muy distinto). Se reemplaza por un
+        // anillo (0-100% ya normalizado) con el % de venta atendida en
+        // el centro — comparable entre filas sin importar el volumen
+        // absoluto, y el color de severidad salta a la vista igual.
+        const pctAtendido = Math.max(0, Math.min(100, Math.round(barW)));
+        const gaugeSvg = `<svg viewBox="0 0 36 36" class="restr-gauge">
+          <path class="restr-gauge-bg" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"/>
+          <path class="restr-gauge-fill" style="stroke:${gapCol}" stroke-dasharray="${pctAtendido}, 100" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"/>
+          <text x="18" y="20.7" class="restr-gauge-text" style="fill:${gapCol}">${pctAtendido}%</text>
+        </svg>`;
         // ── Fila-tarjeta: reemplaza la tabla clásica por un registro
         // horizontal con 3 bloques claros — qué pasa (producto+severidad
         // y la barra demanda-vs-pronóstico), cuánto se gana (el dato que
@@ -7651,12 +7701,10 @@ function renderPR() {
               <span class="restr-sev-tag" style="color:${gapCol};background:${gapCol}14;border-color:${gapCol}35">${sevLbl}</span>
             </div>
             <div class="restr-row-bar">
-              <div class="restr-bar-track">
-                <div class="restr-bar-fact" style="width:${barW}%"></div>
-              </div>
+              ${gaugeSvg}
               <div class="restr-bar-labels">
                 <span><strong style="color:${gapCol}">${fmt(vf,2)}</strong> / ${fmt(pr,2)} MBDC vendible</span>
-                <span style="color:${gapCol}">▼ ${pct}%</span>
+                <span style="color:${gapCol}">▼ ${pct}% vs. pronóstico</span>
               </div>
             </div>
           </div>
@@ -29368,6 +29416,30 @@ const REPOMAR_PRODUCTOS = ['Diesel','G. Regular','G. Premium','TA1'];
 function _repomarNormPuerto(t) {
   return (t || '').trim().toUpperCase()
     .replace(/[ÁÀ]/g,'A').replace(/[ÉÈ]/g,'E').replace(/[ÍÌ]/g,'I').replace(/[ÓÒ]/g,'O').replace(/[ÚÙ]/g,'U');
+}
+
+// ⚠️ AGREGADO — a pedido: fuente ÚNICA de "qué buque repone esta
+// planta+producto y cuándo llega" — reusada por Restricciones para que
+// su ETA nunca vuelva a divergir de RepoMar (que es la fuente correcta
+// y en vivo). Busca en window._repomarBTMapCompletoCache — el mismo
+// mapa completo de buques que arma RepoMar desde Cargas de Naves +
+// Posicionamiento — la escala PENDIENTE (no COMPLETADO) más próxima
+// para esa planta+producto, y devuelve el buque + fecha real de
+// llegada. Si el caché todavía no llegó (primeros segundos tras
+// abrir el dashboard), devuelve null — el llamador decide el respaldo.
+function _restrBuscarReposicionReal(planta, producto) {
+  var cache = window._repomarBTMapCompletoCache;
+  if (!cache || !cache.length) return null;
+  var plantaNorm = _repomarNormPuerto(planta);
+  var mejor = null;
+  cache.forEach(function(n) {
+    if (n.estado === 'COMPLETADO') return;
+    if (!n.fecha_hasta) return;
+    if (_repomarNormPuerto(n.terminal).indexOf(plantaNorm) === -1 && plantaNorm.indexOf(_repomarNormPuerto(n.terminal)) === -1) return;
+    if ((n.producto || '') !== producto) return;
+    if (!mejor || n.fecha_hasta < mejor.fecha_hasta) mejor = n;
+  });
+  return mejor ? { buque: mejor.buque, fecha_hasta: mejor.fecha_hasta } : null;
 }
 
 // ⚠️ AGREGADO — a pedido: mismo mecanismo que el backend
