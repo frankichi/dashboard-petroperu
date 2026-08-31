@@ -50,11 +50,19 @@ body{font-family:var(--sans);font-size:13px;background:var(--bg);color:var(--txt
 .repomar-cell-crit{background:#DC271C;color:#fff;font-weight:700;border-color:#c02016;cursor:help}
 .repomar-cell-ok{color:var(--txt);font-weight:700;background:#eef7ee;cursor:help}
 .repomar-cell-empty{background:#f4f6fa;color:var(--txt3);font-size:10.5px}
+/* ⚠️ AGREGADO — a pedido: marca visible en la celda misma (sin hover)
+   cuando esa planta+producto tiene una restricción activa — un
+   pequeño ✂️ en la esquina, sin tapar la fecha ni competir con el
+   color de severidad (rojo/verde) que ya tiene la celda. */
+.repomar-cell-restr{position:relative;box-shadow:inset 0 0 0 1.5px #f59e0b}
+.repomar-cell-restr::after{content:'\2702\FE0F';position:absolute;top:-1px;right:1px;font-size:8px;line-height:1}
 .repomar-cov-tip{position:fixed;z-index:5000;background:#0d1a2e;color:#fff;border-radius:8px;padding:10px 13px;font-size:11px;line-height:1.7;box-shadow:0 6px 24px rgba(0,0,0,.35);pointer-events:none;min-width:190px;display:none;font-family:var(--sans,inherit)}
 .repomar-cov-tip b{color:#fff;font-size:11.5px;display:block;margin-bottom:4px;border-bottom:1px solid rgba(255,255,255,.15);padding-bottom:4px}
 .repomar-cov-tip .rct-row{display:flex;justify-content:space-between;gap:14px}
 .repomar-cov-tip .rct-lbl{color:rgba(255,255,255,.65)}
 .repomar-cov-tip .rct-val{font-family:var(--mono);font-weight:700}
+.rct-restr-warn{background:rgba(245,158,11,.18);border:1px solid rgba(245,158,11,.4);border-radius:5px;padding:5px 8px;margin-bottom:6px;font-size:10.5px;line-height:1.5;color:#fde68a}
+.rct-restr-ok{background:rgba(34,197,94,.14);border:1px solid rgba(34,197,94,.35);border-radius:5px;padding:4px 8px;margin-bottom:6px;font-size:10.5px;color:#bbf7d0}
 .repomar-cell-retorno-na{background:transparent!important;border-color:transparent!important}
 .repomar-divider{height:22px;position:relative}
 .repomar-divider::after{content:'';position:absolute;left:0;right:0;top:50%;height:1px;background:linear-gradient(90deg,transparent,var(--bdr) 10%,var(--bdr) 90%,transparent)}
@@ -187,6 +195,16 @@ function _repomarMostrarTip(evt) {
   var vfact = d ? (d.vfact || 0) : 0;
   var capacidad = d ? (d.capacidad || 0) : 0;
   var vacio = d ? (d.vacio || 0) : 0;
+  // ⚠️ AGREGADO — a pedido: el popup nunca dejaba claro si esa
+  // planta+producto tiene una restricción activa (Venta Factible por
+  // debajo del pronóstico aprobado) — mismo criterio ya usado en la
+  // página de Restricciones, para que ambos lugares digan lo mismo.
+  var hayRestriccion = pron > 0 && vfact > 0 && vfact < pron;
+  var pctRestr = hayRestriccion ? Math.round((1 - vfact/pron) * 100) : 0;
+  var diasGanadosPopup = (hayRestriccion && inv > 0) ? Math.max(0, Math.floor(inv/vfact) - Math.floor(inv/pron)) : 0;
+  var restrBloque = hayRestriccion
+    ? '<div class="rct-restr-warn">\u2702\ufe0f Restricci\u00f3n activa \u2014 Venta Factible <b>' + pctRestr + '% por debajo</b> del pron\u00f3stico' + (diasGanadosPopup > 0 ? ' \u00b7 <b>+' + diasGanadosPopup + 'd</b> de cobertura ganados' : '') + '</div>'
+    : (pron > 0 && vfact > 0 ? '<div class="rct-restr-ok">\u2713 Sin restricci\u00f3n \u2014 venta al ritmo del pron\u00f3stico</div>' : '');
 
   if (tipo === 'nueva' && d && d.fechaLlegada && d.volDespuesRepo != null) {
     // ⚠️ AGREGADO — a pedido: en "Nueva Cobertura", el popup muestra el
@@ -195,6 +213,7 @@ function _repomarMostrarTip(evt) {
     // Code.gs), no el inventario de hoy.
     tip.innerHTML =
       '<b>' + planta + ' \u00b7 ' + prod + ' \u2014 tras la reposici\u00f3n</b>' +
+      restrBloque +
       '<div class="rct-row"><span class="rct-lbl">Llega el</span><span class="rct-val">' + fmtCorta(d.fechaLlegada) + ' (+' + d.diasHastaLlegada + 'd)</span></div>' +
       '<div class="rct-row"><span class="rct-lbl">Volumen que repone</span><span class="rct-val">' + d.volPendiente.toFixed(1) + ' MB</span></div>' +
       '<div class="rct-row"><span class="rct-lbl">Volumen despu\u00e9s de repo</span><span class="rct-val">' + d.volDespuesRepo.toFixed(1) + ' MB</span></div>' +
@@ -204,11 +223,12 @@ function _repomarMostrarTip(evt) {
   } else {
     tip.innerHTML =
       '<b>' + planta + ' \u00b7 ' + prod + '</b>' +
+      restrBloque +
       '<div class="rct-row"><span class="rct-lbl">Inventario actual</span><span class="rct-val">' + inv.toFixed(1) + ' MB</span></div>' +
       '<div class="rct-row"><span class="rct-lbl">Capacidad</span><span class="rct-val">' + (capacidad > 0 ? capacidad.toFixed(1) + ' MB' : 's/d') + '</span></div>' +
       '<div class="rct-row"><span class="rct-lbl">Vac\u00edo</span><span class="rct-val">' + (capacidad > 0 ? vacio.toFixed(1) + ' MB' : 's/d') + '</span></div>' +
       '<div class="rct-row"><span class="rct-lbl">Pron\u00f3stico aprobado</span><span class="rct-val">' + pron.toFixed(2) + ' MB/d</span></div>' +
-      '<div class="rct-row"><span class="rct-lbl">Venta factible</span><span class="rct-val">' + vfact.toFixed(2) + ' MB/d</span></div>';
+      '<div class="rct-row"><span class="rct-lbl">Venta factible</span><span class="rct-val" style="' + (hayRestriccion ? 'color:#f59e0b;font-weight:800' : '') + '">' + vfact.toFixed(2) + ' MB/d' + (hayRestriccion ? ' \u25bc' : '') + '</span></div>';
   }
   tip.style.display = 'block';
   _repomarMoverTip(evt);
@@ -237,7 +257,14 @@ function filaCobertura(cols, plantas, productos, productosPorPlanta, mapa, tipo)
       var info = mapa[planta + '|' + prod];
       if (!info || !info.fecha) return '<div class="repomar-cell repomar-cell-empty">s/d</div>';
       var critico = info.dias <= 10;
-      return '<div class="repomar-cell ' + (critico ? 'repomar-cell-crit' : 'repomar-cell-ok') + '" data-planta="' + planta + '" data-prod="' + prod + '" data-tipo="' + tipo + '" onmouseenter="_repomarMostrarTip(event)" onmouseleave="_repomarOcultarTip()" onmousemove="_repomarMoverTip(event)">' + fmtCorta(info.fecha) + '</div>';
+      // ⚠️ AGREGADO — a pedido: resaltar en la propia celda (sin
+      // necesidad de pasar el mouse) cuando esa planta+producto tiene
+      // una restricción activa (Venta Factible < Pronóstico) — mismo
+      // criterio que ya usa la página de Restricciones, para que
+      // ambos lugares cuenten la misma historia.
+      var detInfo = _repomarDetalleInv[planta + '|' + prod];
+      var restringido = detInfo && detInfo.pron > 0 && detInfo.vfact > 0 && detInfo.vfact < detInfo.pron;
+      return '<div class="repomar-cell ' + (critico ? 'repomar-cell-crit' : 'repomar-cell-ok') + (restringido ? ' repomar-cell-restr' : '') + '" data-planta="' + planta + '" data-prod="' + prod + '" data-tipo="' + tipo + '" onmouseenter="_repomarMostrarTip(event)" onmouseleave="_repomarOcultarTip()" onmousemove="_repomarMoverTip(event)" title="' + (restringido ? 'Venta factible por debajo del pronóstico' : '') + '">' + fmtCorta(info.fecha) + '</div>';
     }).join('');
     return '<div class="repomar-row" style="grid-template-columns:' + cols + '">' +
       '<div class="repomar-cell repomar-labelcell" data-prod="' + prod + '">' + prod + '</div>' + celdas +
