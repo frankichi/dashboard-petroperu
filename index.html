@@ -30034,6 +30034,18 @@ window.renderPRepoMar = function() {
   var host = document.getElementById('pRepoMar-content');
   if (!host) return;
 
+  // ⚠️ AGREGADO — bug real confirmado (mismo patrón que ya se corrigió
+  // en Vista Ejecutiva): el popup de "vacío" de esta página usa
+  // getCapacidad(), que prioriza _capRefCache (la capacidad REAL,
+  // recién cargada del servidor) — pero esa caché solo se pedía al
+  // visitar Vista Ejecutiva/Capacidades/Decisiones. Si alguien entraba
+  // directo a Reposiciones Marítimas sin haber pasado antes por esas
+  // pantallas en la misma sesión, _capRefCache seguía en null, y
+  // getCapacidad() caía en la tabla fija vieja (STATIC_CAP) — el mismo
+  // problema exacto ya confirmado y corregido para Mollendo/G. Premium,
+  // solo que en otro punto de entrada. Se dispara la carga acá también.
+  if (typeof _asegurarCapRefCache === 'function') _asegurarCapRefCache('renderPRepoMar');
+
   // El cabotaje CONFIRMADO siempre se calcula — es la base real, y
   // además es el punto de partida que necesita el modo "Proyectado".
   var buquesConfirmados = _buildRepoMarBuques();
