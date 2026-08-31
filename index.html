@@ -934,6 +934,57 @@ body.has-ticker #ship-ops-bar{top:calc(var(--topH) + 28px)}
   font-family:var(--mono);font-size:11.5px;font-weight:800;
   padding:4px 10px;border-radius:7px;line-height:1;flex-shrink:0;letter-spacing:-.02em;
 }
+/* ══════════════════════════════════════════════════════════════════
+   Restricciones de Venta — rediseño para presentación gerencial.
+   Reutiliza los tokens de color ya establecidos en el dashboard
+   (severidad roja/naranja/ámbar, acento azul --acc/--acc2) en vez de
+   introducir una paleta nueva — es un panel más del mismo sistema, no
+   una pieza aislada. El elemento con más peso visual es el badge de
+   "días ganados": es el número que gerencia realmente quiere ver de
+   un vistazo, así que se destaca más que cualquier otro dato de la
+   fila (jerarquía tipográfica, no líneas de grilla).
+   ══════════════════════════════════════════════════════════════════ */
+.restr-execsummary{margin:0 22px 14px;padding:12px 16px;background:var(--acc)0d;border:1px solid var(--acc)30;border-left:3px solid var(--acc2);border-radius:8px;font-size:12.5px;line-height:1.55;color:var(--txt2)}
+.restr-execsummary strong{color:var(--txt);font-weight:800}
+body.light .restr-execsummary{background:rgba(0,85,179,.05)}
+.restr-kpistrip{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:0 22px 16px;max-width:640px}
+@media(max-width:700px){.restr-kpistrip{grid-template-columns:1fr 1fr}}
+.restr-kpi{background:var(--card);border:1px solid var(--bdr);border-left:3px solid var(--kc);border-radius:8px;padding:11px 13px}
+body.light .restr-kpi{background:#fff;box-shadow:0 1px 4px rgba(10,30,70,.05)}
+.restr-kpi-top{display:flex;align-items:baseline;gap:7px}
+.restr-kpi-ic{font-size:13px;flex-shrink:0}
+.restr-kpi-val{font-size:21px;font-weight:800;font-family:var(--mono);color:var(--kc);letter-spacing:-.02em}
+.restr-kpi-lbl{font-size:9.5px;color:var(--txt3);font-weight:600;margin-top:3px}
+.restr-toolbar{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;flex-wrap:wrap;margin:0 22px 16px}
+.restr-explain{flex:1;min-width:260px;max-width:640px;font-size:11px;color:var(--txt3);line-height:1.6}
+.restr-explain strong{color:var(--txt2)}
+.restr-cards-wrap{padding:0 22px 26px;display:flex;flex-direction:column;gap:14px}
+.restr-plantacard{background:var(--card);border:1px solid var(--bdr);border-radius:12px;overflow:hidden}
+body.light .restr-plantacard{background:#fff;box-shadow:0 1px 4px rgba(10,30,70,.05)}
+.restr-plantacard-head{display:flex;align-items:baseline;gap:10px;padding:12px 18px;background:var(--card2);border-bottom:1px solid var(--bdr)}
+.restr-plantacard-name{font-size:14.5px;font-weight:800;color:var(--txt);letter-spacing:-.01em}
+.restr-plantacard-count{font-size:10.5px;color:var(--txt3)}
+.restr-plantacard-gain{margin-left:auto;font-size:11px;font-weight:700;color:var(--acc2);background:var(--acc)14;border:1px solid var(--acc)35;border-radius:20px;padding:3px 11px}
+.restr-plantacard-body{display:flex;flex-direction:column}
+.restr-row{display:grid;grid-template-columns:1.5fr 1fr 1fr;gap:18px;align-items:center;padding:14px 18px;border-top:1px solid var(--bdr)44}
+.restr-plantacard-body .restr-row:first-child{border-top:none}
+@media(max-width:900px){.restr-row{grid-template-columns:1fr}}
+.restr-row-prod{display:flex;align-items:center;gap:9px;margin-bottom:7px}
+.restr-prod-name{font-size:13px;font-weight:800;color:var(--txt)}
+.restr-sev-tag{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.3px;padding:2px 8px;border-radius:10px;border:1px solid}
+.restr-bar-track{background:var(--bg3);border-radius:4px;height:7px;overflow:hidden}
+.restr-bar-fact{height:100%;background:#22c55e;border-radius:4px}
+.restr-bar-labels{display:flex;justify-content:space-between;font-size:10px;color:var(--txt3);margin-top:4px}
+.restr-bar-labels strong{font-family:var(--mono);font-size:11px}
+.restr-row-gain{display:flex;flex-direction:column;align-items:center;gap:5px;text-align:center}
+.restr-gain-cob{display:flex;align-items:center;gap:6px;font-family:var(--mono);font-size:12px;color:var(--txt3)}
+.restr-gain-arrow{color:var(--txt3);font-size:11px}
+.restr-gain-badge{font-size:13px;font-weight:800;color:#fff;background:linear-gradient(90deg,var(--acc),var(--acc2));border-radius:20px;padding:4px 14px;letter-spacing:-.01em;white-space:nowrap}
+.restr-row-side{display:flex;flex-direction:column;gap:6px;font-size:11.5px;color:var(--txt2);text-align:right}
+@media(max-width:900px){.restr-row-side{text-align:left}}
+.restr-side-lbl{display:block;font-size:8.5px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--txt3);margin-bottom:1px}
+.restr-side-date{font-family:var(--mono);font-weight:700;color:var(--acc2)}
+.restr-side-bt strong{color:var(--txt)}
 </style>
   <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
   <link rel="dns-prefetch" href="https://script.google.com">
@@ -7570,7 +7621,7 @@ function renderPR() {
     }).sort((a,b) => b.diasGanadosPl - a.diasGanadosPl);
     return plantas.map(({planta, rows, diasGanadosPl}) => {
       const nProds = rows.length;
-      const dLabel = diasGanadosPl > 0 ? `+${diasGanadosPl}d ganados` : '';
+      const dLabel = diasGanadosPl > 0 ? `+${diasGanadosPl}d` : '';
       const tRows = rows.sort((a,b) => prodSortKey(a.producto)-prodSortKey(b.producto)).map(r => {
         const pr  =pronDiarioAprobado(r);
         const vf  = r.vfact || 0, inv = r.inv || 0;
@@ -7580,62 +7631,52 @@ function renderPR() {
         const dias = Math.max(0, cobR-cobN);
         const newDate = dias > 0 ? new Date(new Date(currentDate+'T12:00:00').getTime()+dias*864e5) : null;
         const sev = pct > 50 ? 'red' : pct > 30 ? 'orange' : 'yellow';
-        const sevLbl = pct > 50 ? 'CRÍTICO' : pct > 30 ? 'RECORTE' : 'LEVE';
+        const sevLbl = pct > 50 ? 'Crítico' : pct > 30 ? 'Recorte' : 'Leve';
         const gapCol = sev==='red'?'#ef4444':sev==='orange'?'#f97316':'#f59e0b';
         const barW   = Math.min(100, vf/pr*100);
         const btRow  = today.find(x => x.planta===r.planta && x.producto===r.producto && ((x.bt&&x.vol_rep>0)||(x.bt2&&x.vol_rep_bt2>0)));
         const btName = btRow ? (btRow.bt||btRow.bt2) : null;
         const btEta  = btRow ? (btRow.fecha_reposicion||btRow.fecha_repos_bt2||'') : '';
-        return `<tr>
-          <td style="font-weight:700">${r.producto}</td>
-          <td style="font-family:var(--mono)">${fmt(inv,2)}</td>
-          <td>
-            <div style="display:flex;align-items:center;gap:8px">
-              <div style="flex:1">
-                <div style="display:flex;align-items:center;gap:4px;margin-bottom:3px">
-                  <span style="font-family:var(--mono);font-size:11px;font-weight:700;color:${gapCol}">${fmt(vf,2)}</span>
-                  <span style="font-size:9px;color:var(--txt3)">/ ${fmt(pr,2)} MBDC</span>
-                  <span style="font-size:9px;color:${gapCol};margin-left:4px">▼ ${pct}%</span>
-                </div>
-                <div style="background:var(--bg3);border-radius:4px;height:8px;overflow:hidden;position:relative">
-                  <div style="width:${barW}%;height:100%;background:#22c55e;position:absolute;left:0"></div>
-                  <div style="width:${100-barW}%;height:100%;background:${gapCol}40;border:1px solid ${gapCol};border-radius:0 4px 4px 0;position:absolute;right:0;display:flex;align-items:center;justify-content:center">
-                    <span style="font-size:7px;font-weight:800;color:${gapCol}">${sevLbl}</span>
-                  </div>
-                </div>
+        // ── Fila-tarjeta: reemplaza la tabla clásica por un registro
+        // horizontal con 3 bloques claros — qué pasa (producto+severidad
+        // y la barra demanda-vs-pronóstico), cuánto se gana (el dato que
+        // más le importa a gerencia, destacado en el centro), y qué lo
+        // sostiene (fecha nueva + el BT que trae la reposición). Sin
+        // líneas de grilla — el espaciado y el peso tipográfico hacen la
+        // jerarquía, no los bordes.
+        return `<div class="restr-row">
+          <div class="restr-row-main">
+            <div class="restr-row-prod">
+              <span class="restr-prod-name">${r.producto}</span>
+              <span class="restr-sev-tag" style="color:${gapCol};background:${gapCol}14;border-color:${gapCol}35">${sevLbl}</span>
+            </div>
+            <div class="restr-row-bar">
+              <div class="restr-bar-track">
+                <div class="restr-bar-fact" style="width:${barW}%"></div>
+              </div>
+              <div class="restr-bar-labels">
+                <span><strong style="color:${gapCol}">${fmt(vf,2)}</strong> / ${fmt(pr,2)} MBDC vendible</span>
+                <span style="color:${gapCol}">▼ ${pct}%</span>
               </div>
             </div>
-          </td>
-          <td style="font-family:var(--mono);font-weight:700">${cobN}d</td>
-          <td style="color:var(--txt3)">→</td>
-          <td style="font-family:var(--mono);font-weight:800;color:${gapCol}">${cobR}d</td>
-          <td><span style="background:#a855f720;color:#a855f7;border:1px solid #a855f740;border-radius:5px;padding:2px 8px;font-size:10px;font-weight:700">+${dias}d</span></td>
-          <td style="font-family:var(--mono);color:var(--acc2)">${newDate?newDate.toLocaleDateString('es-PE',{day:'2-digit',month:'short'}):'—'}</td>
-          <td>${btName?`<div style="font-weight:700;font-size:11px;color:var(--acc)">${btName}</div><div style="font-size:9px;color:var(--txt3)">ETA ${btEta?fmtDate(btEta):'—'}</div>`:'—'}</td>
-        </tr>`;
+          </div>
+          <div class="restr-row-gain">
+            <div class="restr-gain-cob"><span>${cobN}d</span><span class="restr-gain-arrow">→</span><span style="color:${gapCol};font-weight:800">${cobR}d</span></div>
+            <div class="restr-gain-badge">+${dias}d de cobertura</div>
+          </div>
+          <div class="restr-row-side">
+            <div class="restr-side-date"><span class="restr-side-lbl">Nueva fecha</span>${newDate?newDate.toLocaleDateString('es-PE',{day:'2-digit',month:'short'}):'—'}</div>
+            <div class="restr-side-bt">${btName?`<span class="restr-side-lbl">Reposición</span><strong>${btName}</strong> · ETA ${btEta?fmtDate(btEta):'—'}`:`<span class="restr-side-lbl">Reposición</span>—`}</div>
+          </div>
+        </div>`;
       }).join('');
-      return `<div style="margin-bottom:16px;border:1px solid var(--bdr);border-radius:10px;overflow:hidden">
-        <div style="background:var(--bg3);padding:8px 16px;display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--bdr)">
-          <span style="font-size:13px;font-weight:800;color:var(--txt)">${planta}</span>
-          <span style="font-size:10px;color:var(--txt3)">${nProds} producto${nProds!==1?'s':''}</span>
-          ${dLabel?`<span style="background:#a855f720;color:#a855f7;border:1px solid #a855f740;border-radius:5px;padding:2px 8px;font-size:10px;font-weight:700">${dLabel}</span>`:''}
+      return `<div class="restr-plantacard">
+        <div class="restr-plantacard-head">
+          <span class="restr-plantacard-name">${planta}</span>
+          <span class="restr-plantacard-count">${nProds} producto${nProds!==1?'s':''} con restricción</span>
+          ${dLabel?`<span class="restr-plantacard-gain">hasta ${dLabel} de cobertura</span>`:''}
         </div>
-        <div style="overflow-x:auto">
-          <table style="width:100%;border-collapse:collapse;font-size:11.5px">
-            <thead><tr style="background:var(--bg3)">
-              <th style="padding:6px 14px;text-align:left;font-size:9px;text-transform:uppercase;letter-spacing:.4px;color:var(--txt3)">Producto</th>
-              <th style="padding:6px 10px;text-align:left;font-size:9px;text-transform:uppercase;letter-spacing:.4px;color:var(--txt3)">Inv (MB)</th>
-              <th style="padding:6px 10px;text-align:left;font-size:9px;text-transform:uppercase;letter-spacing:.4px;color:var(--txt3)">Demanda atendida vs Pronóstico</th>
-              <th style="padding:6px 10px;text-align:left;font-size:9px;text-transform:uppercase;letter-spacing:.4px;color:var(--txt3)">Cob. Normal</th>
-              <th></th>
-              <th style="padding:6px 10px;text-align:left;font-size:9px;text-transform:uppercase;letter-spacing:.4px;color:var(--txt3)">Cob. Restricción</th>
-              <th style="padding:6px 10px;text-align:left;font-size:9px;text-transform:uppercase;letter-spacing:.4px;color:var(--txt3)">Días ganados</th>
-              <th style="padding:6px 10px;text-align:left;font-size:9px;text-transform:uppercase;letter-spacing:.4px;color:var(--txt3)">Nueva fecha cob.</th>
-              <th style="padding:6px 14px;text-align:left;font-size:9px;text-transform:uppercase;letter-spacing:.4px;color:var(--txt3)">Reposición BT</th>
-            </tr></thead>
-            <tbody>${tRows}</tbody>
-          </table>
-        </div>
+        <div class="restr-plantacard-body">${tRows}</div>
       </div>`;
     }).join('');
   }
@@ -7645,40 +7686,51 @@ function renderPR() {
   const redProm  = redVals.length ? redVals.reduce((a,b)=>a+b,0)/redVals.length : 0;
   const diasVals = restrictList.map(r=>{const p=pronDiarioAprobado(r),vf=r.vfact||0,inv=r.inv||0;return (!vf||!p||!inv)?0:Math.max(0,Math.floor(inv/vf)-Math.floor(inv/p));}).filter(v=>v>0);
   const promDias = diasVals.length ? Math.round(diasVals.reduce((a,b)=>a+b,0)/diasVals.length) : 0;
+  // ⚠️ AGREGADO — a pedido: resumen ejecutivo de una línea al tope de la
+  // página — identifica la planta de mayor impacto (más días ganados)
+  // para que gerencia vea de un vistazo dónde está haciendo la
+  // diferencia más grande la restricción, sin tener que leer cada
+  // tarjeta.
+  const porPlantaMax = {};
+  restrictList.forEach(r => {
+    const p = pronDiarioAprobado(r), vf = r.vfact||0, inv = r.inv||0;
+    if (!vf||!p||!inv) return;
+    const d = Math.max(0, Math.floor(inv/vf) - Math.floor(inv/p));
+    if (!porPlantaMax[r.planta] || d > porPlantaMax[r.planta]) porPlantaMax[r.planta] = d;
+  });
+  const topPlantaEntry = Object.entries(porPlantaMax).sort((a,b)=>b[1]-a[1])[0];
+  const resumenEjecutivo = nRestr
+    ? `<strong>${nRestr} restricción${nRestr!==1?'es':''} activa${nRestr!==1?'s':''}</strong> en ${nPlantas} planta${nPlantas!==1?'s':''} están ganando en promedio <strong>${promDias}d</strong> de cobertura antes de que llegue la reposición`
+      + (topPlantaEntry ? ` — el mayor impacto en <strong>${topPlantaEntry[0]}</strong> (+${topPlantaEntry[1]}d).` : '.')
+    : `No hay restricciones activas — toda la venta factible está al nivel del pronóstico aprobado.`;
   document.getElementById('pR-content').innerHTML = `
     <div class="page-header">
       <div class="page-header-title">✂️ Restricciones de Venta</div>
-      <div class="page-header-subtitle">Plantas donde Venta Factible &lt; Pronóstico · ${restrictList.length} productos activos · ${fmtDate(currentDate)}</div>
+      <div class="page-header-subtitle">Plantas donde la Venta Factible quedó por debajo del pronóstico · ${fmtDate(currentDate)}</div>
     </div>
+    <div class="restr-execsummary">📊 ${resumenEjecutivo}</div>
     <!-- KPI strip -->
-    <div style="padding:10px 18px 14px;display:grid;grid-template-columns:repeat(4,1fr);gap:10px;max-width:600px">
-      ${[['Restricciones',nRestr.toString(),'#ef4444'],
-         ['Plantas',nPlantas.toString(),'#f97316'],
-         ['Reduc. promedio',redProm.toFixed(DEC)+'%','#a855f7'],
-         ['Días ganados prom.',promDias+'d','#60a5fa']]
-        .map(([l,v,c])=>`<div style="background:${c}12;border:1px solid ${c}25;border-radius:10px;padding:10px;text-align:center">
-          <div style="font-size:20px;font-weight:800;color:${c};font-family:var(--mono)">${v}</div>
-          <div style="font-size:9px;text-transform:uppercase;letter-spacing:.4px;color:${c};margin-top:2px">${l}</div>
+    <div class="restr-kpistrip">
+      ${[['✂️','Restricciones activas',nRestr.toString(),'#ef4444'],
+         ['🏭','Plantas afectadas',nPlantas.toString(),'#f97316'],
+         ['📉','Recorte promedio',redProm.toFixed(DEC)+'%','#a855f7'],
+         ['📅','Días ganados prom.',promDias+'d','#0071A4']]
+        .map(([ic,l,v,c])=>`<div class="restr-kpi" style="--kc:${c}">
+          <div class="restr-kpi-top"><span class="restr-kpi-ic">${ic}</span><span class="restr-kpi-val">${v}</span></div>
+          <div class="restr-kpi-lbl">${l}</div>
         </div>`).join('')}
     </div>
-    <!-- Explanation -->
-    <div class="restr-tooltip" style="margin:0 18px 14px">
-      <strong>¿Qué es una restricción?</strong> Cuando la <strong>Venta Factible (VFact)</strong> se reduce por debajo del pronóstico, el inventario "dura más". Esto extiende la cobertura hasta que llegue la reposición.
-      <br><span style="font-size:9.5px;color:var(--txt3);margin-top:3px;display:block">Cob. Normal = inv ÷ pronóstico · Cob. Restricción = inv ÷ VFact · Días ganados = Cob. Restricción − Cob. Normal</span>
-    </div>
-    <!-- Legend + filter -->
-    <div style="padding:0 18px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:10px">
-      <div class="restr-legend" style="margin:0">
-        <span class="legend-item"><span style="display:inline-block;width:12px;height:8px;background:#22c55e;border-radius:2px;vertical-align:middle"></span> <span style="font-size:10px">Venta Factible</span></span>
-        <span class="legend-item"><span style="display:inline-block;width:12px;height:8px;background:#ef444440;border:1px solid #ef4444;border-radius:2px;vertical-align:middle"></span> <span style="font-size:10px">Recorte</span></span>
-        <span class="legend-item"><span class="dias-ganados" style="font-size:9px;padding:1px 5px">+Nd</span> <span style="font-size:10px">Días ganados por restricción</span></span>
+    <!-- Explanation + filter -->
+    <div class="restr-toolbar">
+      <div class="restr-explain">
+        <strong>¿Qué es una restricción?</strong> Cuando la Venta Factible cae por debajo del pronóstico aprobado, el inventario dura más de lo previsto — la cobertura se extiende hasta que llegue la reposición programada.
       </div>
       <div class="restr-filter-badge ${activeFilter?'':'all'}" onclick="filterByProd(activeFilter||'__none__')">
         ${restrFilterLabel}
       </div>
     </div>
-    <!-- Table -->
-    <div style="padding:0 18px 24px">${buildRestrTable()}</div>
+    <!-- Tarjetas por planta -->
+    <div class="restr-cards-wrap">${buildRestrTable()}</div>
   `;
 }
 var _navesCache       = null;
