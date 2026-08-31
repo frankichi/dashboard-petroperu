@@ -7709,6 +7709,9 @@ function renderPR() {
       <div class="page-header-subtitle">Plantas donde la Venta Factible quedó por debajo del pronóstico · ${fmtDate(currentDate)}</div>
     </div>
     <div class="restr-execsummary">📊 ${resumenEjecutivo}</div>
+    ${(typeof cobOverrides !== 'undefined' && Object.keys(cobOverrides).length > 0)
+      ? `<div class="restr-execsummary" style="border-left-color:#d97706;background:#d977061a">⚠️ Tienes <strong>${Object.keys(cobOverrides).length} cambio${Object.keys(cobOverrides).length!==1?'s':''} de Venta Factible sin guardar</strong> en Coberturas — esta lista sigue mostrando el último valor guardado hasta que los guardes ahí. <span style="text-decoration:underline;cursor:pointer;color:var(--acc2)" onclick="showPageById('p2')">Ir a Coberturas →</span></div>`
+      : ''}
     <!-- KPI strip -->
     <div class="restr-kpistrip">
       ${[['✂️','Restricciones activas',nRestr.toString(),'#ef4444'],
@@ -9090,6 +9093,34 @@ async function cobSaveToGS() {
         fecha: fecha, planta: planta, producto: producto,
         field: 'vfact', value: ov.vfact
       });
+      // ⚠️ AGREGADO — a pedido: una restricción de Venta Factible no es
+      // un ajuste de un solo día — representa una limitación real
+      // (ej. capacidad de despacho, calidad, etc.) que sigue vigente
+      // día tras día HASTA que llegue la reposición que resuelve el
+      // quiebre. Antes, guardar el override solo escribía la fecha que
+      // se estaba viendo — al día siguiente, si el reporte diario no
+      // volvía a traer un VFact explícito, el sistema dependía de la
+      // "herencia" automática (ver _getVfactEffective) para seguir
+      // aplicándolo, lo cual solo funciona si esa fila del día
+      // siguiente llega SIN vfact propio — si el proceso diario SÍ
+      // escribe algo (aunque sea el pronóstico normal), la restricción
+      // se perdía sola sin que nadie la haya levantado a propósito.
+      // Ahora se escribe explícitamente el mismo VFact para cada día
+      // entre hoy y la fecha en que la cobertura restringida se agota
+      // (el mismo cálculo que ya muestra "Nueva fecha cob." en
+      // Restricciones: días = inv ÷ VFact) — ese es, por definición, el
+      // horizonte hasta el que la reposición debería llegar. Un tope de
+      // 60 días evita una escritura descontrolada si el inventario o el
+      // VFact vienen con un dato atípico.
+      if (r && ov.vfact > 0) {
+        var invParaHorizonte = cobGetInv(r);
+        var diasHorizonte = invParaHorizonte > 0 ? Math.floor(invParaHorizonte / ov.vfact) : 0;
+        diasHorizonte = Math.max(0, Math.min(60, diasHorizonte));
+        for (var _dh = 1; _dh <= diasHorizonte; _dh++) {
+          var _fechaFutura = cobCalcFecha(fechaObjetivo, _dh);
+          vfactRecords.push({ fecha: _fechaFutura, planta: planta, producto: producto, field: 'vfact', value: ov.vfact });
+        }
+      }
     });
     var invRecords = [];
     Object.keys(cobInvOverrides).forEach(function(key) {
@@ -30518,6 +30549,14 @@ window.renderPRepoMar = function() {
 
   host.innerHTML =
     '<div class="repomar-wrap">' +
+      // ⚠️ AGREGADO — a pedido: aviso cuando hay ediciones de Venta
+      // Factible en Coberturas TODAVÍA sin guardar (cobOverrides vive
+      // solo en memoria del navegador hasta presionar "Guardar en GS")
+      // — así queda claro por qué un cambio recién hecho ahí todavía
+      // no se ve reflejado acá, en vez de parecer un bug silencioso.
+      (typeof cobOverrides !== 'undefined' && Object.keys(cobOverrides).length > 0 && !(typeof REPOMAR_SHARE_MODE !== 'undefined' && REPOMAR_SHARE_MODE)
+        ? '<div class="restr-execsummary" style="margin:14px 22px 0;border-left-color:#d97706;background:#d977061a">⚠️ Tienes <strong>' + Object.keys(cobOverrides).length + ' cambio' + (Object.keys(cobOverrides).length!==1?'s':'') + ' de Venta Factible sin guardar</strong> en Coberturas — esta vista no los va a reflejar hasta que los guardes ahí (botón "Guardar en GS"). <span style="text-decoration:underline;cursor:pointer;color:var(--acc2)" onclick="showPageById(\'p2\')">Ir a Coberturas →</span></div>'
+        : '') +
       '<div class="repomar-headerbar">' +
         '<div>' +
           '<div class="repomar-title">🚢 Reposiciones Marítimas y Coberturas Proyectadas</div>' +
