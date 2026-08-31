@@ -4401,6 +4401,19 @@ async function fetchData(forceRefresh) {
   }
   window._authPending = false;
 
+  // ⚠️ AGREGADO — a pedido: hasta ahora, la carga de "todos los buques"
+  // (getBTMapCompleto, la única fuente que trae a URUBAMBA y cualquier
+  // otro buque cuya carga sea 100% insumos de refinería) solo se
+  // disparaba al abrir la pestaña "Reposiciones Marítimas" — por eso,
+  // aunque la caché de servidor ya esté tibia, la persona veía primero
+  // 2 buques y "URUBAMBA" aparecía recién varios segundos después. Se
+  // dispara en paralelo aquí, apenas arranca el dashboard (no bloquea
+  // nada — es fire-and-forget), para que cuando la persona realmente
+  // abra esa pestaña, la data ya esté lista o casi lista.
+  if (typeof _repomarFetchBTMapCompleto === 'function') {
+    try { _repomarFetchBTMapCompleto(); } catch (ePrefetchBT) { /* no crítico */ }
+  }
+
   setGsStatus('connecting', 'Conectando...');
   // Splash: mensajes animados mientras carga
   var _sm = document.getElementById('splashMsg');
