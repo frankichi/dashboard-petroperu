@@ -29604,13 +29604,36 @@ function _buildRepoMarBuques() {
         if (!ultimaEscalaPendiente || f > ultimaEscalaPendiente) { ultimaEscalaPendiente = f; _terminalUltimaEscalaCliente = l.terminalNorm; }
       }
     });
+    // ⚠️ AGREGADO — a pedido (caso real confirmado: URUBAMBA, ya
+    // descargó TODAS sus escalas en Conchán y no le queda ninguna
+    // pendiente): si no hay ninguna escala PENDIENTE, el criterio de
+    // arriba (ultimaEscalaPendiente) queda vacío y el buque se quedaba
+    // sin ningún retorno estimado, aunque en la práctica ya debería
+    // estar zarpando de vuelta. Se usa como base la última escala YA
+    // COMPLETADA (con el mismo criterio: 1 día de estadía/operaciones +
+    // días de tránsito hasta Talara según la tabla de distancias) —
+    // solo entra en juego cuando NO hay ninguna escala pendiente, para
+    // no pisar el criterio principal cuando sí la hay.
+    var ultimaEscalaCompletada = null, _terminalUltimaEscalaCompletadaCliente = null;
+    if (!ultimaEscalaPendiente) {
+      b.legs.forEach(function(l) {
+        if (l.estado === 'COMPLETADO' && l.fecha_hasta) {
+          var fc = l.fecha_hasta.slice(0,10);
+          if (!ultimaEscalaCompletada || fc > ultimaEscalaCompletada) { ultimaEscalaCompletada = fc; _terminalUltimaEscalaCompletadaCliente = l.terminalNorm; }
+        }
+      });
+    }
     var retornoEsValido = !ultimaEscalaPendiente || !retornoPropuesto || retornoPropuesto.slice(0,10) >= ultimaEscalaPendiente;
     b.retornoTalara = retornoEsValido ? retornoPropuesto : '';
     b.ultimaEscalaPendienteFecha = ultimaEscalaPendiente; // para mostrar un mensaje útil si el retorno no es confiable todavía
     // ⚠️ AGREGADO — a pedido: si no hay E.T.A. real, estimar el retorno
     // con la tabla de distancias — ver _repomarEstimarRetorno arriba.
-    b.retornoEstimado = (!b.retornoTalara && ultimaEscalaPendiente)
-      ? _repomarEstimarRetorno(_terminalUltimaEscalaCliente, ultimaEscalaPendiente)
+    // Ahora también cubre el caso "ya no tiene escalas pendientes"
+    // (todo COMPLETADO) usando la última escala completada como base.
+    b.retornoEstimado = !b.retornoTalara
+      ? (ultimaEscalaPendiente
+          ? _repomarEstimarRetorno(_terminalUltimaEscalaCliente, ultimaEscalaPendiente)
+          : _repomarEstimarRetorno(_terminalUltimaEscalaCompletadaCliente, ultimaEscalaCompletada))
       : '';
     // ⚠️ AGREGADO — a pedido: si el buque TODAVÍA no zarpó, mostrar su
     // estado real y actual en Talara (cargando, amarrado, fondeado,
