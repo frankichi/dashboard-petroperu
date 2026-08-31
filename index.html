@@ -6965,8 +6965,8 @@ function renderP1() {
     const diasGanadosList = filtered.map(r => {
       var pr = pronDiarioAprobado(r);
       var inv = r.inv || 0;
-      var cobN = pr > 0 ? Math.floor(inv / pr) : 0;
-      var cobR = (r.vfact||0) > 0 ? Math.floor(inv / (r.vfact||1)) : cobN;
+      var cobN = pr > 0 ? Math.round(inv / pr) : 0;
+      var cobR = (r.vfact||0) > 0 ? Math.round(inv / (r.vfact||1)) : cobN;
       return Math.max(0, cobR - cobN);
     });
     const maxDiasGanados = Math.max(...diasGanadosList, 0);
@@ -6989,8 +6989,8 @@ function renderP1() {
       .map(([planta, rows]) => {
         const maxDG = Math.max(...rows.map(r => {
           var pr = pronDiarioAprobado(r);
-          var cobN = pr > 0 ? Math.floor((r.inv||0) / pr) : 0;
-          var cobR = (r.vfact||0) > 0 ? Math.floor((r.inv||0) / (r.vfact||1)) : cobN;
+          var cobN = pr > 0 ? Math.round((r.inv||0) / pr) : 0;
+          var cobR = (r.vfact||0) > 0 ? Math.round((r.inv||0) / (r.vfact||1)) : cobN;
           return Math.max(0, cobR - cobN);
         }), 0);
         const tRows = rows.map(r => {
@@ -13957,7 +13957,7 @@ function renderPD() {
     const dem = (pronSheet[pk] || r.pron_mes || r.pron || 0);
     const vf  = r.vfact || 0;
     const dmRate = vf > 0 ? vf : (dem > 0 ? dem : (r.dem_prom || r.dem || 0));
-    const calcCob = (r.inv > 0 && dmRate > 0) ? Math.floor(r.inv / dmRate) : (r.inv > 0 ? 999 : 0);
+    const calcCob = (r.inv > 0 && dmRate > 0) ? Math.round(r.inv / dmRate) : (r.inv > 0 ? 999 : 0);
     return Object.assign({}, r, { _calcCob: calcCob });
   }).sort((a, b) => {
     const ca = a._calcCob, cb = b._calcCob;
@@ -13977,7 +13977,7 @@ function renderPD() {
     const vfactV = r.vfact || 0;
     const dem   = Math.abs(vfactV > 0 ? vfactV : (pronV > 0 ? pronV : (r.dem_prom || r.dem || 0)));
     const days  = 21;
-    const daysToQuiebre = dem > 0 ? Math.floor(inv/dem) : 999;
+    const daysToQuiebre = dem > 0 ? Math.round(inv/dem) : 999;
     const btETA = r.fecha_reposicion || '';
     const cobDias = r._calcCob || r.cob || 0;
     const statusColor = cobDias < 4 ? '#ef4444' : cobDias < 7 ? '#eab308' : cobDias < 13 ? '#f97316' : '#22c55e';
@@ -14312,9 +14312,9 @@ function simUpdateStopCoverage(ship, idx) {
     ? pronDiarioAprobado(liveRec)
     : 0;
   const demRate = vf > 0 ? vf : pron;
-  const liveCob = demRate > 0 && inv > 0 ? Math.floor(inv / demRate) : null;
+  const liveCob = demRate > 0 && inv > 0 ? Math.round(inv / demRate) : null;
   const volBbl  = st.vol || 0;
-  let newCob    = (demRate > 0 && volBbl > 0) ? Math.floor((inv + volBbl) / demRate) : null;
+  let newCob    = (demRate > 0 && volBbl > 0) ? Math.round((inv + volBbl) / demRate) : null;
   function cobColor2(c){ return !c||c<=0?'#e03434':c<4?'#e03434':c<8?'#d96b1a':c<13?'#c9970a':'#1a9e50'; }
   const cobEl   = document.getElementById('sim-covnew-'+ship.id+'-'+idx);
   const deltaEl = document.getElementById('sim-covdelta-'+ship.id+'-'+idx);
@@ -14946,11 +14946,11 @@ function renderPE() {
           ? pronDiarioAprobado(liveRec)
           : 0;
         const demRate = vf > 0 ? vf : pron2;  // tasa de consumo (MBDC/día)
-        const liveCob = demRate > 0 && inv > 0 ? Math.floor(inv / demRate) : null;
+        const liveCob = demRate > 0 && inv > 0 ? Math.round(inv / demRate) : null;
         const cobC    = cobColor(liveCob || 0);
         const cobStr  = liveCob !== null ? (liveCob > 0 ? liveCob + 'd' : 'Quiebre') : '—';
         const volBbl  = pr.vol || 0;  // MB
-        let newCob    = (demRate > 0 && volBbl > 0) ? Math.floor((inv + volBbl) / demRate) : null;
+        let newCob    = (demRate > 0 && volBbl > 0) ? Math.round((inv + volBbl) / demRate) : null;
         const newCobC = cobColor(newCob || 0);
         const delta   = (newCob !== null && liveCob !== null) ? newCob - liveCob : null;
         const etaBase   = st.etaDate || active.zarpeDate;
@@ -18611,7 +18611,7 @@ function openWhatIf(planta, producto) {
   modal.style.display = 'flex';
   modal.style.alignItems = 'center';
   modal.style.justifyContent = 'center';
-  var cobBase = demRate > 0 ? Math.floor(inv / demRate) : 999;
+  var cobBase = demRate > 0 ? Math.round(inv / demRate) : 999;
   document.getElementById('whatif-content').innerHTML =
     '<div style="padding:20px">'
     + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">'
@@ -18717,7 +18717,7 @@ function renderWhatIfChart(planta, producto) {
     curBase -= Math.abs(baseRate);
     curSim -= Math.abs(simVfact);
   }
-  var cobSim = simVfact > 0 ? Math.floor(inv / simVfact) : 999;
+  var cobSim = simVfact > 0 ? Math.round(inv / simVfact) : 999;
   var el = document.getElementById('wi-cob-display');
   if (el) { el.textContent = cobSim < 999 ? cobSim + 'd' : '\u2014'; el.style.color = cobSim < 4 ? '#dc2626' : cobSim < 7 ? '#d97706' : '#16a34a'; }
   var ctx = document.getElementById('wi-chart');
@@ -19058,7 +19058,7 @@ function openRestrModal(tipo) {
           return '<span style="color:#f87171;font-weight:700">-'+red+'%</span>'; }},
       { label:'Cobertura', align:'center', px:'10px',
         render: function(r){
-          var cob=(r.inv>0&&(r.vfact||0)>0)?Math.floor(r.inv/(r.vfact||1)):0;
+          var cob=(r.inv>0&&(r.vfact||0)>0)?Math.round(r.inv/(r.vfact||1)):0;
           var col=cob<=0?'#f87171':cob<4?'#ef4444':cob<7?'#fb923c':cob<13?'#facc15':'#4ade80';
           return '<span style="background:'+col+'22;color:'+col+';border:1px solid '+col+'55;border-radius:20px;padding:2px 10px;font-family:var(--mono);font-size:12px;font-weight:800;display:inline-block">'+cob+'d</span>'; }}
     ];
@@ -19128,8 +19128,8 @@ function openRestrModal(tipo) {
       + '</tr></thead><tbody>';
     restr.forEach(function(r) {
       var pr =pronDiarioAprobado(r);
-      var cobNorm = pr > 0 ? Math.floor(r.inv/pr) : 0;
-      var cobRestr = (r.vfact||0) > 0 ? Math.floor(r.inv/(r.vfact||1)) : cobNorm;
+      var cobNorm = pr > 0 ? Math.round(r.inv/pr) : 0;
+      var cobRestr = (r.vfact||0) > 0 ? Math.round(r.inv/(r.vfact||1)) : cobNorm;
       var gained = Math.max(0, cobRestr - cobNorm);
       body += '<tr style="border-bottom:1px solid var(--bdr)">'
         + '<td style="padding:7px 10px;font-weight:800;color:var(--txt)">'+r.planta+'</td>'
@@ -25760,7 +25760,7 @@ function _renderVistaEjecutivaSimpleImpl() {
       var desp = RAW.filter(function(r){ return r.fecha===d && filaAplica(r, pl, prod); })
                     .reduce(function(s,r){ return s+despRow(r); }, 0);
       var pronVal = pronParaFechaExec(d, plantaParaPron, prod);
-      var cobDias = (pronVal > 0 && inv > 0) ? Math.floor(inv / pronVal) : null;
+      var cobDias = (pronVal > 0 && inv > 0) ? Math.round(inv / pronVal) : null;
       var comentarios = [];
       RAW.forEach(function(r) {
         if (r.fecha !== d || !filaAplica(r, pl, prod)) return;
@@ -25901,7 +25901,7 @@ function _renderVistaEjecutivaSimpleImpl() {
         var desp = RAW.filter(function(r){ return r.fecha===d && filaAplica(r, cp.keyCalculo, cp.producto); })
                       .reduce(function(s,r){ return s+despRow(r); }, 0);
         var pronVal = pronParaFechaExec(d, cp.keyCalculo, cp.producto);
-        var cobDias = (pronVal > 0 && inv > 0) ? Math.floor(inv / pronVal) : null;
+        var cobDias = (pronVal > 0 && inv > 0) ? Math.round(inv / pronVal) : null;
         var comentarios = [];
         RAW.forEach(function(r) {
           if (r.fecha !== d || !filaAplica(r, cp.keyCalculo, cp.producto)) return;
@@ -28929,7 +28929,7 @@ el.innerHTML = `
     const repDays   = repDate ? Math.max(0, Math.round((new Date(repDate+'T12:00:00') - baseDate) / 86400000)) : 0;
     const invAtRepDay = Math.max(0, inv - vf * repDays);   // inventario al llegar el buque
     const invAfterRep = invAtRepDay + rep;                  // inventario tras descarga
-    const daysFromETA = vf > 0 ? Math.floor(invAfterRep / vf) : 0;
+    const daysFromETA = vf > 0 ? Math.round(invAfterRep / vf) : 0;
     const cobAfterRep = repDays + daysFromETA;              // total desde la fecha base
     const newCobDate  = repDate ? _pInvAddDays(repDate, daysFromETA) : '';
     const capLine = r.cap || 0;
