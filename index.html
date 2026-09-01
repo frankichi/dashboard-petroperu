@@ -29925,6 +29925,19 @@ function _buildRepoMarBuques() {
             estadoRealEnTerminal: null
           });
           _seAgregoEscalaTransitoRealCli = true;
+          // ⚠️ AGREGADO — bug real confirmado (caso URUBAMBA: la caja de
+          // Bayóvar aparecía "suelta", sin conectar bien con el resto
+          // del recorrido): esta escala se agrega al FINAL del arreglo
+          // sin importar su fecha real — pero _repomarAgruparEscalas NO
+          // reordena, asume que b.legs YA viene en orden cronológico
+          // (así es como llegan las legs reales de Cargas de Naves).
+          // Bayóvar (02-set) en realidad va ENTRE las 2 escalas de
+          // Conchán (31-ago y 10-set), no al final — hay que reordenar
+          // por fecha para que las flechas conecten en la secuencia
+          // real del viaje, no en el orden en que el código las agregó.
+          b.legs.sort(function(a, c) {
+            return (a.fecha_hasta || '').slice(0,10).localeCompare((c.fecha_hasta || '').slice(0,10));
+          });
         }
       }
     }
@@ -30303,7 +30316,7 @@ function _repomarInjectCSS() {
     .repomar-shipname{font-weight:800;color:#fff;background:#0071A4;font-size:12px;padding:5px 10px;letter-spacing:.02em}
     .repomar-shipcargo{color:var(--txt2);font-family:var(--mono);font-size:10px;line-height:1.7;padding:7px 10px 3px;white-space:nowrap}
     .repomar-shipzarpe{margin:6px 10px 8px;background:#fff7e6;border:1px solid #f0c869;border-radius:4px;padding:3px 8px;font-size:10px;font-weight:700;color:#8a6416;display:inline-block}
-    .repomar-legbox{background:#fff;border:1.5px solid #2563eb;border-radius:6px;padding:5px 7px;font-size:10px;margin:3px 2px;position:relative;z-index:2;box-shadow:0 1px 3px rgba(37,99,235,.18)}
+    .repomar-legbox{background:#fff;border:1.5px solid #2563eb;border-radius:6px;padding:5px 7px;font-size:10px;margin:3px 2px;position:relative;z-index:2;box-shadow:0 1px 3px rgba(37,99,235,.18);min-width:118px}
     .repomar-legdate{font-weight:800;color:#2563eb;font-size:10px}
     .repomar-legprod{color:var(--txt2);font-family:var(--mono);font-size:9.5px;margin-top:1px;white-space:nowrap}
     .repomar-legbox.completado{border-color:#16a34a;box-shadow:0 1px 3px rgba(22,163,74,.18)}
