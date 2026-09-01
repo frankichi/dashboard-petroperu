@@ -30982,47 +30982,27 @@ window.renderPRepoMar = function() {
         var x1 = lRect.left + lRect.width/2 - gridRect.left;
         var y1 = lRect.top - gridRect.top;
         var midX = (prevX + x1) / 2;
-        var distanciaHoriz = Math.abs(x1 - prevX);
-        var pathD;
-        // ⚠️ CORREGIDO — caso de cajas APILADAS (mismo terminal, una
-        // debajo de la otra, ej. 2 escalas distintas en Conchán): antes
-        // se intentaba arquear "por arriba" hacia una caja que está
-        // DEBAJO — la curva tenía que atravesar la caja de origen para
-        // llegar. Ahora, si la siguiente caja está prácticamente en la
-        // misma columna y más abajo, se conecta con una línea recta
-        // simple desde el BORDE INFERIOR de la caja de arriba hasta el
-        // borde superior de la de abajo. Geometría trivial: no puede
-        // desbordarse ni enredarse con nada.
-        var prevBottom = prevRect.bottom - gridRect.top;
-        var esApilada = distanciaHoriz < 40 && y1 > prevBottom - 4;
-        if (esApilada) {
-          var xApilada = (prevRect.left + prevRect.width/2 - gridRect.left + x1) / 2;
-          pathD = 'M' + xApilada + ',' + prevBottom + ' L' + xApilada + ',' + y1;
-        } else {
-          // Arco por arriba (caso normal: salto lateral entre plantas).
-          // Si la caja de origen es la de ABAJO de una pila, la flecha
-          // sale por su costado (no por arriba) — si no, el arco
-          // tendría que atravesar la caja de encima para salir.
-          var startX = prevX, startY = prevY;
-          if (prevFueApilada) {
-            startX = (x1 >= prevX ? prevRect.right : prevRect.left) - gridRect.left;
-            startY = prevRect.top + prevRect.height/2 - gridRect.top;
-          }
-          var alturaCurva = Math.max(38, Math.min(60, distanciaHoriz * 0.15));
-          var tope = Math.min(startY, y1) - 15;
-          var controlY = tope - alturaCurva;
-          var midXArc = (startX + x1) / 2;
-          pathD = 'M' + startX + ',' + startY + ' Q' + midXArc + ',' + controlY + ' ' + x1 + ',' + y1;
-        }
-        // ⚠️ QUITADO — a pedido: el halo blanco ya no hace falta, las
-        // flechas volvieron a ir DEBAJO de las cajas (ver .repomar-svg).
+        // ⚠️ REEMPLAZADO POR COMPLETO — a pedido: los arcos "por
+        // arriba" con altura calculada seguían fallando en casos
+        // reales (cruzaban cajas, se desbordaban hacia el
+        // encabezado). Se cambia a una ruta en ESCUADRA que va
+        // SIEMPRE por ABAJO — sale por el borde INFERIOR de la caja
+        // de origen, baja hasta un nivel libre por debajo de ambas
+        // cajas, cruza en horizontal, y sube por el borde INFERIOR de
+        // la caja destino. 3 segmentos rectos, nunca sube hacia el
+        // encabezado, nunca cruza el interior de ninguna caja salvo
+        // el punto exacto de entrada.
+        var salX = prevRect.left + prevRect.width/2 - gridRect.left;
+        var salY = prevRect.bottom - gridRect.top;
+        var entX = x1;
+        var entY = lRect.bottom - gridRect.top;
+        var nivelLibre = Math.max(salY, entY) + 24;
+        var pathD = 'M' + salX + ',' + salY + ' L' + salX + ',' + nivelLibre + ' L' + entX + ',' + nivelLibre + ' L' + entX + ',' + entY;
         pathsHTML += '<path d="' + pathD + '" ' +
           'fill="none" stroke="#93c5fd" stroke-width="2.6" stroke-dasharray="4 3" marker-end="url(#repomar-arrow)"/>';
         // El punto de salida de la SIGUIENTE flecha es el centro
         // superior de ESTA escala — así la ruta sigue avanzando,
         // funcione en la dirección que funcione en pantalla.
-        prevFueApilada = esApilada;
-        prevHeight = lRect.height || 0;
         prevRect = lRect;
         prevX = x1;
         prevY = y1;
