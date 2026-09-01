@@ -29837,12 +29837,14 @@ function _buildRepoMarBuques() {
       var _puertoEtaNormCli = _repomarNormPuerto(pos.puerto_eta);
       var _plantaEtaMatchCli = REPOMAR_PLANTAS.filter(function(p) { return _repomarNormPuerto(p) === _puertoEtaNormCli; })[0];
       var _yaTieneEscalaAhiCli = b.legs.some(function(l) { return _repomarNormPuerto(l.terminal) === _puertoEtaNormCli; });
+      var _seAgregoEscalaTransitoRealCli = false;
       if (_plantaEtaMatchCli && !_yaTieneEscalaAhiCli) {
         b.legs.push({
-          terminal: _plantaEtaMatchCli, terminalNorm: _puertoEtaNormCli, producto: 'En tránsito (sin carga a descargar)', vol: 0,
+          terminal: _plantaEtaMatchCli, terminalNorm: _puertoEtaNormCli, producto: 'En tránsito (sin carga)', vol: 0,
           fecha_hasta: pos.fecha_eta, estado: 'PROGRAMADO', viaje: b.viaje,
           estadoRealEnTerminal: null
         });
+        _seAgregoEscalaTransitoRealCli = true;
       }
     }
     // ⚠️ CORREGIDO — bug real confirmado (MOCHE: Posicionamiento de
@@ -29889,7 +29891,19 @@ function _buildRepoMarBuques() {
     // con la tabla de distancias — ver _repomarEstimarRetorno arriba.
     // Ahora también cubre el caso "ya no tiene escalas pendientes"
     // (todo COMPLETADO) usando la última escala completada como base.
-    b.retornoEstimado = !b.retornoTalara
+    // ⚠️ CORREGIDO — a pedido: cuando la escala agregada arriba (rumbo
+    // real a otra planta, ej. Bayóvar) es la que quedó como "última
+    // escala pendiente", YA es el destino real conocido — agregar
+    // ADEMÁS un recuadro de "Retorno Talara (est.)" sería una doble
+    // proyección encima de un dato real. Se deja sin estimar en ese
+    // caso — la escala real ya deja claro hacia dónde va.
+    // ⚠️ CORREGIDO — bug real confirmado (caso MOCHE, mismo que en
+    // Code.gs): solo se suprime "Retorno Talara" si la escala de
+    // tránsito agregada es, en efecto, la ÚLTIMA escala pendiente — no
+    // basta con que exista, porque puede haber otra escala de descarga
+    // real más tardía (ej. MOCHE: tránsito a Bayóvar el 02-set, pero
+    // todavía le queda una descarga real en Conchán el 05-set).
+    b.retornoEstimado = (!b.retornoTalara && !(_seAgregoEscalaTransitoRealCli && _terminalUltimaEscalaCliente === _puertoEtaNormCli))
       ? (ultimaEscalaPendiente
           ? _repomarEstimarRetorno(_terminalUltimaEscalaCliente, ultimaEscalaPendiente)
           : _repomarEstimarRetorno(_terminalUltimaEscalaCompletadaCliente, ultimaEscalaCompletada))
@@ -30875,7 +30889,7 @@ window.renderPRepoMar = function() {
         var alturaCurva = Math.max(38, Math.min(55, distanciaHoriz * 0.15));
         var controlY = Math.min(prevY, y1) - alturaCurva;
         pathsHTML += '<path d="M' + prevX + ',' + prevY + ' Q' + midX + ',' + controlY + ' ' + x1 + ',' + y1 + '" ' +
-          'fill="none" stroke="#93c5fd" stroke-width="1.6" stroke-dasharray="4 3" marker-end="url(#repomar-arrow)"/>';
+          'fill="none" stroke="#93c5fd" stroke-width="2.6" stroke-dasharray="4 3" marker-end="url(#repomar-arrow)"/>';
         // El punto de salida de la SIGUIENTE flecha es el centro
         // superior de ESTA escala — así la ruta sigue avanzando,
         // funcione en la dirección que funcione en pantalla.
@@ -30896,12 +30910,12 @@ window.renderPRepoMar = function() {
         var alturaCurvaR = Math.max(38, Math.min(55, Math.abs(xR - prevX) * 0.15));
         var controlYR = Math.min(prevY, yR) - alturaCurvaR;
         pathsHTML += '<path d="M' + prevX + ',' + prevY + ' Q' + midXR + ',' + controlYR + ' ' + xR + ',' + yR + '" ' +
-          'fill="none" stroke="#0071A4" stroke-width="1.6" stroke-dasharray="4 3" marker-end="url(#repomar-arrow-retorno)"/>';
+          'fill="none" stroke="#0071A4" stroke-width="2.6" stroke-dasharray="4 3" marker-end="url(#repomar-arrow-retorno)"/>';
       }
     });
     svg.innerHTML = '<defs>' +
-      '<marker id="repomar-arrow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#93c5fd"/></marker>' +
-      '<marker id="repomar-arrow-retorno" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#0071A4"/></marker>' +
+      '<marker id="repomar-arrow" markerWidth="11" markerHeight="11" refX="8" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="#93c5fd"/></marker>' +
+      '<marker id="repomar-arrow-retorno" markerWidth="11" markerHeight="11" refX="8" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="#0071A4"/></marker>' +
       '</defs>' + pathsHTML;
   };
   requestAnimationFrame(window._repomarDrawArrows);
