@@ -29867,7 +29867,14 @@ function _buildRepoMarBuques() {
     // Code.gs): solo agregar si el buque YA ZARPÓ — si no, su propia
     // insignia de estado ya muestra ese mismo E.T.A., y se duplicaba.
     var _seAgregoEscalaTransitoRealCli = false;
-    if (b.zarpe && !proximoPuertoEsTalara && pos) {
+    // ⚠️ CORREGIDO — bug real confirmado: esta condición usaba SOLO
+    // b.zarpe (la fecha exacta) — si esa fecha no había llegado todavía
+    // por el mismo problema de timing que ya corregimos para el texto
+    // "En Talara" (ver b.zarpeConfirmadoPorEscalas más arriba), la caja
+    // de escala sintética para el próximo puerto (Bayóvar, en el caso
+    // de URUBAMBA) nunca se agregaba, aunque ya supiéramos con certeza
+    // que el buque había zarpado.
+    if ((b.zarpe || b.zarpeConfirmadoPorEscalas) && !proximoPuertoEsTalara && pos) {
       var _puertoEtaTxtCli = pos.puerto_eta || '';
       var _fechaEtaTxtCli = pos.fecha_eta || '';
       // ⚠️ AGREGADO — a pedido, mismo respaldo que en Code.gs (caso
