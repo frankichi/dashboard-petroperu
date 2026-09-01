@@ -29825,6 +29825,26 @@ function _buildRepoMarBuques() {
     // deja vacío en vez de inventar una, para no mostrar un dato falso.
     var proximoPuertoEsTalara = pos && pos.puerto_eta && pos.puerto_eta.toUpperCase().indexOf('TALARA') !== -1;
     var retornoPropuesto = proximoPuertoEsTalara ? (pos.fecha_eta || '') : '';
+    // ⚠️ AGREGADO — a pedido, caso real confirmado (URUBAMBA, reporte de
+    // Posicionamiento de Naves del 01-set): ya descargó TODO en Cargas
+    // de Naves, pero su rotación real es Talara→Conchán→BAYÓVAR→Talara
+    // — está navegando a Bayóvar a CARGAR, no directo de vuelta a
+    // Talara. Si el próximo puerto de ETA es una planta de la grilla
+    // (no Talara), se agrega como escala más — mismo criterio que en
+    // el backend (Code.gs), para que este módulo interno y el enlace
+    // público muestren exactamente lo mismo.
+    if (!proximoPuertoEsTalara && pos && pos.puerto_eta && pos.fecha_eta) {
+      var _puertoEtaNormCli = _repomarNormPuerto(pos.puerto_eta);
+      var _plantaEtaMatchCli = REPOMAR_PLANTAS.filter(function(p) { return _repomarNormPuerto(p) === _puertoEtaNormCli; })[0];
+      var _yaTieneEscalaAhiCli = b.legs.some(function(l) { return _repomarNormPuerto(l.terminal) === _puertoEtaNormCli; });
+      if (_plantaEtaMatchCli && !_yaTieneEscalaAhiCli) {
+        b.legs.push({
+          terminal: _plantaEtaMatchCli, terminalNorm: _puertoEtaNormCli, producto: 'En tránsito (sin carga a descargar)', vol: 0,
+          fecha_hasta: pos.fecha_eta, estado: 'PROGRAMADO', viaje: b.viaje,
+          estadoRealEnTerminal: null
+        });
+      }
+    }
     // ⚠️ CORREGIDO — bug real confirmado (MOCHE: Posicionamiento de
     // Naves decía "retorno a Talara el 27-ago", pero Cargas de Naves
     // todavía tiene una escala PENDIENTE en Salaverry con ETA 01-set —
@@ -30628,7 +30648,7 @@ window.renderPRepoMar = function() {
           // flechas conecten grupo 1 -> grupo 2 -> grupo 3 en el orden
           // real del viaje, ya con los productos combinados.
           var lineasProductos = g.productos.map(function(p) {
-            return '<div class="repomar-legprod">' + p.producto + ': ' + p.vol.toFixed(1) + ' MB</div>';
+            return '<div class="repomar-legprod">' + (p.vol > 0 ? (p.producto + ': ' + p.vol.toFixed(1) + ' MB') : p.producto) + '</div>';
           }).join('');
           return '<div class="repomar-legbox' + (esCompletado ? ' completado' : (estadoReal ? ' en-terminal' : '')) + (esVivo ? ' en-vivo' : '') + '" data-buque="' + b.buque + '" data-leg-idx="' + grupos.indexOf(g) + '">' +
             (esVivo ? '<div class="repomar-livepill"><span class="repomar-livedot"></span>En puerto</div>' : '') +

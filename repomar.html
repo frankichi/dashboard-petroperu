@@ -353,7 +353,7 @@ function render(data) {
             ? '<div class="repomar-legdate" style="color:#b45309">' + estadoReal.split(String.fromCharCode(10))[0] + '</div>'
             : '<div class="repomar-legdate">' + etiqueta + ' ' + fmtCorta(g.fecha_hasta) + '</div>';
           var lineasProductos = g.productos.map(function(p) {
-            return '<div class="repomar-legprod">' + p.producto + ': ' + p.vol.toFixed(1) + ' MB</div>';
+            return '<div class="repomar-legprod">' + (p.vol > 0 ? (p.producto + ': ' + p.vol.toFixed(1) + ' MB') : p.producto) + '</div>';
           }).join('');
           return '<div class="repomar-legbox' + (esCompletado ? ' completado' : (estadoReal ? ' en-terminal' : '')) + (esVivo ? ' en-vivo' : '') + '" data-buque="' + b.buque + '" data-leg-idx="' + grupos.indexOf(g) + '">' +
             (esVivo ? '<div class="repomar-livepill"><span class="repomar-livedot"></span>En puerto</div>' : '') +
