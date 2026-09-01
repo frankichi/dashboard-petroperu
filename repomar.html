@@ -525,23 +525,44 @@ function drawArrows(buques) {
       var x1 = lRect.left + lRect.width/2 - gridRect.left;
       var y1 = lRect.top - gridRect.top;
       var midX = (prevX + x1) / 2;
-      // ⚠️ REEMPLAZADO POR COMPLETO — a pedido: los arcos "por arriba"
-      // con altura calculada seguían fallando en casos reales
-      // (cruzaban cajas, se desbordaban hacia el encabezado). Se
-      // cambia a una ruta en ESCUADRA que va SIEMPRE por ABAJO — sale
-      // por el borde INFERIOR de la caja de origen, baja hasta un
-      // nivel libre por debajo de ambas cajas, cruza en horizontal, y
-      // sube por el borde INFERIOR de la caja destino. 3 segmentos
-      // rectos, nunca sube hacia el encabezado, nunca cruza el
-      // interior de ninguna caja salvo el punto exacto de entrada.
-      var salX = prevRect.left + prevRect.width/2 - gridRect.left;
-      var salY = prevRect.bottom - gridRect.top;
-      var entX = x1;
-      var entY = lRect.bottom - gridRect.top;
-      var nivelLibre = Math.max(salY, entY) + 24;
-      var pathD = 'M' + salX + ',' + salY + ' L' + salX + ',' + nivelLibre + ' L' + entX + ',' + nivelLibre + ' L' + entX + ',' + entY;
+      var distanciaHoriz = Math.abs(x1 - prevX);
+      var pathD;
+      // Caso de cajas APILADAS (mismo terminal, una debajo de la otra,
+      // ej. 2 escalas distintas en Conchán): línea recta corta entre el
+      // borde inferior de la de arriba y el superior de la de abajo —
+      // queda contenida entre esas 2 cajas, sin compartir espacio con
+      // ningún otro buque.
+      var prevBottom = prevRect.bottom - gridRect.top;
+      var esApilada = distanciaHoriz < 40 && y1 > prevBottom - 4;
+      if (esApilada) {
+        var xApilada = (prevRect.left + prevRect.width/2 - gridRect.left + x1) / 2;
+        pathD = 'M' + xApilada + ',' + prevBottom + ' L' + xApilada + ',' + y1;
+      } else {
+        // ⚠️ REVERTIDO — a pedido: la ruta "en escuadra por abajo"
+        // evitaba el desborde, pero generaba un problema peor — al
+        // obligar a TODAS las flechas de TODOS los buques a bajar por
+        // el mismo carril inferior, los caminos de distintos buques se
+        // mezclaban visualmente y parecía una sola maraña conectada
+        // ("parece que el Moche hiciera varios viajes"). Se vuelve al
+        // arco simple por arriba — cada flecha queda contenida cerca
+        // de su propia fila, sin invadir el espacio de otro buque.
+        // Si la caja de origen es la de ABAJO de una pila, la flecha
+        // sale por su costado (no por arriba) — si no, el arco tendría
+        // que atravesar la caja de encima para salir.
+        var startX = prevX, startY = prevY;
+        if (prevFueApilada) {
+          startX = (x1 >= prevX ? prevRect.right : prevRect.left) - gridRect.left;
+          startY = prevRect.top + prevRect.height/2 - gridRect.top;
+        }
+        var alturaCurva = Math.max(38, Math.min(60, distanciaHoriz * 0.15));
+        var tope = Math.min(startY, y1) - 15;
+        var controlY = tope - alturaCurva;
+        var midXArc = (startX + x1) / 2;
+        pathD = 'M' + startX + ',' + startY + ' Q' + midXArc + ',' + controlY + ' ' + x1 + ',' + y1;
+      }
       pathsHTML += '<path d="' + pathD + '" ' +
         'fill="none" stroke="#93c5fd" stroke-width="2.6" stroke-dasharray="4 3" marker-end="url(#repomar-arrow)"/>';
+      prevFueApilada = esApilada;
       prevRect = lRect;
       prevX = x1;
       prevY = y1;
