@@ -534,9 +534,26 @@ function drawArrows(buques) {
       // ningún otro buque.
       var prevBottom = prevRect.bottom - gridRect.top;
       var esApilada = distanciaHoriz < 40 && y1 > prevBottom - 4;
+      // ⚠️ AGREGADO — a pedido exacto (boceto de referencia: Mollendo →
+      // Conchán 16/09): cuando el DESTINO queda más ABAJO que el
+      // ORIGEN (la ruta "retrocede" a una escala más tardía que quedó
+      // en una columna anterior), un arco "por arriba" no tiene
+      // sentido — el destino está abajo, no arriba. Sale por el borde
+      // INFERIOR de la caja de origen, y entra por el costado (derecho
+      // o izquierdo, el que dé hacia el origen) de la caja destino.
+      var targetMidY = lRect.top + lRect.height/2 - gridRect.top;
+      var esRetroceso = !esApilada && targetMidY > prevBottom - 4;
       if (esApilada) {
         var xApilada = (prevRect.left + prevRect.width/2 - gridRect.left + x1) / 2;
         pathD = 'M' + xApilada + ',' + prevBottom + ' L' + xApilada + ',' + y1;
+      } else if (esRetroceso) {
+        var salXRetro = prevRect.left + prevRect.width/2 - gridRect.left;
+        var salYRetro = prevBottom;
+        var entXRetro = (x1 < prevX ? lRect.right : lRect.left) - gridRect.left;
+        var entYRetro = targetMidY;
+        var c1x = salXRetro, c1y = salYRetro + 45;
+        var c2x = entXRetro + (x1 < prevX ? 55 : -55), c2y = entYRetro;
+        pathD = 'M' + salXRetro + ',' + salYRetro + ' C' + c1x + ',' + c1y + ' ' + c2x + ',' + c2y + ' ' + entXRetro + ',' + entYRetro;
       } else {
         // ⚠️ REVERTIDO — a pedido: la ruta "en escuadra por abajo"
         // evitaba el desborde, pero generaba un problema peor — al
