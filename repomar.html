@@ -370,18 +370,13 @@ function render(data) {
       // proyectada — con un estilo visual distinto (ámbar, ~) para que
       // quede claro que es una ESTIMACIÓN, no un dato confirmado como
       // el retorno real (azul, sin el ~).
-      var retornoTxt;
-      if (b.retornoTalara) {
-        retornoTxt = '<div class="repomar-legbox" data-retorno-cell="' + idx + '" style="border-color:#0071A4"><div class="repomar-legdate" style="color:#0071A4">Retorno Talara</div><div class="repomar-legprod">' + fmtCorta(b.retornoTalara) + fmtHora(b.retornoTalara) + '</div></div>';
-      } else if (b.retornoEstimado) {
-        retornoTxt = '<div class="repomar-legbox" data-retorno-cell="' + idx + '" style="border-color:#d97706;border-style:dashed" title="Estimado con la tabla de distancias — última escala + 1 día de estadía + días de navegación hasta Talara. No es un E.T.A. confirmado."><div class="repomar-legdate" style="color:#d97706">~ Retorno Talara (est.)</div><div class="repomar-legprod">' + fmtCorta(b.retornoEstimado) + '</div></div>';
-      } else {
-        var mensajeRetornoPendiente = b.ultimaEscalaPendienteFecha
-          ? 'Se sabrá tras completar su última escala (' + fmtCorta(b.ultimaEscalaPendienteFecha) + ')'
-          : 'Aún sin ETA de retorno';
-        retornoTxt = '<div class="repomar-retorno-pendiente">' + mensajeRetornoPendiente + '</div>';
-      }
-      var retornoCell = '<div class="repomar-cell" style="background:transparent;border:none;padding:4px">' + retornoTxt + '</div>';
+      // ⚠️ CORREGIDO — a pedido: se retira el recuadro/flecha de
+      // "Retorno Talara" del diagrama — era una ESTIMACIÓN (tabla de
+      // distancias, no un dato confirmado) y con varios buques en
+      // pantalla generaba demasiadas líneas cruzándose, confundiendo
+      // más de lo que aportaba. La celda queda vacía, sin romper la
+      // alineación de columnas del resto de la grilla.
+      var retornoCell = '<div class="repomar-cell" style="background:transparent;border:none;padding:4px"></div>';
       return '<div class="repomar-row repomar-ship-inner-row" data-ship-row="' + idx + '" style="grid-template-columns:' + cols + '">' + shipBox + legCells + retornoCell + '</div>';
     }).join('');
   } else {
@@ -398,11 +393,8 @@ function render(data) {
       '</div>' +
       '<div class="repomar-divider"></div>' +
       '<div class="repomar-row" style="grid-template-columns:' + cols + '">' +
-        '<div class="repomar-cell" style="grid-column:1/-2;justify-content:flex-start;background:transparent;border:none;padding:0 0 6px">' +
+        '<div class="repomar-cell" style="grid-column:1/-1;justify-content:flex-start;background:transparent;border:none;padding:0 0 6px">' +
           '<div class="repomar-ships-label">' + tituloBuques + '</div>' +
-        '</div>' +
-        '<div class="repomar-cell" style="background:transparent;border:none;padding:0 4px 6px;align-items:flex-end;justify-content:center">' +
-          '<div class="repomar-retorno-titulo">↩ Retorno</div>' +
         '</div>' +
       '</div>' +
       '<div class="repomar-ships" id="repomar-ships">' + filasShips + '</div>' +
@@ -460,21 +452,13 @@ function drawArrows(buques) {
       prevX = x1;
       prevY = y1;
     });
-    var retornoEl = row.querySelector('.repomar-legbox[data-retorno-cell="' + idx + '"]');
-    if (retornoEl) {
-      var rRect = retornoEl.getBoundingClientRect();
-      var xR = rRect.left + rRect.width/2 - gridRect.left;
-      var yR = rRect.top - gridRect.top;
-      var midXR = (prevX + xR) / 2;
-      var alturaCurvaR = Math.max(38, Math.min(55, Math.abs(xR - prevX) * 0.15));
-      var controlYR = Math.min(prevY, yR) - alturaCurvaR;
-      pathsHTML += '<path d="M' + prevX + ',' + prevY + ' Q' + midXR + ',' + controlYR + ' ' + xR + ',' + yR + '" ' +
-        'fill="none" stroke="#0071A4" stroke-width="2.6" stroke-dasharray="4 3" marker-end="url(#repomar-arrow-retorno)"/>';
-    }
+    // ⚠️ CORREGIDO — a pedido: se retiró el recuadro de "Retorno
+    // Talara" (ver arriba) — sin ese recuadro, este querySelector ya
+    // no encontraba nada, así que se quita el bloque entero en vez de
+    // dejar código muerto.
   });
   svg.innerHTML = '<defs>' +
     '<marker id="repomar-arrow" markerWidth="11" markerHeight="11" refX="8" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="#93c5fd"/></marker>' +
-    '<marker id="repomar-arrow-retorno" markerWidth="11" markerHeight="11" refX="8" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="#0071A4"/></marker>' +
     '</defs>' + pathsHTML;
 }
 
