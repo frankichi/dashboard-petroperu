@@ -29831,6 +29831,19 @@ function _buildRepoMarBuques() {
     // por qué "Talara" nunca es un terminal RECEPTOR).
     b.zarpe = pos && pos.fecha_zarpe ? pos.fecha_zarpe : '';
     b.zarpeOrigen = 'Talara';
+    // ⚠️ AGREGADO — bug real confirmado (UCAYALI/URUBAMBA/MOCHE
+    // mostrando "En Talara" aunque ya tenían escalas COMPLETADAS en
+    // Conchán/Mollendo/etc.): b.zarpe depende de que _navPosData
+    // (un fetch aparte) haya llegado a tiempo con la fecha exacta de
+    // zarpe — si por cualquier motivo esa fecha no llegó todavía
+    // (timing del fetch, o una fila que no la repite), el sistema
+    // asumía "nunca zarpó" y mostraba el mensaje equivocado, aunque ya
+    // hubiera pruebas directas de lo contrario: una escala COMPLETADA
+    // solo puede existir si el buque efectivamente zarpó de Talara en
+    // algún momento. Se guarda esa evidencia aparte (sin inventar una
+    // fecha de zarpe que no tenemos) para que el render sepa que NUNCA
+    // debe mostrar "En Talara" en ese caso.
+    b.zarpeConfirmadoPorEscalas = !b.zarpe && b.legs.some(function(l){ return l.estado === 'COMPLETADO'; });
     // ⚠️ AGREGADO — a pedido: fecha estimada de retorno a Talara. El
     // backend ya calcula, junto a la rotación real de cada buque, cuál
     // es su PRÓXIMO puerto de ETA (puerto_eta/fecha_eta) — si ese
@@ -30675,7 +30688,9 @@ window.renderPRepoMar = function() {
       // Posicionamiento de Naves.
       var zarpeTxt = b.zarpe
         ? '<div class="repomar-shipzarpe">Zarpó de ' + b.zarpeOrigen + ': ' + fmtCorta(b.zarpe) + fmtHora(b.zarpe) + '</div>'
-        : '<div class="repomar-shipzarpe repomar-shipzarpe-pendiente">' + (b.estadoActualPreZarpe || 'Aún en Talara') + '</div>';
+        : b.zarpeConfirmadoPorEscalas
+          ? '<div class="repomar-shipzarpe">Zarpó de ' + b.zarpeOrigen + ' (fecha exacta no disponible)</div>'
+          : '<div class="repomar-shipzarpe repomar-shipzarpe-pendiente">' + (b.estadoActualPreZarpe || 'Aún en Talara') + '</div>';
       // ⚠️ AGREGADO — a pedido, caso real confirmado (URUBAMBA): un
       // buque que ya zarpó pero no está amarrado en ningún terminal de
       // la grilla (está navegando ENTRE escalas) se quedaba sin ningún
@@ -30684,7 +30699,7 @@ window.renderPRepoMar = function() {
       var _posNavActualCli = (typeof _navPosData !== 'undefined' && _navPosData) ? _navPosData[b.buque.toUpperCase()] : null;
       var _estaEnAlgunaPlantaCli = REPOMAR_PLANTAS.some(function(p) { return _repomarBuquePresenteEnTerminal(b.buque, _repomarNormPuerto(p)); });
       var enTransitoTxt = '';
-      if (b.zarpe && !_estaEnAlgunaPlantaCli && _posNavActualCli && _posNavActualCli.estado_nav) {
+      if ((b.zarpe || b.zarpeConfirmadoPorEscalas) && !_estaEnAlgunaPlantaCli && _posNavActualCli && _posNavActualCli.estado_nav) {
         var _lineasNavCli = _posNavActualCli.estado_nav.split('\n').map(function(l){ return l.trim(); }).filter(Boolean);
         if (_lineasNavCli[0] && _lineasNavCli[0].toUpperCase() === b.buque.toUpperCase()) _lineasNavCli.shift();
         if (_lineasNavCli[0]) enTransitoTxt = '<div class="repomar-shipzarpe" style="background:#eef2ff;border-color:#818cf8;color:#4338ca">🧭 En tránsito: ' + _lineasNavCli[0] + '</div>';
@@ -30694,7 +30709,11 @@ window.renderPRepoMar = function() {
       // de destino) cuando todavía no zarpó — Talara es el origen y no
       // tiene su propia columna en la grilla, así que la caja del buque
       // hace las veces de "recuadro del puerto" en este caso.
-      var enVivoEnTalara = !b.zarpe;
+      // ⚠️ CORREGIDO — bug real confirmado: no basta con "!b.zarpe" para
+      // decidir si el buque sigue en Talara — si ya hay escalas
+      // COMPLETADAS (b.zarpeConfirmadoPorEscalas), sabemos con certeza
+      // que ya zarpó, aunque no tengamos la fecha exacta.
+      var enVivoEnTalara = !b.zarpe && !b.zarpeConfirmadoPorEscalas;
       var shipBox = '<div class="repomar-cell" style="align-items:flex-start;padding:4px">' +
         '<div class="repomar-shipbox' + (enVivoEnTalara ? ' en-vivo' : '') + '" style="width:100%">' +
           '<div class="repomar-shipname">🚢 ' + b.buque + '</div>' +
