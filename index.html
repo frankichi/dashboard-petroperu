@@ -17313,7 +17313,20 @@ function parseNavesText() {
         if (siguientePos) {
           var _trasNombreSig = text.slice(nextIdx + siguientePos.nombre.length, nextIdx + siguientePos.nombre.length + 100).replace(/^\s+/, '');
           var _primeraLinea = (_trasNombreSig.split('\n')[0] || '').trim();
-          var _esCampoSuelto = /^(E\.?\s*T\.?\s*(?:OPERACIONES|D)|T\.D|I\.D|I\.C|ZARP[OÓ]|AMARR[OÓ]|ARRIB[OÓ]|FONDE[OÓ])\.?:?\s*\d/i.test(_primeraLinea);
+          // ⚠️ CORREGIDO — bug real confirmado con datos reales (caso
+          // URUBAMBA/MOCHE, PDF del 01-set): esta lista de patrones no
+          // incluía "E.T.A. [planta]:" (ej. "E.T.A. BAYÓVAR: 02/05:30
+          // HRS.") — como esa línea suele aparecer al FINAL del bloque
+          // de un buque en el PDF, y a veces se desprende igual que el
+          // resto de campos sueltos, terminaba pegada al INICIO del
+          // bloque del SIGUIENTE buque sin que nada la reconociera como
+          // huérfana — el sistema le atribuía la ETA de un buque a otro
+          // completamente distinto (URUBAMBA→BAYÓVAR terminaba
+          // apareciendo como si fuera de MOCHE).
+          var _esCampoSuelto =
+            /^E\.?\s*T\.?\s*(?:OPERACIONES|D)\.?:?\s*\d/i.test(_primeraLinea) ||
+            /^E\.?\s*T\.?\s*A\.?\s+[A-ZÁÉÍÓÚÑ\s]+?:\s*\d/i.test(_primeraLinea) ||
+            /^(T\.D|I\.D|I\.C|ZARP[OÓ]|AMARR[OÓ]|ARRIB[OÓ]|FONDE[OÓ])\.?:?\s*\d/i.test(_primeraLinea);
           if (_esCampoSuelto) {
             chunk += ' ' + _primeraLinea;
             _lineaRobadaLen = _primeraLinea.length;
