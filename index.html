@@ -29882,8 +29882,14 @@ function _buildRepoMarBuques() {
       // ESTRUCTURADO puerto_eta/fecha_eta puede venir vacío aunque el
       // texto libre de estado_nav sí diga "NAVEGANDO A BAYÓVAR ...
       // E.T.A. BAYÓVAR: 02/05:30 HRS."
-      if ((!_puertoEtaTxtCli || !_fechaEtaTxtCli) && pos.estado_nav) {
-        var _mEtaTextoCli = pos.estado_nav.match(/E\.T\.A\.?\s+([A-ZÁÉÍÓÚÑ0-9\s]+?)[:\s]+(\d{1,2})\/(\d{1,2}):(\d{2})/i);
+      // ⚠️ CORREGIDO — bug real confirmado (consola del navegador,
+      // caso URUBAMBA): _navPosData trae el texto rico en el campo
+      // "estado" (heredado de mov_naves, siempre presente) — el campo
+      // "estado_nav" (de la fusión con posicionamiento_naves) puede no
+      // llegar siempre. Se usa el que esté disponible.
+      var _textoEstadoNavCli = pos.estado_nav || pos.estado || '';
+      if ((!_puertoEtaTxtCli || !_fechaEtaTxtCli) && _textoEstadoNavCli) {
+        var _mEtaTextoCli = _textoEstadoNavCli.match(/E\.T\.A\.?\s+([A-ZÁÉÍÓÚÑ0-9\s]+?)[:\s]+(\d{1,2})\/(\d{1,2}):(\d{2})/i);
         if (_mEtaTextoCli) {
           _puertoEtaTxtCli = _puertoEtaTxtCli || _mEtaTextoCli[1].trim();
           if (!_fechaEtaTxtCli) {
@@ -29997,8 +30003,8 @@ function _buildRepoMarBuques() {
       var _fmtH = function(f) { if (!f || f.indexOf('T') === -1) return ''; return ' ' + f.split('T')[1].slice(0,5); };
       var estadoBase = 'En Talara';
       var detalle = '';
-      if (pos && pos.estado_nav) {
-        var lineas = pos.estado_nav.split('\n').map(function(l){ return l.trim(); }).filter(Boolean);
+      if (pos && (pos.estado_nav || pos.estado)) {
+        var lineas = (pos.estado_nav || pos.estado).split('\n').map(function(l){ return l.trim(); }).filter(Boolean);
         if (lineas[0] && lineas[0].toUpperCase() === b.buque.toUpperCase()) lineas.shift();
         if (lineas[0]) estadoBase = lineas[0];
         var fechaReporte = (pos.fecha || fechaRef || '').slice(0,7); // "AAAA-MM"
@@ -30615,8 +30621,8 @@ window.renderPRepoMar = function() {
     // un punto que ni siquiera contiene el nombre del terminal de
     // destino (Callao ≠ Conchán como texto), así que ese chequeo por sí
     // solo nunca lo hubiera detectado.
-    if (pos.estado_nav) {
-      var mEsperaCli = pos.estado_nav.toUpperCase().match(/INGRESAR[ÁA]\s+A\s+(?:TSM\s+)?([A-ZÁÉÍÓÚÑ0-9\s]+?)\s+A\s+LA\s+SALIDA\s+DEL\s+B[\/\.]?T\s+([A-ZÁÉÍÓÚÑ0-9\s]+)/);
+    if (pos.estado_nav || pos.estado) {
+      var mEsperaCli = (pos.estado_nav || pos.estado).toUpperCase().match(/INGRESAR[ÁA]\s+A\s+(?:TSM\s+)?([A-ZÁÉÍÓÚÑ0-9\s]+?)\s+A\s+LA\s+SALIDA\s+DEL\s+B[\/\.]?T\s+([A-ZÁÉÍÓÚÑ0-9\s]+)/);
       if (mEsperaCli) {
         var terminalEsperaNorm = _repomarNormPuerto(mEsperaCli[1].trim());
         if (terminalEsperaNorm.indexOf(terminalNorm) !== -1) {
@@ -30650,8 +30656,8 @@ window.renderPRepoMar = function() {
   function _repomarBuquePresenteEnTerminal(buque, terminalNorm) {
     var pos = (typeof _navPosData !== 'undefined' && _navPosData) ? _navPosData[buque.toUpperCase()] : null;
     if (!pos) return false;
-    if (pos.estado_nav) {
-      var mEsperaViva = pos.estado_nav.toUpperCase().match(/INGRESAR[ÁA]\s+A\s+(?:TSM\s+)?([A-ZÁÉÍÓÚÑ0-9\s]+?)\s+A\s+LA\s+SALIDA\s+DEL\s+B[\/\.]?T\s+([A-ZÁÉÍÓÚÑ0-9\s]+)/);
+    if (pos.estado_nav || pos.estado) {
+      var mEsperaViva = (pos.estado_nav || pos.estado).toUpperCase().match(/INGRESAR[ÁA]\s+A\s+(?:TSM\s+)?([A-ZÁÉÍÓÚÑ0-9\s]+?)\s+A\s+LA\s+SALIDA\s+DEL\s+B[\/\.]?T\s+([A-ZÁÉÍÓÚÑ0-9\s]+)/);
       if (mEsperaViva && _repomarNormPuerto(mEsperaViva[1].trim()).indexOf(terminalNorm) !== -1) return true;
     }
     if (!pos.ubicacion) return false;
@@ -30706,8 +30712,8 @@ window.renderPRepoMar = function() {
       var _posNavActualCli = (typeof _navPosData !== 'undefined' && _navPosData) ? _navPosData[b.buque.toUpperCase()] : null;
       var _estaEnAlgunaPlantaCli = REPOMAR_PLANTAS.some(function(p) { return _repomarBuquePresenteEnTerminal(b.buque, _repomarNormPuerto(p)); });
       var enTransitoTxt = '';
-      if ((b.zarpe || b.zarpeConfirmadoPorEscalas) && !_estaEnAlgunaPlantaCli && _posNavActualCli && _posNavActualCli.estado_nav) {
-        var _lineasNavCli = _posNavActualCli.estado_nav.split('\n').map(function(l){ return l.trim(); }).filter(Boolean);
+      if ((b.zarpe || b.zarpeConfirmadoPorEscalas) && !_estaEnAlgunaPlantaCli && _posNavActualCli && (_posNavActualCli.estado_nav || _posNavActualCli.estado)) {
+        var _lineasNavCli = (_posNavActualCli.estado_nav || _posNavActualCli.estado).split('\n').map(function(l){ return l.trim(); }).filter(Boolean);
         if (_lineasNavCli[0] && _lineasNavCli[0].toUpperCase() === b.buque.toUpperCase()) _lineasNavCli.shift();
         if (_lineasNavCli[0]) enTransitoTxt = '<div class="repomar-shipzarpe" style="background:#eef2ff;border-color:#818cf8;color:#4338ca">🧭 En tránsito: ' + _lineasNavCli[0] + '</div>';
       }
