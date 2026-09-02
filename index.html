@@ -27000,13 +27000,32 @@ function _renderVistaEjecutivaSimpleImpl() {
         borderRadius: 5, maxBarThickness: barMode?36:26, stack: 'inv'
       });
     }
+    // ⚠️ AGREGADO — a pedido: línea punteada de capacidad del tanque —
+    // solo tiene sentido para una planta y producto específicos (no
+    // para "Nacional" ni "Todos", donde se suman varias instalaciones
+    // distintas y no hay una sola capacidad única que mostrar).
+    // Reutiliza getCapacidad(), la misma función que ya usa el detalle
+    // de Coberturas para esto mismo.
+    var _capLineExec = 0;
+    if (pl !== 'Nacional' && prod !== 'Todos') {
+      var _plantaCapExec = COMBO_PLANTAS[pl] ? COMBO_PLANTAS[pl].plantaDespacho : pl;
+      _capLineExec = getCapacidad(_plantaCapExec, prod) || 0;
+    }
+    if (_capLineExec > 0) {
+      invDatasets.push({
+        type: 'line', label: 'Capacidad (' + fmtMB(_capLineExec) + ')',
+        data: labels.map(function(){ return _capLineExec; }),
+        borderColor: '#dc2626', borderWidth: 2, borderDash: [6, 3],
+        pointRadius: 0, pointHoverRadius: 0, fill: false, tension: 0, order: 0
+      });
+    }
     window._execChartInv = new Chart(ctxInv, {
       type: 'bar',
       data: { labels: labels, datasets: invDatasets },
       options: {
         responsive: true, maintainAspectRatio: false,
         plugins: {
-          legend: { display: hayRepos, position: 'top', align: 'end', labels: { boxWidth: 14, font: { size: 10.5 } } },
+          legend: { display: hayRepos || _capLineExec > 0, position: 'top', align: 'end', labels: { boxWidth: 14, font: { size: 10.5 } } },
           tooltip: {
             backgroundColor: '#0a3a5c', padding: 10, cornerRadius: 8, titleFont: {weight:'700'},
             callbacks: {
