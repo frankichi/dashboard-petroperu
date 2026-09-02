@@ -5668,6 +5668,7 @@ function renderPSegD() {
         '<span class="f-label">Fecha</span>' +
         '<input type="date" id="segd-date" value="' + _segDFecha + '" onchange="_segDFecha=this.value;renderPSegD()">' +
         '<button class="btn-secondary" onclick="renderPSegD()">↻ Actualizar</button>' +
+        '<button class="btn-secondary" id="segd-notif-btn" onclick="_segDNotificarPendientes()" style="display:none">📧 Notificar pendientes</button>' +
         '<span class="date-count" id="segd-count"></span>' +
       '</div>' +
     '</div>' +
@@ -5710,10 +5711,49 @@ function renderPSegD() {
           '<div class="kpi amber"><div class="kpi-label">Pendientes</div><div class="kpi-value">' + pendientes + '</div><div class="kpi-sub">aún no reportan hoy</div></div>' +
         '</div>' +
         '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:10px">' + cardsHtml + '</div>';
+
+      // ⚠️ AGREGADO — a pedido: notificar por correo y Teams a los
+      // usuarios de las plantas que todavía no cierran el reporte del
+      // día. Se guarda la lista de plantas pendientes en una variable
+      // global para que el botón sepa a quién avisar sin tener que
+      // recalcular — y el botón solo se muestra cuando hay algo que
+      // notificar (no tiene sentido ofrecerlo con 0 pendientes).
+      window._segDPlantasPendientes = tracking.filter(function(t) { return t.estado !== 'Reportado' && t.estado !== 'Validado'; }).map(function(t) { return t.planta; });
+      var notifBtn = document.getElementById('segd-notif-btn');
+      if (notifBtn) notifBtn.style.display = window._segDPlantasPendientes.length > 0 ? '' : 'none';
     })
     .catch(function() {
       document.getElementById('segd-body').innerHTML = '<div style="color:var(--red)">Error de conexión al cargar el seguimiento.</div>';
     });
+}
+
+// ⚠️ AGREGADO — a pedido: envía un correo a los usuarios activos de
+// cada planta pendiente (usando la hoja de usuarios ya existente, que
+// ya asocia email↔planta) y, si hay un webhook de Teams configurado,
+// un mensaje ahí también con el resumen completo. Pide confirmación
+// antes de enviar — es una acción que llega a bandejas de entrada
+// reales, no debe dispararse por accidente con un clic de más.
+function _segDNotificarPendientes() {
+  var plantas = window._segDPlantasPendientes || [];
+  if (!plantas.length) return;
+  var btn = document.getElementById('segd-notif-btn');
+  var nombresLegibles = plantas.map(_segDLabel).join(', ');
+  if (!confirm('Esto envía un correo (y un mensaje a Teams, si está configurado) a los usuarios de estas ' + plantas.length + ' planta(s) que todavía no cierran el reporte de hoy:\n\n' + nombresLegibles + '\n\n¿Confirmas el envío?')) return;
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Enviando…'; }
+  fetch(CONFIG.API_URL, {
+    method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action: 'rdNotificarPendientes', fecha: _segDFecha, plantas: plantas })
+  }).then(function() {
+    // mode:'no-cors' no deja leer la respuesta — mismo patrón que ya usa
+    // el resto de la app para llamadas POST a Apps Script. Se asume
+    // éxito y se refresca el estado unos segundos después, que es
+    // tiempo de sobra para que el correo ya haya salido.
+    if (btn) { btn.textContent = '✅ Notificación enviada'; }
+    setTimeout(function() { renderPSegD(); }, 3000);
+  }).catch(function(err) {
+    if (btn) { btn.disabled = false; btn.textContent = '📧 Notificar pendientes'; }
+    alert('No se pudo enviar la notificación: ' + err.message);
+  });
 }
 // ═══════════════════════════════════════════════════════════════════════
 // COMENTARIOS — feed de comentarios registrados en Registro Diario,
