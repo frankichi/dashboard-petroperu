@@ -7685,6 +7685,26 @@ function renderPR() {
     return plantas.map(({planta, rows, diasGanadosPl}) => {
       const nProds = rows.length;
       const dLabel = diasGanadosPl > 0 ? `+${diasGanadosPl}d` : '';
+      // ⚠️ AGREGADO — a pedido: el resaltado de las cajas de planta era
+      // muy poco visible (borde neutro igual para todas, sin importar
+      // si tenían restricción crítica o leve) — había que leer cada
+      // producto adentro para saber qué tan grave era. Se calcula la
+      // severidad MÁS GRAVE entre los productos de esta planta (mismo
+      // criterio pct>50 crítico / >30 recorte / resto leve que ya usa
+      // cada tarjeta de producto) y se aplica como borde de color +
+      // fondo del encabezado, para que se note de un vistazo cuál
+      // planta necesita atención sin tener que abrir cada tarjeta.
+      let _peorSevPl = null, _peorPctPl = -1;
+      rows.forEach(r => {
+        const _prPl = pronDiarioAprobado(r);
+        const _vfPl = r.vfact || 0;
+        const _pctPl = _prPl > 0 ? Math.round((1-_vfPl/_prPl)*100) : 0;
+        if (_pctPl > _peorPctPl) {
+          _peorPctPl = _pctPl;
+          _peorSevPl = _pctPl > 50 ? 'red' : _pctPl > 30 ? 'orange' : 'yellow';
+        }
+      });
+      const _colorPl = _peorSevPl === 'red' ? '#ef4444' : _peorSevPl === 'orange' ? '#f97316' : _peorSevPl === 'yellow' ? '#f59e0b' : null;
       const tRows = rows.sort((a,b) => prodSortKey(a.producto)-prodSortKey(b.producto)).map(r => {
         const pr  =pronDiarioAprobado(r);
         const vf  = r.vfact || 0, inv = r.inv || 0;
@@ -7783,8 +7803,8 @@ function renderPR() {
       // siguiente planta puede empezar en la misma fila si queda
       // espacio (ver .restr-cards-wrap, ahora flex-wrap). Se sigue sin
       // desperdiciar espacio, pero sin perder la agrupación visual.
-      return `<div class="restr-plantacard">
-        <div class="restr-plantacard-head">
+      return `<div class="restr-plantacard"${_colorPl?` style="border-left:5px solid ${_colorPl};box-shadow:0 1px 6px ${_colorPl}22"`:''}>
+        <div class="restr-plantacard-head"${_colorPl?` style="background:${_colorPl}14"`:''}>
           <span class="restr-plantacard-name">${planta}</span>
           <span class="restr-plantacard-count">${nProds} producto${nProds!==1?'s':''}</span>
           ${dLabel?`<span class="restr-plantacard-gain">hasta ${dLabel}</span>`:''}
