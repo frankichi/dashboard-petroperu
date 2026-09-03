@@ -24991,7 +24991,12 @@ function _buildCoberturaSectionHTML(plantaParam, productoParam, nombreFnRerender
       volTotal += info.volMB;
       diasTotal += info.diasRepos;
       if (info.tipo) tipos.push(info.tipo);
-      var etiquetaFecha = info.fecha ? ((info.estado === 'COMPLETADO' ? ', ya descarg\u00f3 ' : ', ETA ') + info.fecha) : '';
+      // ⚠️ CORREGIDO — mismo bug real confirmado (UCAYALI en Conchán):
+      // no decir "ETA" si el buque ya está en el terminal según
+      // Posicionamiento de Naves en tiempo real.
+      var _estadoRealDetalle = (info.bt && typeof _navEstadoActualTexto === 'function') ? _navEstadoActualTexto(info.bt) : '';
+      var _yaLlegoDetalle = !!_estadoRealDetalle && !/NAVEGANDO/i.test(_estadoRealDetalle);
+      var etiquetaFecha = info.fecha ? ((info.estado === 'COMPLETADO' ? ', ya descarg\u00f3 ' : _yaLlegoDetalle ? ', Op. hasta ' : ', ETA ') + info.fecha) : '';
       detalle.push(r.producto + ': ' + info.volMB.toFixed(DEC) + ' MB (' + (info.bt || '\u2014') + etiquetaFecha + ') \u2192 +' + info.diasRepos + 'd');
       if (btUnico === null) { btUnico = info.bt; fechaUnico = info.fecha; estadoUnico = info.estado; }
       else if (btUnico !== info.bt) { btUnico = ''; fechaUnico = ''; estadoUnico = ''; } // más de un buque distinto — no hay uno solo que mostrar
@@ -25453,9 +25458,15 @@ function _buildCoberturaSectionHTML(plantaParam, productoParam, nombreFnRerender
     var navesHTML = '';
     if (esRepMultiProducto && d.reposNaves && d.reposNaves.length > 1) {
       navesHTML = d.reposNaves.map(function(n) {
-        var etiquetaFecha = n.fecha ? ((n.estado === 'COMPLETADO' ? 'ya descarg\u00f3 ' : n.estado === 'DESCARGANDO' ? 'lleg\u00f3 (descargando) ' : 'ETA ') + n.fecha) : '';
         var prodTxt = n.producto ? (n.producto + ' \u2014 ') : '';
         var estadoActualTxt = (typeof _navEstadoActualTexto === 'function') ? _navEstadoActualTexto(n.buque) : '';
+        // ⚠️ CORREGIDO — mismo bug real confirmado (UCAYALI en Conchán)
+        // que en _tipCabotajeNave: no decir "ETA" si el estado real ya
+        // indica que el buque llegó.
+        var yaLlegoSegunEstadoReal = !!estadoActualTxt && !/NAVEGANDO/i.test(estadoActualTxt);
+        var etiquetaFecha = n.fecha ? ((n.estado === 'COMPLETADO' ? 'ya descarg\u00f3 '
+          : (n.estado === 'DESCARGANDO' || yaLlegoSegunEstadoReal) ? 'Op. hasta '
+          : 'ETA ') + n.fecha) : '';
         var etdTxt = (typeof _navEtdTexto === 'function') ? _navEtdTexto(n.buque) : '';
         return '<div style="margin-top:5px">\uD83D\uDEA2 <b>' + (n.buque||'\u2014') + '</b> \u00b7 ' + prodTxt + n.vol.toFixed(DEC) + ' MB' + (etiquetaFecha ? ' \u00b7 ' + etiquetaFecha : '')
           + (estadoActualTxt ? '<div style="margin-left:14px;color:#facc15;font-size:11px">\uD83D\uDCE1 Estado actual: ' + estadoActualTxt + '</div>' : '')
@@ -25477,8 +25488,22 @@ function _buildCoberturaSectionHTML(plantaParam, productoParam, nombreFnRerender
     // es justamente lo que generaba la confusión reportada.
     function _tipCabotajeNave(seg, esPrincipal) {
       var n = seg.nave;
-      var etiquetaFecha = n.fecha ? ((n.estado === 'COMPLETADO' ? 'ya descarg\u00f3 ' : n.estado === 'DESCARGANDO' ? 'lleg\u00f3 (descargando) ' : 'ETA ') + n.fecha) : '';
       var estadoActualTxt = (esPrincipal && typeof _navEstadoActualTexto === 'function') ? _navEstadoActualTexto(n.buque) : '';
+      // ⚠️ CORREGIDO — bug real confirmado (UCAYALI en Conchán): el
+      // rótulo "ETA" salía de n.estado, un campo de Cargas de Naves que
+      // puede seguir diciendo "PROGRAMADO" aunque el buque YA haya
+      // llegado — mientras que "Estado actual" (más abajo) sí viene de
+      // Posicionamiento de Naves en tiempo real y correctamente decía
+      // "Amarró en Conchán". Resultado: la misma tarjeta decía "ETA
+      // 03/09" y "Amarró el 31/08" a la vez — incoherente, un buque ya
+      // amarrado no tiene ETA, tiene una fecha de fin de operación. Si
+      // ya hay un estado real que indica que el buque llegó (Amarró/
+      // Fondeó/En [terminal] — cualquier cosa que NO sea "Navegando"),
+      // se usa esa evidencia en vez de confiar solo en n.estado.
+      var yaLlegoSegunEstadoReal = !!estadoActualTxt && !/NAVEGANDO/i.test(estadoActualTxt);
+      var etiquetaFecha = n.fecha ? ((n.estado === 'COMPLETADO' ? 'ya descarg\u00f3 '
+        : (n.estado === 'DESCARGANDO' || yaLlegoSegunEstadoReal) ? 'Op. hasta '
+        : 'ETA ') + n.fecha) : '';
       // ⚠️ AGREGADO — a pedido: E.T.D. (estimado de término de descarga)
       // junto al estado actual, cuando el reporte de Posicionamiento de
       // Naves ya trae esa estimación — mismo criterio de "solo en el
