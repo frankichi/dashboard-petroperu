@@ -27066,15 +27066,63 @@ function _renderVistaEjecutivaSimpleImpl() {
     }
     if (_capLineExec > 0) {
       invDatasets.push({
-        type: 'line', label: 'Capacidad (' + fmtMB(_capLineExec) + ')',
+        type: 'line', label: '🔻 Capacidad',
         data: labels.map(function(){ return _capLineExec; }),
         borderColor: '#dc2626', borderWidth: 2, borderDash: [6, 3],
         pointRadius: 0, pointHoverRadius: 0, fill: false, tension: 0, order: 0
       });
     }
+    // ⚠️ AGREGADO — a pedido: misma pastilla con el valor que ya usa la
+    // línea de pronóstico en Despachos (mismo estilo, forma redondeada,
+    // en el extremo de la línea) — en rojo, para diferenciarla del
+    // morado de pronóstico sin perder consistencia visual entre ambos
+    // gráficos.
+    var _capPillPlugin = {
+      id: '_execCapPillPlugin',
+      afterDatasetsDraw: function(chart) {
+        if (!_capLineExec || _capLineExec <= 0) return;
+        var idxCap = invDatasets.findIndex(function(d){ return d.label && d.label.indexOf('Capacidad') !== -1; });
+        if (idxCap < 0) return;
+        var meta = chart.getDatasetMeta(idxCap);
+        if (!meta || !meta.data || !meta.data.length) return;
+        var puntoRef = meta.data[meta.data.length - 1];
+        var ctx = chart.ctx;
+        var texto = fmtMB(_capLineExec);
+        ctx.save();
+        ctx.font = '700 11px Inter, system-ui, sans-serif';
+        var anchoTexto = ctx.measureText(texto).width;
+        var padX = 8, altoPastilla = 20;
+        var anchoPastilla = anchoTexto + padX * 2;
+        var x = puntoRef.x - anchoPastilla - 4;
+        var y = puntoRef.y - altoPastilla / 2;
+        var area = chart.chartArea;
+        if (x < area.left) x = puntoRef.x + 4;
+        if (y < area.top) y = area.top;
+        if (y + altoPastilla > area.bottom) y = area.bottom - altoPastilla;
+        var r = 10;
+        ctx.beginPath();
+        ctx.moveTo(x + r, y);
+        ctx.lineTo(x + anchoPastilla - r, y);
+        ctx.arcTo(x + anchoPastilla, y, x + anchoPastilla, y + r, r);
+        ctx.lineTo(x + anchoPastilla, y + altoPastilla - r);
+        ctx.arcTo(x + anchoPastilla, y + altoPastilla, x + anchoPastilla - r, y + altoPastilla, r);
+        ctx.lineTo(x + r, y + altoPastilla);
+        ctx.arcTo(x, y + altoPastilla, x, y + altoPastilla - r, r);
+        ctx.lineTo(x, y + r);
+        ctx.arcTo(x, y, x + r, y, r);
+        ctx.closePath();
+        ctx.fillStyle = '#dc2626';
+        ctx.fill();
+        ctx.fillStyle = '#fff';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(texto, x + padX, y + altoPastilla / 2 + 0.5);
+        ctx.restore();
+      }
+    };
     window._execChartInv = new Chart(ctxInv, {
       type: 'bar',
       data: { labels: labels, datasets: invDatasets },
+      plugins: [_capPillPlugin],
       options: {
         responsive: true, maintainAspectRatio: false,
         plugins: {
