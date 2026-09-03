@@ -28054,7 +28054,24 @@ function renderExecMapa(plantaSeleccionada) {
     }, 250);
   }
 
-  setTimeout(function(){ if (_execLeafletMap) _execLeafletMap.invalidateSize(); }, 200);
+  // ⚠️ CORREGIDO — bug real confirmado (captura de pantalla: en la
+  // PRIMERA carga el mapa se veía completamente vacío, solo los puntos
+  // de colores flotando sin ningún fondo — y recién aparecía después
+  // de varios refrescos). Causa: cuando Leaflet se inicializa mientras
+  // su contenedor todavía no terminó de "asentarse" en la pantalla
+  // (pasa seguido al inyectarlo vía innerHTML, sobre todo en la
+  // primera carga con más cosas ejecutándose a la vez), calcula mal el
+  // tamaño del mapa y los mosaicos de fondo no llegan a pedirse bien —
+  // hasta que algo fuerza un recálculo (como hacer zoom a mano, que es
+  // justo lo que "refrescar varias veces" termina logrando por
+  // casualidad). Un solo invalidateSize() a los 200ms no bastaba
+  // siempre — ahora se reintenta en varios momentos (inmediato, 150,
+  // 500 y 1200ms), cubriendo tanto cargas rápidas como lentas, sin
+  // ningún costo real si el mapa ya estaba bien (invalidateSize() no
+  // hace nada si no hace falta).
+  [0, 150, 500, 1200].forEach(function(demora) {
+    setTimeout(function(){ if (_execLeafletMap) _execLeafletMap.invalidateSize(); }, demora);
+  });
 }
 
 // ── Instalar como app (acceso directo en el celular) ──────────────────
