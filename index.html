@@ -4467,7 +4467,12 @@ async function fetchData(forceRefresh) {
   // dispara en paralelo aquí, apenas arranca el dashboard (no bloquea
   // nada — es fire-and-forget), para que cuando la persona realmente
   // abra esa pestaña, la data ya esté lista o casi lista.
-  if (typeof _repomarFetchBTMapCompleto === 'function') {
+  // ⚠️ AMPLIADO — a pedido (carga lenta): en Vista Ejecutiva este dato
+  // nunca se pinta en ningún punto (es exclusivo de la pestaña
+  // Reposiciones Marítimas, que no existe en ese modo) — se saltaba de
+  // más en cada carga. Se sigue pidiendo normal en el dashboard interno
+  // y en el enlace público de RepoMar, donde sí hace falta cuanto antes.
+  if (typeof _repomarFetchBTMapCompleto === 'function' && !(typeof EXECUTIVE_MODE !== 'undefined' && EXECUTIVE_MODE)) {
     try { _repomarFetchBTMapCompleto(); } catch (ePrefetchBT) { /* no crítico */ }
   }
 
@@ -4557,7 +4562,11 @@ async function fetchData(forceRefresh) {
     // al construirlo). Pedirlo en modo ejecutivo era tiempo de red y de
     // splash gastado en un dato que nunca se iba a pintar. Se salta por
     // completo ahí; en el panel de administración sigue igual que antes.
-    var fluvialPromise = (typeof EXECUTIVE_MODE !== 'undefined' && EXECUTIVE_MODE)
+    // ⚠️ AMPLIADO — a pedido (RepoMar carga lento): el mismo criterio de
+    // arriba (Vista Ejecutiva no necesita barcazas fluviales) aplica
+    // igual al enlace público de RepoMar — tampoco pinta ese dato en
+    // ningún punto, y era tiempo de red gastado de más en cada carga.
+    var fluvialPromise = ((typeof EXECUTIVE_MODE !== 'undefined' && EXECUTIVE_MODE) || (typeof REPOMAR_SHARE_MODE !== 'undefined' && REPOMAR_SHARE_MODE))
       ? Promise.resolve(null)
       : fetch(CONFIG.API_URL + '?action=getIquiViajesFluv')
           .then(function(r) { return r.json(); })
