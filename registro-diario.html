@@ -2807,6 +2807,52 @@ var PROD_COLORS = {
 };
 function prodColor(p) { return PROD_COLORS[p] || '#64748b'; }
 
+// ⚠️ AGREGADO — a pedido: pronóstico (mes vigente, o el anterior si el
+// vigente todavía no está aprobado) y capacidad del tanque en los
+// gráficos de Histórico — mismo criterio ya usado en la Vista
+// Ejecutiva del dashboard principal. La capacidad casi no cambia
+// (referencia estática), así que se pide una sola vez y se reutiliza;
+// el pronóstico ya se cargaba para la pestaña "Pronóstico" — aquí solo
+// se dispara esa misma carga si todavía no ocurrió, en vez de duplicar
+// la lógica de fetch.
+window._capData = window._capData || null;
+window._capLoading = false;
+function rdLoadCapacidades() {
+  if (window._capData || window._capLoading) return Promise.resolve(window._capData || []);
+  window._capLoading = true;
+  return rdGet('getCapacidadesTodas', {})
+    .then(function(res) {
+      var datos = Array.isArray(res) ? res : (res.capacidades || res.data || []);
+      window._capData = datos || [];
+      return window._capData;
+    })
+    .catch(function(e) {
+      console.warn('[CAP] No se pudo cargar capacidades:', e.message);
+      window._capData = [];
+      return [];
+    })
+    .finally(function() { window._capLoading = false; });
+}
+function rdCapacidadPara(planta, producto) {
+  if (!window._capData) return 0;
+  var fila = window._capData.find(function(c) { return c.planta === planta && c.producto === producto; });
+  return fila ? (fila.capacidad || 0) : 0;
+}
+// Pronóstico diario aprobado del mes vigente — si el mes actual (según
+// la última fecha del propio histórico que se está graficando) no
+// tiene pronóstico subido todavía, usa el mes anterior más reciente
+// que sí tenga dato, en vez de dejar la línea vacía los primeros días
+// de cada mes (que es cuando más falta hace, justo al cerrar el mes
+// previo).
+function rdPronosticoPara(producto, mesRef) {
+  if (!window._pronData || !_pronData.length) return 0;
+  var filaExacta = _pronData.find(function(p) { return p.producto === producto && p.mes === mesRef; });
+  if (filaExacta) return filaExacta.pron_mb || 0;
+  var candidatos = _pronData.filter(function(p) { return p.producto === producto && p.mes && p.mes < mesRef; })
+    .sort(function(a, b) { return b.mes.localeCompare(a.mes); });
+  return candidatos.length ? (candidatos[0].pron_mb || 0) : 0;
+}
+
 function rdRenderHistChart(registros, filtProd) {
   // ⚠️ AGREGADO — Chart.js ya no viene pre-cargado (ver comentario al
   // inicio del archivo). Si todavía no está listo, se dispara su
@@ -2835,6 +2881,19 @@ function rdRenderHistChart(registros, filtProd) {
     return (ia<0?99:ia)-(ib<0?99:ib);
   });
   var datasetsExist = [], datasetsDem = [];
+  // ⚠️ AGREGADO — a pedido: si capacidad/pronóstico todavía no se
+  // cargaron, se disparan aquí (no hace falta que el usuario haya
+  // abierto esas otras pestañas) y se vuelve a renderizar el mismo
+  // gráfico apenas lleguen — así aparecen solas sin que el usuario
+  // tenga que refrescar nada a mano.
+  var plantaEfectivaChart = RD.plantaAdminVista || RD.planta;
+  if (!window._capData && !window._capLoading) {
+    rdLoadCapacidades().then(function(){ rdRenderHistChart(registros, filtProd); });
+  }
+  if (!window._pronLoaded && RD.token && plantaEfectivaChart && typeof rdLoadPronostico === 'function') {
+    rdLoadPronostico().then(function(){ rdRenderHistChart(registros, filtProd); });
+  }
+  var mesRefChart = (fechas.length ? fechas[fechas.length-1] : new Date().toISOString().slice(0,10)).slice(0,7);
   prods.forEach(function(prod) {
     var col = prodColor(prod), byFec = {};
     rows.filter(function(r){ return r.producto===prod; }).forEach(function(r){ byFec[r.fecha]=r; });
@@ -2842,6 +2901,22 @@ function rdRenderHistChart(registros, filtProd) {
       borderColor:col, backgroundColor:col, tension:.3, pointRadius:3, pointHoverRadius:5, fill:prods.length===1, spanGaps:true });
     datasetsDem.push({ label:prod, data:fechas.map(function(f){ return byFec[f]?(byFec[f].vreal||byFec[f].dem||byFec[f].dem_prom||0):0; }),
       borderColor:col, backgroundColor:col+'33', tension:.2, pointRadius:3, pointHoverRadius:5, fill:false, spanGaps:false });
+    // Capacidad — línea punteada horizontal, mismo color del producto
+    // pero con guiones, para distinguirla de la barra sin perder la
+    // asociación visual de a qué producto pertenece.
+    var capVal = rdCapacidadPara(plantaEfectivaChart, prod);
+    if (capVal > 0) {
+      datasetsExist.push({ label:prod+' · Capacidad', data:fechas.map(function(){ return capVal; }),
+        borderColor:col, borderWidth:2, borderDash:[6,3], pointRadius:0, pointHoverRadius:0, fill:false, tension:0 });
+    }
+    // Pronóstico aprobado del mes vigente (o el anterior si el vigente
+    // no está aprobado todavía) — línea punteada en Demanda, mismo
+    // criterio que Capacidad para diferenciarla de la barra/curva real.
+    var pronVal = rdPronosticoPara(prod, mesRefChart);
+    if (pronVal > 0) {
+      datasetsDem.push({ label:prod+' · Pronóstico', data:fechas.map(function(){ return pronVal; }),
+        borderColor:col, borderWidth:2, borderDash:[6,3], pointRadius:0, pointHoverRadius:0, fill:false, tension:0 });
+    }
   });
   var lbls = fechas.map(function(f){ return fmtFecha(f); });
   var commonOpts = {
