@@ -17377,9 +17377,18 @@ function parseNavesText() {
       var isPP = BUQUES_PP.indexOf(nombre) >= 0;
       var isImp = BUQUES_IMP.indexOf(nombre) >= 0;
       var ubicacion = '';
-      var _l1=chunk.match(/(EN\s+BAH[I\u00cdA]|NAVEGANDO\s+A|DESCARGANDO\s+EN|FONDEADO\s+EN|AMARRADO\s+EN)\s+([A-Z\u00C0-\u00FF\-\s]+?)(?:\s{2,}|T\.|AMARR|ARRIB|ZARP|FOND|BUQUE|ABOR|\n|$)/im);
+      var _l1=chunk.match(/(EN\s+BAH[IÍ]A?|NAVEGANDO\s+A|DESCARGANDO\s+EN|FONDEADO\s+EN|AMARRADO\s+EN)\s+([A-Z\u00C0-\u00FF\-\s]+?)(?:\s{2,}|T\.|AMARR|ARRIB|ZARP|FOND|BUQUE|ABOR|\n|$)/im);
       if(_l1)ubicacion=_l1[0].replace(/\s{2,}[\s\S]*/,'').replace(/[\n\r][\s\S]*/,'').trim();
       if(!ubicacion){var _l2=chunk.match(/\bEN\s+(TALARA|ILO|CALLAO|MOLLENDO|SALAVERRY|CHIMBOTE|ETEN|SUPE|BAYOVAR|BAY[\u00d3O]VAR|PISCO|CONCH[\u00c1A]N|IQUITOS|PUCALLPA)\b/i);if(_l2)ubicacion=_l2[0].trim();}
+      // ⚠️ AGREGADO — bug real confirmado (caso MOCHE: "EN MU1 TALARA"):
+      // cuando el nombre del muelle (MU1, MU2, TSM, LS2...) aparece
+      // ENTRE "EN" y el nombre de la planta, ningún patrón anterior lo
+      // reconocía — _l1 busca frases fijas ("EN BAHÍA", "AMARRADO EN"),
+      // _l2 requiere que la planta venga INMEDIATAMENTE después de
+      // "EN". Se agrega un patrón que tolera un código de muelle en
+      // medio, y se queda con el nombre de la PLANTA (no el muelle) —
+      // ej. "EN MU1 TALARA" → ubicación = "EN TALARA".
+      if(!ubicacion){var _l2b=chunk.match(/\bEN\s+(?:MU\d|TSM|LS\d|MI\d?)\s+(TALARA|ILO|CALLAO|MOLLENDO|SALAVERRY|CHIMBOTE|ETEN|SUPE|BAYOVAR|BAY[\u00d3O]VAR|PISCO|CONCH[\u00c1A]N|IQUITOS|PUCALLPA)\b/i);if(_l2b)ubicacion='EN '+_l2b[1].trim();}
       if(!ubicacion){var _l3=chunk.match(/CARGANDO\s+EN\s+([A-Z\u00C0-\u00FF\-]+)/i);if(_l3)ubicacion='CARGANDO EN '+_l3[1].trim();}
       var rotacion = '';
       var rotM = chunk.match(/ROTACI[OÓ]N:\s*([^\n.]+)/i);
