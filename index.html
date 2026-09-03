@@ -27604,13 +27604,23 @@ function _execMapaDatos(fecha) {
     var esRef = REFINERIAS.indexOf(planta) !== -1;
     var despReal = r.vreal || r.dem || 0;
     var pronVal = (typeof pronSheet !== 'undefined' && pronSheet[key]) || r.pron_mes || r.pron || 0;
+    var rep = _execReposicionInfo(r, fecha, arrastrarLocal);
+    // ⚠️ CORREGIDO — bug real confirmado (a pedido, auditoría general):
+    // este mapa calculaba su propia fórmula de venta factible en vez de
+    // usar cobSystemDays() — la misma función canónica que ya usa la
+    // página de Coberturas en todo el sistema. Su versión local no
+    // conocía restricciones activas (cobOverrides) ni la herencia de
+    // venta factible del día anterior (cuando hoy todavía no tiene
+    // dato propio) — dos reglas de negocio reales que sí aplica la
+    // fórmula canónica. Resultado: en cualquier planta con una
+    // restricción de venta factible vigente, el mapa podía mostrar un
+    // número de días distinto al que aparece en Coberturas para la
+    // misma planta+producto — justo la inconsistencia reportada.
     var cobDias = 0;
-    if (!esRef && r.inv > 0) {
-      var denom = (r.vfact || 0) > 0 ? r.vfact : (despReal > 0 ? despReal : pronVal);
-      if (denom > 0) cobDias = Math.round(r.inv / denom);
+    if (!esRef && r.inv > 0 && typeof cobSystemDays === 'function') {
+      cobDias = cobSystemDays(r);
       if (cobDias > 90) cobDias = 0; // outlier — mismo guard que el resto del sistema
     }
-    var rep = _execReposicionInfo(r, fecha, arrastrarLocal);
     porInstalacion[planta].productos.push({ producto: producto, existencia: r.inv || 0, despReal: despReal, pron: pronVal, cob: cobDias, repos: rep, fechaDatoReal: r._fechaDatoReal || null, proyectado: !!r._proyectadoConsumo });
     if (!esRef && cobDias > 0 && cobDias < porInstalacion[planta].minCob) porInstalacion[planta].minCob = cobDias;
   });
