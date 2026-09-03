@@ -31208,6 +31208,15 @@ window.renderPRepoMar = function() {
         var midX = (prevX + x1) / 2;
         var distanciaHoriz = Math.abs(x1 - prevX);
         var pathD;
+        // ⚠️ AGREGADO — a pedido: color/grosor distinto según la
+        // dirección real del tramo — las columnas de la grilla van de
+        // norte a sur (Bayóvar...Ilo), así que moverse hacia la
+        // DERECHA es alejarse de Talara (ida) y hacia la IZQUIERDA es
+        // volver hacia el norte (retorno) — sin necesidad de mirar el
+        // nombre del terminal, la propia posición en pantalla ya lo
+        // dice. No aplica al caso "apilada" (mismo terminal, no hay
+        // dirección norte-sur real que marcar ahí).
+        var esRetornoNorte = x1 < prevX - 5;
         // Caso de cajas APILADAS (mismo terminal, una debajo de la
         // otra, ej. 2 escalas distintas en Conchán): línea recta corta
         // entre el borde inferior de la de arriba y el superior de la
@@ -31260,7 +31269,9 @@ window.renderPRepoMar = function() {
           pathD = 'M' + startX + ',' + startY + ' Q' + midXArc + ',' + controlY + ' ' + x1 + ',' + y1;
         }
         pathsHTML += '<path d="' + pathD + '" ' +
-          'fill="none" stroke="#93c5fd" stroke-width="2.6" stroke-dasharray="4 3" marker-end="url(#repomar-arrow)"/>';
+          (esRetornoNorte
+            ? 'fill="none" stroke="#ea580c" stroke-width="3.4" stroke-dasharray="4 3" marker-end="url(#repomar-arrow-retorno)"/>'
+            : 'fill="none" stroke="#3b82f6" stroke-width="3.4" stroke-dasharray="4 3" marker-end="url(#repomar-arrow)"/>');
         // El punto de salida de la SIGUIENTE flecha es el centro
         // superior de ESTA escala — así la ruta sigue avanzando,
         // funcione en la dirección que funcione en pantalla.
@@ -31275,7 +31286,8 @@ window.renderPRepoMar = function() {
       // dejar código muerto.
     });
     svg.innerHTML = '<defs>' +
-      '<marker id="repomar-arrow" markerWidth="11" markerHeight="11" refX="8" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="#93c5fd"/></marker>' +
+      '<marker id="repomar-arrow" markerWidth="11" markerHeight="11" refX="8" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="#3b82f6"/></marker>' +
+      '<marker id="repomar-arrow-retorno" markerWidth="11" markerHeight="11" refX="8" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="#ea580c"/></marker>' +
       '</defs>' + pathsHTML;
   };
   requestAnimationFrame(window._repomarDrawArrows);
