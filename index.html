@@ -27571,6 +27571,15 @@ function _execFichaTabla(planta, info, esRef) {
       var icono = iconoTipo[rep.tipo] || '📦';
       var btTxt = [rep.bt, rep.bt2].filter(Boolean).join(' + ');
       var estadoTxt = rep.estado ? (ESTADO_BT_LABEL[String(rep.estado).toUpperCase()] || rep.estado) : '';
+      // ⚠️ AGREGADO — a pedido: mismo nivel de detalle que ya muestra el
+      // panel de Mapa de Operaciones (llegada real, estado actual,
+      // estimado de zarpe/término) — antes esta tarjeta solo decía algo
+      // genérico como "🔴 Descargando", sin la fecha/hora real detrás.
+      // Reutiliza las mismas funciones (_navEstadoActualTexto,
+      // _navEtdTexto) que ya leen el reporte de Posicionamiento de
+      // Naves — no es un cálculo nuevo, es mostrar lo que ya existe.
+      var estadoActualTxt = (rep.bt && typeof _navEstadoActualTexto === 'function') ? _navEstadoActualTexto(rep.bt) : '';
+      var etdTxt = (rep.bt && typeof _navEtdTexto === 'function') ? _navEtdTexto(rep.bt) : '';
       return '<div style="padding:5px 0;border-bottom:1px solid #f1f5f9;font-size:10px">' +
         '<div style="display:flex;align-items:center;justify-content:space-between">' +
         '<div><span style="font-weight:700;color:#0f1e3c">' + p.producto + '</span>' +
@@ -27590,6 +27599,8 @@ function _execFichaTabla(planta, info, esRef) {
         // evitar la ambigüedad exacta del caso reportado (buque de 57
         // MB, planta con solo 32 MB reflejados en su inventario).
         (estadoTxt ? '<div style="margin-top:2px;font-size:9px;color:#64748b">' + estadoTxt + ' · volumen = manifiesto del buque, no necesariamente lo ya descargado</div>' : '') +
+        (estadoActualTxt ? '<div style="margin-top:2px;font-size:9px;color:#b45309">📡 ' + estadoActualTxt + '</div>' : '') +
+        (etdTxt ? '<div style="margin-top:1px;font-size:9px;color:#4338ca">🕒 ' + etdTxt + '</div>' : '') +
         '</div>';
     }).join('');
     reposHTML =
