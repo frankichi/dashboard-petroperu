@@ -24382,15 +24382,39 @@ function _buildCoberturaSectionHTML(plantaParam, productoParam, nombreFnRerender
   // del dashboard (hoja 'pronostico', ya en MBDC diario). Si 'Todos' los
   // productos está seleccionado, se suma el pronóstico de cada producto.
   function pronParaFechaExec(fecha, planta, prod) {
-    if (typeof _pTendPronParaFecha !== 'function') return 0;
+    // ⚠️ AGREGADO — bug real confirmado con consola (Salaverry · G.
+    // Premium: pronSheet tenía 0.157, pero _pTendPronParaFecha
+    // devolvía 0 y la línea nunca se agregaba): _pTendPronParaFecha
+    // depende de una caché que se llena con un fetch APARTE
+    // (_pronByMonthCache) — si ese fetch todavía no volvió, o el mes
+    // actual no tiene pronóstico ahí, devuelve 0 aunque el dato SÍ
+    // esté disponible en "pronSheet" (el pronóstico que llega embebido
+    // en la carga inicial, sin depender de ningún fetch adicional).
+    function _pronDesdeSheetFallback(pl2, pr2) {
+      if (pl2 === 'Nacional') {
+        var padres = (typeof PRON_PADRE_PLANTS !== 'undefined' ? PRON_PADRE_PLANTS[pr2] : null) || null;
+        var tot2 = 0;
+        Object.keys(pronSheet || {}).forEach(function(k) {
+          var parts = k.split('|');
+          if (parts[1] === pr2 && (!padres || padres.has(parts[0]))) tot2 += pronSheet[k] || 0;
+        });
+        return tot2;
+      }
+      return (pronSheet && pronSheet[pl2 + '|' + pr2]) || 0;
+    }
+    if (typeof _pTendPronParaFecha !== 'function') return _pronDesdeSheetFallback(planta, prod);
     if (prod === 'Todos') {
       var tot = 0;
       (typeof PRODUCTO_ORDEN !== 'undefined' ? PRODUCTO_ORDEN : []).forEach(function(p) {
-        tot += (_pTendPronParaFecha(fecha, planta, p) || 0);
+        var v = _pTendPronParaFecha(fecha, planta, p) || 0;
+        if (!v) v = _pronDesdeSheetFallback(planta, p);
+        tot += v;
       });
       return tot;
     }
-    return _pTendPronParaFecha(fecha, planta, prod) || 0;
+    var val = _pTendPronParaFecha(fecha, planta, prod) || 0;
+    if (!val) val = _pronDesdeSheetFallback(planta, prod);
+    return val;
   }
   // ── Meses con datos reales disponibles para el filtro actual ─────────
   // "Mensual" ya NO agrega todo el mes en una sola barra (eso "no decía
