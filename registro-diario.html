@@ -2906,7 +2906,12 @@ function rdRenderHistChart(registros, filtProd) {
     // asociación visual de a qué producto pertenece.
     var capVal = rdCapacidadPara(plantaEfectivaChart, prod);
     if (capVal > 0) {
-      datasetsExist.push({ label:prod+' · Capacidad', data:fechas.map(function(){ return capVal; }),
+      // ⚠️ CORREGIDO — a pedido: al gráfico de Existencias (tipo "bar"
+      // en general) le faltaba decir que ESTA serie en particular es
+      // una LÍNEA — sin eso, Chart.js la dibuja como otra barra más
+      // (alcanzando la altura de la capacidad todos los días), no como
+      // la línea punteada horizontal que sí se ve en Vista Ejecutiva.
+      datasetsExist.push({ type:'line', label:prod+' · Capacidad', data:fechas.map(function(){ return capVal; }),
         borderColor:col, borderWidth:2, borderDash:[6,3], pointRadius:0, pointHoverRadius:0, fill:false, tension:0 });
     }
     // Pronóstico aprobado del mes vigente (o el anterior si el vigente
