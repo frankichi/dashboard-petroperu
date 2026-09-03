@@ -4512,6 +4512,13 @@ async function fetchData(forceRefresh) {
     if (typeof EXECUTIVE_MODE !== 'undefined' && EXECUTIVE_MODE && typeof renderVistaEjecutivaSimple === 'function') {
       renderVistaEjecutivaSimple();
     }
+    // ⚠️ AGREGADO — a pedido: revisa coberturas bajas cada vez que
+    // llegan datos frescos (carga inicial + cada auto-refresh), no
+    // solo cuando la persona tiene Vista Ejecutiva abierta en pantalla
+    // — así el aviso llega aunque esté viendo otra pestaña de la app.
+    if (typeof window._execAlertasScan === 'function') {
+      setTimeout(function(){ window._execAlertasScan(); }, 800);
+    }
   }
 
   // ⚠️ NUEVO — hasta ahora, si el navegador no lograba ni siquiera
@@ -6200,6 +6207,86 @@ function cobSystemDays(r) {
   if (!vf || vf <= 0 || !inv || inv <= 0) return 0;
   return Math.round(inv / vf);
 }
+
+// ── Alertas de cobertura baja (notificaciones del navegador) ─────────
+// ⚠️ AGREGADO — a pedido: aviso automático cuando una planta cae por
+// debajo de 14 días de cobertura (nivel "aviso") o 5 días (nivel
+// "crítico") — funciona vía la Notification API del navegador, que
+// muestra el aviso como notificación nativa del sistema operativo
+// (incluida la pantalla del celular) SIEMPRE QUE la pestaña siga
+// abierta o la web esté instalada como app — con la app totalmente
+// cerrada no llega nada, para eso haría falta Web Push con un
+// servidor de notificaciones aparte (VAPID + backend), que es un
+// desarrollo bastante más grande.
+window._execAlertasOn = (localStorage.getItem('execAlertasOn') === '1');
+window._execToggleAlertas = function() {
+  if (!window._execAlertasOn) {
+    if (typeof Notification === 'undefined') {
+      alert('Este navegador no soporta notificaciones.');
+      return;
+    }
+    Notification.requestPermission().then(function(perm) {
+      if (perm !== 'granted') {
+        alert('No se concedió permiso de notificaciones — actívalo desde la configuración del navegador si cambias de opinión.');
+        return;
+      }
+      window._execAlertasOn = true;
+      localStorage.setItem('execAlertasOn', '1');
+      new Notification('✅ Alertas activadas', { body: 'Avisaremos si alguna planta cae por debajo de 14 o 5 días de cobertura.' });
+      if (typeof renderVistaEjecutivaSimple === 'function') renderVistaEjecutivaSimple();
+      window._execAlertasScan();
+    });
+  } else {
+    window._execAlertasOn = false;
+    localStorage.setItem('execAlertasOn', '0');
+    if (typeof renderVistaEjecutivaSimple === 'function') renderVistaEjecutivaSimple();
+  }
+};
+// Se recuerda qué combinaciones planta|producto|nivel ya se avisaron
+// HOY, para no repetir la misma notificación cada 5 minutos (el ritmo
+// del auto-refresh) — solo vuelve a avisar si cambia de día.
+function _execAlertasYaVistasHoy() {
+  var _fechaRefAlertas = currentDate || (DATES && DATES.length ? DATES[DATES.length-1] : new Date().toISOString().slice(0,10));
+  var key = 'execAlertasVistas_' + _fechaRefAlertas;
+  try { return new Set(JSON.parse(localStorage.getItem(key) || '[]')); }
+  catch (e) { return new Set(); }
+}
+function _execAlertasGuardarVista(marca) {
+  var _fechaRefAlertas = currentDate || (DATES && DATES.length ? DATES[DATES.length-1] : new Date().toISOString().slice(0,10));
+  var key = 'execAlertasVistas_' + _fechaRefAlertas;
+  var vistas = _execAlertasYaVistasHoy();
+  vistas.add(marca);
+  try { localStorage.setItem(key, JSON.stringify(Array.from(vistas))); } catch (e) {}
+}
+window._execAlertasScan = function() {
+  if (!window._execAlertasOn || typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
+  if (typeof _getInvHistIdx !== 'function' || typeof _invArrastrado !== 'function') return;
+  var _fechaRefAlertas = currentDate || (DATES && DATES.length ? DATES[DATES.length-1] : new Date().toISOString().slice(0,10));
+  var vistas = _execAlertasYaVistasHoy();
+  var idx = _getInvHistIdx();
+  Object.keys(idx).forEach(function(key) {
+    var parts = key.split('|');
+    var planta = parts[0], producto = parts.slice(1).join('|');
+    var r = _invArrastrado(planta, producto, _fechaRefAlertas);
+    if (!r) return;
+    var dias = cobSystemDays(r);
+    if (dias <= 0) return; // sin dato confiable — no alertar con ruido
+    var nivel = dias < 5 ? 'critico' : dias < 14 ? 'aviso' : null;
+    if (!nivel) return;
+    var marca = planta + '|' + producto + '|' + nivel;
+    if (vistas.has(marca)) return;
+    var icono = nivel === 'critico' ? '🔴' : '🟡';
+    var titulo = (nivel === 'critico' ? 'Cobertura crítica' : 'Cobertura baja') + ' — ' + planta;
+    try {
+      new Notification(icono + ' ' + titulo, {
+        body: producto + ': ' + dias + ' días de cobertura' + (nivel === 'critico' ? ' — atención inmediata' : ''),
+        tag: marca
+      });
+    } catch (eNotif) { /* no crítico */ }
+    _execAlertasGuardarVista(marca);
+  });
+};
+
 // ── Control Tower: parseo de puertos cerrados desde notas de posicionamiento ──
 function parseClosedPorts() {
   var portsSet = {};
@@ -26841,6 +26928,14 @@ function _renderVistaEjecutivaSimpleImpl() {
             '<button onclick="window._execExportPasoAlcance(\'pdf\',\'planta\')" style="display:block;width:100%;text-align:left;padding:10px 14px;background:none;border:none;cursor:pointer;font-size:12px;font-weight:600;color:var(--txt);border-top:1px solid var(--bdr)">📍 Solo ' + (pl==='Nacional'?'la planta seleccionada':_plLabel(pl)) + '<br><span style="font-size:10px;font-weight:400;color:var(--txt3)">' + (pl==='Nacional' ? 'Elige una planta primero en el mapa o el selector' : 'Todos los productos de la planta') + '</span></button>' +
           '</div>' +
         '</div>' +
+        // ⚠️ AGREGADO — a pedido: alertas push del navegador cuando una
+        // planta cae por debajo de 14 días de cobertura (aviso) o 5
+        // días (crítico) — funcionan mientras la web esté abierta o
+        // instalada como app (con la app totalmente cerrada haría
+        // falta un sistema de notificaciones push con servidor aparte,
+        // que es un desarrollo más grande). El icono cambia según si
+        // ya están activadas o no, para que se note el estado actual.
+        '<button onclick="window._execToggleAlertas()" id="exec-alertas-btn" title="' + (window._execAlertasOn ? 'Alertas activadas — clic para desactivar' : 'Activar alertas de cobertura baja') + '" style="width:36px;height:36px;padding:6px;border-radius:8px;cursor:pointer;border:1.5px solid ' + (window._execAlertasOn ? '#b45309' : '#94a3b8') + ';background:' + (window._execAlertasOn ? '#fffbeb' : '#f8fafc') + ';display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">' + (window._execAlertasOn ? '🔔' : '🔕') + '</button>' +
         // Paso 2 (período) — oculto por defecto, se rellena y muestra
         // desde _execExportPasoAlcance() una vez elegido el alcance.
         '<div id="exec-export-menu-periodo" style="display:none;position:absolute;top:calc(100% + 4px);right:0;z-index:601;background:var(--card);border:1px solid var(--bdr);border-radius:8px;box-shadow:0 6px 20px rgba(0,0,0,.18);min-width:260px"></div>' +
