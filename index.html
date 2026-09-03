@@ -30756,6 +30756,34 @@ window.renderPRepoMar = function() {
     return pos.ubicacion;
   }
 
+  // ⚠️ AGREGADO — a pedido, caso real confirmado (UCAYALI en Conchán):
+  // cuando el buque YA está presente en el terminal (esVivo), la caja
+  // seguía diciendo "E.T.A. [fecha]" como si todavía estuviera en
+  // camino — con un buque ya amarrado y en operación eso no tiene
+  // sentido, y encima esa fecha venía de Cargas de Naves (el plan
+  // original), no de lo que Posicionamiento de Naves reporta que
+  // realmente está pasando. Se arma una línea con la llegada real
+  // (ARRIBÓ) y el estimado real de zarpe — extraído del texto completo
+  // del reporte diario, que ya sabemos que llega íntegro. Se prueban 3
+  // variantes del campo de estimado, de más a menos específico: "E.
+  // ZARPE A [planta]" (la más precisa, incluye destino), luego
+  // "E.T.OPERACIONES" / "E.T.D." (término estimado de la operación
+  // actual) como respaldo si la primera no aparece.
+  function _repomarDetalleLlegadaZarpe(buque) {
+    var pos = (typeof _navPosData !== 'undefined' && _navPosData) ? _navPosData[buque.toUpperCase()] : null;
+    if (!pos) return null;
+    var texto = pos.estado_nav || pos.estado || '';
+    if (!texto) return null;
+    var mArr = texto.match(/ARRIB[OÓ]\s+A\s+[A-ZÁÉÍÓÚÑ\s]+?:\s*(\d{1,2}(?:\.\d{1,2})?\/\d{1,2}:\d{2})\s*HRS/i);
+    var mZarpeEst = texto.match(/E\.?\s*ZARPE\s+A\s+[A-ZÁÉÍÓÚÑ\s]+?:\s*(\d{1,2}(?:\.\d{1,2})?\/\d{1,2}:\d{2})\s*HRS/i)
+      || texto.match(/E\.?\s*T\.?\s*(?:OPERACIONES|D)\.?:\s*(\d{1,2}(?:\.\d{1,2})?\/\d{1,2}:\d{2})\s*HRS/i);
+    if (!mArr && !mZarpeEst) return null;
+    var partes = [];
+    if (mArr) partes.push('Llegó: ' + mArr[1].replace('.', '/'));
+    if (mZarpeEst) partes.push('Est. zarpe: ' + mZarpeEst[1].replace('.', '/'));
+    return partes.length ? partes.join(' · ') : null;
+  }
+
   // ⚠️ AGREGADO — a pedido: presencia FÍSICA del buque en un terminal,
   // independiente del estado de la escala (E.T.A./T.D.) — es lo que
   // enciende el indicador "en vivo" (recuadro pulsante + "EN PUERTO").
@@ -30878,15 +30906,20 @@ window.renderPRepoMar = function() {
           // en vez de un ETA que ya no tiene sentido.
           var estadoReal = !esCompletado ? _repomarEstadoRealEnTerminal(b.buque, g.terminalNorm) : null;
           var etiqueta = esCompletado ? 'T.D.' : 'E.T.A.';
-          // ⚠️ CORREGIDO — bug real confirmado (caso UCAYALI en
-          // Conchán, Residual Asfáltico): el estado real en texto
-          // libre REEMPLAZABA por completo la fecha E.T.A. — la caja
-          // se quedaba sin fecha visible, dando a entender que ese
-          // producto no tenía fecha propia y estaba "pegado" a la caja
-          // de al lado. Ahora se muestran SIEMPRE los dos: la fecha
-          // primero (nunca se omite), y el estado real como segunda
-          // línea aparte.
-          var lineaEstado = '<div class="repomar-legdate">' + etiqueta + ' ' + fmtCorta(g.fecha_hasta) + '</div>' +
+          // ⚠️ CORREGIDO — bug real confirmado (UCAYALI en Conchán): la
+          // caja de un buque YA presente en el terminal (esVivo) seguía
+          // mostrando "E.T.A. [fecha]" como si aún estuviera en camino
+          // — esa fecha venía del PLAN original (Cargas de Naves), no
+          // de lo que Posicionamiento de Naves reporta que realmente
+          // está pasando ahora. Cuando el buque ya está aquí, se
+          // reemplaza esa línea por la llegada real + estimado real de
+          // zarpe (ver _repomarDetalleLlegadaZarpe) — si el reporte no
+          // trae esos datos puntuales, se usa la fecha original como
+          // respaldo, para no dejar la caja sin ninguna fecha.
+          var detalleVivo = esVivo ? _repomarDetalleLlegadaZarpe(b.buque) : null;
+          var lineaEstado = (detalleVivo
+              ? '<div class="repomar-legdate" style="color:#0071A4">' + detalleVivo + '</div>'
+              : '<div class="repomar-legdate">' + etiqueta + ' ' + fmtCorta(g.fecha_hasta) + '</div>') +
             (estadoReal ? '<div class="repomar-legdate" style="color:#b45309;font-size:8.5px;font-weight:600">' + estadoReal.split('\n')[0] + '</div>' : '');
           // ⚠️ AGREGADO — a pedido: data-leg-idx ahora identifica el
           // GRUPO (no la escala individual) — necesario para que las
