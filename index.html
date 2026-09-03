@@ -30541,7 +30541,29 @@ function _repomarInjectCSS() {
     @keyframes repomarLiveDot2Spin{to{transform:rotate(360deg)}}
     .repomar-lastupdate{font-size:9.5px;color:var(--txt3)}
     .repomar-programar-btn:hover{background:#eef7fc}
-    .repomar-scroll{overflow-x:auto;padding-bottom:8px}
+    .repomar-scroll{overflow-x:auto;padding-bottom:8px;-webkit-overflow-scrolling:touch;scroll-behavior:smooth}
+    /* ⚠️ AGREGADO — a pedido: RepoMar responsive en celular. El
+       diagrama es ancho por naturaleza (10 columnas de plantas) — en
+       vez de intentar comprimirlo hasta hacerlo ilegible, se aprovecha
+       el scroll horizontal nativo (con inercia en iOS) y se sugiere
+       girar el celular a horizontal, donde el diagrama entra mucho
+       mejor. En pantallas anchas (celular en horizontal, tablet,
+       desktop) no aparece ningún aviso — solo se activa cuando hace
+       falta de verdad. */
+    .repomar-rotar-aviso{display:none}
+    @media (max-width:768px) and (orientation:portrait){
+      .repomar-wrap{padding:14px 10px 30px}
+      .repomar-rotar-aviso{
+        display:flex;align-items:center;gap:10px;background:linear-gradient(90deg,#0071A4,#003a56);
+        color:#fff;padding:10px 14px;border-radius:10px;margin-bottom:14px;font-size:12px;font-weight:600;
+      }
+      .repomar-rotar-aviso-icono{font-size:20px;flex-shrink:0;animation:repomarRotarBalanceo 1.6s ease-in-out infinite}
+      @keyframes repomarRotarBalanceo{0%,100%{transform:rotate(0deg)}50%{transform:rotate(-90deg)}}
+    }
+    @media (max-width:480px){
+      .repomar-title{font-size:16px}
+      .repomar-headerbar{gap:8px}
+    }
     .repomar-grid{position:relative;min-width:1450px;background:var(--card);border-radius:10px;box-shadow:0 1px 3px rgba(0,0,0,.08);overflow:hidden;padding:2px 2px 2px 26px}
     .repomar-covblock{position:relative}
     .repomar-covblock-vlabel{position:absolute;left:-24px;top:0;bottom:0;width:22px;background:#0071A4;color:#fff;writing-mode:vertical-rl;transform:rotate(180deg);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:800;letter-spacing:.08em;border-radius:4px 0 0 4px}
@@ -31176,6 +31198,12 @@ window.renderPRepoMar = function() {
 
   host.innerHTML =
     '<div class="repomar-wrap">' +
+      // ⚠️ AGREGADO — a pedido: aviso para girar el celular a horizontal
+      // — el diagrama tiene muchas columnas y en vertical se ve muy
+      // apretado. Solo se muestra en pantallas chicas en modo vertical
+      // (ver media query) — desaparece solo al girar el celular, sin
+      // que haga falta cerrarlo a mano.
+      '<div class="repomar-rotar-aviso"><span class="repomar-rotar-aviso-icono">📱</span><span>Gira el celular a horizontal para ver mejor el diagrama de reposiciones — tiene varias columnas de plantas.</span></div>' +
       // ⚠️ AGREGADO — a pedido: aviso cuando hay ediciones de Venta
       // Factible en Coberturas TODAVÍA sin guardar (cobOverrides vive
       // solo en memoria del navegador hasta presionar "Guardar en GS")
