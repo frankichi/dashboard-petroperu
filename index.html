@@ -29790,6 +29790,39 @@ function _repomarNormPuerto(t) {
     .replace(/[ÁÀ]/g,'A').replace(/[ÉÈ]/g,'E').replace(/[ÍÌ]/g,'I').replace(/[ÓÒ]/g,'O').replace(/[ÚÙ]/g,'U');
 }
 
+// ⚠️ AGREGADO — a pedido: las cajas de RepoMar son angostas y el
+// nombre completo de algunos productos ("RESIDUAL ASFÁLTICO", "ACEITE
+// CIC. LIG. (LCO)") no cabe sin desbordarse — se usa una abreviatura
+// corta para mostrar. De paso, resuelve otro problema real: el reporte
+// de Cargas de Naves a veces nombra el MISMO producto de dos formas
+// distintas según la fila ("RESIDUAL ASFÁLTICO" vs "RESIDUAL ASFAL.",
+// "CRUDO ORIENTE" vs "COE") — usando la abreviatura como clave de
+// agrupación, esos casos se SUMAN en vez de aparecer como dos líneas
+// separadas del mismo cargamento.
+var REPOMAR_PROD_ABREV = {
+  'NAFTA REFORMADA': 'REFORMADA',
+  'DIESEL': 'DIESEL',
+  'RESIDUAL ASFÁLTICO': 'R. ASF.',
+  'RESIDUAL ASFAL.': 'R. ASF.',
+  'CRUDO WHS': 'C. WHS',
+  'CRUDO WTI': 'C. WTI',
+  'G. REGULAR': 'REGULAR',
+  'ACEITE CIC. LIG. (LCO)': 'LCO',
+  'G. PREMIUM': 'PREMIUM',
+  'CRUDO ORIENTE': 'COE',
+  'COE': 'COE',
+  'NAFTA LIVIANA HDT': 'N. LIV. HDT',
+  'NFCC HDT': 'NFCC HDT',
+  'NFCC': 'NFCC',
+  'ALCOHOL CARBURANTE.': 'DFE',
+  'ALCOHOL CARBURANTE': 'DFE',
+  'B-100': 'B100'
+};
+function _repomarAbrevProd(producto) {
+  var key = (producto || '').trim().toUpperCase();
+  return REPOMAR_PROD_ABREV[key] || producto;
+}
+
 // ⚠️ AGREGADO — a pedido: fuente ÚNICA de "qué buque repone esta
 // planta+producto y cuándo llega" — reusada por Restricciones para que
 // su ETA nunca vuelva a divergir de RepoMar (que es la fuente correcta
@@ -29879,11 +29912,23 @@ function _repomarAgruparEscalas(legs) {
     if (!porClave[clave]) {
       porClave[clave] = {
         terminal: l.terminal, terminalNorm: l.terminalNorm, fecha_hasta: l.fecha_hasta,
-        estado: l.estado, productos: []
+        estado: l.estado, productos: [], _prodPorAbrev: {}
       };
       grupos.push(porClave[clave]);
     }
-    porClave[clave].productos.push({ producto: l.producto, vol: l.vol });
+    // ⚠️ AGREGADO — a pedido: el reporte a veces nombra el mismo
+    // producto de dos formas distintas (ver _repomarAbrevProd) — se
+    // agrupa por abreviatura para SUMAR esos casos en una sola línea,
+    // en vez de mostrar el mismo cargamento repetido dos veces.
+    var abrev = _repomarAbrevProd(l.producto);
+    var grupo = porClave[clave];
+    if (grupo._prodPorAbrev[abrev]) {
+      grupo._prodPorAbrev[abrev].vol += (l.vol || 0);
+    } else {
+      var entrada = { producto: l.producto, abrev: abrev, vol: l.vol || 0 };
+      grupo._prodPorAbrev[abrev] = entrada;
+      grupo.productos.push(entrada);
+    }
   });
   return grupos; // ya en orden cronológico, porque legs ya venía ordenado y push conserva el orden de aparición
 }
@@ -30095,7 +30140,7 @@ function _buildRepoMarBuques() {
           terminal: planta, terminalNorm: _repomarNormPuerto(n.terminal),
           producto: n.producto, vol: n.vol, fecha_hasta: n.fecha_hasta, estado: n.estado, viaje: n.viaje
         });
-        buquesMap[key].cargaInicial[n.producto] = (buquesMap[key].cargaInicial[n.producto] || 0) + n.vol;
+        buquesMap[key].cargaInicial[_repomarAbrevProd(n.producto)] = (buquesMap[key].cargaInicial[_repomarAbrevProd(n.producto)] || 0) + n.vol;
       }
     });
   } else {
@@ -30136,7 +30181,7 @@ function _buildRepoMarBuques() {
             terminal: planta, terminalNorm: _repomarNormPuerto(n.terminal),
             producto: n.producto, vol: n.vol, fecha_hasta: n.fecha_hasta, estado: n.estado, viaje: n.viaje
           });
-          buquesMap[key].cargaInicial[n.producto] = (buquesMap[key].cargaInicial[n.producto] || 0) + n.vol;
+          buquesMap[key].cargaInicial[_repomarAbrevProd(n.producto)] = (buquesMap[key].cargaInicial[_repomarAbrevProd(n.producto)] || 0) + n.vol;
         }
       });
     });
@@ -31212,7 +31257,8 @@ window.renderPRepoMar = function() {
           // flechas conecten grupo 1 -> grupo 2 -> grupo 3 en el orden
           // real del viaje, ya con los productos combinados.
           var lineasProductos = g.productos.map(function(p) {
-            return '<div class="repomar-legprod">' + (p.vol > 0 ? (p.producto + ': ' + p.vol.toFixed(1) + ' MB') : p.producto) + '</div>';
+            var etiquetaProd = p.abrev || _repomarAbrevProd(p.producto);
+            return '<div class="repomar-legprod">' + (p.vol > 0 ? (etiquetaProd + ': ' + p.vol.toFixed(1) + ' MB') : etiquetaProd) + '</div>';
           }).join('');
           return '<div class="repomar-legbox' + (esCompletado ? ' completado' : (estadoReal ? ' en-terminal' : '')) + (esVivo ? ' en-vivo' : '') + '" data-buque="' + b.buque + '" data-leg-idx="' + grupos.indexOf(g) + '">' +
             (esVivo ? '<div class="repomar-livepill"><span class="repomar-livedot"></span>En puerto</div>' : '') +
