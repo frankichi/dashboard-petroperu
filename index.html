@@ -30859,7 +30859,7 @@ function _repomarInjectCSS() {
     /* AGREGADO — a pedido: flecha "en tránsito" resaltada con animación
        (mientras el buque navega hacia su próxima escala, hasta que
        llegue el día) + el mismo buquecito flotando sobre ella. */
-    @keyframes repomarArrowPulse{0%,100%{opacity:1;stroke-width:5.5;filter:drop-shadow(0 0 3px rgba(217,119,6,.6))}50%{opacity:.55;stroke-width:7.5;filter:drop-shadow(0 0 7px rgba(217,119,6,.9))}}
+    @keyframes repomarArrowPulse{0%,100%{opacity:1;stroke-width:3.2;filter:drop-shadow(0 0 2px rgba(217,119,6,.55))}50%{opacity:.6;stroke-width:4.2;filter:drop-shadow(0 0 4px rgba(217,119,6,.8))}}
     .repomar-arrow-transito{animation:repomarArrowPulse 1.4s ease-in-out infinite;stroke:#d97706!important}
     @keyframes repomarBoatFloatSvg{0%,100%{transform:translateY(0)}50%{transform:translateY(-3px)}}
     .repomar-boat-transito{animation:repomarBoatFloatSvg 2.4s ease-in-out infinite;filter:drop-shadow(0 2px 3px rgba(0,0,0,.35))}
@@ -31694,8 +31694,8 @@ window.renderPRepoMar = function() {
         }
         pathsHTML += '<path d="' + pathD + '" class="' + (esTransitoActual ? 'repomar-arrow-transito' : '') + '" ' +
           (esRetornoNorte
-            ? 'fill="none" stroke="#ea580c" stroke-width="3.4" stroke-dasharray="4 3" marker-end="url(#repomar-arrow-retorno)"/>'
-            : 'fill="none" stroke="#3b82f6" stroke-width="3.4" stroke-dasharray="4 3" marker-end="url(#repomar-arrow)"/>');
+            ? 'fill="none" stroke="#ea580c" stroke-width="2.2" stroke-dasharray="4 3" marker-end="url(#repomar-arrow-retorno)"/>'
+            : 'fill="none" stroke="#3b82f6" stroke-width="2.2" stroke-dasharray="4 3" marker-end="url(#repomar-arrow)"/>');
         // ⚠️ AGREGADO — a pedido: buquecito flotando sobre el punto medio
         // de la flecha "en tránsito" — misma imagen que ya se usa sobre
         // las cajas "en vivo", reutilizada aquí como <image> del SVG.
@@ -31718,8 +31718,8 @@ window.renderPRepoMar = function() {
       // dejar código muerto.
     });
     svg.innerHTML = '<defs>' +
-      '<marker id="repomar-arrow" markerWidth="11" markerHeight="11" refX="8" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="#3b82f6"/></marker>' +
-      '<marker id="repomar-arrow-retorno" markerWidth="11" markerHeight="11" refX="8" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="#ea580c"/></marker>' +
+      '<marker id="repomar-arrow" markerWidth="7.5" markerHeight="7.5" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#3b82f6"/></marker>' +
+      '<marker id="repomar-arrow-retorno" markerWidth="7.5" markerHeight="7.5" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#ea580c"/></marker>' +
       '</defs>' + pathsHTML;
   };
   requestAnimationFrame(window._repomarDrawArrows);
