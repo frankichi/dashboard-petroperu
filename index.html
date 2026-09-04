@@ -5249,7 +5249,14 @@ function _invConProyeccion(planta, producto, fechaObjetivo) {
   // reporte más reciente por algún motivo).
   var LIMITE_DIAS_PROYECCION = 14;
   if (diasHabiles.length > LIMITE_DIAS_PROYECCION) {
-    console.warn('[_invConProyeccion] Brecha demasiado grande (' + diasHabiles.length + ' días hábiles) para ' + planta + '|' + producto + ' — se muestra el último dato real (' + rAntes.fecha + ') sin proyectar, para evitar un resultado poco confiable.');
+    // ⚠️ CAMBIADO — a pedido (optimización): esta advertencia es real y
+    // útil para depurar, pero se imprimía SIEMPRE — para cada
+    // planta+producto con esta condición, en cada actualización — cientos
+    // de líneas en la consola incluso en uso normal, sin ningún beneficio
+    // para quien no está depurando activamente. Ahora solo se imprime si
+    // window._debugProyeccion está activado a mano (window._debugProyeccion=true
+    // en la consola), quedando disponible cuando realmente hace falta.
+    if (window._debugProyeccion) console.warn('[_invConProyeccion] Brecha demasiado grande (' + diasHabiles.length + ' días hábiles) para ' + planta + '|' + producto + ' — se muestra el último dato real (' + rAntes.fecha + ') sin proyectar, para evitar un resultado poco confiable.');
     // ⚠️ CORREGIDO — bug real confirmado (Pucallpa · Diesel, gráfico de
     // Vista Ejecutiva completamente en blanco): el comentario de arriba
     // decía "se muestra el último dato real conocido", pero el código
@@ -28340,6 +28347,14 @@ function initExecutiveMode() {
       // que la gráfica SIEMPRE llene el espacio disponible de su
       // tarjeta, sin importar si la tarjeta vecina es más alta.
       '.exec-chart-wrap{min-height:300px;flex:1}' +
+      // ⚠️ AGREGADO — bug real confirmado (canvas de 330px dentro de un
+      // contenedor mucho más ancho, incluso después de forzar resize()
+      // por JS): un <canvas> por defecto usa sus atributos width/height
+      // como tamaño de caja CSS — Chart.js normalmente lo corrige solo,
+      // pero cuando eso falla (por la razón que sea), esta regla CSS
+      // directa lo fuerza sin depender de ningún timing de JavaScript,
+      // asegurando que siempre ocupe el 100% de su contenedor flex.
+      '.exec-chart-wrap canvas{width:100%!important;height:100%!important}' +
       '.exec-kpi-grid{gap:16px!important}' +
       '#exec-mapa-container{height:520px!important}' +
     '}' +
