@@ -29993,7 +29993,7 @@ function _repomarAgruparEscalas(legs) {
     if (!porClave[clave]) {
       porClave[clave] = {
         terminal: l.terminal, terminalNorm: l.terminalNorm, fecha_hasta: l.fecha_hasta,
-        estado: l.estado, productos: [], _prodPorAbrev: {}
+        estado: l.estado, productos: [], _prodPorAbrev: {}, tipo: l.tipo || 'descarga'
       };
       grupos.push(porClave[clave]);
     }
@@ -30219,7 +30219,7 @@ function _buildRepoMarBuques() {
       if (!yaExiste) {
         buquesMap[key].legs.push({
           terminal: planta, terminalNorm: _repomarNormPuerto(n.terminal),
-          producto: n.producto, vol: n.vol, fecha_hasta: n.fecha_hasta, estado: n.estado, viaje: n.viaje
+          producto: n.producto, vol: n.vol, fecha_hasta: n.fecha_hasta, estado: n.estado, viaje: n.viaje, tipo: 'descarga'
         });
         buquesMap[key].cargaInicial[_repomarAbrevProd(n.producto)] = (buquesMap[key].cargaInicial[_repomarAbrevProd(n.producto)] || 0) + n.vol;
       }
@@ -30260,7 +30260,7 @@ function _buildRepoMarBuques() {
         if (!yaExiste) {
           buquesMap[key].legs.push({
             terminal: planta, terminalNorm: _repomarNormPuerto(n.terminal),
-            producto: n.producto, vol: n.vol, fecha_hasta: n.fecha_hasta, estado: n.estado, viaje: n.viaje
+            producto: n.producto, vol: n.vol, fecha_hasta: n.fecha_hasta, estado: n.estado, viaje: n.viaje, tipo: 'descarga'
           });
           buquesMap[key].cargaInicial[_repomarAbrevProd(n.producto)] = (buquesMap[key].cargaInicial[_repomarAbrevProd(n.producto)] || 0) + n.vol;
         }
@@ -30270,6 +30270,20 @@ function _buildRepoMarBuques() {
   }
 
   var buques = Object.keys(buquesMap).map(function(k){ return buquesMap[k]; });
+  // ⚠️ AGREGADO — a pedido: en la ficha lateral, tachar/resaltar los
+  // productos que YA se descargaron por completo — así se ve de un
+  // vistazo qué carga ya cumplió su recorrido (y el buque navega con
+  // ella "vacía") vs qué carga todavía está pendiente de entregar. Un
+  // producto se marca como entregado solo si TODAS sus escalas para
+  // ese producto están COMPLETADO — si todavía queda una pendiente en
+  // cualquier planta, se considera "a bordo".
+  buques.forEach(function(b) {
+    b.productosEntregados = {};
+    Object.keys(b.cargaInicial).forEach(function(abrev) {
+      var legsDeEsteProd = b.legs.filter(function(l) { return _repomarAbrevProd(l.producto) === abrev; });
+      b.productosEntregados[abrev] = legsDeEsteProd.length > 0 && legsDeEsteProd.every(function(l) { return l.estado === 'COMPLETADO'; });
+    });
+  });
   // ⚠️ AGREGADO — a pedido, caso real confirmado (URUBAMBA en Bayóvar):
   // Bayóvar solo aparecía como "origen de carga" en los datos de Cargas
   // de Naves — nunca como TERMINAL de una escala — así que nunca
@@ -30290,7 +30304,7 @@ function _buildRepoMarBuques() {
         terminal: planta, terminalNorm: terminalNormBuscado,
         producto: '', vol: 0,
         fecha_hasta: (typeof currentDate !== 'undefined' && currentDate) ? currentDate : new Date().toISOString().slice(0,10),
-        estado: 'PROGRAMADO', viaje: b.viaje, _sintetica: true
+        estado: 'PROGRAMADO', viaje: b.viaje, _sintetica: true, tipo: 'carga'
       });
     });
   });
@@ -30837,6 +30851,15 @@ function _repomarInjectCSS() {
     .repomar-legbox{background:#fff;border:1.5px solid #2563eb;border-radius:6px;padding:5px 7px;font-size:10px;margin:3px 2px;position:relative;z-index:2;box-shadow:0 1px 3px rgba(37,99,235,.18);min-width:128px;max-width:100%;box-sizing:border-box}
     .repomar-legdate{font-weight:800;color:#2563eb;font-size:10px}
     .repomar-legprod{color:var(--txt2);font-family:var(--mono);font-size:9.5px;margin-top:1px;text-transform:uppercase;white-space:nowrap}
+    /* AGREGADO — a pedido: etiqueta CARGA/DESCARGA arriba de cada caja de
+       escala, para distinguir a primera vista si el buque está cargando
+       (ej. Bayóvar, solo carga) o descargando ahí. */
+    .repomar-legtipo{font-size:8px;font-weight:800;letter-spacing:.04em;padding:1px 5px;border-radius:4px;display:inline-block;margin-bottom:2px}
+    .repomar-legtipo-carga{background:#fef3c7;color:#92400e}
+    .repomar-legtipo-descarga{background:#dbeafe;color:#1e40af}
+    /* AGREGADO — a pedido: productos ya entregados por completo, tachados
+       y atenuados en la ficha del buque. */
+    .repomar-prod-entregado{text-decoration:line-through;opacity:.45}
     .repomar-legbox.completado{border-color:#16a34a;box-shadow:0 1px 3px rgba(22,163,74,.18)}
     .repomar-legbox.completado .repomar-legdate{color:#16a34a}
     .repomar-legbox.en-terminal{border-color:#b45309;box-shadow:0 1px 3px rgba(180,83,9,.18)}
@@ -31272,7 +31295,13 @@ window.renderPRepoMar = function() {
         // productos (mayúscula solo inicial) y otros directo del PDF de
         // Cargas de Naves (todo mayúscula). Se estandariza a mayúscula
         // completa, igual que ya se ve en las cajas de escala.
-        return prod.toUpperCase() + ': ' + b.cargaInicial[prod].toFixed(1) + ' MB';
+        var lineaProd = prod.toUpperCase() + ': ' + b.cargaInicial[prod].toFixed(1) + ' MB';
+        // ⚠️ AGREGADO — a pedido: producto ya entregado por completo
+        // (todas sus escalas COMPLETADO) → se tacha y se atenúa, para
+        // ver de un vistazo qué ya cumplió su recorrido vs qué sigue a
+        // bordo pendiente de entrega.
+        var yaEntregado = b.productosEntregados && b.productosEntregados[prod];
+        return yaEntregado ? ('<span class="repomar-prod-entregado">' + lineaProd + '</span>') : lineaProd;
       }).join('<br>');
       // ⚠️ AMPLIADO — a pedido: origen (siempre Talara en esta flota) y
       // hora exacta de zarpe, no solo la fecha.
@@ -31381,6 +31410,13 @@ window.renderPRepoMar = function() {
           // GRUPO (no la escala individual) — necesario para que las
           // flechas conecten grupo 1 -> grupo 2 -> grupo 3 en el orden
           // real del viaje, ya con los productos combinados.
+          // ⚠️ AGREGADO — a pedido: "debe entenderse a primera vista" si
+          // el buque está CARGANDO o DESCARGANDO ahí — antes todas las
+          // cajas se veían igual, sin distinguir (ej. Bayóvar donde el
+          // buque solo carga, nunca descarga).
+          var etiquetaTipo = g.tipo === 'carga'
+            ? '<div class="repomar-legtipo repomar-legtipo-carga">▲ CARGA</div>'
+            : '<div class="repomar-legtipo repomar-legtipo-descarga">▼ DESCARGA</div>';
           var lineasProductos = g.productos.map(function(p) {
             var etiquetaProd = p.abrev || _repomarAbrevProd(p.producto);
             return '<div class="repomar-legprod">' + (p.vol > 0 ? (etiquetaProd + ': ' + p.vol.toFixed(1) + ' MB') : etiquetaProd) + '</div>';
@@ -31395,6 +31431,7 @@ window.renderPRepoMar = function() {
           var _offsetVertical = (!esVivo && _idxGlobalCaja % 2 === 1) ? ' margin-top:34px' : '';
           return '<div class="repomar-legbox' + (esCompletado ? ' completado' : (estadoReal ? ' en-terminal' : '')) + (esVivo ? ' en-vivo' : '') + '" style="' + _offsetVertical + '" data-buque="' + b.buque + '" data-leg-idx="' + _idxGlobalCaja + '">' +
             (esVivo ? '<div class="repomar-livepill"><span class="repomar-livedot"></span>En puerto</div>' : '') +
+            etiquetaTipo +
             lineaEstado +
             lineasProductos +
           '</div>';
