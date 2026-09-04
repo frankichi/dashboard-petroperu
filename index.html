@@ -26981,46 +26981,13 @@ function _renderVistaEjecutivaSimpleImpl() {
       (despPromedioPeriodo !== null && !esRefineriaExec ? '<div style="font-size:9.5px;color:var(--txt3);font-weight:600">⌀ Promedio de despacho calculado sobre ' + periodoLabelTxt + '</div>' : '') +
     '</div>' : '') +
     (esRefineriaExec ? '<div style="margin-bottom:16px;padding:10px 14px;background:#eef2f7;border:1px solid #cbd5e1;border-radius:10px;font-size:12px;color:#475569">🛢️ <b>' + pl + '</b> es una refinería — solo procesa y almacena producto, no vende. Por eso aquí solo se muestra su <b>inventario</b>, sin despacho.</div>' : '') +
-    '<div class="exec-mapa-card" style="background:var(--card);border:1px solid var(--bdr);border-radius:14px;padding:22px 24px;margin-bottom:24px">' +
-      '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:12px">' +
-        '<div>' +
-          '<div style="font-size:13px;font-weight:800;color:var(--txt)">🗺️ Mapa Nacional — Cobertura por Instalación</div>' +
-          (function() {
-            var _fechaMapaLbl = window._execMapaFecha || fechaHoy;
-            var _plantasConCierreMapa = {};
-            RAW.forEach(function(r) {
-              if (r.fecha === _fechaMapaLbl && !r._proyectadoConsumo && !r._proyectado && !_esFilaFantasma(r)) _plantasConCierreMapa[r.planta] = true;
-            });
-            var _nCerraronMapa = Object.keys(_plantasConCierreMapa).length;
-            var _fechaTextoMapa = _execNombreDia(_fechaMapaLbl) + ' ' + _fechaMapaLbl.slice(8,10)+'.'+_fechaMapaLbl.slice(5,7)+'.'+_fechaMapaLbl.slice(0,4);
-            return (_tieneSuficientesCierresGlobal(_fechaMapaLbl))
-              ? ('<div id="exec-mapa-fecha-titulo" style="font-size:11px;color:var(--txt3);margin-top:2px">Datos al cierre del ' + _fechaTextoMapa + '</div>')
-              : ('<div id="exec-mapa-fecha-titulo" style="font-size:11px;color:#b45309;font-weight:600;margin-top:2px">⚠️ ' + _fechaTextoMapa + ' — día en curso, aún no cierra</div>');
-          })() +
-        '</div>' +
-        '<div style="display:flex;align-items:center;gap:8px">' +
-          '<label style="font-size:10.5px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.4px">📅 Ver fecha</label>' +
-          '<input type="date" id="exec-mapa-fecha-input" value="' + (currentDate || window._execMapaFecha || fechaHoy) + '" min="' + ((DATES&&DATES[0])||'') + '" max="' + (((DATES&&DATES[DATES.length-1])||'') > new Date().toISOString().slice(0,10) ? (DATES[DATES.length-1]) : new Date().toISOString().slice(0,10)) + '" onchange="window._execMapaSetFecha(this.value)" style="padding:6px 10px;border-radius:7px;border:1px solid var(--bdr);background:var(--card2);color:var(--txt);font-family:var(--mono);font-size:12px;font-weight:600">' +
-          '<button id="exec-mapa-toggle-btn" onclick="toggleExecMapa()" style="padding:6px 12px;border-radius:7px;border:1px solid var(--bdr);background:var(--card2);color:var(--txt2);font-size:11.5px;font-weight:700;cursor:pointer;white-space:nowrap">' + (window._execMapaOculto ? '👁️ Mostrar mapa' : '🙈 Ocultar mapa') + '</button>' +
-          '<div id="exec-mapa-kpis"></div>' +
-        '</div>' +
-      '</div>' +
-      // ⚠️ CORREGIDO (causa raíz real, confirmada con diagnóstico) — el
-      // contenedor de Leaflet tenía overflow:hidden, necesario para
-      // recortar las esquinas redondeadas del mapa — pero eso también
-      // recorta CUALQUIER popup que sea más alto de lo normal (ej. una
-      // planta con 3 productos en vez de 2), aunque el popup en sí
-      // tuviera los datos completos y bien armados (confirmado con el
-      // diagnóstico: los 3 productos llegaban bien hasta el renderizado,
-      // pero se recortaban visualmente al mostrarse). Un div envolvente
-      // con su propio overflow:hidden NO sirve — el recorte se hereda
-      // de cualquier ancestro, sin importar el contenedor inmediato.
-      // Se quita el recorte por completo: se prioriza que los datos
-      // completos siempre sean visibles sobre el detalle estético de
-      // esquinas perfectamente redondeadas en casos extremos.
-      '<div id="exec-mapa-container" style="height:460px;border-radius:10px;background:#eef2f7;position:relative;z-index:1;isolation:isolate;' + (window._execMapaOculto ? 'display:none' : '') + '"></div>' +
-      '<div id="exec-mapa-hint" style="font-size:10.5px;color:var(--txt3);margin-top:8px;' + (window._execMapaOculto ? 'display:none' : '') + '">📍 Toca cualquier instalación para ver existencia, despacho real, pronóstico y cobertura por producto</div>' +
-    '</div>' +
+    // ⚠️ QUITADO — a pedido: el mapa de "Cobertura por Instalación" se
+    // retira de Vista Ejecutiva por completo — daba problemas de carga
+    // recurrentes (mosaicos que no aparecían en el primer render,
+    // parpadeos al reconstruirse) y de paso, quitarlo ayuda a que la
+    // página cargue más rápido — ya no hay que traer la librería
+    // Leaflet, pedir mosaicos de OpenStreetMap, ni calcular la
+    // posición de cada marcador en cada actualización.
     '<div class="exec-charts-row">' +
     '<div style="background:var(--card);border:1px solid var(--bdr);border-radius:14px;padding:22px 24px;margin-bottom:20px">' +
       '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:14px">' +
@@ -27055,17 +27022,9 @@ function _renderVistaEjecutivaSimpleImpl() {
     vacioSectionHTML +
     plantasGridHTML;
 
-  // Mapa Nacional — visible salvo que el usuario lo haya ocultado con el
-  // botón "Ocultar mapa" (window._execMapaOculto, persiste entre
-  // refrescos de este panel). Si está oculto, no se inicializa Leaflet
-  // dentro de un contenedor display:none (causa problemas de tiles mal
-  // dimensionados al mostrarlo después) — se inicializa recién al
-  // volver a mostrarlo, ver toggleExecMapa().
-  if (!window._execMapaOculto && document.getElementById('exec-mapa-container')) {
-    if (typeof _loadMapLibs === 'function') {
-      _loadMapLibs(function() { if (typeof renderExecMapa === 'function') renderExecMapa(pl); });
-    }
-  }
+  // ⚠️ QUITADO — a pedido: el mapa de Vista Ejecutiva se retiró por
+  // completo (ver más arriba, donde se quitó su tarjeta del HTML) —
+  // esta inicialización ya no tiene ningún contenedor al que apuntar.
 
   if (typeof Chart === 'undefined') return;
   // ⚠️ CORREGIDO — bug real: causaba "gráficas en blanco" al cambiar de
