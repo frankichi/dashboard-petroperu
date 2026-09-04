@@ -27215,6 +27215,18 @@ function _renderVistaEjecutivaSimpleImpl() {
         }
       }
     });
+    // ⚠️ CORREGIDO — bug real confirmado (canvas interno de 330px
+    // dentro de un contenedor mucho más ancho, dejando un área vacía
+    // sin gridlines ni barras): Chart.js dibuja con el tamaño que
+    // tenía el contenedor en el momento exacto de la creación — si el
+    // contenedor se ensancha después (otros elementos de la página
+    // terminando de cargar/acomodarse), el canvas se queda "congelado"
+    // en su tamaño viejo. Se fuerza un resize() explícito poco después
+    // de crear el gráfico, una vez el layout ya se asentó — mismo
+    // criterio que ya se usó para el mapa (invalidateSize escalonado).
+    [50, 300].forEach(function(demora) {
+      setTimeout(function(){ if (window._execChartInv) window._execChartInv.resize(); }, demora);
+    });
   }
   var ctxDesp = document.getElementById('exec-chart-desp');
   if (ctxDesp) {
@@ -27346,6 +27358,14 @@ function _renderVistaEjecutivaSimpleImpl() {
           x: { grid: { display: false }, ticks: { maxRotation: 0, autoSkipPadding: 8, font: { size: 10.5 }, color: function(ctx){ return _execEsDomingoOFeriado(datesN[ctx.index]) ? '#c8102e' : '#94a3b8'; } } }
         }
       }
+    });
+    // ⚠️ AGREGADO — mismo respaldo que el gráfico de Inventario: el
+    // ResizeObserver de abajo solo reacciona a cambios de tamaño
+    // DESPUÉS de conectarse — puede perderse el asentamiento inicial
+    // del layout si el canvas se crea antes de que el contenedor
+    // termine de acomodarse.
+    [50, 300].forEach(function(demora) {
+      setTimeout(function(){ if (window._execChartDesp) window._execChartDesp.resize(); }, demora);
     });
 
     // ⚠️ CAMBIADO — a pedido: el listener de window.resize no bastaba —
