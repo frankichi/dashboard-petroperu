@@ -30300,12 +30300,32 @@ function _buildRepoMarBuques() {
       if (!_repomarBuquePresenteEnTerminal(b.buque, terminalNormBuscado)) return;
       var yaCubierto = b.legs.some(function(l) { return l.terminalNorm === terminalNormBuscado && l.estado !== 'COMPLETADO'; });
       if (yaCubierto) return;
-      b.legs.push({
-        terminal: planta, terminalNorm: terminalNormBuscado,
-        producto: '', vol: 0,
-        fecha_hasta: (typeof currentDate !== 'undefined' && currentDate) ? currentDate : new Date().toISOString().slice(0,10),
-        estado: 'PROGRAMADO', viaje: b.viaje, _sintetica: true, tipo: 'carga'
-      });
+      // ⚠️ AGREGADO — a pedido: la caja "CARGA" se veía vacía, sin
+      // ningún producto — se completa con los productos de la PRÓXIMA
+      // escala pendiente del buque (la fecha más próxima entre las que
+      // ya venían del reporte) — es lo que tiene sentido físicamente:
+      // lo que se está cargando ahora es justamente lo que se va a
+      // entregar en esa próxima parada.
+      var fechaHastaCarga = (typeof currentDate !== 'undefined' && currentDate) ? currentDate : new Date().toISOString().slice(0,10);
+      var pendientes = b.legs.filter(function(l) { return l.estado !== 'COMPLETADO'; });
+      if (pendientes.length) {
+        pendientes.sort(function(a, c) { return (a.fecha_hasta || '').localeCompare(c.fecha_hasta || ''); });
+        var proximaFecha = pendientes[0].fecha_hasta;
+        var productosACargar = pendientes.filter(function(l) { return l.fecha_hasta === proximaFecha; });
+        productosACargar.forEach(function(l) {
+          b.legs.push({
+            terminal: planta, terminalNorm: terminalNormBuscado,
+            producto: l.producto, vol: l.vol,
+            fecha_hasta: fechaHastaCarga, estado: 'PROGRAMADO', viaje: b.viaje, _sintetica: true, tipo: 'carga'
+          });
+        });
+      } else {
+        b.legs.push({
+          terminal: planta, terminalNorm: terminalNormBuscado,
+          producto: '', vol: 0,
+          fecha_hasta: fechaHastaCarga, estado: 'PROGRAMADO', viaje: b.viaje, _sintetica: true, tipo: 'carga'
+        });
+      }
     });
   });
   // ⚠️ AGREGADO — a pedido: diagnóstico de por qué un buque puntual no
