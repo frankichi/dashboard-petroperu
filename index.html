@@ -5279,7 +5279,12 @@ function _invConProyeccion(planta, producto, fechaObjetivo) {
   // sea un error del cálculo que una coincidencia real de agotamiento
   // exacto — se avisa por consola para poder diagnosticarlo.
   if (invProy <= 0 && rAntes.inv > 0.5) {
-    console.warn('[_invConProyeccion] La proyección para ' + planta + '|' + producto + ' llegó a 0 partiendo de ' + rAntes.inv.toFixed(2) + ' MB (' + diasHabiles.length + ' días hábiles desde ' + rAntes.fecha + ') — revisar si el pronóstico usado es razonable.');
+    // ⚠️ CAMBIADO — mismo criterio ya aplicado a la advertencia de
+    // "Brecha demasiado grande" en esta misma función — se imprimía
+    // siempre, para cada planta+producto en cada actualización (889
+    // mensajes de consola solo por esto, según reportado) sin
+    // beneficio para quien no está depurando activamente.
+    if (window._debugProyeccion) console.warn('[_invConProyeccion] La proyección para ' + planta + '|' + producto + ' llegó a 0 partiendo de ' + rAntes.inv.toFixed(2) + ' MB (' + diasHabiles.length + ' días hábiles desde ' + rAntes.fecha + ') — revisar si el pronóstico usado es razonable.');
   }
   invProy = Math.max(0, invProy);
   return Object.assign({}, rAntes, {
@@ -31120,6 +31125,17 @@ window.renderPRepoMar = function() {
       // dibujar — varios productos que llegan a la MISMA planta el
       // MISMO día ahora comparten una sola caja, con un encabezado de
       // fecha/estado único, en vez de una caja por producto.
+      // ⚠️ AGREGADO — bug real confirmado (UCAYALI: Conchán 03/09 →
+      // Mollendo 06/09 → Conchán 16/09 dibujado en el orden equivocado):
+      // _repomarAgruparEscalas() asume que b.legs YA viene en orden
+      // cronológico, pero nada garantizaba eso para las escalas
+      // normales — solo se ordenaba explícitamente para el caso
+      // especial del "rescate" de Bayóvar. Cuando un mismo terminal
+      // (Conchán) aparece dos veces con un terminal distinto (Mollendo)
+      // en medio, el orden real de llegada al arreglo puede no
+      // coincidir con el orden cronológico real. Ordenar aquí no rompe
+      // nada si ya estaba bien ordenado — es puramente defensivo.
+      b.legs.sort(function(a, c) { return (a.fecha_hasta || '').localeCompare(c.fecha_hasta || ''); });
       var grupos = _repomarAgruparEscalas(b.legs);
       // ⚠️ AGREGADO — a pedido: indicador "en vivo" — se calcula UNA vez
       // por planta si el buque está físicamente ahí ahora mismo, y solo
@@ -31378,6 +31394,10 @@ window.renderPRepoMar = function() {
       // conecta caja combinada con caja combinada, en vez de intentar
       // dibujar una flecha extra hacia una escala que ya no tiene su
       // propia caja separada (ahora vive dentro de una caja compartida).
+      // ⚠️ AGREGADO — mismo ordenamiento defensivo aplicado arriba (ver
+      // comentario en la construcción de "grupos"), ahora también antes
+      // de dibujar las flechas — ambos puntos deben usar el mismo orden.
+      b.legs.sort(function(a, c) { return (a.fecha_hasta || '').localeCompare(c.fecha_hasta || ''); });
       var gruposDibujo = _repomarAgruparEscalas(b.legs);
       gruposDibujo.forEach(function(g, grupoIdx) {
         var legEl = row.querySelector('.repomar-legbox[data-buque="' + b.buque + '"][data-leg-idx="' + grupoIdx + '"]');

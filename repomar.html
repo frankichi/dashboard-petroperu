@@ -392,6 +392,7 @@ function render(data) {
       // ⚠️ CORREGIDO — a pedido: agrupar por terminal+fecha ANTES de
       // dibujar — varios productos que llegan a la MISMA planta el
       // MISMO día ahora comparten una sola caja.
+      b.legs.sort(function(a, c) { return (a.fecha_hasta || '').localeCompare(c.fecha_hasta || ''); });
       var grupos = _repomarAgruparEscalas(b.legs);
       var legCells = plantas.map(function(planta) {
         var gruposAqui = grupos.filter(function(g){ return g.terminal === planta; });
@@ -517,6 +518,7 @@ function drawArrows(buques) {
     var prevFueApilada = false;
     // ⚠️ CORREGIDO — a pedido: iterar sobre los GRUPOS combinados
     // (terminal+fecha), no sobre cada escala individual.
+    b.legs.sort(function(a, c) { return (a.fecha_hasta || '').localeCompare(c.fecha_hasta || ''); });
     var gruposDibujo = _repomarAgruparEscalas(b.legs);
     gruposDibujo.forEach(function(g, grupoIdx) {
       var legEl = row.querySelector('.repomar-legbox[data-buque="' + b.buque + '"][data-leg-idx="' + grupoIdx + '"]');
