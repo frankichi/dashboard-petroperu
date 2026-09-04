@@ -30369,30 +30369,16 @@ function _buildRepoMarBuques() {
   buques.forEach(function(b) {
     b.legs.sort(function(a, c) { return (a.fecha_hasta||'').localeCompare(c.fecha_hasta||''); });
     var pos = (typeof _navPosData !== 'undefined' && _navPosData) ? _navPosData[b.buque.toUpperCase()] : null;
-    // ⚠️ CORREGIDO — a pedido, bug real confirmado (URUBAMBA: "Zarpó de
-    // Talara: 31/08/26 07:58" mostrado justo debajo de una escala que
-    // terminó de descargar en CONCHÁN esa misma madrugada — incoherente,
-    // porque zarpó DE CONCHÁN, no de Talara). El supuesto de que
-    // "siempre zarpa de Talara" solo es cierto para el PRIMER zarpe de
-    // cada rotación (cuando carga en la refinería) — pero un buque que
-    // ya está en ruta zarpa de CUALQUIER puerto donde acabe de
-    // descargar/cargar, camino a su siguiente escala. Ahora se busca la
-    // escala COMPLETADA más reciente (por fecha) que sea anterior o
-    // igual a la fecha del zarpe — ese es el puerto real de origen. Si
-    // no hay ninguna (primer zarpe de la rotación, sin escalas previas
-    // registradas todavía), se asume Talara como respaldo razonable.
+    // ⚠️ REVERTIDO — a pedido: el intento anterior de corregir esto
+    // (buscar la última escala completada para inferir el origen del
+    // zarpe) partía de una lectura incorrecta de Posicionamiento de
+    // Naves — "Zarpó de Talara" SÍ es correcto: es ahí donde el buque
+    // cargó para llegar a Conchán (las flechas del diagrama ya
+    // muestran ese tramo Talara→Conchán correctamente). El origen
+    // siempre es Talara en esta flota — vuelve al comportamiento
+    // original, sin inferencia.
     b.zarpe = pos && pos.fecha_zarpe ? pos.fecha_zarpe : '';
     b.zarpeOrigen = 'Talara';
-    if (b.zarpe) {
-      var fechaZarpeSoloDia = b.zarpe.slice(0, 10);
-      var escalasPreviasCompletadas = b.legs.filter(function(l) {
-        return l.estado === 'COMPLETADO' && l.tipo !== 'carga' && (l.fecha_hasta || '').slice(0, 10) <= fechaZarpeSoloDia;
-      });
-      if (escalasPreviasCompletadas.length) {
-        escalasPreviasCompletadas.sort(function(a, c) { return (a.fecha_hasta||'').localeCompare(c.fecha_hasta||''); });
-        b.zarpeOrigen = escalasPreviasCompletadas[escalasPreviasCompletadas.length - 1].terminal;
-      }
-    }
     // ⚠️ AGREGADO — bug real confirmado (UCAYALI/URUBAMBA/MOCHE
     // mostrando "En Talara" aunque ya tenían escalas COMPLETADAS en
     // Conchán/Mollendo/etc.): b.zarpe depende de que _navPosData
