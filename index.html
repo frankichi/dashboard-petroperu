@@ -30344,22 +30344,36 @@ function _buildRepoMarBuques() {
       if (!_repomarBuquePresenteEnTerminal(b.buque, terminalNormBuscado)) return;
       var yaCubierto = b.legs.some(function(l) { return l.terminalNorm === terminalNormBuscado && l.estado !== 'COMPLETADO'; });
       if (yaCubierto) return;
-      // ⚠️ AGREGADO — a pedido: la caja "CARGA" se veía vacía, sin
-      // ningún producto — se completa con los productos de la PRÓXIMA
-      // escala pendiente del buque (la fecha más próxima entre las que
-      // ya venían del reporte) — es lo que tiene sentido físicamente:
-      // lo que se está cargando ahora es justamente lo que se va a
-      // entregar en esa próxima parada.
+      // ⚠️ CORREGIDO — a pedido, caso real confirmado (URUBAMBA en
+      // Bayóvar: mostraba CRUDO WTI 50.0 MB, cuando el reporte real dice
+      // que ahí se cargan 80.0 MB en total — 50.0 para descargar en
+      // Talara + 30.0 para descargar después en Conchán). Antes solo se
+      // tomaban los productos de la escala pendiente MÁS PRÓXIMA — pero
+      // lo que se carga en el puerto de origen es el TOTAL que el buque
+      // va a repartir en TODAS sus paradas pendientes, no solo en la
+      // primera. Ahora se suman TODAS las escalas pendientes agrupando
+      // por producto — así el volumen mostrado coincide con lo que
+      // realmente se cargó ahí.
       var fechaHastaCarga = (typeof currentDate !== 'undefined' && currentDate) ? currentDate : new Date().toISOString().slice(0,10);
-      var pendientes = b.legs.filter(function(l) { return l.estado !== 'COMPLETADO'; });
+      var todasPendientes = b.legs.filter(function(l) { return l.estado !== 'COMPLETADO'; });
+      // ⚠️ CORREGIDO — a pedido: se filtra por el ORIGEN real de cada
+      // escala (cuando el dato está disponible) para sumar solo lo que
+      // de verdad se carga EN ESTE terminal — sin esto, productos con
+      // origen distinto (ej. RESIDUAL ASFAL. con origen Talara) se
+      // mezclaban incorrectamente en la caja de carga de Bayóvar.
+      var pendientes = todasPendientes.filter(function(l) { return _repomarNormPuerto(l.origen || '') === terminalNormBuscado; });
+      if (!pendientes.length) pendientes = todasPendientes; // respaldo si no hay dato de origen
       if (pendientes.length) {
-        pendientes.sort(function(a, c) { return (a.fecha_hasta || '').localeCompare(c.fecha_hasta || ''); });
-        var proximaFecha = pendientes[0].fecha_hasta;
-        var productosACargar = pendientes.filter(function(l) { return l.fecha_hasta === proximaFecha; });
-        productosACargar.forEach(function(l) {
+        var sumaPorProducto = {}; // producto -> {vol, producto}
+        pendientes.forEach(function(l) {
+          var abrevClave = _repomarAbrevProd(l.producto);
+          if (!sumaPorProducto[abrevClave]) sumaPorProducto[abrevClave] = { producto: l.producto, vol: 0 };
+          sumaPorProducto[abrevClave].vol += (l.vol || 0);
+        });
+        Object.keys(sumaPorProducto).forEach(function(abrevClave) {
           b.legs.push({
             terminal: planta, terminalNorm: terminalNormBuscado,
-            producto: l.producto, vol: l.vol,
+            producto: sumaPorProducto[abrevClave].producto, vol: sumaPorProducto[abrevClave].vol,
             fecha_hasta: fechaHastaCarga, estado: 'PROGRAMADO', viaje: b.viaje, _sintetica: true, tipo: 'carga'
           });
         });
