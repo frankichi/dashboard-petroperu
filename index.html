@@ -30291,18 +30291,25 @@ function _buildRepoMarBuques() {
       if (!origenNorm || origenNorm === 'TALARA' || origenNorm === l.terminalNorm) return;
       var esTerminalValido = REPOMAR_PLANTAS.some(function(p) { return _repomarNormPuerto(p) === origenNorm; });
       if (!esTerminalValido) return;
-      var claveDedup = origenNorm + '|' + l.producto + '|' + l.fecha_hasta;
+      // ⚠️ CORREGIDO — bug real confirmado (URUBAMBA en Bayóvar): sin
+      // esta condición, un origen SIN ninguna escala de descarga propia
+      // ahí (como Bayóvar, que nunca es destino) no tenía con qué
+      // agruparse — cada producto/fecha de origen distinto generaba su
+      // PROPIA caja fragmentada, duplicando y peleando con la caja que
+      // el mecanismo de "buque presente ahí ahora" ya arma correctamente
+      // para ese mismo caso. Ahora solo se agrega la caja de origen
+      // cuando SÍ existe una escala de descarga real del buque en ese
+      // terminal para agruparse con ella — si no existe, se confía en
+      // el otro mecanismo (posición actual) para representarlo.
+      var descargaAhiMismo = b.legs.find(function(l2) { return l2.terminalNorm === origenNorm && l2.tipo === 'descarga'; });
+      if (!descargaAhiMismo) return;
+      var claveDedup = origenNorm + '|' + l.producto + '|' + descargaAhiMismo.fecha_hasta;
       if (yaAgregadoOrigen[claveDedup]) return;
       yaAgregadoOrigen[claveDedup] = true;
-      // Busca la fecha de la propia escala de descarga del buque en ese
-      // terminal de origen (si existe), para agrupar ambas cajas juntas.
-      var descargaAhiMismo = b.legs.find(function(l2) { return l2.terminalNorm === origenNorm && l2.tipo === 'descarga'; });
-      var fechaCarga = descargaAhiMismo ? descargaAhiMismo.fecha_hasta : l.fecha_hasta;
-      var estadoCarga = descargaAhiMismo ? descargaAhiMismo.estado : l.estado;
       var terminalOrigenNombre = REPOMAR_PLANTAS.filter(function(p) { return _repomarNormPuerto(p) === origenNorm; })[0];
       b.legs.push({
         terminal: terminalOrigenNombre, terminalNorm: origenNorm,
-        producto: l.producto, vol: l.vol, fecha_hasta: fechaCarga, estado: estadoCarga,
+        producto: l.producto, vol: l.vol, fecha_hasta: descargaAhiMismo.fecha_hasta, estado: descargaAhiMismo.estado,
         viaje: l.viaje, tipo: 'carga', _sintetica: true
       });
     });
