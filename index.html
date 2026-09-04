@@ -29805,6 +29805,7 @@ function _repomarNormPuerto(t) {
 // separadas del mismo cargamento.
 var REPOMAR_PROD_ABREV = {
   'NAFTA REFORMADA': 'REFORMADA',
+  'NAFTA PRIMARIA': 'N. PRIM.',
   'DIESEL': 'DIESEL',
   'RESIDUAL ASFÁLTICO': 'R. ASF.',
   'RESIDUAL ASFAL.': 'R. ASF.',
@@ -30193,6 +30194,30 @@ function _buildRepoMarBuques() {
   }
 
   var buques = Object.keys(buquesMap).map(function(k){ return buquesMap[k]; });
+  // ⚠️ AGREGADO — a pedido, caso real confirmado (URUBAMBA en Bayóvar):
+  // Bayóvar solo aparecía como "origen de carga" en los datos de Cargas
+  // de Naves — nunca como TERMINAL de una escala — así que nunca
+  // generaba su propia caja, aunque el buque esté ahí ahora mismo según
+  // Posicionamiento de Naves. Se sintetiza una escala "en vivo" para
+  // cualquier terminal de la grilla donde el buque esté físicamente
+  // presente ahora mismo (mismo dato que ya usa el resto del sistema
+  // para el indicador "en vivo"), siempre que esa parada no esté ya
+  // representada por una escala PENDIENTE ahí — para no duplicar una
+  // caja que ya existiría de todas formas.
+  buques.forEach(function(b) {
+    REPOMAR_PLANTAS.forEach(function(planta) {
+      var terminalNormBuscado = _repomarNormPuerto(planta);
+      if (!_repomarBuquePresenteEnTerminal(b.buque, terminalNormBuscado)) return;
+      var yaCubierto = b.legs.some(function(l) { return l.terminalNorm === terminalNormBuscado && l.estado !== 'COMPLETADO'; });
+      if (yaCubierto) return;
+      b.legs.push({
+        terminal: planta, terminalNorm: terminalNormBuscado,
+        producto: '', vol: 0,
+        fecha_hasta: (typeof currentDate !== 'undefined' && currentDate) ? currentDate : new Date().toISOString().slice(0,10),
+        estado: 'PROGRAMADO', viaje: b.viaje, _sintetica: true
+      });
+    });
+  });
   // ⚠️ AGREGADO — a pedido: diagnóstico de por qué un buque puntual no
   // aparece en este módulo interno (que arma los datos en JS, distinto
   // del backend). Abrir la consola del navegador en esta vista y
@@ -30531,6 +30556,19 @@ function _buildRepoMarCobertura(buques) {
       restrMap[key] = (fila.vfact || 0) > 0 && pronAprobado > 0 && (fila.vfact || 0) < pronAprobado;
 
       var diasHoy = (typeof cobSystemDays === 'function') ? cobSystemDays(fila) : 0;
+      // ⚠️ CAMBIADO — a pedido específico para Talara: al ser refinería,
+      // su "venta factible" (de ventas) es un monto chico que le entra
+      // a la propia planta, no representa su verdadero volumen — la
+      // fórmula canónica (cobSystemDays, que usa venta factible como
+      // denominador) no tiene sentido acá. Para Talara se calcula
+      // directo: (inventario reportado + volumen real de refinería) /
+      // pronóstico aprobado — así los "días" reflejan cuánto durará lo
+      // que REALMENTE tiene la refinería, no el número de ventas.
+      if (planta === 'Talara' && typeof cobGetInv === 'function') {
+        var invTalaraRef = cobGetInv(fila) || 0;
+        if (typeof cobGetRefineryAdj === 'function') invTalaraRef += (cobGetRefineryAdj(planta, producto) || 0);
+        diasHoy = (invTalaraRef > 0 && pronAprobado > 0) ? Math.round(invTalaraRef / pronAprobado) : 0;
+      }
       var hayDatoValido = (fila.inv > 0) || (fila.vfact > 0) || (pronAprobado > 0);
       actualDias[key] = diasHoy;
       actual[key] = !hayDatoValido ? '' : (diasHoy > 0 ? cobCalcFecha(fechaRef, diasHoy) : fechaRef);
@@ -31271,7 +31309,15 @@ window.renderPRepoMar = function() {
             var etiquetaProd = p.abrev || _repomarAbrevProd(p.producto);
             return '<div class="repomar-legprod">' + (p.vol > 0 ? (etiquetaProd + ': ' + p.vol.toFixed(1) + ' MB') : etiquetaProd) + '</div>';
           }).join('');
-          return '<div class="repomar-legbox' + (esCompletado ? ' completado' : (estadoReal ? ' en-terminal' : '')) + (esVivo ? ' en-vivo' : '') + '" data-buque="' + b.buque + '" data-leg-idx="' + grupos.indexOf(g) + '">' +
+          // ⚠️ AGREGADO — a pedido: cajas de terminales VECINOS con
+          // fechas cercanas quedaban demasiado juntas y se superponían
+          // visualmente (ej. MOCHE con Eten y Salaverry casi al mismo
+          // tiempo) — se alternan un poco más arriba/abajo según su
+          // posición en el orden cronológico del viaje, para separarlas
+          // sin tener que tocar el cálculo de las flechas.
+          var _idxGlobalCaja = grupos.indexOf(g);
+          var _offsetVertical = (!esVivo && _idxGlobalCaja % 2 === 1) ? ' margin-top:34px' : '';
+          return '<div class="repomar-legbox' + (esCompletado ? ' completado' : (estadoReal ? ' en-terminal' : '')) + (esVivo ? ' en-vivo' : '') + '" style="' + _offsetVertical + '" data-buque="' + b.buque + '" data-leg-idx="' + _idxGlobalCaja + '">' +
             (esVivo ? '<div class="repomar-livepill"><span class="repomar-livedot"></span>En puerto</div>' : '') +
             lineaEstado +
             lineasProductos +
