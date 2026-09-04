@@ -30573,13 +30573,7 @@ function _repomarInjectCSS() {
 
     /* ═══ Encabezado y botón de compartir ═══ */
     .repomar-wrap{padding:22px 26px 44px;max-width:1680px;margin:0 auto}
-    .repomar-headerbar{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:18px;flex-wrap:wrap;position:sticky;top:0;z-index:30;background:var(--bg);padding:10px 0 8px}
-    /* AGREGADO — a pedido: encabezado (título/botones) y la tabla de
-       Fecha Cobertura fijos arriba mientras se hace scroll — los
-       controles y las coberturas reales siempre quedan a la vista,
-       aunque haya muchos buques y haga falta bajar bastante para verlos
-       todos. Solo la lista de buques/escalas se desplaza. */
-    .repomar-cobertura-fija{position:sticky;top:76px;z-index:25;background:var(--bg);padding-top:4px}
+    .repomar-headerbar{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:18px;flex-wrap:wrap}
     .repomar-title{font-size:19px;font-weight:800;color:var(--txt);letter-spacing:-.01em;display:flex;align-items:center;gap:9px}
     .repomar-subtitle{font-size:11.5px;color:var(--txt3);margin-top:3px}
     .repomar-credit-top{font-size:10px;color:var(--txt3);margin-top:6px;display:flex;align-items:center}
@@ -30677,9 +30671,9 @@ function _repomarInjectCSS() {
     .repomar-shipname{font-weight:800;color:#fff;background:#0071A4;font-size:12px;padding:5px 10px;letter-spacing:.02em}
     .repomar-shipcargo{color:var(--txt2);font-family:var(--mono);font-size:10px;line-height:1.7;padding:7px 10px 3px;white-space:nowrap}
     .repomar-shipzarpe{margin:6px 10px 8px;background:#fff7e6;border:1px solid #f0c869;border-radius:4px;padding:3px 8px;font-size:10px;font-weight:700;color:#8a6416;display:inline-block}
-    .repomar-legbox{background:#fff;border:1.5px solid #2563eb;border-radius:6px;padding:5px 7px;font-size:10px;margin:3px 2px;position:relative;z-index:2;box-shadow:0 1px 3px rgba(37,99,235,.18);min-width:118px}
+    .repomar-legbox{background:#fff;border:1.5px solid #2563eb;border-radius:6px;padding:5px 7px;font-size:10px;margin:3px 2px;position:relative;z-index:2;box-shadow:0 1px 3px rgba(37,99,235,.18);min-width:90px;max-width:100%;box-sizing:border-box}
     .repomar-legdate{font-weight:800;color:#2563eb;font-size:10px}
-    .repomar-legprod{color:var(--txt2);font-family:var(--mono);font-size:9.5px;margin-top:1px;white-space:nowrap;text-transform:uppercase}
+    .repomar-legprod{color:var(--txt2);font-family:var(--mono);font-size:9.5px;margin-top:1px;text-transform:uppercase;white-space:normal;overflow-wrap:break-word;word-break:break-word}
     .repomar-legbox.completado{border-color:#16a34a;box-shadow:0 1px 3px rgba(22,163,74,.18)}
     .repomar-legbox.completado .repomar-legdate{color:#16a34a}
     .repomar-legbox.en-terminal{border-color:#b45309;box-shadow:0 1px 3px rgba(180,83,9,.18)}
@@ -31337,7 +31331,6 @@ window.renderPRepoMar = function() {
       '<div class="repomar-scroll">' +
         '<div class="repomar-grid" id="repomar-grid">' +
           '<svg class="repomar-svg" id="repomar-svg"></svg>' +
-          '<div class="repomar-cobertura-fija">' +
           filaEncabezado +
           // ⚠️ CORREGIDO — a pedido: "FECHA COBERTURA"/"NUEVA COBERTURA"
           // ahora van como una franja vertical angosta al costado
@@ -31350,7 +31343,6 @@ window.renderPRepoMar = function() {
           '<div class="repomar-covblock">' +
             '<div class="repomar-covblock-vlabel">' + tituloArriba + '</div>' +
             filaCobertura(coberturaArriba, diasArriba, 'actual') +
-          '</div>' +
           '</div>' +
           '<div class="repomar-divider"></div>' +
           // ⚠️ CORREGIDO — a pedido: "Retorno" ahora es un título propio,
