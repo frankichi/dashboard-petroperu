@@ -29774,7 +29774,15 @@ el.innerHTML = `
 // a sur (igual que el reporte de referencia). Bayóvar es un terminal de
 // carga (origen), no una planta con inventario propio — se muestra como
 // columna de contexto geográfico, sin filas de cobertura.
-const REPOMAR_PLANTAS = ['Bayóvar','Eten','Salaverry','Chimbote','Supe','Callao','Conchán','Pisco','Mollendo','Ilo'];
+// ⚠️ CAMBIADO — a pedido: se agrega Talara como columna propia — antes
+// se excluía (solo cubría las 10 plantas RECEPTORAS de reposición),
+// pero eso significaba que cualquier escala intermedia por Talara
+// (caso real confirmado: UCAYALI Conchán→Mollendo→Talara→Conchán)
+// quedaba invisible, "saltada" entre las dos cajas vecinas. Va al
+// INICIO de la lista — es la planta más al norte, el punto de partida
+// y retorno de todos los viajes, así el orden de columnas sigue
+// reflejando la geografía real de la ruta (norte a sur).
+const REPOMAR_PLANTAS = ['Talara','Bayóvar','Eten','Salaverry','Chimbote','Supe','Callao','Conchán','Pisco','Mollendo','Ilo'];
 const REPOMAR_PRODUCTOS = ['Diesel','G. Regular','G. Premium','TA1'];
 
 function _repomarNormPuerto(t) {
