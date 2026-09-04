@@ -30745,6 +30745,13 @@ function _repomarMostrarTip(evt) {
   var tip = document.getElementById('repomar-cov-tip');
   if (!tip) return;
   var inv = fila ? (fila.inv || 0) : 0;
+  // ⚠️ CORREGIDO — a pedido, caso real confirmado (Talara): la fecha
+  // mostrada en la celda YA usaba el volumen de refinería (cobSystemDays
+  // lo suma internamente), pero este popup mostraba el número crudo que
+  // reporta ventas (montos chicos) sin ese mismo ajuste — dos fuentes
+  // distintas para el mismo dato, mostrando cifras que no coincidían
+  // entre la celda y su propio popup.
+  if (typeof cobGetRefineryAdj === 'function') inv += (cobGetRefineryAdj(planta, prod) || 0);
   var pron = (fila && typeof pronDiarioAprobado === 'function') ? (pronDiarioAprobado(fila) || 0) : 0;
   var vfact = fila ? (fila.vfact || 0) : 0;
   var capacidad = (typeof getCapacidad === 'function') ? (getCapacidad(planta, prod) || 0) : 0;
