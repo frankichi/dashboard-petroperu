@@ -31158,7 +31158,7 @@ window.renderPRepoMar = function() {
   // Conchán tras terminar de descargar), y (2) está fondeado en bahía
   // esperando ingresar a ese terminal ("ingresará a la salida del B/T
   // X" — físicamente ya está ahí, a la espera de un muelle libre).
-  function _repomarBuquePresenteEnTerminal(buque, terminalNorm) {
+  window._repomarBuquePresenteEnTerminal = function _repomarBuquePresenteEnTerminal(buque, terminalNorm) {
     var pos = (typeof _navPosData !== 'undefined' && _navPosData) ? _navPosData[buque.toUpperCase()] : null;
     if (!pos) return false;
     if (pos.estado_nav || pos.estado) {
@@ -31170,6 +31170,8 @@ window.renderPRepoMar = function() {
     if (ubicViva.indexOf('NAVEGANDO') === 0) return false;
     return ubicViva.indexOf(terminalNorm) !== -1;
   }
+
+  var _repomarBuquePresenteEnTerminal = window._repomarBuquePresenteEnTerminal;
 
   // ⚠️ CORREGIDO — a pedido: "Retorno" se veía como si fuera una planta
   // más (mismo estilo azul que "Bayóvar", "Eten", etc.), cuando en
