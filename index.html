@@ -30006,7 +30006,7 @@ function _repomarAgruparEscalas(legs) {
     if (grupo._prodPorAbrev[abrev]) {
       grupo._prodPorAbrev[abrev].vol += (l.vol || 0);
     } else {
-      var entrada = { producto: l.producto, abrev: abrev, vol: l.vol || 0 };
+      var entrada = { producto: l.producto, abrev: abrev, vol: l.vol || 0, tipo: l.tipo || 'descarga' };
       grupo._prodPorAbrev[abrev] = entrada;
       grupo.productos.push(entrada);
     }
@@ -31478,13 +31478,35 @@ window.renderPRepoMar = function() {
           // el buque está CARGANDO o DESCARGANDO ahí — antes todas las
           // cajas se veían igual, sin distinguir (ej. Bayóvar donde el
           // buque solo carga, nunca descarga).
-          var etiquetaTipo = g.tipo === 'carga'
-            ? '<div class="repomar-legtipo repomar-legtipo-carga">▲ CARGA</div>'
-            : '<div class="repomar-legtipo repomar-legtipo-descarga">▼ DESCARGA</div>';
-          var lineasProductos = g.productos.map(function(p) {
+          // ⚠️ CORREGIDO — a pedido, caso real confirmado (Conchán con
+          // UCAYALI: descarga NAFTA REFORMADA/NFCC/DIESEL de Talara Y
+          // carga ALCOHOL CARBURANTE/PREMIUM/REGULAR/B-100 para Mollendo/
+          // Talara, la MISMA escala) — cuando una caja combina productos
+          // de descarga y de carga a la vez, se muestran ambas secciones
+          // separadas DENTRO de la misma caja (▼ DESCARGA arriba, ▲ CARGA
+          // abajo, cada una con sus propios productos) — en vez de una
+          // sola etiqueta que ocultaba que ahí también se carga (o
+          // viceversa).
+          var prodsDescarga = g.productos.filter(function(p) { return p.tipo !== 'carga'; });
+          var prodsCarga = g.productos.filter(function(p) { return p.tipo === 'carga'; });
+          function _lineaProd(p) {
             var etiquetaProd = p.abrev || _repomarAbrevProd(p.producto);
             return '<div class="repomar-legprod">' + (p.vol > 0 ? (etiquetaProd + ': ' + p.vol.toFixed(1) + ' MB') : etiquetaProd) + '</div>';
-          }).join('');
+          }
+          var etiquetaTipo, lineasProductos;
+          if (prodsDescarga.length && prodsCarga.length) {
+            etiquetaTipo = '';
+            lineasProductos =
+              '<div class="repomar-legtipo repomar-legtipo-descarga">▼ DESCARGA</div>' +
+              prodsDescarga.map(_lineaProd).join('') +
+              '<div class="repomar-legtipo repomar-legtipo-carga" style="margin-top:3px">▲ CARGA</div>' +
+              prodsCarga.map(_lineaProd).join('');
+          } else {
+            etiquetaTipo = g.tipo === 'carga'
+              ? '<div class="repomar-legtipo repomar-legtipo-carga">▲ CARGA</div>'
+              : '<div class="repomar-legtipo repomar-legtipo-descarga">▼ DESCARGA</div>';
+            lineasProductos = g.productos.map(_lineaProd).join('');
+          }
           // ⚠️ AGREGADO — a pedido: cajas de terminales VECINOS con
           // fechas cercanas quedaban demasiado juntas y se superponían
           // visualmente (ej. MOCHE con Eten y Salaverry casi al mismo
