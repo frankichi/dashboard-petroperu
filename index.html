@@ -27007,9 +27007,14 @@ function _renderVistaEjecutivaSimpleImpl() {
         periodoBar +
       '</div>' +
       mesesSelectorBar +
-      '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:10px">' +
+      // ⚠️ CORREGIDO — bug real confirmado (espacio en blanco a la
+      // derecha del gráfico de Inventario, mientras que Despachos —
+      // con la misma regla CSS de ancho 100% — se veía bien): este
+      // gráfico tenía un <div> extra envolviéndolo (display:flex) que
+      // Despachos no tiene. Ya no tiene sentido — antes puede haber
+      // tenido más de un elemento adentro, ahora solo el gráfico — se
+      // quita para que ambos tengan exactamente la misma estructura.
       '<div class="exec-chart-wrap" style="position:relative;height:220px"><canvas id="exec-chart-inv"></canvas></div>' +
-    '</div>' +
     // ⚠️ CORREGIDO — bug real confirmado con inspector + conteo de
     // etiquetas: faltaba ESTE '</div>' para cerrar la tarjeta de
     // Inventario ANTES de que empezara la de Despachos. Sin él, la
