@@ -3745,7 +3745,7 @@ window.EXECUTIVE_MODE = EXECUTIVE_MODE;
 if (EXECUTIVE_MODE) {
   setInterval(function() {
     if (typeof fetchData === 'function') fetchData(true);
-  }, 5 * 60 * 1000);
+  }, 8 * 60 * 1000);
 }
 // ⚠️ AGREGADO — a pedido: "Reposiciones Marítimas" como enlace
 // independiente para compartir, sin necesidad de dar acceso al
@@ -4029,7 +4029,7 @@ function _authInit() {
 }
 // _authInit se llama desde el DOMContentLoaded principal antes de fetchData.
 const EXEC_VISIBLE_TABS = new Set(['p1','p2','p6','pInv','pA','pCis','pB','pD']);
-const EXEC_AUTOREFRESH_MS = 5 * 60 * 1000;  // 5 min
+const EXEC_AUTOREFRESH_MS = 8 * 60 * 1000;  // 5 min
 const COB_COLORS = {
   CRIT:  {bg:'#dc2626', text:'#fff', light:'#dc262618', border:'#dc262644'}, // <4d
   WARN:  {bg:'#d97706', text:'#fff', light:'#d9770618', border:'#d9770644'}, // 4-6d
@@ -31158,7 +31158,7 @@ window.renderPRepoMar = function() {
   // Conchán tras terminar de descargar), y (2) está fondeado en bahía
   // esperando ingresar a ese terminal ("ingresará a la salida del B/T
   // X" — físicamente ya está ahí, a la espera de un muelle libre).
-  window._repomarBuquePresenteEnTerminal = function _repomarBuquePresenteEnTerminal(buque, terminalNorm) {
+  function _repomarBuquePresenteEnTerminal(buque, terminalNorm) {
     var pos = (typeof _navPosData !== 'undefined' && _navPosData) ? _navPosData[buque.toUpperCase()] : null;
     if (!pos) return false;
     if (pos.estado_nav || pos.estado) {
@@ -31170,8 +31170,6 @@ window.renderPRepoMar = function() {
     if (ubicViva.indexOf('NAVEGANDO') === 0) return false;
     return ubicViva.indexOf(terminalNorm) !== -1;
   }
-
-  var _repomarBuquePresenteEnTerminal = window._repomarBuquePresenteEnTerminal;
 
   // ⚠️ CORREGIDO — a pedido: "Retorno" se veía como si fuera una planta
   // más (mismo estilo azul que "Bayóvar", "Eten", etc.), cuando en
