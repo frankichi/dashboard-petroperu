@@ -30128,6 +30128,7 @@ function _repomarFetchBTMapCompleto() {
     .then(function(naves) {
       window._repomarBTMapCompletoCache = Array.isArray(naves) ? naves : [];
       window._repomarBTMapCompletoPendiente = false;
+      window._repomarCargaInicialEnCurso = false;
       var activePageEl = document.querySelector('.page.active');
       if (activePageEl && activePageEl.id === 'pRepoMar' && typeof renderPRepoMar === 'function') renderPRepoMar();
     })
@@ -30226,49 +30227,18 @@ function _buildRepoMarBuques() {
       }
     });
   } else {
-  REPOMAR_PLANTAS.forEach(function(planta) {
-    (PRODUCTOS_POR_PLANTA_EXEC[planta] || []).forEach(function(producto) {
-      var fila = null;
-      if (typeof _invConProyeccion === 'function') {
-        try { fila = _invConProyeccion(planta, producto, fechaRef); }
-        catch(eProy) { console.warn('[RepoMar] _invConProyeccion falló para ' + planta + '|' + producto + ':', eProy.message); }
-      }
-      if (!fila || !fila.bt_lista) return;
-      var lista;
-      try { lista = JSON.parse(fila.bt_lista); } catch(e) { return; }
-      lista.forEach(function(n) {
-        // ⚠️ CORREGIDO — a pedido: antes se ocultaba CUALQUIER entrega
-        // COMPLETADO sin importar cuándo se completó — un buque que
-        // acababa de descargar (como UCAYALI en Conchán) desaparecía
-        // del diagrama de un día para otro, sin dejar ningún rastro de
-        // que la entrega sí llegó. Ahora se sigue mostrando durante los
-        // 5 días posteriores a completarse (con estilo distinto: "T.D."
-        // en vez de "E.T.A.", borde verde en vez de azul — ver CSS), y
-        // recién después de esa ventana se deja de mostrar, para no
-        // saturar el diagrama con entregas de hace semanas.
-        if (n.estado === 'COMPLETADO') {
-          var fechaCompletado = (n.fecha_hasta || '').slice(0, 10);
-          var diasDesdeCompletado = fechaCompletado
-            ? Math.round((new Date(fechaRef + 'T12:00:00') - new Date(fechaCompletado + 'T12:00:00')) / 86400000)
-            : 999;
-          if (diasDesdeCompletado > 5 || diasDesdeCompletado < 0) return;
-        }
-        var key = n.buque.toUpperCase();
-        if (!buquesMap[key]) buquesMap[key] = { buque: n.buque, viaje: n.viaje, legs: [], cargaInicial: {} };
-        var yaExiste = buquesMap[key].legs.some(function(l) {
-          return l.terminalNorm === _repomarNormPuerto(n.terminal) && l.producto === n.producto && l.fecha_hasta === n.fecha_hasta;
-        });
-        if (!yaExiste) {
-          buquesMap[key].legs.push({
-            terminal: planta, terminalNorm: _repomarNormPuerto(n.terminal),
-            producto: n.producto, vol: n.vol, fecha_hasta: n.fecha_hasta, estado: n.estado, viaje: n.viaje, tipo: 'descarga',
-            origen: n.origen || ''
-          });
-          buquesMap[key].cargaInicial[_repomarAbrevProd(n.producto)] = (buquesMap[key].cargaInicial[_repomarAbrevProd(n.producto)] || 0) + n.vol;
-        }
-      });
-    });
-  });
+  // ⚠️ CORREGIDO — a pedido: caso real confirmado (el diagrama de
+  // RepoMar cargaba un itinerario, y 3-4 segundos después "saltaba" a
+  // otro completamente distinto — feo y confuso) — este camino
+  // provisional (por planta+producto, antes de que llegue el mapa
+  // completo) construía un resultado DIFERENTE al final, así que la
+  // persona veía primero una versión incompleta y luego el reemplazo
+  // abrupto por la versión correcta. Ya no se usa como dato provisional
+  // para mostrar — se deja `buquesMap` vacío y se marca que la carga
+  // sigue en curso (ver bandera más abajo), para que el render pueda
+  // mostrar un estado de "cargando" en vez de un itinerario que va a
+  // cambiar solo, sin avisar.
+  window._repomarCargaInicialEnCurso = true;
   }
 
   var buques = Object.keys(buquesMap).map(function(k){ return buquesMap[k]; });
@@ -31578,7 +31548,14 @@ window.renderPRepoMar = function() {
       return '<div class="repomar-row repomar-ship-inner-row" data-ship-row="' + idx + '" style="grid-template-columns:' + cols + '">' + shipBox + legCells + retornoCell + '</div>';
     }).join('');
   } else {
-    filasShips = '<div class="repomar-empty-msg">No hay cabotaje marítimo vigente en este momento (todas las entregas ya se completaron, o no hay ninguna reportada en Cargas de Naves).</div>';
+    // ⚠️ AGREGADO — a pedido: mientras el mapa completo de buques
+    // todavía está en camino (los primeros 3-4 segundos), mostrar un
+    // mensaje de "cargando" en vez del mensaje de "no hay cabotaje" —
+    // ese mensaje daba a entender que no había NADA, cuando en
+    // realidad los datos completos estaban a punto de llegar.
+    filasShips = window._repomarCargaInicialEnCurso
+      ? '<div class="repomar-empty-msg">Cargando itinerarios de buques…</div>'
+      : '<div class="repomar-empty-msg">No hay cabotaje marítimo vigente en este momento (todas las entregas ya se completaron, o no hay ninguna reportada en Cargas de Naves).</div>';
   }
 
   host.innerHTML =
