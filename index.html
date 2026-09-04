@@ -30430,7 +30430,7 @@ function _buildRepoMarBuques() {
 // no hay ningún dato (inv, vfact Y pron en cero — caso real confirmado:
 // Callao·TA1).
 function _buildRepoMarCobertura(buques) {
-  var actual = {}, actualDias = {}, nueva = {};
+  var actual = {}, actualDias = {}, nueva = {}, restrMap = {};
   var detalleNueva = {}; // volumen/vacío proyectado tras la reposición, para el popup — ver más abajo
   var fechaRef = (typeof currentDate !== 'undefined' && currentDate) ? currentDate : new Date().toISOString().slice(0,10);
 
@@ -30464,11 +30464,22 @@ function _buildRepoMarCobertura(buques) {
       }
       if (!fila) return;
 
+      // ⚠️ AGREGADO — a pedido (optimización, RepoMar cargaba muy
+      // lento): _invConProyeccion() ya se calculaba UNA vez acá arriba
+      // — pero filaCobertura() más abajo volvía a llamarla EXACTAMENTE
+      // para la misma planta+producto, solo para chequear si hay una
+      // restricción activa. Con ~40 combinaciones planta+producto, eso
+      // eran ~40 llamadas de más a una función que hace búsqueda +
+      // interpolación en el historial — trabajo duplicado sin ninguna
+      // necesidad. Se guarda el resultado aquí mismo (que ya se estaba
+      // calculando de todas formas) y filaCobertura lo reutiliza en vez
+      // de volver a pedirlo.
       // ⚠️ CORREGIDO — a pedido: "pronóstico aprobado" ahora sale de
       // pronDiarioAprobado (la misma fuente que ya usa cobSystemDays
       // internamente como respaldo, y la misma que usa Coberturas), no
       // de fila.pron directo — que en varios casos salía vacío/0.
       var pronAprobado = (typeof pronDiarioAprobado === 'function') ? (pronDiarioAprobado(fila) || 0) : (fila.pron || 0);
+      restrMap[key] = (fila.vfact || 0) > 0 && pronAprobado > 0 && (fila.vfact || 0) < pronAprobado;
 
       var diasHoy = (typeof cobSystemDays === 'function') ? cobSystemDays(fila) : 0;
       var hayDatoValido = (fila.inv > 0) || (fila.vfact > 0) || (pronAprobado > 0);
@@ -30539,7 +30550,7 @@ function _buildRepoMarCobertura(buques) {
       }
     });
   });
-  return { actual: actual, actualDias: actualDias, nueva: nueva, detalleNueva: detalleNueva };
+  return { actual: actual, actualDias: actualDias, nueva: nueva, detalleNueva: detalleNueva, restrMap: restrMap };
 }
 
 
@@ -30960,13 +30971,8 @@ window.renderPRepoMar = function() {
         // aplicar"). Marcar esa celda como restringida contradiría lo
         // que el propio popup dice ahí mismo.
         var restringido = false;
-        if (tipo === 'actual' && typeof _invConProyeccion === 'function') {
-          try {
-            var filaRestr = _invConProyeccion(planta, prod, fechaRef);
-            var pronRestr = (filaRestr && typeof pronDiarioAprobado === 'function') ? (pronDiarioAprobado(filaRestr) || 0) : 0;
-            var vfactRestr = filaRestr ? (filaRestr.vfact || 0) : 0;
-            restringido = pronRestr > 0 && vfactRestr > 0 && vfactRestr < pronRestr;
-          } catch(eRestrCell) {}
+        if (tipo === 'actual') {
+          restringido = !!(cob.restrMap && cob.restrMap[planta + '|' + prod]);
         }
         // ⚠️ AGREGADO — a pedido: data-planta/data-prod/data-tipo para
         // que el popup informativo (al pasar el mouse) sepa qué
