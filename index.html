@@ -30377,7 +30377,14 @@ function _buildRepoMarBuques() {
     // muestran ese tramo Talara→Conchán correctamente). El origen
     // siempre es Talara en esta flota — vuelve al comportamiento
     // original, sin inferencia.
-    b.zarpe = pos && pos.fecha_zarpe ? pos.fecha_zarpe : '';
+    // ⚠️ CORREGIDO — a pedido: "Zarpó de Talara" mostraba la hora del
+    // ÚLTIMO zarpe reportado del buque, sin importar de qué puerto —
+    // podía ser un tramo posterior (ej. Conchán→Bayóvar), no el zarpe
+    // real desde la refinería. Ahora se prioriza el campo nuevo
+    // fecha_zarpe_talara_real (buscado en el historial completo,
+    // específicamente cuando el buque SÍ estaba en Talara) — con
+    // fecha_zarpe como respaldo si ese dato todavía no llegó.
+    b.zarpe = pos && (pos.fecha_zarpe_talara_real || pos.fecha_zarpe) ? (pos.fecha_zarpe_talara_real || pos.fecha_zarpe) : '';
     b.zarpeOrigen = 'Talara';
     // ⚠️ AGREGADO — bug real confirmado (UCAYALI/URUBAMBA/MOCHE
     // mostrando "En Talara" aunque ya tenían escalas COMPLETADAS en
