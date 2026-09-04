@@ -30219,7 +30219,8 @@ function _buildRepoMarBuques() {
       if (!yaExiste) {
         buquesMap[key].legs.push({
           terminal: planta, terminalNorm: _repomarNormPuerto(n.terminal),
-          producto: n.producto, vol: n.vol, fecha_hasta: n.fecha_hasta, estado: n.estado, viaje: n.viaje, tipo: 'descarga'
+          producto: n.producto, vol: n.vol, fecha_hasta: n.fecha_hasta, estado: n.estado, viaje: n.viaje, tipo: 'descarga',
+          origen: n.origen || ''
         });
         buquesMap[key].cargaInicial[_repomarAbrevProd(n.producto)] = (buquesMap[key].cargaInicial[_repomarAbrevProd(n.producto)] || 0) + n.vol;
       }
@@ -30260,7 +30261,8 @@ function _buildRepoMarBuques() {
         if (!yaExiste) {
           buquesMap[key].legs.push({
             terminal: planta, terminalNorm: _repomarNormPuerto(n.terminal),
-            producto: n.producto, vol: n.vol, fecha_hasta: n.fecha_hasta, estado: n.estado, viaje: n.viaje, tipo: 'descarga'
+            producto: n.producto, vol: n.vol, fecha_hasta: n.fecha_hasta, estado: n.estado, viaje: n.viaje, tipo: 'descarga',
+            origen: n.origen || ''
           });
           buquesMap[key].cargaInicial[_repomarAbrevProd(n.producto)] = (buquesMap[key].cargaInicial[_repomarAbrevProd(n.producto)] || 0) + n.vol;
         }
@@ -30270,6 +30272,41 @@ function _buildRepoMarBuques() {
   }
 
   var buques = Object.keys(buquesMap).map(function(k){ return buquesMap[k]; });
+  // ⚠️ AGREGADO — a pedido, caso real confirmado (UCAYALI: carga en
+  // Conchán ALCOHOL CARBURANTE/PREMIUM/REGULAR/B-100 para entregar en
+  // Mollendo y Talara, ADEMÁS de descargar ahí mismo NAFTA REFORMADA/
+  // NFCC/DIESEL de Talara) — un mismo terminal puede ser origen de
+  // carga Y destino de descarga a la vez, en escalas distintas del
+  // mismo viaje. Usa el ORIGEN real de cada fila (ver Code.gs) — si es
+  // un terminal de la grilla (no Talara, ya cubierto aparte) y distinto
+  // del propio destino de esa fila, se agrega una caja "CARGA" ahí,
+  // agrupada con la fecha de la escala de DESCARGA real que el buque
+  // ya tiene en ese mismo terminal (si existe), para que ambas cajas
+  // queden juntas — es la misma parada física, solo que cumple los dos
+  // roles.
+  buques.forEach(function(b) {
+    var yaAgregadoOrigen = {};
+    b.legs.slice().forEach(function(l) {
+      var origenNorm = _repomarNormPuerto(l.origen || '');
+      if (!origenNorm || origenNorm === 'TALARA' || origenNorm === l.terminalNorm) return;
+      var esTerminalValido = REPOMAR_PLANTAS.some(function(p) { return _repomarNormPuerto(p) === origenNorm; });
+      if (!esTerminalValido) return;
+      var claveDedup = origenNorm + '|' + l.producto + '|' + l.fecha_hasta;
+      if (yaAgregadoOrigen[claveDedup]) return;
+      yaAgregadoOrigen[claveDedup] = true;
+      // Busca la fecha de la propia escala de descarga del buque en ese
+      // terminal de origen (si existe), para agrupar ambas cajas juntas.
+      var descargaAhiMismo = b.legs.find(function(l2) { return l2.terminalNorm === origenNorm && l2.tipo === 'descarga'; });
+      var fechaCarga = descargaAhiMismo ? descargaAhiMismo.fecha_hasta : l.fecha_hasta;
+      var estadoCarga = descargaAhiMismo ? descargaAhiMismo.estado : l.estado;
+      var terminalOrigenNombre = REPOMAR_PLANTAS.filter(function(p) { return _repomarNormPuerto(p) === origenNorm; })[0];
+      b.legs.push({
+        terminal: terminalOrigenNombre, terminalNorm: origenNorm,
+        producto: l.producto, vol: l.vol, fecha_hasta: fechaCarga, estado: estadoCarga,
+        viaje: l.viaje, tipo: 'carga', _sintetica: true
+      });
+    });
+  });
   // ⚠️ AGREGADO — a pedido: en la ficha lateral, tachar/resaltar los
   // productos que YA se descargaron por completo — así se ve de un
   // vistazo qué carga ya cumplió su recorrido (y el buque navega con
