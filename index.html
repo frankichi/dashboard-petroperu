@@ -3755,6 +3755,18 @@ function invFilaValida(r) {
 // absoluto (undefined/null/vacío) se recurre al pronóstico como
 // respaldo — un cero real reportado se queda en cero, sin excepción.
 function _despValorReal(r) {
+  // ⚠️ AJUSTADO — a pedido: el fix anterior trataba CUALQUIER vreal=0
+  // como un cero real reportado — pero también existen filas
+  // "fantasma" (creadas por el sistema, sin que nadie reportara nada
+  // ese día — ver _esFilaFantasma más abajo) donde vreal=0 no es un
+  // reporte real, es simplemente que no hay dato. Tratar esas filas
+  // fantasma como "cero real" apagaba de más las gráficas. Ahora se
+  // excluyen primero: una fila fantasma se trata como "no informado"
+  // (cae al pronóstico como respaldo, igual que antes de este cambio),
+  // y solo un vreal=0 en una fila CON datos reales en otros campos
+  // (inv/pron/vfact) se respeta como el cero real que es. (Hoisting de
+  // función hace que el orden de declaración no importe aquí.)
+  if (_esFilaFantasma(r)) return (r.dem || 0);
   var vrealInformado = (r.vreal !== undefined && r.vreal !== null && r.vreal !== '');
   return vrealInformado ? r.vreal : (r.dem || 0);
 }
@@ -6798,7 +6810,16 @@ function decBuildRecs() {
       if (capacidad <= 0) return; // sin dato de capacidad para esta planta/producto
       var vacio = Math.max(0, capacidad - (r.inv||0));
       if (vacio <= 0) return; // tanque ya lleno, no hay espacio físico
-      var despDia = _despValorReal(r) || pronDiarioAprobado(r) || 0;
+      // ⚠️ CORREGIDO — bug real que yo mismo reintroduje al aplicar el
+      // fix anterior: encadenar "|| pronDiarioAprobado(r)" directo
+      // sobre el resultado de _despValorReal(r) volvía a caer en el
+      // mismo problema un nivel más adentro (un despacho real de 0
+      // seguía cayendo al pronóstico). Ahora solo se recurre al
+      // pronóstico cuando NINGÚN campo (ni vreal ni dem) vino
+      // informado — nunca cuando el resultado real fue legítimamente 0.
+      var _vrealODemInformado = (r.vreal !== undefined && r.vreal !== null && r.vreal !== '') ||
+                                 (r.dem   !== undefined && r.dem   !== null && r.dem   !== '');
+      var despDia = _vrealODemInformado ? _despValorReal(r) : (pronDiarioAprobado(r) || 0);
       if (despDia <= 0) return;
       var volParaObjetivo = Math.max(0, (DIAS_OBJETIVO_SANO - r._dCob) * despDia);
       var volSugerido = Math.min(vacio, volParaObjetivo);
@@ -24539,8 +24560,7 @@ function _buildCoberturaSectionHTML(plantaParam, productoParam, nombreFnRerender
   // al pronóstico como respaldo. Un cero real reportado se queda en
   // cero, sin excepción.
   function despRow(r) {
-    var vrealInformado = (r.vreal !== undefined && r.vreal !== null && r.vreal !== '');
-    var v = vrealInformado ? r.vreal : (r.dem || 0);
+    var v = _despValorReal(r);
     return (v > 0 && v <= DESP_MAX_RAZONABLE) ? v : 0;
   }
 
