@@ -5053,7 +5053,16 @@ async function fetchData(forceRefresh) {
     }
     // Pron\u00f3stico llega en paralelo — actualiza sin bloquear el UI
     pronPromise
-      .then(function(r){ return r.ok ? r.json() : null; })
+      // ⚠️ CORREGIDO — a pedido: pronPromise normalmente es un
+      // placeholder intencional (Promise.resolve(null) — ver más
+      // arriba, el pronóstico paralelo se carga aparte, bajo demanda,
+      // no en cada arranque) — pero este .then asumía siempre una
+      // Response real y explotaba con "Cannot read properties of null
+      // (reading 'ok')" en CADA actualización, disparando una
+      // advertencia constante en consola por un caso esperado, no un
+      // error real. Ahora se maneja null explícitamente sin generar
+      // ruido — solo se intenta leer .ok cuando de verdad llegó algo.
+      .then(function(r){ return (r && r.ok) ? r.json() : null; })
       .then(function(pronData) {
         if (!Array.isArray(pronData)) return;
         var loaded = 0;
