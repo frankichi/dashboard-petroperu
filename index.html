@@ -3743,6 +3743,21 @@ function invFilaValida(r) {
   var max = esRef ? INV_SANO_MAX_REFINERIA : INV_SANO_MAX;
   return (r.inv || 0) <= max;
 }
+// ⚠️ AGREGADO — a pedido, bug real y GRAVE confirmado (reportado como
+// urgente): el patrón `r.vreal || r.dem || 0`, repetido en más de una
+// decena de lugares del dashboard gerencial, trata un despacho REAL de
+// 0 (ej. domingo, sin despacho ese día) como si el campo nunca hubiera
+// venido informado — JavaScript considera 0 "falsy", así que el `||`
+// sigue de largo hasta `r.dem` (el PRONÓSTICO, no lo real) — mostrando
+// como si SÍ hubiera despacho cuando el reporte real decía cero. Esto
+// desinformaba directamente a gerencia. Esta función centraliza la
+// lectura correcta: solo cuando el campo vreal NO vino informado en
+// absoluto (undefined/null/vacío) se recurre al pronóstico como
+// respaldo — un cero real reportado se queda en cero, sin excepción.
+function _despValorReal(r) {
+  var vrealInformado = (r.vreal !== undefined && r.vreal !== null && r.vreal !== '');
+  return vrealInformado ? r.vreal : (r.dem || 0);
+}
 // ⚠️ AGREGADO — a pedido: detecta las filas "fantasma" que a veces
 // aparecen en la base de datos (inventario, pronóstico, venta real y
 // V.Factible en 0 al mismo tiempo) — confirmado con un caso real: el
@@ -6783,7 +6798,7 @@ function decBuildRecs() {
       if (capacidad <= 0) return; // sin dato de capacidad para esta planta/producto
       var vacio = Math.max(0, capacidad - (r.inv||0));
       if (vacio <= 0) return; // tanque ya lleno, no hay espacio físico
-      var despDia = r.vreal || r.dem || pronDiarioAprobado(r) || 0;
+      var despDia = _despValorReal(r) || pronDiarioAprobado(r) || 0;
       if (despDia <= 0) return;
       var volParaObjetivo = Math.max(0, (DIAS_OBJETIVO_SANO - r._dCob) * despDia);
       var volSugerido = Math.min(vacio, volParaObjetivo);
@@ -9899,7 +9914,7 @@ function _renderP2Body() {
           return x.fecha === prevDateStr && x.planta === r.planta && x.producto === r.producto;
         });
         var prevVreal = (prevRaw.length && prevRaw[0].vreal > 0) ? prevRaw[0].vreal : 0;
-        vrealMbdc      = prevVreal || r.vreal || r.dem || 0;
+        vrealMbdc      = prevVreal || _despValorReal(r);
         vrealSource    = 'E&D ' + prevDateStr;
         vrealFromCognos= false;
         vrealSuffix    = venta7dAvg > 0 ? ' · Cognos prom7d: ' + venta7dAvg.toFixed(DEC) : '';
@@ -10012,7 +10027,7 @@ function _renderP2Body() {
             // fecha del día que se está viendo — mismo destino que ya usan
             // Registro Diario y la Vista Ejecutiva.
             if (esRefFila) return '<td class="r" title="Refiner\u00eda: no despacha"><span style="color:var(--txt3);font-size:10px">\u2014</span></td>';
-            var dR = r.vreal || r.dem || 0;
+            var dR = _despValorReal(r);
             if (cobEditMode) {
               return '<td class="r" style="white-space:nowrap">'
                 + '<input class="cob-edit" type="number" step="0.01" min="0" value="' + dR.toFixed(DEC) + '" style="width:62px" '
@@ -10036,7 +10051,7 @@ function _renderP2Body() {
             // pronóstico en su lugar — más representativo que un número
             // disparado por un despacho puntual casi en cero.
             var COB_REAL_FALLBACK_UMBRAL = 80;
-            var despReal = r.vreal || r.dem || 0;
+            var despReal = _despValorReal(r);
             var cobRealRaw = (despReal > 0 && (r.inv||0) > 0) ? Math.round(r.inv / despReal) : 0;
             if (esRefFila) return '<td class="r" title="Refiner\u00eda: no aplica"><span style="color:var(--txt3);font-size:10px">\u2014</span></td>';
             var cobFinal = cobRealRaw, usandoPron = false;
@@ -13800,7 +13815,7 @@ function renderPTend() {
         });
         if (!filas.length) return null;
         var tot = filas.reduce(function(s,r){
-          var v = r.vreal || r.dem || 0;
+          var v = _despValorReal(r);
           return s + ((v > 0 && v <= DESP_MAX_RAZONABLE_T) ? v : 0);
         }, 0);
         return tot > 0 ? parseFloat(tot.toFixed(3)) : null;
@@ -21349,7 +21364,7 @@ function _invReportRangeRows() {
     return {
       fecha: r.fecha, planta: r.planta, producto: r.producto,
       existencia: parseFloat((r.inv||0).toFixed(DEC)),
-      despacho_real: parseFloat((r.vreal||r.dem||0).toFixed(DEC)),
+      despacho_real: parseFloat(_despValorReal(r).toFixed(DEC)),
       pronostico_mbdc: parseFloat((r.pron||0).toFixed(DEC)),
       cobertura_dias: r.cob || ''
     };
@@ -24510,8 +24525,22 @@ function _buildCoberturaSectionHTML(plantaParam, productoParam, nombreFnRerender
   // error de digitación (ej. "100" tecleado como valor de prueba durante
   // pruebas del sistema) — se descarta para que nunca infle esta vista.
   var DESP_MAX_RAZONABLE = 60; // MB/día por planta+producto
+  // ⚠️ CORREGIDO — a pedido, bug real y grave confirmado: `r.vreal ||
+  // r.dem || 0` — cuando una planta reporta un despacho REAL de 0 (ej.
+  // domingo, sin despacho ese día), JavaScript trata 0 como "falsy" y
+  // el `||` sigue de largo hasta `r.dem` (el PRONÓSTICO/demanda
+  // estimada, NO lo que realmente se despachó) — mostrando en el
+  // dashboard gerencial como si SÍ hubiera despacho ese día, cuando el
+  // reporte real decía cero. Esto desinformaba directamente a
+  // gerencia. Ahora se distingue explícitamente "el campo vreal SÍ
+  // vino informado" (incluyendo cuando vino como 0 real) de "el campo
+  // vreal no vino informado en absoluto" (undefined/null/vacío) — solo
+  // en este último caso, sin ningún dato real que mostrar, se recurre
+  // al pronóstico como respaldo. Un cero real reportado se queda en
+  // cero, sin excepción.
   function despRow(r) {
-    var v = r.vreal || r.dem || 0;
+    var vrealInformado = (r.vreal !== undefined && r.vreal !== null && r.vreal !== '');
+    var v = vrealInformado ? r.vreal : (r.dem || 0);
     return (v > 0 && v <= DESP_MAX_RAZONABLE) ? v : 0;
   }
 
@@ -24791,7 +24820,7 @@ function _buildCoberturaSectionHTML(plantaParam, productoParam, nombreFnRerender
     return c;
   }
   function cobReal(r) {
-    var desp = r.vreal || r.dem || 0;
+    var desp = _despValorReal(r);
     if (desp <= 0 || r.inv == null) return null;
     var c = Math.round(Math.max(0, r.inv) / desp);
     // Regla de respaldo: despacho real anormalmente bajo ese día → usar
@@ -25090,7 +25119,7 @@ function _buildCoberturaSectionHTML(plantaParam, productoParam, nombreFnRerender
     if (hayDescargando && fechaAyer) {
       var invHoyProd = r.inv || 0;
       var invAyerProd = sumFecha(fechaAyer, 'inv', r.planta, r.producto);
-      var despHoyProd = r.vreal || r.dem || 0;
+      var despHoyProd = _despValorReal(r);
       var recibidoHoy = Math.max(0, invHoyProd - invAyerProd + despHoyProd);
       if (recibidoHoy > 0) {
         var recibidoRestante = recibidoHoy;
@@ -25260,7 +25289,7 @@ function _buildCoberturaSectionHTML(plantaParam, productoParam, nombreFnRerender
       // forzando pronóstico (pedido explícito, el despacho real de un
       // solo día puede tener anomalías una vez el inventario está
       // combinado con la refinería).
-      var despachoRealProd = r.vreal || r.dem || 0;
+      var despachoRealProd = _despValorReal(r);
       var denomProd = (esTalaraComb || window._execCobModo !== 'real') ? pronProd : despachoRealProd;
       if (!porPlantaFila[r.planta]) {
         porPlantaFila[r.planta] = { invSum: 0, pronSum: 0, invSumCob: 0, pronSumCob: 0, capSum: 0, proyectado: false, planta: r.planta, producto: r.producto };
@@ -26291,7 +26320,7 @@ function _renderVistaEjecutivaSimpleImpl() {
           inv: inv,
           // "Despacho Reportado" = el despacho REAL que la planta reportó
           // ese cierre (no un valor calculado/factible por el sistema).
-          despReportado: r.vreal || r.dem || 0,
+          despReportado: _despValorReal(r),
           pron: cobGetPron(r),
           cob: cobDias,
           fechaCob: cobDias !== null && cobDias !== undefined ? _diasAFecha(r.fecha, cobDias) : '—'
@@ -27535,7 +27564,7 @@ function _execReposicionInfo(r, fechaRef, arrastrarLocalFn) {
     var rAyer = arrastrarLocalFn(r.planta, r.producto, fechaAyerCalc);
     var invAyerProd = rAyer ? (rAyer.inv || 0) : 0;
     var invHoyProd = r.inv || 0;
-    var despHoyProd = r.vreal || r.dem || 0;
+    var despHoyProd = _despValorReal(r);
     var recibidoHoy = Math.max(0, invHoyProd - invAyerProd + despHoyProd);
     if (recibidoHoy > 0) {
       var restar1 = Math.min(vol1, recibidoHoy);
@@ -27674,7 +27703,7 @@ function _execMapaDatos(fecha) {
     if (!r) return;
     if (!porInstalacion[planta]) porInstalacion[planta] = { productos: [], minCob: 999 };
     var esRef = REFINERIAS.indexOf(planta) !== -1;
-    var despReal = r.vreal || r.dem || 0;
+    var despReal = _despValorReal(r);
     var pronVal = (typeof pronSheet !== 'undefined' && pronSheet[key]) || r.pron_mes || r.pron || 0;
     var rep = _execReposicionInfo(r, fecha, arrastrarLocal);
     // ⚠️ CORREGIDO — bug real confirmado (a pedido, auditoría general):
