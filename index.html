@@ -25920,6 +25920,25 @@ function _buildCoberturaSectionHTML(plantaParam, productoParam, nombreFnRerender
 
 
 function renderVistaEjecutivaSimple() {
+  // ⚠️ CORREGIDO — a pedido, bug real y grave confirmado ("las gráficas
+  // de Vista Ejecutiva/panel gerencial están en blanco, sin ningún
+  // error visible"): Chart.js se carga bajo demanda (ensureChartJS,
+  // para no gastar tiempo de carga en vistas que no dibujan gráficos)
+  // — pero Vista Ejecutiva nunca fue agregada a los puntos que la
+  // disparan (a diferencia de Tendencia, Pronóstico, etc.). Como
+  // resultado, `Chart` quedaba SIEMPRE undefined en esta vista, y el
+  // código de gráficos se detenía en silencio (`if (typeof Chart ===
+  // 'undefined') return;`) — sin lanzar ningún error, por eso no
+  // aparecía nada en consola. Ahora, si Chart.js todavía no cargó, se
+  // dispara su carga y se reintenta el render apenas esté listo — una
+  // sola vez, sin bloquear el resto de la página mientras tanto.
+  if (typeof Chart === 'undefined') {
+    if (typeof ensureChartJS === 'function') {
+      ensureChartJS().then(function(){ renderVistaEjecutivaSimple(); })
+        .catch(function(e){ console.warn('[ExecMode] No se pudo cargar Chart.js:', e && e.message); });
+    }
+    return;
+  }
   if (window._execRenderDebounce) clearTimeout(window._execRenderDebounce);
   window._execRenderDebounce = setTimeout(_renderVistaEjecutivaSimpleImpl, 60);
 }
