@@ -9530,11 +9530,33 @@ async function cobSaveToGS() {
     }
     var promises = [];
     if (hasFieldChanges) {
-      promises.push(fetch(CONFIG.API_URL, {
-        method: 'POST', redirect: 'follow',
-        headers: {'Content-Type': 'text/plain;charset=utf-8'},
-        body: JSON.stringify({ action: 'updateFieldFull', updates: allFieldChanges })
-      }).then(function(r){ return r.json().catch(function(){ return { success:false, message:'Respuesta inválida del servidor' }; }); }));
+      // ⚠️ AGREGADO — a pedido: caso real reportado ("no puedo guardar en
+      // coberturas") — la respuesta llegaba no-JSON, el mismo síntoma de
+      // "arranque en frío" que ya se ve en /solicitudes (que sí
+      // reintenta) justo después de redesplegar Code.gs. Este guardado
+      // no tenía ningún reintento — fallaba directo desde el primer
+      // intento. Ahora, si la respuesta no es JSON válido, espera 1.5s
+      // y reintenta UNA vez antes de darse por vencido.
+      promises.push(
+        fetch(CONFIG.API_URL, {
+          method: 'POST', redirect: 'follow',
+          headers: {'Content-Type': 'text/plain;charset=utf-8'},
+          body: JSON.stringify({ action: 'updateFieldFull', updates: allFieldChanges })
+        }).then(function(r){ return r.json(); }).catch(function(){
+          console.warn('[CobSave] Respuesta no-JSON (posible arranque en frío), reintentando en 1.5s...');
+          return new Promise(function(resolve){
+            setTimeout(function(){
+              fetch(CONFIG.API_URL, {
+                method: 'POST', redirect: 'follow',
+                headers: {'Content-Type': 'text/plain;charset=utf-8'},
+                body: JSON.stringify({ action: 'updateFieldFull', updates: allFieldChanges })
+              }).then(function(r2){ return r2.json(); })
+                .then(resolve)
+                .catch(function(){ resolve({ success:false, message:'Respuesta inválida del servidor (tras reintento)' }); });
+            }, 1500);
+          });
+        })
+      );
     }
     if (hasDespChanges) {
       var mes = prevDateStr.slice(0, 7);
