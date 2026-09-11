@@ -4541,7 +4541,7 @@ if (typeof window._repomarBuquePresenteEnTerminal !== 'function') {
   };
 }
 
-async function fetchData(forceRefresh) {
+async function fetchData(forceRefresh, _esReintento404) {
   // Sincronizar sesión desde el script inline de login
   if (!_dashSession && window._dashSession) _dashSession = window._dashSession;
   if (window._authPending && !_dashSession) {
@@ -5116,6 +5116,22 @@ async function fetchData(forceRefresh) {
     clearInterval(_st);
     console.error('[API] Error:', error);
     var _is404 = error.message && error.message.indexOf('404') >= 0;
+    // ⚠️ AGREGADO — a pedido: caso real reportado ("a veces me sale GAS
+    // no disponible (404)" incluso actualizando la implementación
+    // correctamente) — Google Apps Script puede quedar brevemente
+    // inaccesible justo después de publicar una nueva versión (unos
+    // segundos de "arranque en frío" mientras activa el cambio), igual
+    // que ya pasa con /solicitudes (que sí reintenta). Esta pantalla no
+    // reintentaba nunca — mostraba el error de "hay que redesplegar"
+    // desde el primer intento fallido, aunque fuera solo cuestión de
+    // esperar un momento. Ahora, si es un 404 y todavía no se intentó
+    // de nuevo, espera 3s y reintenta UNA vez antes de mostrar la
+    // pantalla de error — solo se rinde si el reintento también falla.
+    if (_is404 && !_esReintento404) {
+      console.warn('[API] 404 en el primer intento — puede ser arranque en frío tras un redeploy. Reintentando en 3s...');
+      setTimeout(function(){ fetchData(forceRefresh, true); }, 3000);
+      return;
+    }
     setGsStatus('error', _is404 ? 'GAS no disponible' : 'Sin conexión');
     var _elOv = document.getElementById('loadingOverlay');
     if (_elOv) {
