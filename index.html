@@ -14558,9 +14558,17 @@ function simUpdateFleetSidebar(ship) {
   const used = ship.stops.reduce((a,st)=>a+st.vol,0);
   const pct  = ship.volTotal>0 ? Math.min(100,used/ship.volTotal*100) : 0;
   const fillC = pct>100?'#e03434':pct>90?'#c9970a':'#1a9e50';
-  el.querySelector('.sim-sb-meta').textContent = `${ship.stops.length} escalas · ${used.toFixed(DEC)}/${ship.volTotal} MB`;
-  el.querySelector('.sim-sb-fill').style.width = pct+'%';
-  el.querySelector('.sim-sb-fill').style.background = fillC;
+  // ⚠️ CORREGIDO — bug real confirmado ("Cannot read properties of
+  // null (reading 'style')" al editar un campo de la simulación de
+  // buques): estos dos elementos internos no se verificaban antes de
+  // usarlos — si el sidebar todavía no terminó de dibujarse con esa
+  // estructura interna exacta (o quedó en un estado intermedio), esto
+  // rompía toda la función. Se protege igual que ya hace la función
+  // vecina simUpdateCapBar, sin caerse cuando falta un elemento.
+  const metaEl = el.querySelector('.sim-sb-meta');
+  const fillEl = el.querySelector('.sim-sb-fill');
+  if (metaEl) metaEl.textContent = `${ship.stops.length} escalas · ${used.toFixed(DEC)}/${ship.volTotal} MB`;
+  if (fillEl) { fillEl.style.width = pct+'%'; fillEl.style.background = fillC; }
 }
 function simUpdateCapBar(ship) {
   const used    = ship.stops.reduce((a,st)=>a+st.vol,0);
