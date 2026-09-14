@@ -31028,6 +31028,14 @@ function _repomarInjectCSS() {
     .repomar-shipcargo{color:var(--txt2);font-family:var(--mono);font-size:10px;line-height:1.7;padding:7px 10px 3px;white-space:nowrap}
     .repomar-shipzarpe{margin:6px 10px 8px;background:#fff7e6;border:1px solid #f0c869;border-radius:4px;padding:3px 8px;font-size:10px;font-weight:700;color:#8a6416;display:inline-block}
     .repomar-legbox{background:#fff;border:1.5px solid #2563eb;border-radius:6px;padding:5px 7px;font-size:10px;margin:3px 2px;position:relative;z-index:2;box-shadow:0 1px 3px rgba(37,99,235,.18);min-width:128px;max-width:100%;box-sizing:border-box}
+    /* AGREGADO — a pedido: al pasar el mouse por una caja de escala, que
+       se eleve por encima de las que se le superponen (en vez de quedar
+       tapada o estorbando), y que las flechas que la conectan (de dónde
+       viene / a dónde va) se resalten — ver JS de hover más abajo, que
+       agrega/quita estas clases. */
+    .repomar-legbox:hover{z-index:60;box-shadow:0 4px 14px rgba(37,99,235,.35);border-color:#1d4ed8}
+    .repomar-arrow-resaltada{stroke-width:4.5!important;filter:drop-shadow(0 0 4px rgba(29,78,216,.7))}
+    .repomar-arrow-atenuada{opacity:.15}
     .repomar-legdate{font-weight:800;color:#2563eb;font-size:10px}
     .repomar-legprod{color:var(--txt2);font-family:var(--mono);font-size:9.5px;margin-top:1px;text-transform:uppercase;white-space:nowrap}
     /* AGREGADO — a pedido: etiqueta CARGA/DESCARGA arriba de cada caja de
@@ -31819,6 +31827,39 @@ window.renderPRepoMar = function() {
     var grid = document.getElementById('repomar-grid');
     var svg = document.getElementById('repomar-svg');
     if (!grid || !svg) return;
+    // ⚠️ AGREGADO — a pedido: al pasar el mouse por una caja de escala,
+    // resaltar las flechas que la conectan (de dónde viene / a dónde
+    // va) — usando delegación de eventos sobre el contenedor (que
+    // persiste entre redibujados), con una bandera para no engancharse
+    // dos veces si esta función corre de nuevo (resize, zoom, etc.).
+    if (!grid._repomarHoverListo) {
+      grid._repomarHoverListo = true;
+      grid.addEventListener('mouseover', function(ev) {
+        var caja = ev.target.closest('.repomar-legbox');
+        if (!caja) return;
+        var buqueCaja = caja.getAttribute('data-buque');
+        var idxCaja = caja.getAttribute('data-leg-idx');
+        if (!buqueCaja || idxCaja === null) return;
+        var svgEl = document.getElementById('repomar-svg');
+        if (!svgEl) return;
+        var todasFlechas = svgEl.querySelectorAll('path[data-buque]');
+        todasFlechas.forEach(function(p) {
+          var esConectada = p.getAttribute('data-buque') === buqueCaja &&
+            (p.getAttribute('data-from-idx') === idxCaja || p.getAttribute('data-to-idx') === idxCaja);
+          p.classList.toggle('repomar-arrow-resaltada', esConectada);
+          p.classList.toggle('repomar-arrow-atenuada', !esConectada);
+        });
+      });
+      grid.addEventListener('mouseout', function(ev) {
+        var caja = ev.target.closest('.repomar-legbox');
+        if (!caja) return;
+        var svgEl = document.getElementById('repomar-svg');
+        if (!svgEl) return;
+        svgEl.querySelectorAll('path[data-buque]').forEach(function(p) {
+          p.classList.remove('repomar-arrow-resaltada', 'repomar-arrow-atenuada');
+        });
+      });
+    }
     var gridRect = grid.getBoundingClientRect();
     svg.setAttribute('width', gridRect.width);
     svg.setAttribute('height', gridRect.height);
@@ -31944,7 +31985,7 @@ window.renderPRepoMar = function() {
           var midXArc = (startX + x1) / 2;
           pathD = 'M' + startX + ',' + startY + ' Q' + midXArc + ',' + controlY + ' ' + x1 + ',' + y1;
         }
-        pathsHTML += '<path d="' + pathD + '" class="' + (esTransitoActual ? 'repomar-arrow-transito' : '') + '" ' +
+        pathsHTML += '<path d="' + pathD + '" class="' + (esTransitoActual ? 'repomar-arrow-transito' : '') + '" data-buque="' + b.buque + '" data-from-idx="' + (grupoIdx-1) + '" data-to-idx="' + grupoIdx + '" ' +
           (esRetornoNorte
             ? 'fill="none" stroke="#ea580c" stroke-width="2.2" stroke-dasharray="4 3" marker-end="url(#repomar-arrow-retorno)"/>'
             : 'fill="none" stroke="#3b82f6" stroke-width="2.2" stroke-dasharray="4 3" marker-end="url(#repomar-arrow)"/>');
