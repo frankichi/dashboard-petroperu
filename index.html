@@ -31010,7 +31010,7 @@ function _repomarInjectCSS() {
        el camino de un sticky hacia su contenedor de scroll real). Se
        quitó overflow:hidden de arriba (ya no hacía falta recortar nada
        ahí) y ahora si funciona correctamente. */
-    .repomar-headerrow{position:sticky;top:0;z-index:70;background:var(--card)}
+    .repomar-headerrow{background:var(--card)}
     .repomar-headerrow .repomar-cell[style*="transparent"]{background:var(--card)!important}
     .repomar-covblock{position:relative}
     .repomar-covblock-vlabel{position:absolute;left:-24px;top:0;bottom:0;width:22px;background:#0071A4;color:#fff;writing-mode:vertical-rl;transform:rotate(180deg);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:800;letter-spacing:.08em;border-radius:4px 0 0 4px}
@@ -31886,6 +31886,59 @@ window.renderPRepoMar = function() {
     var grid = document.getElementById('repomar-grid');
     var svg = document.getElementById('repomar-svg');
     if (!grid || !svg) return;
+    // ⚠️ CAMBIADO — a pedido: el sticky por CSS puro (position:sticky)
+    // no lograba funcionar de forma confiable en este layout — con
+    // varios contenedores anidados de por medio, cualquiera de ellos
+    // puede romper la cadena hacia el scroll real sin que sea obvio
+    // cuál. Se reemplaza por un clon fijo por JavaScript: en vez de
+    // depender de que TODA la cadena de contenedores esté perfecta,
+    // esto simplemente mide dónde está la cabecera original en cada
+    // scroll y, si ya se fue por encima del área visible, muestra una
+    // copia idéntica en position:fixed en su lugar — funciona sin
+    // importar cuántos overflow haya de por medio.
+    (function() {
+      var original = grid.querySelector('.repomar-headerrow');
+      var scrollCont = document.getElementById('pRepoMar');
+      var horizCont = grid.closest('.repomar-scroll');
+      if (!original || !scrollCont || !horizCont) return;
+      var clone = document.getElementById('repomar-header-clone');
+      if (!clone) {
+        clone = document.createElement('div');
+        clone.id = 'repomar-header-clone';
+        clone.style.cssText = 'position:fixed;z-index:80;overflow:hidden;pointer-events:none;display:none;box-shadow:0 2px 8px rgba(0,0,0,.15)';
+        document.body.appendChild(clone);
+      }
+      function actualizarClonHeader() {
+        var origRect = original.getBoundingClientRect();
+        var contRect = scrollCont.getBoundingClientRect();
+        // Se activa el clon apenas la cabecera original suba por
+        // encima del borde superior visible del contenedor que hace
+        // scroll de verdad (#pRepoMar).
+        if (origRect.top < contRect.top) {
+          var horizRect = horizCont.getBoundingClientRect();
+          clone.style.display = 'block';
+          clone.style.top = contRect.top + 'px';
+          clone.style.left = horizRect.left + 'px';
+          clone.style.width = horizRect.width + 'px';
+          clone.innerHTML = original.outerHTML;
+          // La fila clonada es tan ancha como la cuadrícula completa
+          // (1450px+), igual que la original — se desplaza hacia la
+          // izquierda lo mismo que el scroll horizontal actual, para
+          // que las columnas sigan alineadas con el contenido de abajo.
+          var filaClon = clone.firstElementChild;
+          if (filaClon) filaClon.style.marginLeft = (-horizCont.scrollLeft) + 'px';
+        } else {
+          clone.style.display = 'none';
+        }
+      }
+      if (!scrollCont._repomarStickyListo) {
+        scrollCont._repomarStickyListo = true;
+        scrollCont.addEventListener('scroll', actualizarClonHeader, {passive:true});
+        horizCont.addEventListener('scroll', actualizarClonHeader, {passive:true});
+        window.addEventListener('resize', actualizarClonHeader);
+      }
+      actualizarClonHeader();
+    })();
     // ⚠️ AGREGADO — a pedido: al pasar el mouse por una caja de escala,
     // resaltar las flechas que la conectan (de dónde viene / a dónde
     // va) — usando delegación de eventos sobre el contenedor (que
