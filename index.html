@@ -30449,13 +30449,30 @@ function _buildRepoMarBuques() {
       // realmente se cargó ahí.
       var fechaHastaCarga = (typeof currentDate !== 'undefined' && currentDate) ? currentDate : new Date().toISOString().slice(0,10);
       var todasPendientes = b.legs.filter(function(l) { return l.estado !== 'COMPLETADO'; });
-      // ⚠️ CORREGIDO — a pedido: se filtra por el ORIGEN real de cada
-      // escala (cuando el dato está disponible) para sumar solo lo que
-      // de verdad se carga EN ESTE terminal — sin esto, productos con
-      // origen distinto (ej. RESIDUAL ASFAL. con origen Talara) se
-      // mezclaban incorrectamente en la caja de carga de Bayóvar.
+      // ⚠️ CORREGIDO — a pedido, bug real confirmado (MOCHE "descargando"
+      // en Callao cuando Callao NO aparece en su itinerario real — esos
+      // datos eran de UCAYALI): antes, si NINGUNA escala pendiente tenía
+      // origen=este terminal, se caía igual a "usar TODAS las
+      // pendientes" como respaldo — pensado solo para cuando el dato de
+      // origen viene vacío/ausente. Pero si el buque simplemente está
+      // FONDEADO/de paso por un terminal que NO es su punto de carga
+      // real (como Callao, donde varios buques hacen escala solo para
+      // inspección, sin operación de carga) — ese respaldo creaba una
+      // caja fantasma con TODO su cargamento futuro, atribuido al lugar
+      // equivocado. Ahora el respaldo solo se usa cuando el dato de
+      // origen está sistemáticamente AUSENTE en todas sus escalas (sin
+      // ninguna pista de dónde carga cada cosa) — si SÍ hay datos de
+      // origen pero ninguno coincide con este terminal, es señal clara
+      // de que aquí no carga nada, y no se crea ninguna caja.
       var pendientes = todasPendientes.filter(function(l) { return _repomarNormPuerto(l.origen || '') === terminalNormBuscado; });
-      if (!pendientes.length) pendientes = todasPendientes; // respaldo si no hay dato de origen
+      var hayAlgunOrigenInformado = todasPendientes.some(function(l) { return !!(l.origen || '').trim(); });
+      // ⚠️ AGREGADO — a pedido: si SÍ hay datos de origen para este
+      // buque pero NINGUNO coincide con este terminal, es evidencia
+      // clara de que aquí no hay ninguna operación real (solo está de
+      // paso/fondeado, ej. Callao para inspección) — no se crea NINGUNA
+      // caja, ni siquiera vacía, en vez de sugerir que algo pasa ahí.
+      if (!pendientes.length && hayAlgunOrigenInformado) return;
+      if (!pendientes.length && !hayAlgunOrigenInformado) pendientes = todasPendientes; // respaldo solo si no hay NINGÚN dato de origen
       if (pendientes.length) {
         var sumaPorProducto = {}; // producto -> {vol, producto}
         pendientes.forEach(function(l) {
