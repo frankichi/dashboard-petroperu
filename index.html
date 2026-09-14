@@ -30991,7 +30991,17 @@ function _repomarInjectCSS() {
       .repomar-title{font-size:16px}
       .repomar-headerbar{gap:8px}
     }
-    .repomar-grid{position:relative;min-width:1450px;background:var(--card);border-radius:10px;box-shadow:0 1px 3px rgba(0,0,0,.08);overflow:hidden;padding:2px 2px 2px 26px}
+    .repomar-grid{position:relative;min-width:1450px;background:var(--card);border-radius:10px;box-shadow:0 1px 3px rgba(0,0,0,.08);padding:2px 2px 2px 26px}
+    /* ⚠️ CORREGIDO — a pedido, bug real confirmado tras 3 intentos
+       fallidos anteriores (ver notas viejas): la causa era el
+       overflow:hidden en .repomar-grid — eso BLOQUEA por completo
+       cualquier position:sticky de los elementos que contiene (regla
+       general de CSS: un ancestro con overflow:hidden/auto/scroll corta
+       el camino de un sticky hacia su contenedor de scroll real). Se
+       quitó overflow:hidden de arriba (ya no hacía falta recortar nada
+       ahí) y ahora si funciona correctamente. */
+    .repomar-headerrow{position:sticky;top:0;z-index:70;background:var(--card)}
+    .repomar-headerrow .repomar-cell[style*="transparent"]{background:var(--card)!important}
     .repomar-covblock{position:relative}
     .repomar-covblock-vlabel{position:absolute;left:-24px;top:0;bottom:0;width:22px;background:#0071A4;color:#fff;writing-mode:vertical-rl;transform:rotate(180deg);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:800;letter-spacing:.08em;border-radius:4px 0 0 4px}
     /* ⚠️ CORREGIDO — causa raíz real de que las flechas "se enredaran":
