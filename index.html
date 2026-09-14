@@ -30466,12 +30466,15 @@ function _buildRepoMarBuques() {
       // de que aquí no carga nada, y no se crea ninguna caja.
       var pendientes = todasPendientes.filter(function(l) { return _repomarNormPuerto(l.origen || '') === terminalNormBuscado; });
       var hayAlgunOrigenInformado = todasPendientes.some(function(l) { return !!(l.origen || '').trim(); });
-      // ⚠️ AGREGADO — a pedido: si SÍ hay datos de origen para este
-      // buque pero NINGUNO coincide con este terminal, es evidencia
-      // clara de que aquí no hay ninguna operación real (solo está de
-      // paso/fondeado, ej. Callao para inspección) — no se crea NINGUNA
-      // caja, ni siquiera vacía, en vez de sugerir que algo pasa ahí.
-      if (!pendientes.length && hayAlgunOrigenInformado) return;
+      // ⚠️ CORREGIDO — a pedido: el intento anterior, al no encontrar
+      // ningún producto que coincida, dejaba de mostrar la caja por
+      // completo — pero eso también se llevó el indicador de DÓNDE está
+      // el buque ahora mismo (ej. MOCHE fondeado en Callao, de paso,
+      // sin operación de carga real ahí). Ahora sí se sigue mostrando
+      // esa ubicación — pero como "⚓ DE PASO" (sin productos, sin
+      // pretender que ahí carga algo), distinta de "▲ CARGA" — para no
+      // repetir el error de antes (inventar cargamento que no
+      // corresponde) sin perder la información real de dónde está.
       if (!pendientes.length && !hayAlgunOrigenInformado) pendientes = todasPendientes; // respaldo solo si no hay NINGÚN dato de origen
       if (pendientes.length) {
         var sumaPorProducto = {}; // producto -> {vol, producto}
@@ -30491,7 +30494,8 @@ function _buildRepoMarBuques() {
         b.legs.push({
           terminal: planta, terminalNorm: terminalNormBuscado,
           producto: '', vol: 0,
-          fecha_hasta: fechaHastaCarga, estado: 'PROGRAMADO', viaje: b.viaje, _sintetica: true, tipo: 'carga'
+          fecha_hasta: fechaHastaCarga, estado: 'PROGRAMADO', viaje: b.viaje, _sintetica: true,
+          tipo: hayAlgunOrigenInformado ? 'transito' : 'carga'
         });
       }
     });
@@ -31060,12 +31064,22 @@ function _repomarInjectCSS() {
        (ej. Bayóvar, solo carga) o descargando ahí. */
     .repomar-legtipo{font-size:8px;font-weight:800;letter-spacing:.04em;padding:1px 5px;border-radius:4px;display:inline-block;margin-bottom:2px}
     .repomar-legtipo-carga{background:#fef3c7;color:#92400e}
+    .repomar-legtipo-transito{background:#e5e7eb;color:#4b5563}
     .repomar-legtipo-descarga{background:#dbeafe;color:#1e40af}
     /* AGREGADO — a pedido: productos ya entregados por completo, tachados
        y atenuados en la ficha del buque. */
     .repomar-prod-entregado{text-decoration:line-through;opacity:.45}
     .repomar-legbox.completado{border-color:#16a34a;box-shadow:0 1px 3px rgba(22,163,74,.18)}
     .repomar-legbox.completado .repomar-legdate{color:#16a34a}
+    /* AGREGADO — a pedido: la caja de una faena YA EFECTUADA se ve más
+       transparente (para que resalte menos frente a lo pendiente), y su
+       etiqueta "DESCARGÓ" se pinta de rojo como indicador claro de que
+       ya se completó — pero al pasar el mouse (ver regla :hover ya
+       existente más arriba) recupera opacidad completa, igual que el
+       resto. */
+    .repomar-legbox.completado{opacity:.62}
+    .repomar-legbox.completado:hover{opacity:1}
+    .repomar-legbox.completado .repomar-legtipo-descarga{background:#fee2e2;color:#b91c1c}
     .repomar-legbox.en-terminal{border-color:#b45309;box-shadow:0 1px 3px rgba(180,83,9,.18)}
     /* ⚠️ AGREGADO — a pedido: indicador "en vivo" — el recuadro del
        terminal donde el buque está FÍSICAMENTE ahora (según el reporte
@@ -31649,8 +31663,16 @@ window.renderPRepoMar = function() {
               '<div class="repomar-legtipo repomar-legtipo-carga" style="margin-top:3px">▲ CARGA</div>' +
               prodsCarga.map(_lineaProd).join('');
           } else {
+            // ⚠️ AGREGADO — a pedido: distinción para cuando el buque
+            // solo está de paso/fondeado en un terminal (ej. Callao
+            // para inspección) SIN ninguna operación real de carga o
+            // descarga ahí — se sigue mostrando dónde está, pero con
+            // una etiqueta que no da a entender que algo se está
+            // cargando o descargando en ese punto.
             etiquetaTipo = g.tipo === 'carga'
               ? '<div class="repomar-legtipo repomar-legtipo-carga">▲ CARGA</div>'
+              : g.tipo === 'transito'
+              ? '<div class="repomar-legtipo repomar-legtipo-transito">⚓ DE PASO</div>'
               : '<div class="repomar-legtipo repomar-legtipo-descarga">' + etiquetaDescargaTxt + '</div>';
             lineasProductos = g.productos.map(_lineaProd).join('');
           }
