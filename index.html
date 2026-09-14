@@ -31075,6 +31075,23 @@ function _repomarInjectCSS() {
        viene / a dónde va) se resalten — ver JS de hover más abajo, que
        agrega/quita estas clases. */
     .repomar-legbox:hover{z-index:60;box-shadow:0 4px 14px rgba(37,99,235,.35);border-color:#1d4ed8}
+    /* AGREGADO — a pedido: botón de edición sobre cada caja — solo
+       visible al pasar el mouse, para no saturar la vista normal. */
+    .repomar-editbtn{position:absolute;top:2px;right:2px;width:16px;height:16px;line-height:16px;text-align:center;font-size:10px;border-radius:3px;background:var(--acc);color:#fff;border:none;cursor:pointer;opacity:0;transition:opacity .12s;z-index:5;padding:0}
+    .repomar-legbox:hover .repomar-editbtn{opacity:1}
+    .repomar-modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9000;display:flex;align-items:center;justify-content:center}
+    .repomar-modal{background:var(--card);border-radius:10px;padding:20px 22px;width:380px;max-width:92vw;max-height:85vh;overflow-y:auto;box-shadow:0 10px 40px rgba(0,0,0,.3)}
+    .repomar-modal h3{margin:0 0 14px;font-size:15px;color:var(--txt)}
+    .repomar-modal label{display:block;font-size:10.5px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.4px;margin:10px 0 3px}
+    .repomar-modal input,.repomar-modal select{width:100%;background:var(--card2);color:var(--txt);border:1px solid var(--bdr);border-radius:5px;padding:6px 9px;font-size:12.5px;font-family:var(--sans);box-sizing:border-box}
+    .repomar-modal-prodrow{display:flex;gap:6px;align-items:center;margin-bottom:6px}
+    .repomar-modal-prodrow input{flex:1}
+    .repomar-modal-prodrow button{background:none;border:none;color:var(--red);cursor:pointer;font-size:15px;padding:2px 6px}
+    .repomar-modal-actions{display:flex;gap:8px;margin-top:18px;justify-content:flex-end}
+    .repomar-modal-btn{padding:7px 16px;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;border:1px solid var(--bdr);background:var(--card2);color:var(--txt2)}
+    .repomar-modal-btn.primary{background:var(--acc);border-color:var(--acc);color:#fff}
+    .repomar-modal-btn.danger{background:var(--red)14;border-color:var(--red)40;color:var(--red)}
+    .repomar-modal-err{color:var(--red);font-size:11px;margin-top:8px;display:none}
     .repomar-arrow-resaltada{stroke-width:4.5!important;filter:drop-shadow(0 0 4px rgba(29,78,216,.7))}
     .repomar-arrow-atenuada{opacity:.15}
     .repomar-legdate{font-weight:800;color:#2563eb;font-size:10px}
@@ -31299,6 +31316,164 @@ function _repomarCompartir() {
   }
 }
 window._repomarCompartir = _repomarCompartir;
+
+// ⚠️ AGREGADO — a pedido: edición bidireccional de Cabotaje Confirmado
+// desde el panel principal. Requiere sesión de Flota (mismo login que
+// ya existe en el backend, flotaLogin/flotaCurrentUser) — se pide una
+// vez y el token queda guardado en localStorage para las próximas
+// veces, hasta que expire.
+function _repomarTokenFlota() {
+  return localStorage.getItem('_repomarFlotaToken') || '';
+}
+function _repomarCerrarModal() {
+  var overlay = document.getElementById('repomar-modal-overlay');
+  if (overlay) overlay.remove();
+}
+function _repomarPedirLogin(alExito) {
+  _repomarCerrarModal();
+  var div = document.createElement('div');
+  div.id = 'repomar-modal-overlay';
+  div.className = 'repomar-modal-overlay';
+  div.innerHTML =
+    '<div class="repomar-modal">' +
+      '<h3>Iniciar sesión — Flota</h3>' +
+      '<div style="font-size:11px;color:var(--txt3);margin-bottom:6px">Necesitas una cuenta de Flota o Administrador para editar el cabotaje.</div>' +
+      '<label>Correo</label><input type="email" id="repomar-login-email" placeholder="tu@petroperu.com.pe">' +
+      '<label>Contraseña</label><input type="password" id="repomar-login-pass">' +
+      '<div class="repomar-modal-err" id="repomar-login-err"></div>' +
+      '<div class="repomar-modal-actions">' +
+        '<button class="repomar-modal-btn" onclick="_repomarCerrarModal()">Cancelar</button>' +
+        '<button class="repomar-modal-btn primary" id="repomar-login-btn">Ingresar</button>' +
+      '</div>' +
+    '</div>';
+  document.body.appendChild(div);
+  document.getElementById('repomar-login-btn').onclick = function() {
+    var email = document.getElementById('repomar-login-email').value.trim();
+    var pass = document.getElementById('repomar-login-pass').value;
+    var errEl = document.getElementById('repomar-login-err');
+    if (!email || !pass) { errEl.textContent = 'Completa correo y contraseña.'; errEl.style.display = 'block'; return; }
+    fetch(CONFIG.API_URL, {
+      method: 'POST', redirect: 'follow',
+      headers: {'Content-Type': 'text/plain;charset=utf-8'},
+      body: JSON.stringify({ action: 'flotaLogin', email: email, password: pass })
+    }).then(function(r){ return r.json(); }).then(function(res) {
+      if (res.success && res.token) {
+        localStorage.setItem('_repomarFlotaToken', res.token);
+        _repomarCerrarModal();
+        if (alExito) alExito();
+      } else {
+        errEl.textContent = res.message || 'No se pudo iniciar sesión.';
+        errEl.style.display = 'block';
+      }
+    }).catch(function() {
+      errEl.textContent = 'Error de conexión. Intenta de nuevo.';
+      errEl.style.display = 'block';
+    });
+  };
+}
+function _repomarAbrirEdicion(btnEl) {
+  var datos;
+  try { datos = JSON.parse(btnEl.getAttribute('data-escala')); } catch(e) { return; }
+  if (!_repomarTokenFlota()) { _repomarPedirLogin(function(){ _repomarMostrarModalEdicion(datos); }); return; }
+  _repomarMostrarModalEdicion(datos);
+}
+function _repomarMostrarModalEdicion(datos) {
+  _repomarCerrarModal();
+  var div = document.createElement('div');
+  div.id = 'repomar-modal-overlay';
+  div.className = 'repomar-modal-overlay';
+  var filasProd = datos.productos.map(function(p, i) {
+    return '<div class="repomar-modal-prodrow" data-idx="' + i + '">' +
+      '<input type="text" class="repomar-prod-nombre" value="' + (p.producto||'').replace(/"/g,'&quot;') + '" placeholder="Producto">' +
+      '<input type="number" step="0.1" class="repomar-prod-vol" value="' + (p.vol||0) + '" placeholder="MB" style="width:70px;flex:none">' +
+      '<button onclick="this.parentElement.remove()" title="Quitar este producto">✕</button>' +
+    '</div>';
+  }).join('');
+  div.innerHTML =
+    '<div class="repomar-modal">' +
+      '<h3>Editar escala — ' + datos.buque + ' · ' + datos.terminal + '</h3>' +
+      '<div style="font-size:10.5px;color:var(--txt3)">Viaje ' + datos.viaje + '</div>' +
+      '<label>Fecha</label><input type="date" id="repomar-edit-fecha" value="' + (datos.fecha_hasta||'').slice(0,10) + '">' +
+      '<label>Estado</label>' +
+      '<select id="repomar-edit-estado">' +
+        ['PROGRAMADO','ACTUAL','COMPLETADO'].map(function(e){ return '<option value="' + e + '"' + (e===datos.estado?' selected':'') + '>' + e + '</option>'; }).join('') +
+      '</select>' +
+      '<label>Productos</label>' +
+      '<div id="repomar-edit-prods">' + filasProd + '</div>' +
+      '<button class="repomar-modal-btn" style="width:100%;margin-top:4px" onclick="' +
+        '(function(c){var d=document.createElement(\'div\');d.className=\'repomar-modal-prodrow\';' +
+        'd.innerHTML=\'<input type=\\\'text\\\' class=\\\'repomar-prod-nombre\\\' placeholder=\\\'Producto\\\'>' +
+        '<input type=\\\'number\\\' step=\\\'0.1\\\' class=\\\'repomar-prod-vol\\\' placeholder=\\\'MB\\\' style=\\\'width:70px;flex:none\\\'>' +
+        '<button onclick=\\\'this.parentElement.remove()\\\'>\\u2715</button>\';' +
+        'c.appendChild(d);})(document.getElementById(\'repomar-edit-prods\'))">+ Agregar producto</button>' +
+      '<div class="repomar-modal-err" id="repomar-edit-err"></div>' +
+      '<div class="repomar-modal-actions">' +
+        '<button class="repomar-modal-btn danger" id="repomar-edit-eliminar">Eliminar escala completa</button>' +
+        '<button class="repomar-modal-btn" onclick="_repomarCerrarModal()">Cancelar</button>' +
+        '<button class="repomar-modal-btn primary" id="repomar-edit-guardar">Guardar</button>' +
+      '</div>' +
+    '</div>';
+  document.body.appendChild(div);
+
+  function llamarEdicion(payload) {
+    payload.token = _repomarTokenFlota();
+    payload.buque = datos.buque; payload.viaje = datos.viaje; payload.terminal = datos.terminal;
+    return fetch(CONFIG.API_URL, {
+      method: 'POST', redirect: 'follow',
+      headers: {'Content-Type': 'text/plain;charset=utf-8'},
+      body: JSON.stringify({ action: 'repomarEditarEscala', ...payload })
+    }).then(function(r){ return r.json(); });
+  }
+
+  document.getElementById('repomar-edit-guardar').onclick = function() {
+    var errEl = document.getElementById('repomar-edit-err');
+    var fecha = document.getElementById('repomar-edit-fecha').value;
+    var estado = document.getElementById('repomar-edit-estado').value;
+    if (!fecha) { errEl.textContent = 'La fecha es obligatoria.'; errEl.style.display = 'block'; return; }
+    var filas = Array.from(document.querySelectorAll('#repomar-edit-prods .repomar-modal-prodrow'));
+    if (!filas.length) { errEl.textContent = 'Agrega al menos un producto, o usa "Eliminar escala completa".'; errEl.style.display = 'block'; return; }
+    this.disabled = true; this.textContent = 'Guardando…';
+    var self = this;
+    // ⚠️ Se envía CADA producto como una llamada separada (el backend
+    // trabaja por producto individual) — en secuencia, para no saturar
+    // el servidor con llamadas paralelas.
+    var cadena = Promise.resolve();
+    filas.forEach(function(fila) {
+      var nombre = fila.querySelector('.repomar-prod-nombre').value.trim();
+      var vol = parseFloat(fila.querySelector('.repomar-prod-vol').value) || 0;
+      if (!nombre) return;
+      cadena = cadena.then(function() {
+        return llamarEdicion({ accion: 'editar', producto: nombre, vol: vol, fecha_hasta: fecha, fecha_desde: fecha, estado: estado });
+      });
+    });
+    cadena.then(function() {
+      _repomarCerrarModal();
+      if (typeof _repomarActualizarManualInterno === 'function') _repomarActualizarManualInterno();
+    }).catch(function() {
+      errEl.textContent = 'Error al guardar. Intenta de nuevo.';
+      errEl.style.display = 'block';
+      self.disabled = false; self.textContent = 'Guardar';
+    });
+  };
+
+  document.getElementById('repomar-edit-eliminar').onclick = function() {
+    if (!confirm('¿Eliminar por completo esta escala (' + datos.terminal + ') del itinerario de ' + datos.buque + '? Esto no borra el historial, pero deja de mostrarse en el panel.')) return;
+    this.disabled = true; this.textContent = 'Eliminando…';
+    var self = this;
+    var cadena = Promise.resolve();
+    datos.productos.forEach(function(p) {
+      cadena = cadena.then(function() {
+        return llamarEdicion({ accion: 'eliminar', producto: p.producto, vol: 0, fecha_hasta: datos.fecha_hasta, estado: 'ELIMINADO' });
+      });
+    });
+    cadena.then(function() {
+      _repomarCerrarModal();
+      if (typeof _repomarActualizarManualInterno === 'function') _repomarActualizarManualInterno();
+    }).catch(function() {
+      self.disabled = false; self.textContent = 'Eliminar escala completa';
+    });
+  };
+}
 
 window.renderPRepoMar = function() {
   _repomarInjectCSS();
@@ -31704,7 +31879,24 @@ window.renderPRepoMar = function() {
           // sin tener que tocar el cálculo de las flechas.
           var _idxGlobalCaja = grupos.indexOf(g);
           var _offsetVertical = (!esVivo && _idxGlobalCaja % 2 === 1) ? ' margin-top:34px' : '';
+          // ⚠️ AGREGADO — a pedido: edición bidireccional de Cabotaje
+          // Confirmado desde el panel principal (a veces hay que
+          // acortar un viaje o cambiar/quitar el producto que carga).
+          // Solo visible en el panel normal (no en el modo compartido
+          // de solo lectura) — el botón de lápiz abre un modal con los
+          // datos de ESTA caja, incrustados como JSON en el propio
+          // elemento para no tener que volver a pedirlos al servidor.
+          var botonEditar = '';
+          if (!(typeof REPOMAR_SHARE_MODE !== 'undefined' && REPOMAR_SHARE_MODE)) {
+            var datosEscalaJSON = JSON.stringify({
+              buque: b.buque, viaje: b.viaje, terminal: g.terminal, tipo: g.tipo,
+              fecha_hasta: g.fecha_hasta, estado: g.estado,
+              productos: g.productos.map(function(p){ return {producto:p.producto, vol:p.vol, tipo:p.tipo||'descarga'}; })
+            }).replace(/'/g, '&#39;');
+            botonEditar = '<button class="repomar-editbtn" onclick="event.stopPropagation();_repomarAbrirEdicion(this)" data-escala=\'' + datosEscalaJSON + '\' title="Editar esta escala">✎</button>';
+          }
           return '<div class="repomar-legbox' + (esCompletado ? ' completado' : (estadoReal ? ' en-terminal' : '')) + (esVivo ? ' en-vivo' : '') + '" style="' + _offsetVertical + '" data-buque="' + b.buque + '" data-leg-idx="' + _idxGlobalCaja + '">' +
+            botonEditar +
             (esVivo ? '<div class="repomar-livepill"><span class="repomar-livedot"></span>En puerto</div>' : '') +
             etiquetaTipo +
             lineaEstado +
