@@ -31897,10 +31897,8 @@ window.renderPRepoMar = function() {
     // copia idéntica en position:fixed en su lugar — funciona sin
     // importar cuántos overflow haya de por medio.
     (function() {
-      var original = grid.querySelector('.repomar-headerrow');
       var scrollCont = document.getElementById('pRepoMar');
-      var horizCont = grid.closest('.repomar-scroll');
-      if (!original || !scrollCont || !horizCont) return;
+      if (!scrollCont) return;
       var clone = document.getElementById('repomar-header-clone');
       if (!clone) {
         clone = document.createElement('div');
@@ -31908,7 +31906,20 @@ window.renderPRepoMar = function() {
         clone.style.cssText = 'position:fixed;z-index:80;overflow:hidden;pointer-events:none;display:none;box-shadow:0 2px 8px rgba(0,0,0,.15)';
         document.body.appendChild(clone);
       }
+      // ⚠️ CORREGIDO — bug real confirmado con diagnóstico en vivo: el
+      // clon se quedaba oculto para siempre porque `original` y
+      // `horizCont` se guardaban UNA sola vez al enganchar el listener
+      // — pero la cabecera se reconstruye por completo en cada
+      // actualización (auto-refresh, "Actualizar estado", etc.),
+      // dejando esas referencias apuntando a nodos ya fuera del
+      // documento (sus getBoundingClientRect() siempre da todo en
+      // cero). Ahora se buscan de nuevo, frescos, en CADA scroll — más
+      // trabajo por evento, pero nunca quedan obsoletas.
       function actualizarClonHeader() {
+        var gridActual = document.getElementById('repomar-grid');
+        var original = gridActual ? gridActual.querySelector('.repomar-headerrow') : null;
+        var horizCont = gridActual ? gridActual.closest('.repomar-scroll') : null;
+        if (!original || !horizCont) { clone.style.display = 'none'; return; }
         var origRect = original.getBoundingClientRect();
         var contRect = scrollCont.getBoundingClientRect();
         // Se activa el clon apenas la cabecera original suba por
@@ -31933,8 +31944,17 @@ window.renderPRepoMar = function() {
       }
       if (!scrollCont._repomarStickyListo) {
         scrollCont._repomarStickyListo = true;
-        scrollCont.addEventListener('scroll', actualizarClonHeader, {passive:true});
-        horizCont.addEventListener('scroll', actualizarClonHeader, {passive:true});
+        // ⚠️ CORREGIDO — mismo motivo que arriba: .repomar-scroll
+        // TAMBIÉN se reconstruye en cada actualización, así que
+        // enganchar el listener directo ahí tiene el mismo problema
+        // (deja de funcionar apenas se reconstruye una vez). Se usa
+        // "fase de captura" (capture:true) sobre el contenedor
+        // ESTABLE (#pRepoMar, que nunca se destruye) — los eventos de
+        // scroll no burbujean normalmente, pero sí se pueden capturar
+        // desde un ancestro en la fase de captura, así que un solo
+        // listener aquí sigue funcionando sin importar cuántas veces
+        // se reconstruya el contenido de abajo.
+        scrollCont.addEventListener('scroll', actualizarClonHeader, {passive:true, capture:true});
         window.addEventListener('resize', actualizarClonHeader);
       }
       actualizarClonHeader();
