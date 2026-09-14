@@ -31608,18 +31608,25 @@ window.renderPRepoMar = function() {
             var etiquetaProd = p.abrev || _repomarAbrevProd(p.producto);
             return '<div class="repomar-legprod">' + (p.vol > 0 ? (etiquetaProd + ': ' + p.vol.toFixed(1) + ' MB') : etiquetaProd) + '</div>';
           }
+          // ⚠️ AGREGADO — a pedido: una vez que ya pasó la fecha y el
+          // buque efectivamente descargó ahí (esCompletado), la caja
+          // decía "▼ DESCARGA" — como si todavía estuviera por pasar.
+          // Ahora dice "▼ DESCARGÓ" (pasado) cuando ya se completó, y
+          // "▼ DESCARGA" solo mientras sigue pendiente — junto con la
+          // fecha real de término (T.D.) que ya se mostraba arriba.
+          var etiquetaDescargaTxt = esCompletado ? '▼ DESCARGÓ' : '▼ DESCARGA';
           var etiquetaTipo, lineasProductos;
           if (prodsDescarga.length && prodsCarga.length) {
             etiquetaTipo = '';
             lineasProductos =
-              '<div class="repomar-legtipo repomar-legtipo-descarga">▼ DESCARGA</div>' +
+              '<div class="repomar-legtipo repomar-legtipo-descarga">' + etiquetaDescargaTxt + '</div>' +
               prodsDescarga.map(_lineaProd).join('') +
               '<div class="repomar-legtipo repomar-legtipo-carga" style="margin-top:3px">▲ CARGA</div>' +
               prodsCarga.map(_lineaProd).join('');
           } else {
             etiquetaTipo = g.tipo === 'carga'
               ? '<div class="repomar-legtipo repomar-legtipo-carga">▲ CARGA</div>'
-              : '<div class="repomar-legtipo repomar-legtipo-descarga">▼ DESCARGA</div>';
+              : '<div class="repomar-legtipo repomar-legtipo-descarga">' + etiquetaDescargaTxt + '</div>';
             lineasProductos = g.productos.map(_lineaProd).join('');
           }
           // ⚠️ AGREGADO — a pedido: cajas de terminales VECINOS con
