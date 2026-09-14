@@ -31092,6 +31092,8 @@ function _repomarInjectCSS() {
     .repomar-modal-btn.primary{background:var(--acc);border-color:var(--acc);color:#fff}
     .repomar-modal-btn.danger{background:var(--red)14;border-color:var(--red)40;color:var(--red)}
     .repomar-modal-err{color:var(--red);font-size:11px;margin-top:8px;display:none}
+    .repomar-addescala-btn{margin:4px 10px 6px;padding:4px 10px;border-radius:5px;font-size:10.5px;font-weight:700;background:var(--card2);border:1px dashed var(--bdr2);color:var(--txt2);cursor:pointer;width:calc(100% - 20px)}
+    .repomar-addescala-btn:hover{border-color:var(--acc);color:var(--acc2)}
     .repomar-arrow-resaltada{stroke-width:4.5!important;filter:drop-shadow(0 0 4px rgba(29,78,216,.7))}
     .repomar-arrow-atenuada{opacity:.15}
     .repomar-legdate{font-weight:800;color:#2563eb;font-size:10px}
@@ -31475,6 +31477,86 @@ function _repomarMostrarModalEdicion(datos) {
   };
 }
 
+function _repomarAbrirAgregarEscala(buque, viaje) {
+  if (!_repomarTokenFlota()) { _repomarPedirLogin(function(){ _repomarMostrarModalAgregar(buque, viaje); }); return; }
+  _repomarMostrarModalAgregar(buque, viaje);
+}
+function _repomarMostrarModalAgregar(buque, viaje) {
+  _repomarCerrarModal();
+  var div = document.createElement('div');
+  div.id = 'repomar-modal-overlay';
+  div.className = 'repomar-modal-overlay';
+  div.innerHTML =
+    '<div class="repomar-modal">' +
+      '<h3>Agregar escala nueva — ' + buque + '</h3>' +
+      '<div style="font-size:10.5px;color:var(--txt3)">Viaje ' + viaje + '</div>' +
+      '<label>Terminal (destino de esta escala)</label>' +
+      '<select id="repomar-add-terminal">' +
+        REPOMAR_PLANTAS.map(function(p){ return '<option value="' + p + '">' + p + '</option>'; }).join('') +
+      '</select>' +
+      '<label>Origen de la carga (opcional — normalmente Talara)</label>' +
+      '<select id="repomar-add-origen">' +
+        '<option value="">Talara (por defecto)</option>' +
+        REPOMAR_PLANTAS.map(function(p){ return '<option value="' + p + '">' + p + '</option>'; }).join('') +
+      '</select>' +
+      '<label>Fecha</label><input type="date" id="repomar-add-fecha">' +
+      '<label>Estado</label>' +
+      '<select id="repomar-add-estado"><option value="PROGRAMADO" selected>PROGRAMADO</option><option value="ACTUAL">ACTUAL</option><option value="COMPLETADO">COMPLETADO</option></select>' +
+      '<label>Productos</label>' +
+      '<div id="repomar-add-prods">' +
+        '<div class="repomar-modal-prodrow"><input type="text" class="repomar-prod-nombre" placeholder="Producto"><input type="number" step="0.1" class="repomar-prod-vol" placeholder="MB" style="width:70px;flex:none"><button onclick="this.parentElement.remove()">✕</button></div>' +
+      '</div>' +
+      '<button class="repomar-modal-btn" style="width:100%;margin-top:4px" onclick="' +
+        '(function(c){var d=document.createElement(\'div\');d.className=\'repomar-modal-prodrow\';' +
+        'd.innerHTML=\'<input type=\\\'text\\\' class=\\\'repomar-prod-nombre\\\' placeholder=\\\'Producto\\\'>' +
+        '<input type=\\\'number\\\' step=\\\'0.1\\\' class=\\\'repomar-prod-vol\\\' placeholder=\\\'MB\\\' style=\\\'width:70px;flex:none\\\'>' +
+        '<button onclick=\\\'this.parentElement.remove()\\\'>\\u2715</button>\';' +
+        'c.appendChild(d);})(document.getElementById(\'repomar-add-prods\'))">+ Agregar producto</button>' +
+      '<div class="repomar-modal-err" id="repomar-add-err"></div>' +
+      '<div class="repomar-modal-actions">' +
+        '<button class="repomar-modal-btn" onclick="_repomarCerrarModal()">Cancelar</button>' +
+        '<button class="repomar-modal-btn primary" id="repomar-add-guardar">Guardar</button>' +
+      '</div>' +
+    '</div>';
+  document.body.appendChild(div);
+
+  document.getElementById('repomar-add-guardar').onclick = function() {
+    var errEl = document.getElementById('repomar-add-err');
+    var terminal = document.getElementById('repomar-add-terminal').value;
+    var origen = document.getElementById('repomar-add-origen').value;
+    var fecha = document.getElementById('repomar-add-fecha').value;
+    var estado = document.getElementById('repomar-add-estado').value;
+    if (!fecha) { errEl.textContent = 'La fecha es obligatoria.'; errEl.style.display = 'block'; return; }
+    var filas = Array.from(document.querySelectorAll('#repomar-add-prods .repomar-modal-prodrow'));
+    var conProducto = filas.filter(function(f){ return f.querySelector('.repomar-prod-nombre').value.trim(); });
+    if (!conProducto.length) { errEl.textContent = 'Agrega al menos un producto.'; errEl.style.display = 'block'; return; }
+    this.disabled = true; this.textContent = 'Guardando…';
+    var self = this;
+    var cadena = Promise.resolve();
+    conProducto.forEach(function(fila) {
+      var nombre = fila.querySelector('.repomar-prod-nombre').value.trim();
+      var vol = parseFloat(fila.querySelector('.repomar-prod-vol').value) || 0;
+      cadena = cadena.then(function() {
+        return fetch(CONFIG.API_URL, {
+          method: 'POST', redirect: 'follow',
+          headers: {'Content-Type': 'text/plain;charset=utf-8'},
+          body: JSON.stringify({ action: 'repomarEditarEscala', accion: 'agregar', token: _repomarTokenFlota(),
+            buque: buque, viaje: viaje, terminal: terminal, origen: origen,
+            producto: nombre, vol: vol, fecha_hasta: fecha, fecha_desde: fecha, estado: estado })
+        }).then(function(r){ return r.json(); });
+      });
+    });
+    cadena.then(function() {
+      _repomarCerrarModal();
+      if (typeof _repomarActualizarManualInterno === 'function') _repomarActualizarManualInterno();
+    }).catch(function() {
+      errEl.textContent = 'Error al guardar. Intenta de nuevo.';
+      errEl.style.display = 'block';
+      self.disabled = false; self.textContent = 'Guardar';
+    });
+  };
+}
+
 window.renderPRepoMar = function() {
   _repomarInjectCSS();
   var host = document.getElementById('pRepoMar-content');
@@ -31756,6 +31838,12 @@ window.renderPRepoMar = function() {
       // COMPLETADAS (b.zarpeConfirmadoPorEscalas), sabemos con certeza
       // que ya zarpó, aunque no tengamos la fecha exacta.
       var enVivoEnTalara = !b.zarpe && !b.zarpeConfirmadoPorEscalas;
+      // ⚠️ AGREGADO — a pedido: botón para agregar una escala NUEVA a
+      // este buque — a veces se cambia el destino a otra planta/
+      // terminal que no estaba en el itinerario original. Solo visible
+      // en el panel normal (no en el modo compartido de solo lectura).
+      var botonAgregarEscala = (typeof REPOMAR_SHARE_MODE !== 'undefined' && REPOMAR_SHARE_MODE) ? '' :
+        '<button class="repomar-addescala-btn" onclick="_repomarAbrirAgregarEscala(' + "'" + b.buque.replace(/'/g,"\\'") + "', '" + b.viaje.replace(/'/g,"\\'") + "'" + ')">+ Agregar escala</button>';
       var shipBox = '<div class="repomar-cell" style="align-items:flex-start;padding:4px">' +
         '<div class="repomar-shipbox' + (enVivoEnTalara ? ' en-vivo' : '') + '" style="width:100%">' +
           '<div class="repomar-shipname">🚢 ' + b.buque + '</div>' +
@@ -31763,6 +31851,7 @@ window.renderPRepoMar = function() {
           (enVivoEnTalara ? '<div class="repomar-livepill" style="margin:0 10px 4px">' + '<span class="repomar-livedot"></span>En puerto</div>' : '') +
           zarpeTxt +
           enTransitoTxt +
+          botonAgregarEscala +
         '</div>' +
       '</div>';
       // ⚠️ CORREGIDO — a pedido: agrupar por terminal+fecha ANTES de
