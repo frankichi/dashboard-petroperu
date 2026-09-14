@@ -30968,7 +30968,17 @@ function _repomarInjectCSS() {
     @keyframes repomarLiveDot2Spin{to{transform:rotate(360deg)}}
     .repomar-lastupdate{font-size:9.5px;color:var(--txt3)}
     .repomar-programar-btn:hover{background:#eef7fc}
-    .repomar-scroll{overflow-x:auto;padding-bottom:8px;-webkit-overflow-scrolling:touch;scroll-behavior:smooth}
+    /* ⚠️ CORREGIDO — a pedido: el sticky de la cabecera "no funcionaba"
+       a pesar del fix anterior — la causa real es un detalle sutil de
+       CSS: al definir solo overflow-x (sin tocar overflow-y), el
+       estándar obliga al navegador a tratar TAMBIÉN el eje vertical
+       como "auto" — convirtiendo este contenedor en su propio contexto
+       de scroll, aunque nunca se desplaza verticalmente de verdad (la
+       página es la que se mueve). Eso "secuestraba" el sticky sin que
+       se viera ningún efecto. overflow-y:visible explícito rompe ese
+       acoplamiento y deja que el sticky se enganche al scroll real de
+       la página. */
+    .repomar-scroll{overflow-x:auto;overflow-y:visible;padding-bottom:8px;-webkit-overflow-scrolling:touch;scroll-behavior:smooth}
     /* ⚠️ AGREGADO — a pedido: RepoMar responsive en celular. El
        diagrama es ancho por naturaleza (10 columnas de plantas) — en
        vez de intentar comprimirlo hasta hacerlo ilegible, se aprovecha
