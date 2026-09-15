@@ -14547,6 +14547,18 @@ function simLoad() {
     const totalCap = Object.values(bt.prodCap).reduce((a,v)=>a+v,0);
     const stopsArr = Object.values(bt.stops);
     stopsArr.forEach(st => { st.vol = st.prods.reduce((a,p)=>a+p.vol,0); });
+    // ⚠️ AGREGADO — a pedido: ordenar las escalas por fecha (ETA) antes
+    // de armar el buque — Object.values() sigue el orden en que las
+    // filas aparecían en la hoja (por planta/producto), no el orden
+    // cronológico real del itinerario. Las escalas sin fecha (planta sin
+    // fecha_reposicion en la BD) se dejan al final, sin desordenar las
+    // que sí tienen fecha real.
+    stopsArr.sort((a, b) => {
+      if (!a.etaDate && !b.etaDate) return 0;
+      if (!a.etaDate) return 1;
+      if (!b.etaDate) return -1;
+      return a.etaDate < b.etaDate ? -1 : a.etaDate > b.etaDate ? 1 : 0;
+    });
     const ship = {
       id: simNextId++, name: bt.name,
       volTotal: Math.round(totalCap*10)/10,
@@ -15016,6 +15028,15 @@ async function simLoadFromGS() {
       if (!totalVol) {
         totalVol = ship.stops.reduce(function(a, st) { return a + st.vol; }, 0);
       }
+      // ⚠️ AGREGADO — a pedido: mismo ordenamiento por fecha que simLoad()
+      // — las filas de GS se recorren en el orden en que se guardaron,
+      // no necesariamente en orden cronológico de escala.
+      ship.stops.sort(function(a, b) {
+        if (!a.etaDate && !b.etaDate) return (a._escNum||0) - (b._escNum||0);
+        if (!a.etaDate) return 1;
+        if (!b.etaDate) return -1;
+        return a.etaDate < b.etaDate ? -1 : a.etaDate > b.etaDate ? 1 : 0;
+      });
       simShips.push({
         id: id,
         name: ship.name,
@@ -15118,6 +15139,14 @@ async function _simAutoLoadFromGS() {
     Object.values(shipMap).forEach(function(ship) {
       var id=simNextId++;
       (ship.stops||[]).forEach(function(st) { if (typeof simEnsureProds === 'function') simEnsureProds(st); });
+      // ⚠️ AGREGADO — a pedido: mismo ordenamiento por fecha que simLoad()
+      // y simLoadFromGS().
+      ship.stops.sort(function(a, b) {
+        if (!a.etaDate && !b.etaDate) return (a._escNum||0) - (b._escNum||0);
+        if (!a.etaDate) return 1;
+        if (!b.etaDate) return -1;
+        return a.etaDate < b.etaDate ? -1 : a.etaDate > b.etaDate ? 1 : 0;
+      });
       var totalVol=ship.volTotal||ship.stops.reduce(function(a,st){return a+st.vol;},0);
       simShips.push({id:id,name:ship.name,volTotal:Math.round(totalVol*10)/10,
         origen:ship.origen,zarpeDate:ship.zarpeDate,prodCap:ship.prodCap,stops:ship.stops});
