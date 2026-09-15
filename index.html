@@ -14513,34 +14513,47 @@ function simLoad() {
   simInited = true;
   const today = byLatest();
   const btMap = {};
+  // ⚠️ CORREGIDO — a pedido: antes esta función creaba UNA escala
+  // separada por cada combinación planta+producto+slot BT (ej. 4 filas
+  // distintas para "Salaverry" con G.Premium / G.Premium(BT2) /
+  // G.Regular / G.Regular(BT2)), en vez de una sola escala "Salaverry"
+  // con los 4 productos dentro. La tarjeta de edición (sim-stop-card)
+  // ya soporta varios productos por escala vía st.prods[] — aquí solo
+  // faltaba agrupar por planta al cargar, reusando ese mismo array.
   today.forEach(r => {
     if (!r.bt||r.bt===''||r.bt==='-') return;
-    if (!btMap[r.bt]) btMap[r.bt] = {name:r.bt, origen:r.planta, prodCap:{}, stops:{}};
     const v1 = r.vol_rep     || 0;
     const v2 = r.vol_rep_bt2 || 0;
+    if (v1<=0 && v2<=0) return;
+    if (!btMap[r.bt]) btMap[r.bt] = {name:r.bt, origen:r.planta, prodCap:{}, stops:{}};
+    const k = r.planta;
+    if (!btMap[r.bt].stops[k]) {
+      btMap[r.bt].stops[k] = {planta:r.planta, etaDate:'', prods:[]};
+    }
+    const st = btMap[r.bt].stops[k];
     if (v1>0) {
-      const k = r.planta+'||'+r.producto+'||1';
-      btMap[r.bt].stops[k] = {planta:r.planta, producto:r.producto, vol:parseFloat(v1.toFixed(DEC)), etaDate:r.fecha_reposicion||'',
-        prods:[{producto:r.producto, vol:parseFloat(v1.toFixed(DEC))}]};
+      st.prods.push({producto:r.producto, vol:parseFloat(v1.toFixed(DEC))});
+      if (!st.etaDate) st.etaDate = r.fecha_reposicion||'';
       btMap[r.bt].prodCap[r.producto] = (btMap[r.bt].prodCap[r.producto]||0) + v1;
     }
     if (v2>0) {
-      const k = r.planta+'||'+r.producto+'||2';
       const prod2 = r.producto+'(BT2)';
-      btMap[r.bt].stops[k] = {planta:r.planta, producto:prod2, vol:parseFloat(v2.toFixed(DEC)), etaDate:r.fecha_repos_bt2||'',
-        prods:[{producto:prod2, vol:parseFloat(v2.toFixed(DEC))}]};
+      st.prods.push({producto:prod2, vol:parseFloat(v2.toFixed(DEC))});
+      if (!st.etaDate) st.etaDate = r.fecha_repos_bt2||'';
       btMap[r.bt].prodCap[prod2] = (btMap[r.bt].prodCap[prod2]||0) + v2;
     }
   });
   Object.values(btMap).forEach(bt => {
     const totalCap = Object.values(bt.prodCap).reduce((a,v)=>a+v,0);
+    const stopsArr = Object.values(bt.stops);
+    stopsArr.forEach(st => { st.vol = st.prods.reduce((a,p)=>a+p.vol,0); });
     const ship = {
       id: simNextId++, name: bt.name,
       volTotal: Math.round(totalCap*10)/10,
       origen: bt.origen||'Talara',
       zarpeDate: currentDate||'',
       prodCap: bt.prodCap,
-      stops: Object.values(bt.stops),
+      stops: stopsArr,
     };
     simRecalcETAs(ship);
     simShips.push(ship);
@@ -14602,7 +14615,14 @@ function simUpdateCapBar(ship) {
   if (fillEl) { fillEl.style.width=pct+'%'; fillEl.style.background=capColor; }
   if (numEl)  { numEl.style.color=capColor; numEl.textContent=`${used.toFixed(DEC)} / ${ship.volTotal} MB  ${remain>=0?remain.toFixed(DEC)+' libre':Math.abs(remain).toFixed(DEC)+' exceso'}`; }
   const byProd = {};
-  ship.stops.forEach(st=>{ byProd[st.producto]=(byProd[st.producto]||0)+st.vol; });
+  // ⚠️ CORREGIDO — a pedido: sumar por producto recorriendo st.prods[]
+  // (una escala puede tener varios productos); antes solo leía
+  // st.producto/st.vol, que no existen en escalas agrupadas y dejaban
+  // las barras "Asignado/Cap." del panel en 0.
+  ship.stops.forEach(st=>{
+    const prods = (st.prods && st.prods.length) ? st.prods : [{producto:st.producto||'', vol:st.vol||0}];
+    prods.forEach(p=>{ byProd[p.producto]=(byProd[p.producto]||0)+(p.vol||0); });
+  });
   Object.entries(byProd).forEach(([prod,assign])=>{
     const cap    = ship.prodCap&&ship.prodCap[prod]||0;
     const pct2   = cap>0 ? Math.min(100,assign/cap*100) : (ship.volTotal>0?assign/ship.volTotal*100:0);
@@ -14684,7 +14704,12 @@ function simDelProd(id, prod) {
   const s=simShips.find(s=>s.id===id); if(!s||!s.prodCap) return;
   delete s.prodCap[prod];
   s.volTotal=Object.values(s.prodCap).reduce((a,v)=>a+v,0);
-  s.stops=s.stops.filter(st=>st.producto!==prod);
+  // ⚠️ CORREGIDO — a pedido: quitar SOLO las filas de ese producto
+  // dentro de st.prods[] de cada escala (no la escala entera, que
+  // puede tener otros productos de la misma planta); si una escala se
+  // queda sin productos, recién ahí se elimina.
+  s.stops.forEach(st=>{ simEnsureProds(st); st.prods=st.prods.filter(p=>p.producto!==prod); simUpdateStopTotals(st); });
+  s.stops=s.stops.filter(st=>st.prods.length>0);
   simRecalcETAs(s); renderPE();
 }
 function simChangeProdName(id, oldProd, newProd) {
@@ -14692,7 +14717,13 @@ function simChangeProdName(id, oldProd, newProd) {
   const vol = s.prodCap[oldProd]||0;
   delete s.prodCap[oldProd];
   s.prodCap[newProd]=vol;
-  s.stops.forEach(st=>{ if(st.producto===oldProd) st.producto=newProd; });
+  // ⚠️ CORREGIDO — a pedido: renombrar el producto dentro de st.prods[]
+  // de cada escala en vez de st.producto (ya no existe en escalas con
+  // varios productos).
+  s.stops.forEach(st=>{
+    simEnsureProds(st);
+    st.prods.forEach(p=>{ if(p.producto===oldProd) p.producto=newProd; });
+  });
   renderPE();
 }
 function simAddStop(id) {
@@ -15157,7 +15188,13 @@ function renderPE() {
     Object.entries(prodCap).forEach(function(entry) {
       const prod    = entry[0];
       const cap     = entry[1];
-      const assign  = active.stops.filter(st => st.producto === prod).reduce((a, st) => a + st.vol, 0);
+      // ⚠️ CORREGIDO — a pedido: mismo fix que simUpdateCapBar, aplicado
+      // en el cálculo usado durante el render completo (antes filtraba
+      // por st.producto, que no existe en escalas con varios productos).
+      const assign  = active.stops.reduce((a, st) => {
+        const prods = (st.prods && st.prods.length) ? st.prods : [{producto:st.producto||'', vol:st.vol||0}];
+        return a + prods.filter(p => p.producto === prod).reduce((b, p) => b + (p.vol||0), 0);
+      }, 0);
       const rem2    = cap > 0 ? cap - assign : null;
       const pct2    = cap > 0 ? Math.min(100, assign / cap * 100) : 0;
       const fillC2  = rem2 !== null ? (rem2 < 0 ? '#e03434' : rem2 === 0 ? '#c9970a' : '#1a9e50') : '#1d4ed8';
