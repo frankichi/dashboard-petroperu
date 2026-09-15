@@ -31557,6 +31557,61 @@ function _repomarMostrarModalAgregar(buque, viaje) {
   };
 }
 
+// ⚠️ AGREGADO — a pedido: en vez de editar el Cabotaje Confirmado
+// directamente, se copia el itinerario actual de un buque a Cabotaje
+// Proyectado (Simulador BT) — ahí se edita como propuesta (fechas,
+// productos, escalas nuevas) con las herramientas que el Simulador ya
+// tiene, y recién se vuelve real cuando alguien la confirma más
+// adelante. Nunca modifica cargas_naves directamente.
+function _repomarCopiarBuqueAProyectado(nombreBuque) {
+  var confirmados = window._repomarBuquesConfirmadosCache || [];
+  var b = confirmados.find(function(x){ return x.buque === nombreBuque; });
+  if (!b) { alert('No se encontró el buque ' + nombreBuque + ' en el Cabotaje Confirmado.'); return; }
+
+  var yaExisteEnProyectado = (typeof simShips !== 'undefined') && simShips.some(function(s){ return s.name === nombreBuque; });
+  if (yaExisteEnProyectado && !confirm(nombreBuque + ' ya está en Cabotaje Proyectado — ¿reemplazar esa copia por el itinerario Confirmado actual? Se perderán los cambios que ya hayas hecho ahí.')) return;
+  if (!yaExisteEnProyectado && !confirm('¿Copiar el itinerario actual de ' + nombreBuque + ' a Cabotaje Proyectado para editarlo ahí como propuesta? Esto NO modifica el Confirmado — es solo una copia de trabajo.')) return;
+
+  var grupos = _repomarAgruparEscalas(b.legs);
+  var pendientes = grupos.filter(function(g){ return g.estado !== 'COMPLETADO'; });
+  pendientes.sort(function(a,c){ return (a.fecha_hasta||'').localeCompare(c.fecha_hasta||''); });
+
+  var prodCap = {};
+  Object.keys(b.cargaInicial || {}).forEach(function(abrev) {
+    // prodCap usa nombres de producto "normales" (los de PRODUCTS), no
+    // abreviaturas — se recupera el nombre original del primer leg que
+    // tenga esa abreviatura.
+    var legOriginal = b.legs.find(function(l){ return _repomarAbrevProd(l.producto) === abrev; });
+    var nombreProd = legOriginal ? legOriginal.producto : abrev;
+    prodCap[nombreProd] = b.cargaInicial[abrev];
+  });
+
+  var stopsNuevos = pendientes.map(function(g) {
+    return {
+      planta: g.terminal, producto: (g.productos[0] && g.productos[0].producto) || '',
+      vol: g.productos.reduce(function(s,p){ return s + (p.vol||0); }, 0),
+      etaDate: (g.fecha_hasta || '').slice(0, 10),
+      prods: g.productos.map(function(p){ return {producto: p.producto, vol: p.vol}; })
+    };
+  });
+
+  if (typeof simShips === 'undefined') { alert('El Simulador BT no está disponible en esta vista.'); return; }
+  if (yaExisteEnProyectado) {
+    simShips = simShips.filter(function(s){ return s.name !== nombreBuque; });
+  }
+  var nuevoId = (typeof simNextId !== 'undefined') ? simNextId++ : (Date.now());
+  simShips.push({
+    id: nuevoId, name: nombreBuque,
+    volTotal: Math.round(Object.values(prodCap).reduce(function(s,v){ return s+v; }, 0) * 10) / 10,
+    origen: 'Talara', zarpeDate: b.zarpe ? b.zarpe.slice(0,10) : (currentDate || ''),
+    prodCap: prodCap, stops: stopsNuevos
+  });
+  if (typeof simInited !== 'undefined') simInited = true;
+  if (typeof simActiveId !== 'undefined') simActiveId = nuevoId;
+  if (typeof simSaveToGS === 'function') simSaveToGS();
+  _repomarCambiarModoLocal('proyectado');
+}
+
 window.renderPRepoMar = function() {
   _repomarInjectCSS();
   var host = document.getElementById('pRepoMar-content');
@@ -31577,6 +31632,10 @@ window.renderPRepoMar = function() {
   // El cabotaje CONFIRMADO siempre se calcula — es la base real, y
   // además es el punto de partida que necesita el modo "Proyectado".
   var buquesConfirmados = _buildRepoMarBuques();
+  // ⚠️ AGREGADO — a pedido: se expone globalmente para que el botón
+  // "Copiar a Proyectado" (evento aparte, fuera de este render) pueda
+  // leer los datos del buque elegido sin tener que recalcularlos.
+  window._repomarBuquesConfirmadosCache = buquesConfirmados;
   var cob = _buildRepoMarCobertura(buquesConfirmados);
   window._repomarCobDetalleNueva = cob.detalleNueva; // para el popup de "Nueva Cobertura"
   var fechaRef = (typeof currentDate !== 'undefined' && currentDate) ? currentDate : new Date().toISOString().slice(0,10);
@@ -31838,12 +31897,15 @@ window.renderPRepoMar = function() {
       // COMPLETADAS (b.zarpeConfirmadoPorEscalas), sabemos con certeza
       // que ya zarpó, aunque no tengamos la fecha exacta.
       var enVivoEnTalara = !b.zarpe && !b.zarpeConfirmadoPorEscalas;
-      // ⚠️ AGREGADO — a pedido: botón para agregar una escala NUEVA a
-      // este buque — a veces se cambia el destino a otra planta/
-      // terminal que no estaba en el itinerario original. Solo visible
-      // en el panel normal (no en el modo compartido de solo lectura).
-      var botonAgregarEscala = (typeof REPOMAR_SHARE_MODE !== 'undefined' && REPOMAR_SHARE_MODE) ? '' :
-        '<button class="repomar-addescala-btn" onclick="_repomarAbrirAgregarEscala(' + "'" + b.buque.replace(/'/g,"\\'") + "', '" + b.viaje.replace(/'/g,"\\'") + "'" + ')">+ Agregar escala</button>';
+      // ⚠️ CAMBIADO — a pedido: en vez de editar directo el Confirmado,
+      // el botón ahora copia este buque a Cabotaje Proyectado
+      // (Simulador BT) para editarlo ahí como propuesta — recién se
+      // vuelve real cuando alguien lo confirma más adelante. Solo
+      // visible en el panel normal (no en el modo compartido) y solo
+      // en la vista de Confirmado (en Proyectado ya se edita directo
+      // con las herramientas del Simulador).
+      var botonAgregarEscala = ((typeof REPOMAR_SHARE_MODE !== 'undefined' && REPOMAR_SHARE_MODE) || modo === 'proyectado') ? '' :
+        '<button class="repomar-addescala-btn" onclick="_repomarCopiarBuqueAProyectado(' + "'" + b.buque.replace(/'/g,"\\'") + "'" + ')">📋 Copiar a Proyectado</button>';
       var shipBox = '<div class="repomar-cell" style="align-items:flex-start;padding:4px">' +
         '<div class="repomar-shipbox' + (enVivoEnTalara ? ' en-vivo' : '') + '" style="width:100%">' +
           '<div class="repomar-shipname">🚢 ' + b.buque + '</div>' +
@@ -31968,24 +32030,12 @@ window.renderPRepoMar = function() {
           // sin tener que tocar el cálculo de las flechas.
           var _idxGlobalCaja = grupos.indexOf(g);
           var _offsetVertical = (!esVivo && _idxGlobalCaja % 2 === 1) ? ' margin-top:34px' : '';
-          // ⚠️ AGREGADO — a pedido: edición bidireccional de Cabotaje
-          // Confirmado desde el panel principal (a veces hay que
-          // acortar un viaje o cambiar/quitar el producto que carga).
-          // Solo visible en el panel normal (no en el modo compartido
-          // de solo lectura) — el botón de lápiz abre un modal con los
-          // datos de ESTA caja, incrustados como JSON en el propio
-          // elemento para no tener que volver a pedirlos al servidor.
-          var botonEditar = '';
-          if (!(typeof REPOMAR_SHARE_MODE !== 'undefined' && REPOMAR_SHARE_MODE)) {
-            var datosEscalaJSON = JSON.stringify({
-              buque: b.buque, viaje: b.viaje, terminal: g.terminal, tipo: g.tipo,
-              fecha_hasta: g.fecha_hasta, estado: g.estado,
-              productos: g.productos.map(function(p){ return {producto:p.producto, vol:p.vol, tipo:p.tipo||'descarga'}; })
-            }).replace(/'/g, '&#39;');
-            botonEditar = '<button class="repomar-editbtn" onclick="event.stopPropagation();_repomarAbrirEdicion(this)" data-escala=\'' + datosEscalaJSON + '\' title="Editar esta escala">✎</button>';
-          }
+          // ⚠️ QUITADO — a pedido: la edición directa de Cabotaje
+          // Confirmado se reemplaza por el flujo de propuesta — copiar
+          // a Cabotaje Proyectado (Simulador BT), editar ahí, y recién
+          // confirmar cuando esté listo. Editar el Confirmado
+          // directamente ya no aplica.
           return '<div class="repomar-legbox' + (esCompletado ? ' completado' : (estadoReal ? ' en-terminal' : '')) + (esVivo ? ' en-vivo' : '') + '" style="' + _offsetVertical + '" data-buque="' + b.buque + '" data-leg-idx="' + _idxGlobalCaja + '">' +
-            botonEditar +
             (esVivo ? '<div class="repomar-livepill"><span class="repomar-livedot"></span>En puerto</div>' : '') +
             etiquetaTipo +
             lineaEstado +
