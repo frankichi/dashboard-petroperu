@@ -14508,98 +14508,62 @@ function simRecalcETAs(ship) {
     cur = st.planta;
   });
 }
+// ⚠️ AGREGADO — a pedido: extraído de _repomarCopiarBuqueAProyectado()
+// para poder reusarlo también desde simLoad() — convierte UN buque
+// confirmado (formato de _buildRepoMarBuques()/window._repomarBuquesConfirmadosCache,
+// el mismo que usa RepoMar/Cabotaje Confirmado) al formato de buque que
+// usa el Simulador BT (simShips). No asigna id — eso lo decide quien
+// llama, según si es carga inicial o reemplazo de una copia existente.
+function _repomarBuqueConfirmadoASim(b) {
+  var grupos = _repomarAgruparEscalas(b.legs);
+  var pendientes = grupos.filter(function(g){ return g.estado !== 'COMPLETADO'; });
+  pendientes.sort(function(a,c){ return (a.fecha_hasta||'').localeCompare(c.fecha_hasta||''); });
+  var prodCap = {};
+  Object.keys(b.cargaInicial || {}).forEach(function(abrev) {
+    var legOriginal = b.legs.find(function(l){ return _repomarAbrevProd(l.producto) === abrev; });
+    var nombreProd = legOriginal ? legOriginal.producto : abrev;
+    prodCap[nombreProd] = b.cargaInicial[abrev];
+  });
+  var stops = pendientes.map(function(g) {
+    return {
+      planta: g.terminal, producto: (g.productos[0] && g.productos[0].producto) || '',
+      vol: g.productos.reduce(function(s,p){ return s + (p.vol||0); }, 0),
+      etaDate: (g.fecha_hasta || '').slice(0, 10),
+      prods: g.productos.map(function(p){ return {producto: p.producto, vol: p.vol}; })
+    };
+  });
+  return {
+    name: b.buque,
+    volTotal: Math.round(Object.values(prodCap).reduce(function(s,v){ return s+v; }, 0) * 10) / 10,
+    origen: 'Talara', zarpeDate: b.zarpe ? b.zarpe.slice(0,10) : (currentDate || ''),
+    prodCap: prodCap, stops: stops
+  };
+}
 function simLoad() {
   if (simInited) return;
   simInited = true;
-  const today = byLatest();
-  const btMap = {};
-  // ⚠️ CORREGIDO — a pedido: antes esta función creaba UNA escala
-  // separada por cada combinación planta+producto+slot BT (ej. 4 filas
-  // distintas para "Salaverry" con G.Premium / G.Premium(BT2) /
-  // G.Regular / G.Regular(BT2)), en vez de una sola escala "Salaverry"
-  // con los 4 productos dentro. La tarjeta de edición (sim-stop-card)
-  // ya soporta varios productos por escala vía st.prods[] — aquí solo
-  // faltaba agrupar por planta al cargar, reusando ese mismo array.
-  today.forEach(r => {
-    const v1 = r.vol_rep     || 0;
-    const v2 = r.vol_rep_bt2 || 0;
-    if (v1<=0 && v2<=0) return;
-    // ⚠️ CORREGIDO — a pedido ("aun duplica volúmenes y productos"): `bt`
-    // y `bt2` son DOS BUQUES DISTINTOS e independientes en la misma fila
-    // de reposición (no "primera y segunda entrega del mismo buque" —
-    // eso ya lo asume correctamente el resto del código, ver por ej. la
-    // ficha de buque: `isBT2 = r.bt2===buqueName && r.bt!==buqueName`).
-    // La versión anterior de simLoad() (ya venía así desde antes de esta
-    // sesión) metía SIEMPRE el volumen de vol_rep_bt2 dentro del buque
-    // de la columna `bt`, aunque `bt2` fuera un buque real diferente —
-    // eso duplicaba/mezclaba volumen entre buques. Ahora cada slot
-    // (bt/vol_rep y bt2/vol_rep_bt2) se procesa como el buque que
-    // realmente le corresponde.
-    [
-      {bt: r.bt,  vol: v1, fecha: r.fecha_reposicion || ''},
-      {bt: r.bt2, vol: v2, fecha: r.fecha_repos_bt2   || ''},
-    ].forEach(slot => {
-      if (!slot.bt || slot.bt===''||slot.bt==='-' || slot.vol<=0) return;
-      if (!btMap[slot.bt]) btMap[slot.bt] = {name:slot.bt, origen:r.planta, prodCap:{}, stops:{}};
-      const k = r.planta;
-      if (!btMap[slot.bt].stops[k]) {
-        btMap[slot.bt].stops[k] = {planta:r.planta, etaDate:'', prods:[]};
-      }
-      const st = btMap[slot.bt].stops[k];
-      st.prods.push({producto:r.producto, vol:parseFloat(slot.vol.toFixed(DEC))});
-      if (!st.etaDate) st.etaDate = slot.fecha;
-      btMap[slot.bt].prodCap[r.producto] = (btMap[slot.bt].prodCap[r.producto]||0) + slot.vol;
-    });
-  });
-  Object.values(btMap).forEach(bt => {
-    const totalCap = Object.values(bt.prodCap).reduce((a,v)=>a+v,0);
-    const stopsArr = Object.values(bt.stops);
-    stopsArr.forEach(st => {
-      // ⚠️ AGREGADO — a pedido: si el mismo producto termina apareciendo
-      // dos veces en la misma escala (ej. bt y bt2 coinciden siendo el
-      // mismo buque para esa fila), se consolida en una sola línea
-      // sumando el volumen, en vez de mostrar el producto repetido.
-      const merged = {};
-      const order = [];
-      st.prods.forEach(p => {
-        if (!(p.producto in merged)) { merged[p.producto]=0; order.push(p.producto); }
-        merged[p.producto]+=p.vol;
-      });
-      st.prods = order.map(nm => ({producto:nm, vol: parseFloat(merged[nm].toFixed(DEC))}));
-      st.vol = st.prods.reduce((a,p)=>a+p.vol,0);
-    });
-    // ⚠️ AGREGADO — a pedido: ordenar las escalas por fecha (ETA) antes
-    // de armar el buque — Object.values() sigue el orden en que las
-    // filas aparecían en la hoja (por planta/producto), no el orden
-    // cronológico real del itinerario. Las escalas sin fecha (planta sin
-    // fecha_reposicion en la BD) se dejan al final, sin desordenar las
-    // que sí tienen fecha real.
-    stopsArr.sort((a, b) => {
-      if (!a.etaDate && !b.etaDate) return 0;
-      if (!a.etaDate) return 1;
-      if (!b.etaDate) return -1;
-      return a.etaDate < b.etaDate ? -1 : a.etaDate > b.etaDate ? 1 : 0;
-    });
-    const ship = {
-      id: simNextId++, name: bt.name,
-      volTotal: Math.round(totalCap*10)/10,
-      origen: bt.origen||'Talara',
-      zarpeDate: currentDate||'',
-      prodCap: bt.prodCap,
-      stops: stopsArr,
-    };
-    // ⚠️ CORREGIDO — a pedido: NO llamar simRecalcETAs() aquí. Esa función
-    // recalcula st.etaDate como zarpeDate + tiempo de viaje acumulado —
-    // pero zarpeDate en este punto es solo "hoy" (currentDate), no la
-    // fecha real de zarpe del buque, así que pisaba las fechas REALES de
-    // fecha_reposicion/fecha_repos_bt2 que ya cargamos arriba desde la
-    // BD (líneas 14536/14542) con fechas inventadas — por eso el ETA que
-    // se veía al editar no coincidía con lo que hay en la BD ni en el
-    // Cabotaje Confirmado. Las escalas cargadas desde BD ya traen su
-    // fecha real; simRecalcETAs solo debe usarse para escalas nuevas
-    // creadas a mano en el Simulador (simAddStop, cambio de zarpe/origen),
-    // que sí necesitan una fecha estimada por no tener una real todavía.
-    simShips.push(ship);
+  // ⚠️ CORREGIDO — a pedido ("tiene que coincidir con la carga y
+  // posicionamiento de naves"): el Simulador BT ya NO se arma desde una
+  // fuente aparte (reporte_diario / columnas bt-vol_rep-bt2-vol_rep_bt2
+  // de inventario, que se llenan como parte del registro de cobertura y
+  // podían divergir del itinerario real). Ahora usa EXACTAMENTE la misma
+  // fuente que Cabotaje Confirmado en Reposiciones Marítimas —
+  // _buildRepoMarBuques(), sobre cargas_naves — así que lo que aparece
+  // al abrir el Simulador es el mismo itinerario que ves como
+  // Confirmado, no un cálculo paralelo.
+  // Ojo: _buildRepoMarBuques() puede devolver un resultado PROVISIONAL
+  // (por producto, vía bt_lista) si el mapa completo de naves
+  // (getBTMapCompleto) todavía no terminó de llegar — dispara esa
+  // petición si hace falta y, cuando complete, RepoMar se redibuja
+  // solo; el Simulador solo se refresca automático si sigue siendo la
+  // pestaña activa Y no se ha tocado nada todavía (ver
+  // _repomarFetchBTMapCompleto), para no pisar ediciones en curso.
+  var confirmados = _buildRepoMarBuques();
+  window._repomarBuquesConfirmadosCache = confirmados;
+  confirmados.forEach(function(b) {
+    var shipData = _repomarBuqueConfirmadoASim(b);
+    if (!shipData.stops.length) return; // nada pendiente que proyectar
+    simShips.push(Object.assign({id: simNextId++}, shipData));
   });
   if (simShips.length) simActiveId = simShips[0].id;
 }
@@ -30357,6 +30321,21 @@ function _repomarFetchBTMapCompleto() {
       window._repomarCargaInicialEnCurso = false;
       var activePageEl = document.querySelector('.page.active');
       if (activePageEl && activePageEl.id === 'pRepoMar' && typeof renderPRepoMar === 'function') renderPRepoMar();
+      // ⚠️ AGREGADO — a pedido: el Simulador BT ahora arma sus buques
+      // desde esta misma fuente (ver simLoad()). Si la persona entró al
+      // tab "Simulador BT" ANTES de que este mapa completo terminara de
+      // llegar, simLoad() corrió con `confirmados` vacío (a propósito —
+      // ver comentario en _buildRepoMarBuques — para no mostrar primero
+      // un itinerario provisional que después "salta" a otro) y quedó
+      // sin buques. Acá se recarga sola — pero SOLO si todavía no tiene
+      // ningún buque cargado, para no pisar ediciones en curso si la
+      // persona ya empezó a trabajar con datos provisionales de otra
+      // fuente (ej. "Cargar desde GS").
+      if (activePageEl && activePageEl.id === 'pE' && typeof simShips !== 'undefined' && !simShips.length) {
+        if (typeof simInited !== 'undefined') simInited = false;
+        if (typeof simLoad === 'function') simLoad();
+        if (typeof renderPE === 'function') renderPE();
+      }
     })
     .catch(function() { window._repomarBTMapCompletoPendiente = false; });
 }
@@ -31675,40 +31654,19 @@ function _repomarCopiarBuqueAProyectado(nombreBuque) {
   if (yaExisteEnProyectado && !confirm(nombreBuque + ' ya está en Cabotaje Proyectado — ¿reemplazar esa copia por el itinerario Confirmado actual? Se perderán los cambios que ya hayas hecho ahí.')) return;
   if (!yaExisteEnProyectado && !confirm('¿Copiar el itinerario actual de ' + nombreBuque + ' a Cabotaje Proyectado para editarlo ahí como propuesta? Esto NO modifica el Confirmado — es solo una copia de trabajo.')) return;
 
-  var grupos = _repomarAgruparEscalas(b.legs);
-  var pendientes = grupos.filter(function(g){ return g.estado !== 'COMPLETADO'; });
-  pendientes.sort(function(a,c){ return (a.fecha_hasta||'').localeCompare(c.fecha_hasta||''); });
-
-  var prodCap = {};
-  Object.keys(b.cargaInicial || {}).forEach(function(abrev) {
-    // prodCap usa nombres de producto "normales" (los de PRODUCTS), no
-    // abreviaturas — se recupera el nombre original del primer leg que
-    // tenga esa abreviatura.
-    var legOriginal = b.legs.find(function(l){ return _repomarAbrevProd(l.producto) === abrev; });
-    var nombreProd = legOriginal ? legOriginal.producto : abrev;
-    prodCap[nombreProd] = b.cargaInicial[abrev];
-  });
-
-  var stopsNuevos = pendientes.map(function(g) {
-    return {
-      planta: g.terminal, producto: (g.productos[0] && g.productos[0].producto) || '',
-      vol: g.productos.reduce(function(s,p){ return s + (p.vol||0); }, 0),
-      etaDate: (g.fecha_hasta || '').slice(0, 10),
-      prods: g.productos.map(function(p){ return {producto: p.producto, vol: p.vol}; })
-    };
-  });
+  // ⚠️ CORREGIDO — a pedido: la transformación de "buque confirmado" a
+  // "buque simulador" ahora vive en una sola función compartida
+  // (_repomarBuqueConfirmadoASim, ver simLoad()) en vez de estar
+  // duplicada acá — así no pueden volver a divergir entre "abrir el
+  // Simulador" y "Copiar a Proyectado".
+  var shipData = _repomarBuqueConfirmadoASim(b);
 
   if (typeof simShips === 'undefined') { alert('El Simulador BT no está disponible en esta vista.'); return; }
   if (yaExisteEnProyectado) {
     simShips = simShips.filter(function(s){ return s.name !== nombreBuque; });
   }
   var nuevoId = (typeof simNextId !== 'undefined') ? simNextId++ : (Date.now());
-  simShips.push({
-    id: nuevoId, name: nombreBuque,
-    volTotal: Math.round(Object.values(prodCap).reduce(function(s,v){ return s+v; }, 0) * 10) / 10,
-    origen: 'Talara', zarpeDate: b.zarpe ? b.zarpe.slice(0,10) : (currentDate || ''),
-    prodCap: prodCap, stops: stopsNuevos
-  });
+  simShips.push(Object.assign({id: nuevoId}, shipData));
   if (typeof simInited !== 'undefined') simInited = true;
   if (typeof simActiveId !== 'undefined') simActiveId = nuevoId;
   if (typeof simSaveToGS === 'function') simSaveToGS();
