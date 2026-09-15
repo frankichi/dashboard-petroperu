@@ -14525,6 +14525,24 @@ function simRecalcETAs(ship) {
   let cur   = ship.origen;
   let curDt = ship.zarpeDate ? new Date(ship.zarpeDate+'T12:00:00') : new Date();
   ship.stops.forEach(st => {
+    // ⚠️ CORREGIDO — a pedido ("las fechas de ETA no coinciden con el
+    // reporte confirmado"): esta función solo suma tiempo de NAVEGACIÓN
+    // entre puertos (DIST_H) — no tiempo de descarga, espera de muelle,
+    // etc. Recalcular con esto la fecha de una escala que YA tenía fecha
+    // real (venida de Cabotaje Confirmado) la subestimaba en varios
+    // días (caso real reportado: 12-13 set. calculado vs. 17-28 set.
+    // real). No existe en el sistema un tiempo de operación por puerto
+    // documentado como para modelarlo bien — así que, en vez de adivinar
+    // uno, ahora esta función NUNCA pisa la fecha real de una escala que
+    // ya la tenía (st._etaReal). Esa fecha real sirve de ancla para
+    // proyectar recién las escalas SIN fecha real (nuevas, agregadas a
+    // mano en el Simulador) que queden después de ella en el orden
+    // actual — que sí se calculan por distancia, a falta de algo mejor.
+    if (st._etaReal && st.etaDate) {
+      curDt = new Date(st.etaDate + 'T12:00:00');
+      cur = st.planta;
+      return;
+    }
     const d = getDistDays(cur, st.planta);
     if (d !== null) {
       curDt = new Date(curDt.getTime() + d*86400000);
@@ -14562,10 +14580,15 @@ function _repomarBuqueConfirmadoASim(b) {
   var stops = pendientes.map(function(g) {
     var descargas = g.productos.filter(function(p){ return p.tipo !== 'carga'; });
     var cargasAqui = g.productos.filter(function(p){ return p.tipo === 'carga'; });
+    var etaReal = (g.fecha_hasta || '').slice(0, 10);
     return {
       planta: g.terminal, producto: (descargas[0] && descargas[0].producto) || '',
       vol: descargas.reduce(function(s,p){ return s + (p.vol||0); }, 0),
-      etaDate: (g.fecha_hasta || '').slice(0, 10),
+      etaDate: etaReal,
+      // ⚠️ AGREGADO — a pedido: marca esta fecha como REAL (viene de
+      // Cabotaje Confirmado) — ver simRecalcETAs, que ya no la
+      // sobrescribe con un cálculo por distancia al reordenar/editar.
+      _etaReal: !!etaReal,
       prods: descargas.map(function(p){ return {producto: p.producto, vol: p.vol}; }),
       cargas: cargasAqui.map(function(p){ return {producto: p.producto, vol: p.vol}; })
     };
@@ -15034,7 +15057,7 @@ async function simSaveToGS() {
           zarpe:s.zarpeDate,vol_total_mb:totalVol.toFixed(DEC),n_escalas:s.stops.length,
           retorno_est:lastEta?lastEta.etaDate:'',escala_num:i+1,planta:st.planta,
           eta:st.etaDate,dist_dias:d?d.toFixed(DEC):'',productos:pr.producto+':'+pr.vol.toFixed(DEC),
-          flujo:'descarga'});
+          flujo:'descarga',eta_real:st._etaReal?1:0});
       });
       // ⚠️ AGREGADO — a pedido: persistir también la sección "Carga
       // aquí" (st.cargas) — mismas columnas que una fila de escala
@@ -15049,7 +15072,7 @@ async function simSaveToGS() {
           zarpe:s.zarpeDate,vol_total_mb:totalVol.toFixed(DEC),n_escalas:s.stops.length,
           retorno_est:lastEta?lastEta.etaDate:'',escala_num:i+1,planta:st.planta,
           eta:st.etaDate,dist_dias:d?d.toFixed(DEC):'',productos:pr.producto+':'+pr.vol.toFixed(DEC),
-          flujo:'carga'});
+          flujo:'carga',eta_real:st._etaReal?1:0});
       });
     });
   });
@@ -15155,6 +15178,7 @@ async function simLoadFromGS() {
             producto: esCarga ? '' : prodName,
             vol: esCarga ? 0 : prodVol,
             etaDate: r.eta || '',
+            _etaReal: !!r.eta_real,
             prods: esCarga ? [] : [{producto: prodName, vol: prodVol}],
             cargas: esCarga ? [{producto: prodName, vol: prodVol}] : [],
             _escNum: r.escala_num
@@ -15278,7 +15302,7 @@ async function _simAutoLoadFromGS() {
           else { existingStop.prods.push({producto:prodName,vol:prodVol}); existingStop.vol+=prodVol; }
         } else {
           shipMap[r.buque].stops.push({planta:r.planta||'',producto:esCarga?'':prodName,vol:esCarga?0:prodVol,
-            etaDate:r.eta||'',prods:esCarga?[]:[{producto:prodName,vol:prodVol}],
+            etaDate:r.eta||'',_etaReal:!!r.eta_real,prods:esCarga?[]:[{producto:prodName,vol:prodVol}],
             cargas:esCarga?[{producto:prodName,vol:prodVol}]:[],_escNum:r.escala_num});
         }
       }
