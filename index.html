@@ -14521,32 +14521,53 @@ function simLoad() {
   // ya soporta varios productos por escala vía st.prods[] — aquí solo
   // faltaba agrupar por planta al cargar, reusando ese mismo array.
   today.forEach(r => {
-    if (!r.bt||r.bt===''||r.bt==='-') return;
     const v1 = r.vol_rep     || 0;
     const v2 = r.vol_rep_bt2 || 0;
     if (v1<=0 && v2<=0) return;
-    if (!btMap[r.bt]) btMap[r.bt] = {name:r.bt, origen:r.planta, prodCap:{}, stops:{}};
-    const k = r.planta;
-    if (!btMap[r.bt].stops[k]) {
-      btMap[r.bt].stops[k] = {planta:r.planta, etaDate:'', prods:[]};
-    }
-    const st = btMap[r.bt].stops[k];
-    if (v1>0) {
-      st.prods.push({producto:r.producto, vol:parseFloat(v1.toFixed(DEC))});
-      if (!st.etaDate) st.etaDate = r.fecha_reposicion||'';
-      btMap[r.bt].prodCap[r.producto] = (btMap[r.bt].prodCap[r.producto]||0) + v1;
-    }
-    if (v2>0) {
-      const prod2 = r.producto+'(BT2)';
-      st.prods.push({producto:prod2, vol:parseFloat(v2.toFixed(DEC))});
-      if (!st.etaDate) st.etaDate = r.fecha_repos_bt2||'';
-      btMap[r.bt].prodCap[prod2] = (btMap[r.bt].prodCap[prod2]||0) + v2;
-    }
+    // ⚠️ CORREGIDO — a pedido ("aun duplica volúmenes y productos"): `bt`
+    // y `bt2` son DOS BUQUES DISTINTOS e independientes en la misma fila
+    // de reposición (no "primera y segunda entrega del mismo buque" —
+    // eso ya lo asume correctamente el resto del código, ver por ej. la
+    // ficha de buque: `isBT2 = r.bt2===buqueName && r.bt!==buqueName`).
+    // La versión anterior de simLoad() (ya venía así desde antes de esta
+    // sesión) metía SIEMPRE el volumen de vol_rep_bt2 dentro del buque
+    // de la columna `bt`, aunque `bt2` fuera un buque real diferente —
+    // eso duplicaba/mezclaba volumen entre buques. Ahora cada slot
+    // (bt/vol_rep y bt2/vol_rep_bt2) se procesa como el buque que
+    // realmente le corresponde.
+    [
+      {bt: r.bt,  vol: v1, fecha: r.fecha_reposicion || ''},
+      {bt: r.bt2, vol: v2, fecha: r.fecha_repos_bt2   || ''},
+    ].forEach(slot => {
+      if (!slot.bt || slot.bt===''||slot.bt==='-' || slot.vol<=0) return;
+      if (!btMap[slot.bt]) btMap[slot.bt] = {name:slot.bt, origen:r.planta, prodCap:{}, stops:{}};
+      const k = r.planta;
+      if (!btMap[slot.bt].stops[k]) {
+        btMap[slot.bt].stops[k] = {planta:r.planta, etaDate:'', prods:[]};
+      }
+      const st = btMap[slot.bt].stops[k];
+      st.prods.push({producto:r.producto, vol:parseFloat(slot.vol.toFixed(DEC))});
+      if (!st.etaDate) st.etaDate = slot.fecha;
+      btMap[slot.bt].prodCap[r.producto] = (btMap[slot.bt].prodCap[r.producto]||0) + slot.vol;
+    });
   });
   Object.values(btMap).forEach(bt => {
     const totalCap = Object.values(bt.prodCap).reduce((a,v)=>a+v,0);
     const stopsArr = Object.values(bt.stops);
-    stopsArr.forEach(st => { st.vol = st.prods.reduce((a,p)=>a+p.vol,0); });
+    stopsArr.forEach(st => {
+      // ⚠️ AGREGADO — a pedido: si el mismo producto termina apareciendo
+      // dos veces en la misma escala (ej. bt y bt2 coinciden siendo el
+      // mismo buque para esa fila), se consolida en una sola línea
+      // sumando el volumen, en vez de mostrar el producto repetido.
+      const merged = {};
+      const order = [];
+      st.prods.forEach(p => {
+        if (!(p.producto in merged)) { merged[p.producto]=0; order.push(p.producto); }
+        merged[p.producto]+=p.vol;
+      });
+      st.prods = order.map(nm => ({producto:nm, vol: parseFloat(merged[nm].toFixed(DEC))}));
+      st.vol = st.prods.reduce((a,p)=>a+p.vol,0);
+    });
     // ⚠️ AGREGADO — a pedido: ordenar las escalas por fecha (ETA) antes
     // de armar el buque — Object.values() sigue el orden en que las
     // filas aparecían en la hoja (por planta/producto), no el orden
