@@ -15388,6 +15388,7 @@ function renderPE() {
     + '<button class="sim-btn sim-btn-ghost" onclick="showPage(\'pRepoMar\')" title="Volver a Reposiciones Marítimas" style="display:flex;align-items:center;gap:5px">← Reposiciones Marítimas</button>'
     + '<div class="sim-toolbar-title">🛳️ Simulador de Embarques BT</div>'
     + '<button class="sim-btn sim-btn-primary" onclick="simAddShip()">+ Nuevo Buque</button>'
+    + '<button class="sim-btn" style="background:#16a34a;color:#fff;border-color:#16a34a" onclick="_repomarConfirmarProyectado()" title="Vuelve real el itinerario de este buque — reemplaza sus escalas pendientes en Cabotaje Confirmado">✅ Confirmar buque</button>'
     + '<button class="sim-btn sim-btn-ghost" onclick="simExportCSV()">⬇ CSV</button>'
     + '<button id="sim-save-btn" class="sim-btn" style="background:var(--grn);color:#fff;border-color:var(--grn);font-size:11px" onclick="simSaveToGS()">💾 Guardar en GS</button>'
     + '<button id="sim-reload-btn" class="sim-btn sim-btn-ghost" onclick="simLoadFromGS()" style="font-size:10px" title="Cargar última simulación guardada">↺ Recargar GS</button>'
@@ -31610,6 +31611,68 @@ function _repomarCopiarBuqueAProyectado(nombreBuque) {
   if (typeof simActiveId !== 'undefined') simActiveId = nuevoId;
   if (typeof simSaveToGS === 'function') simSaveToGS();
   _repomarCambiarModoLocal('proyectado');
+}
+
+function _repomarConfirmarProyectado() {
+  if (typeof simActiveId === 'undefined' || simActiveId === null) { alert('Selecciona primero un buque en el Simulador.'); return; }
+  var s = simShips.find(function(x){ return x.id === simActiveId; });
+  if (!s) { alert('No se encontró el buque seleccionado.'); return; }
+  if (!s.stops || !s.stops.length) { alert(s.name + ' no tiene escalas para confirmar.'); return; }
+  if (!confirm('¿Confirmar el itinerario de ' + s.name + '? Esto reemplaza sus escalas pendientes en Cabotaje Confirmado por lo que armaste aquí en el Simulador. No se puede deshacer automáticamente.')) return;
+  if (!_repomarTokenFlota()) { _repomarPedirLogin(function(){ _repomarEjecutarConfirmacion(s); }); return; }
+  _repomarEjecutarConfirmacion(s);
+}
+function _repomarEjecutarConfirmacion(s) {
+  // ⚠️ AGREGADO — a pedido: "confirmar" un buque del Simulador —
+  // primero se marcan como ELIMINADAS las escalas PENDIENTES que ese
+  // buque tenía en Cabotaje Confirmado (usando el mismo endpoint de
+  // edición ya construido), y después se agregan como nuevas las
+  // escalas de la propuesta del Simulador — así el Confirmado termina
+  // reflejando exactamente lo que se armó como propuesta, sin dejar
+  // restos de la versión anterior mezclados.
+  var confirmados = window._repomarBuquesConfirmadosCache || [];
+  var bConf = confirmados.find(function(x){ return x.buque === s.name; });
+  var viaje = bConf ? bConf.viaje : '\u2014';
+  var token = _repomarTokenFlota();
+
+  function llamar(payload) {
+    payload.token = token; payload.buque = s.name; payload.viaje = viaje;
+    return fetch(CONFIG.API_URL, {
+      method: 'POST', redirect: 'follow',
+      headers: {'Content-Type': 'text/plain;charset=utf-8'},
+      body: JSON.stringify(Object.assign({ action: 'repomarEditarEscala' }, payload))
+    }).then(function(r){ return r.json(); });
+  }
+
+  var cadena = Promise.resolve();
+  // Paso 1: eliminar las escalas pendientes actuales de ese buque.
+  if (bConf) {
+    var gruposViejos = _repomarAgruparEscalas(bConf.legs).filter(function(g){ return g.estado !== 'COMPLETADO'; });
+    gruposViejos.forEach(function(g) {
+      g.productos.forEach(function(p) {
+        cadena = cadena.then(function() {
+          return llamar({ accion: 'eliminar', terminal: g.terminal, producto: p.producto, vol: 0, fecha_hasta: g.fecha_hasta, estado: 'ELIMINADO' });
+        });
+      });
+    });
+  }
+  // Paso 2: agregar las escalas nuevas de la propuesta del Simulador.
+  s.stops.forEach(function(stop) {
+    (stop.prods && stop.prods.length ? stop.prods : [{producto: stop.producto, vol: stop.vol}]).forEach(function(p) {
+      if (!p.producto) return;
+      cadena = cadena.then(function() {
+        return llamar({ accion: 'agregar', terminal: stop.planta, producto: p.producto, vol: p.vol || 0,
+          fecha_hasta: (stop.etaDate || '').slice(0,10), fecha_desde: (stop.etaDate || '').slice(0,10), estado: 'PROGRAMADO' });
+      });
+    });
+  });
+
+  cadena.then(function() {
+    alert(s.name + ' confirmado. El Cabotaje Confirmado ya refleja este itinerario.');
+    if (typeof _repomarActualizarManualInterno === 'function') _repomarActualizarManualInterno();
+  }).catch(function() {
+    alert('Hubo un error al confirmar. Revisa la conexión e intenta de nuevo.');
+  });
 }
 
 window.renderPRepoMar = function() {
