@@ -14555,7 +14555,17 @@ function simLoad() {
       prodCap: bt.prodCap,
       stops: stopsArr,
     };
-    simRecalcETAs(ship);
+    // ⚠️ CORREGIDO — a pedido: NO llamar simRecalcETAs() aquí. Esa función
+    // recalcula st.etaDate como zarpeDate + tiempo de viaje acumulado —
+    // pero zarpeDate en este punto es solo "hoy" (currentDate), no la
+    // fecha real de zarpe del buque, así que pisaba las fechas REALES de
+    // fecha_reposicion/fecha_repos_bt2 que ya cargamos arriba desde la
+    // BD (líneas 14536/14542) con fechas inventadas — por eso el ETA que
+    // se veía al editar no coincidía con lo que hay en la BD ni en el
+    // Cabotaje Confirmado. Las escalas cargadas desde BD ya traen su
+    // fecha real; simRecalcETAs solo debe usarse para escalas nuevas
+    // creadas a mano en el Simulador (simAddStop, cambio de zarpe/origen),
+    // que sí necesitan una fecha estimada por no tener una real todavía.
     simShips.push(ship);
   });
   if (simShips.length) simActiveId = simShips[0].id;
@@ -15267,7 +15277,12 @@ function renderPE() {
       stopsHTML += ' <span style="font-size:10px;font-weight:400;color:var(--txt3)">→ '+prodSummary+'</span></div>';
       stopsHTML += '<div style="font-size:9.5px;color:var(--txt3)">Desde '+prev+' · '+distStr+'</div>';
       stopsHTML += '</div>';
-      if (st.etaDate) stopsHTML += '<div class="sim-stop-eta-badge">📅 '+fmtD(st.etaDate)+'</div>';
+      // ⚠️ CORREGIDO — a pedido: antes, si st.etaDate venía vacío (la BD
+      // no tiene fecha_reposicion para esa planta/producto), el badge
+      // simplemente no se dibujaba y la escala quedaba sin ninguna
+      // indicación de fecha — confuso al editar. Ahora se muestra
+      // "Sin ETA" explícito en vez de dejarlo en blanco.
+      stopsHTML += '<div class="sim-stop-eta-badge"'+(st.etaDate?'':' style="opacity:.55"')+'>📅 '+(st.etaDate?fmtD(st.etaDate):'Sin ETA')+'</div>';
       stopsHTML += '<div style="font-size:11px;font-weight:800;font-family:var(--mono);color:var(--acc2);padding:0 8px;white-space:nowrap">'+totalVol.toFixed(DEC)+' MB</div>';
       stopsHTML += '<button class="sim-stop-del2" onclick="simDelStop('+active.id+','+idx+')">🗑</button>';
       stopsHTML += '</div>'; // stop-head
