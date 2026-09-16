@@ -26649,7 +26649,7 @@ function _renderVistaEjecutivaSimpleImpl() {
     }
     return rawPlanta;
   }
-  function _execReporteFilasNacional(fechasOverride) {
+  function _execReporteFilasNacional(fechasOverride, plantaRawForzada) {
     var fechas = fechasOverride || _execReporteFechas();
     if (!fechas.length) return [];
     var fechaSet = {};
@@ -26674,6 +26674,23 @@ function _renderVistaEjecutivaSimpleImpl() {
       if (!r.fecha) return;
       if (typeof SKIP_COMBOS !== 'undefined' && SKIP_COMBOS.has((r.planta||'')+'|'+(r.producto||''))) return;
       if (typeof PLANTAS_DUPLICADAS_EN_REFINERIA !== 'undefined' && PLANTAS_DUPLICADAS_EN_REFINERIA.indexOf(r.planta) !== -1) return;
+      // ⚠️ AGREGADO — a pedido (bug real confirmado: exportar "Refinería
+      // Iquitos" sola descargaba de hecho el catálogo de la PLANTA DE
+      // VENTAS Iquitos — sin PI6 ni los demás productos propios de la
+      // refinería): cuando se pide una planta cruda forzada (sin pasar
+      // por ningún combo), se filtra ANTES de canonizar — si se dejara
+      // canonizar iría a parar al mismo "Iquitos" combinado de siempre,
+      // con SU catálogo de productos (PRODUCTOS_POR_PLANTA_EXEC['Iquitos'],
+      // que no incluye PI6 porque la refinería no forma parte de las 18
+      // plantas de venta oficiales). Con la planta cruda forzada se usa
+      // el catálogo propio de esa planta exacta (PRODUCTOS_POR_PLANTA_EXEC
+      // ['Refinería Iquitos'], que sí incluye PI6).
+      if (plantaRawForzada) {
+        if (r.planta !== plantaRawForzada) return;
+        if (typeof PRODUCTOS_POR_PLANTA_EXEC !== 'undefined' && PRODUCTOS_POR_PLANTA_EXEC[plantaRawForzada] && PRODUCTOS_POR_PLANTA_EXEC[plantaRawForzada].indexOf(r.producto) === -1) return;
+        combosMap[plantaRawForzada + '|' + r.producto] = { planta: plantaRawForzada, producto: r.producto, keyCalculo: plantaRawForzada };
+        return;
+      }
       var plantaCanon = _comboCanonico(r.planta);
       // ⚠️ AGREGADO — bug real confirmado (regresión): el respaldo de
       // "último dato real conocido" agregado para rescatar plantas que
@@ -26949,54 +26966,42 @@ function _renderVistaEjecutivaSimpleImpl() {
       if (btnExcel) { btnExcel.disabled = false; btnExcel.innerHTML = txtOriginal; }
     }
     var _plantaScopeXls = (window._execPlanta && window._execPlanta !== 'Nacional') ? window._execPlanta : null;
-    // ⚠️ AGREGADO — a pedido: se guarda ANTES de resolver el combo — es
-    // la única forma de distinguir las dos opciones del desplegable que
-    // terminan apuntando al mismo "Iquitos" canónico: "Refinería
-    // Iquitos" sola (🛢️, opción directa) vs. el combo "🔗 Iquitos + Ref.
-    // Iquitos" (clave interna). La refinería nunca despacha — solo se
-    // sube su inventario a mano en Coberturas. El combo, en cambio, SÍ
-    // debe combinar ese inventario con el despacho real de la Planta de
-    // Ventas Iquitos (un reporte aparte, de esa planta) — eso es
-    // intencional y no se toca. Solo cuando se elige la refinería SOLA
-    // se debe limpiar cualquier despacho — ver más abajo, después del
-    // filtro por planta.
-    var _esRefineriaIquitosSola = (window._execPlanta === 'Refinería Iquitos');
-    // ⚠️ CORREGIDO — bug real confirmado (Refinería Iquitos): cuando la
-    // planta elegida es una "vista combinada" (ej. Iquitos, Conchán —
-    // las que aparecen en el optgroup "Vistas combinadas planta +
-    // refinería"), window._execPlanta guarda la CLAVE interna del combo
-    // ('__COMBO_IQUITOS__'), no el nombre real. Las filas de filasNac
-    // usan el nombre YA RESUELTO (_comboCanonico → plantaDespacho, ej.
-    // "Iquitos") — comparar la clave interna contra ese nombre nunca
-    // daba match, así que el filtro por planta vaciaba TODO el reporte
-    // y salía "no hay datos" aunque la pantalla sí mostrara inventario.
-    // Mismo patrón de resolución que ya usa el resto del archivo
-    // (COMBO_PLANTAS[pl] ? COMBO_PLANTAS[pl].plantaDespacho : pl) —
-    // aplica a Iquitos, Conchán y cualquier otra vista combinada actual
-    // o futura, no solo a este caso puntual.
-    if (_plantaScopeXls && typeof COMBO_PLANTAS !== 'undefined' && COMBO_PLANTAS[_plantaScopeXls]) {
-      _plantaScopeXls = COMBO_PLANTAS[_plantaScopeXls].plantaDespacho;
-    } else if (_plantaScopeXls && typeof _comboCanonico === 'function') {
-      // ⚠️ CORREGIDO — a pedido (seguía fallando para Refinería Iquitos):
-      // el fix anterior solo cubría cuando window._execPlanta trae la
-      // CLAVE del combo ('__COMBO_IQUITOS__', elegida desde la opción
-      // 🔗 "Iquitos + Ref. Iquitos'). Pero el desplegable también ofrece
-      // "Refinería Iquitos" como opción DIRECTA (🛢️, tomada tal cual de
-      // los datos crudos — ver plantasDisp) — ahí window._execPlanta
-      // llega como 'Refinería Iquitos' literal, que no es una clave de
-      // COMBO_PLANTAS, así que el chequeo anterior no la tocaba y seguía
-      // sin coincidir con "Iquitos" (el nombre canónico de las filas).
-      // _comboCanonico() sí sabe resolver un nombre crudo de planta
-      // (busca en qué combo aparece dentro de plantasInv) — se usa como
-      // segundo intento para cubrir also este camino.
-      _plantaScopeXls = _comboCanonico(_plantaScopeXls);
+    // ⚠️ AGREGADO — a pedido: "Refinería Iquitos" sola es un caso aparte
+    // desde acá — NO se canoniza al "Iquitos" combinado (que usa el
+    // catálogo de productos de la planta de ventas, sin PI6 ni el resto
+    // de productos propios de la refinería, y trae despacho que no le
+    // pertenece). Se mantiene como planta cruda y se le pasa así a
+    // _execReporteFilasNacional (ver plantaRawForzada) para que arme las
+    // filas directamente desde su propio catálogo, sin pasar por ningún
+    // combo. El combo "🔗 Iquitos + Ref. Iquitos" (clave interna) SIGUE
+    // combinando inventario+despacho tal como está pensado — no se toca.
+    var _esRefineriaIquitosSola = (_plantaScopeXls === 'Refinería Iquitos');
+    if (!_esRefineriaIquitosSola) {
+      // ⚠️ CORREGIDO — bug real confirmado (Refinería Iquitos): cuando la
+      // planta elegida es una "vista combinada" (ej. Iquitos, Conchán —
+      // las que aparecen en el optgroup "Vistas combinadas planta +
+      // refinería"), window._execPlanta guarda la CLAVE interna del combo
+      // ('__COMBO_IQUITOS__'), no el nombre real. Las filas de filasNac
+      // usan el nombre YA RESUELTO (_comboCanonico → plantaDespacho, ej.
+      // "Iquitos") — comparar la clave interna contra ese nombre nunca
+      // daba match, así que el filtro por planta vaciaba TODO el reporte
+      // y salía "no hay datos" aunque la pantalla sí mostrara inventario.
+      // Mismo patrón de resolución que ya usa el resto del archivo
+      // (COMBO_PLANTAS[pl] ? COMBO_PLANTAS[pl].plantaDespacho : pl) —
+      // aplica a Conchán y cualquier otra vista combinada actual o
+      // futura, no solo a este caso puntual.
+      if (_plantaScopeXls && typeof COMBO_PLANTAS !== 'undefined' && COMBO_PLANTAS[_plantaScopeXls]) {
+        _plantaScopeXls = COMBO_PLANTAS[_plantaScopeXls].plantaDespacho;
+      } else if (_plantaScopeXls && typeof _comboCanonico === 'function') {
+        _plantaScopeXls = _comboCanonico(_plantaScopeXls);
+      }
     }
     // ⚠️ AGREGADO — período de exportación: paso independiente del
     // selector de 7/15/30 días de las gráficas de pantalla. 'hoy' = un
     // solo día (fechaHoy); en otro caso, los últimos N días con datos
     // disponibles.
     var _diasExport = (!periodo || periodo === 'hoy') ? [fechaHoy] : (periodo.indexOf('mes:') === 0 ? (DATES || []).filter(function(d){ return d.slice(0,7) === periodo.slice(4); }) : (DATES || []).slice(-(parseInt(periodo, 10) || 1)));
-    var filasNac = _execReporteFilasNacional(_diasExport);
+    var filasNac = _execReporteFilasNacional(_diasExport, _esRefineriaIquitosSola ? 'Refinería Iquitos' : null);
     // ⚠️ AGREGADO — alcance del reporte: si el usuario eligió "solo la
     // planta seleccionada", se filtra sobre el mismo conjunto de datos
     // ya armado (con el combo Talara+Refinería y el arrastre ya
@@ -27006,17 +27011,6 @@ function _renderVistaEjecutivaSimpleImpl() {
     // producto" no tendría sentido como reporte de planta.
     if (scope === 'planta' && _plantaScopeXls) {
       filasNac = filasNac.filter(function(r) { return r.planta === _plantaScopeXls; });
-    }
-    // ⚠️ AGREGADO — a pedido: cuando se eligió "Refinería Iquitos" SOLA
-    // (no el combo), el despacho/pronóstico que trae la fila es el de la
-    // Planta de Ventas Iquitos (una fuente distinta) — la refinería en sí
-    // no despacha, ese dato no le corresponde a esta exportación. Se
-    // limpia solo para este caso puntual; el combo sigue trayendo el
-    // despacho combinado tal como está pensado.
-    if (_esRefineriaIquitosSola) {
-      filasNac = filasNac.map(function(r) {
-        return Object.assign({}, r, { desp: 0, pron: 0, cob: null });
-      });
     }
     if (!filasNac.length) { alert('No hay datos de inventario para el período elegido' + (scope === 'planta' ? (' en ' + (_plantaScopeXls||'')) : '') + '.'); return; }
 
@@ -27124,31 +27118,23 @@ function _renderVistaEjecutivaSimpleImpl() {
     var _esMultiDia = _diasExportPdf.length > 1;
     var _plantaScope = (window._execPlanta && window._execPlanta !== 'Nacional') ? window._execPlanta : null;
     // ⚠️ AGREGADO — a pedido: mismo distingo que en Excel (ver
-    // _esRefineriaIquitosSola) — se guarda ANTES de resolver el combo.
-    var _esRefineriaIquitosSolaPdf = (window._execPlanta === 'Refinería Iquitos');
-    // ⚠️ CORREGIDO — mismo bug y mismo fix que en la exportación a Excel
-    // (ver _plantaScopeXls, más arriba en este archivo) — window._execPlanta
-    // puede traer la clave interna de un combo ('__COMBO_IQUITOS__') en
-    // vez del nombre real de la planta.
-    if (_plantaScope && typeof COMBO_PLANTAS !== 'undefined' && COMBO_PLANTAS[_plantaScope]) {
-      _plantaScope = COMBO_PLANTAS[_plantaScope].plantaDespacho;
-    } else if (_plantaScope && typeof _comboCanonico === 'function') {
-      // ⚠️ CORREGIDO — mismo fix ampliado que en Excel (ver _plantaScopeXls)
-      // — cubre también la opción directa "Refinería Iquitos" (nombre
-      // crudo, no clave de combo).
-      _plantaScope = _comboCanonico(_plantaScope);
+    // _esRefineriaIquitosSola) — "Refinería Iquitos" sola usa su propio
+    // catálogo de productos (con PI6), sin pasar por el combo.
+    var _esRefineriaIquitosSolaPdf = (_plantaScope === 'Refinería Iquitos');
+    if (!_esRefineriaIquitosSolaPdf) {
+      // ⚠️ CORREGIDO — mismo bug y mismo fix que en la exportación a Excel
+      // (ver _plantaScopeXls, más arriba en este archivo) — window._execPlanta
+      // puede traer la clave interna de un combo ('__COMBO_IQUITOS__') en
+      // vez del nombre real de la planta.
+      if (_plantaScope && typeof COMBO_PLANTAS !== 'undefined' && COMBO_PLANTAS[_plantaScope]) {
+        _plantaScope = COMBO_PLANTAS[_plantaScope].plantaDespacho;
+      } else if (_plantaScope && typeof _comboCanonico === 'function') {
+        _plantaScope = _comboCanonico(_plantaScope);
+      }
     }
-    var filasNacPdf = _execReporteFilasNacional(_diasExportPdf);
+    var filasNacPdf = _execReporteFilasNacional(_diasExportPdf, _esRefineriaIquitosSolaPdf ? 'Refinería Iquitos' : null);
     if (scope === 'planta' && _plantaScope) {
       filasNacPdf = filasNacPdf.filter(function(r) { return r.planta === _plantaScope; });
-    }
-    // ⚠️ AGREGADO — a pedido: mismo caso puntual que en Excel — "Refinería
-    // Iquitos" sola no despacha, ese dato de la fila combinada le
-    // pertenece a la Planta de Ventas Iquitos, no a la refinería.
-    if (_esRefineriaIquitosSolaPdf) {
-      filasNacPdf = filasNacPdf.map(function(r) {
-        return Object.assign({}, r, { desp: 0, pron: 0, cob: null });
-      });
     }
     if (!filasNacPdf.length) { alert('No hay datos de inventario para el período elegido' + (scope === 'planta' ? (' en ' + (_plantaScope||'')) : '') + '.'); return; }
 
