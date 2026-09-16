@@ -26964,6 +26964,20 @@ function _renderVistaEjecutivaSimpleImpl() {
     // o futura, no solo a este caso puntual.
     if (_plantaScopeXls && typeof COMBO_PLANTAS !== 'undefined' && COMBO_PLANTAS[_plantaScopeXls]) {
       _plantaScopeXls = COMBO_PLANTAS[_plantaScopeXls].plantaDespacho;
+    } else if (_plantaScopeXls && typeof _comboCanonico === 'function') {
+      // ⚠️ CORREGIDO — a pedido (seguía fallando para Refinería Iquitos):
+      // el fix anterior solo cubría cuando window._execPlanta trae la
+      // CLAVE del combo ('__COMBO_IQUITOS__', elegida desde la opción
+      // 🔗 "Iquitos + Ref. Iquitos'). Pero el desplegable también ofrece
+      // "Refinería Iquitos" como opción DIRECTA (🛢️, tomada tal cual de
+      // los datos crudos — ver plantasDisp) — ahí window._execPlanta
+      // llega como 'Refinería Iquitos' literal, que no es una clave de
+      // COMBO_PLANTAS, así que el chequeo anterior no la tocaba y seguía
+      // sin coincidir con "Iquitos" (el nombre canónico de las filas).
+      // _comboCanonico() sí sabe resolver un nombre crudo de planta
+      // (busca en qué combo aparece dentro de plantasInv) — se usa como
+      // segundo intento para cubrir also este camino.
+      _plantaScopeXls = _comboCanonico(_plantaScopeXls);
     }
     // ⚠️ AGREGADO — período de exportación: paso independiente del
     // selector de 7/15/30 días de las gráficas de pantalla. 'hoy' = un
@@ -27092,6 +27106,11 @@ function _renderVistaEjecutivaSimpleImpl() {
     // vez del nombre real de la planta.
     if (_plantaScope && typeof COMBO_PLANTAS !== 'undefined' && COMBO_PLANTAS[_plantaScope]) {
       _plantaScope = COMBO_PLANTAS[_plantaScope].plantaDespacho;
+    } else if (_plantaScope && typeof _comboCanonico === 'function') {
+      // ⚠️ CORREGIDO — mismo fix ampliado que en Excel (ver _plantaScopeXls)
+      // — cubre también la opción directa "Refinería Iquitos" (nombre
+      // crudo, no clave de combo).
+      _plantaScope = _comboCanonico(_plantaScope);
     }
     var filasNacPdf = _execReporteFilasNacional(_diasExportPdf);
     if (scope === 'planta' && _plantaScope) {
