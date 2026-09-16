@@ -26901,6 +26901,22 @@ function _renderVistaEjecutivaSimpleImpl() {
       if (btnExcel) { btnExcel.disabled = false; btnExcel.innerHTML = txtOriginal; }
     }
     var _plantaScopeXls = (window._execPlanta && window._execPlanta !== 'Nacional') ? window._execPlanta : null;
+    // ⚠️ CORREGIDO — bug real confirmado (Refinería Iquitos): cuando la
+    // planta elegida es una "vista combinada" (ej. Iquitos, Conchán —
+    // las que aparecen en el optgroup "Vistas combinadas planta +
+    // refinería"), window._execPlanta guarda la CLAVE interna del combo
+    // ('__COMBO_IQUITOS__'), no el nombre real. Las filas de filasNac
+    // usan el nombre YA RESUELTO (_comboCanonico → plantaDespacho, ej.
+    // "Iquitos") — comparar la clave interna contra ese nombre nunca
+    // daba match, así que el filtro por planta vaciaba TODO el reporte
+    // y salía "no hay datos" aunque la pantalla sí mostrara inventario.
+    // Mismo patrón de resolución que ya usa el resto del archivo
+    // (COMBO_PLANTAS[pl] ? COMBO_PLANTAS[pl].plantaDespacho : pl) —
+    // aplica a Iquitos, Conchán y cualquier otra vista combinada actual
+    // o futura, no solo a este caso puntual.
+    if (_plantaScopeXls && typeof COMBO_PLANTAS !== 'undefined' && COMBO_PLANTAS[_plantaScopeXls]) {
+      _plantaScopeXls = COMBO_PLANTAS[_plantaScopeXls].plantaDespacho;
+    }
     // ⚠️ AGREGADO — período de exportación: paso independiente del
     // selector de 7/15/30 días de las gráficas de pantalla. 'hoy' = un
     // solo día (fechaHoy); en otro caso, los últimos N días con datos
@@ -27022,6 +27038,13 @@ function _renderVistaEjecutivaSimpleImpl() {
     var _diasExportPdf = (!periodo || periodo === 'hoy') ? [fechaHoy] : (periodo.indexOf('mes:') === 0 ? (DATES || []).filter(function(d){ return d.slice(0,7) === periodo.slice(4); }) : (DATES || []).slice(-(parseInt(periodo, 10) || 1)));
     var _esMultiDia = _diasExportPdf.length > 1;
     var _plantaScope = (window._execPlanta && window._execPlanta !== 'Nacional') ? window._execPlanta : null;
+    // ⚠️ CORREGIDO — mismo bug y mismo fix que en la exportación a Excel
+    // (ver _plantaScopeXls, más arriba en este archivo) — window._execPlanta
+    // puede traer la clave interna de un combo ('__COMBO_IQUITOS__') en
+    // vez del nombre real de la planta.
+    if (_plantaScope && typeof COMBO_PLANTAS !== 'undefined' && COMBO_PLANTAS[_plantaScope]) {
+      _plantaScope = COMBO_PLANTAS[_plantaScope].plantaDespacho;
+    }
     var filasNacPdf = _execReporteFilasNacional(_diasExportPdf);
     if (scope === 'planta' && _plantaScope) {
       filasNacPdf = filasNacPdf.filter(function(r) { return r.planta === _plantaScope; });
