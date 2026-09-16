@@ -15911,6 +15911,17 @@ document.addEventListener('input', function(e) {
   const prodIdx = parseInt(el.dataset.prodIdx);
   simStopProdField(shipId, stopIdx, prodIdx, 'vol', el.value);
 });
+// ⚠️ AGREGADO — a pedido: guarda lo que se va escribiendo/pegando en el
+// textarea de Posicionamiento de Naves para que sobreviva a los
+// re-renders en segundo plano de la página "Carga de Datos" (ver
+// _uplAccordion / renderPUpload) — antes, si uno de esos re-renders
+// ocurría antes de pulsar "Analizar Texto", el texto pegado
+// desaparecía junto con el acordeón que se cerraba solo.
+document.addEventListener('input', function(e) {
+  if (e.target && e.target.id === 'naves-text-input') {
+    window._uplNavesDraft = e.target.value;
+  }
+});
 // ⚠️ AGREGADO — a pedido: arrastrar y soltar para reordenar las
 // escalas del buque activo en el Simulador (ver simReorderStop). El
 // "agarre" visual (⠿) es solo indicativo — toda la tarjeta es
@@ -16256,7 +16267,16 @@ function renderPUpload() {
         + '<input type="date" id="naves-date-override" value="'+(currentDate||new Date().toISOString().slice(0,10))+'">'
         + '<span class="upl-date-hint">Fecha del reporte que estás pegando</span></div>'
         + '<textarea id="naves-text-input" placeholder="Pega aquí el texto del reporte de naves (copia desde el PDF)..." '
-        + 'style="width:100%;height:90px;background:var(--card2);color:var(--txt);border:1px solid var(--bdr);border-radius:8px;padding:10px;font-family:var(--mono);font-size:10px;resize:vertical;box-sizing:border-box"></textarea>'
+        + 'style="width:100%;height:90px;background:var(--card2);color:var(--txt);border:1px solid var(--bdr);border-radius:8px;padding:10px;font-family:var(--mono);font-size:10px;resize:vertical;box-sizing:border-box">'
+        // ⚠️ AGREGADO — a pedido: mismo problema que el acordeón que se
+        // cerraba solo — el re-render en segundo plano de esta página
+        // (ver renderPUpload/_uplAccordion) reconstruye este textarea
+        // desde cero, así que el texto pegado pero todavía no
+        // "analizado" también se perdía. Se restaura desde
+        // window._uplNavesDraft, que se va guardando mientras se
+        // escribe/pega (ver el listener 'input' delegado más abajo).
+        + (window._uplNavesDraft ? window._uplNavesDraft.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;') : '')
+        + '</textarea>'
         + '<div style="display:flex;gap:8px;margin-top:8px">'
         + '<button class="upload-btn upload-btn-secondary" onclick="parseNavesText()" style="flex:1">🔍 Analizar Texto</button>'
         + '<span style="font-size:9px;color:var(--txt3);display:flex;align-items:center">o</span>'
@@ -16381,8 +16401,26 @@ function renderPUpload() {
   _bindUploadEvents();
 }
 function _uplAccordion(id, icon, title, desc, badge, openDefault, bodyHTML, lastDate) {
-  var open = openDefault ? 'open' : '';
-  var disp = openDefault ? 'block' : 'none';
+  // ⚠️ CORREGIDO — a pedido ("al pegar la data se abate el acordeón
+  // solo, 3 veces seguidas"): el estado abierto/cerrado se recalculaba
+  // en CADA render desde un heurístico ("¿ya hay datos parseados en esta
+  // sección?"), no desde lo que el usuario decidió a mano. La página
+  // "Carga de Datos" se vuelve a renderizar sola en segundo plano poco
+  // después de abrirla (termina de cargar SheetJS, termina de precargar
+  // Ventas PP — ver renderPUpload) — cualquier acordeón abierto a mano
+  // MIENTRAS TANTO (ej. para pegar el texto de Posicionamiento de Naves,
+  // que todavía no se ha "analizado" y por tanto el heurístico lo sigue
+  // viendo como cerrado) se volvía a cerrar solo con cada uno de esos
+  // re-renders. Ahora el estado se guarda en window._uplOpenState y
+  // sobrevive a los re-renders — openDefault solo se usa la primerísima
+  // vez que se dibuja ese acordeón en la sesión. Aplica a TODOS los
+  // acordeones de esta página (actuales y los que se agreguen después),
+  // no solo al de naves.
+  window._uplOpenState = window._uplOpenState || {};
+  var isOpen = (window._uplOpenState[id] !== undefined) ? window._uplOpenState[id] : !!openDefault;
+  window._uplOpenState[id] = isOpen;
+  var open = isOpen ? 'open' : '';
+  var disp = isOpen ? 'block' : 'none';
   var dateTag = '';
   if (lastDate) {
     var _dObj = new Date(lastDate + 'T12:00:00');
@@ -16417,9 +16455,14 @@ function _uplToggle(id) {
   var arrow = document.getElementById(id+'-arrow');
   if (!body) return;
   var isOpen = body.style.display !== 'none';
-  body.style.display  = isOpen ? 'none' : 'block';
-  if (hdr)   { hdr.classList.toggle('open', !isOpen); }
-  if (arrow) { arrow.classList.toggle('open', !isOpen); }
+  var newOpen = !isOpen;
+  body.style.display  = newOpen ? 'block' : 'none';
+  if (hdr)   { hdr.classList.toggle('open', newOpen); }
+  if (arrow) { arrow.classList.toggle('open', newOpen); }
+  // ⚠️ AGREGADO — a pedido: persistir el estado para que sobreviva a
+  // los re-renders en segundo plano de la página (ver _uplAccordion).
+  window._uplOpenState = window._uplOpenState || {};
+  window._uplOpenState[id] = newOpen;
 }
 window._uplToggle = _uplToggle;
 function initDropzone(dzId, fileInputId, onFile) {
@@ -18152,6 +18195,11 @@ var mAmarro = chunk.match(/AMARR[OÓ](?:\s+EN\s+[A-Z0-9\-]+)?:\s*(\d{1,2}(?:\.\d
     });
     if (!naves.length) throw new Error('No se detectaron naves. Verifica que el texto contiene nombres como URUBAMBA, MOCHE, etc.');
     uploadNavesData = {fecha: fecha, naves: naves, tipo: isCargas ? 'CARGAS' : 'DIARIO', cierresPuerto: cierresPuerto};
+    // ⚠️ AGREGADO — a pedido: el texto ya quedó analizado y guardado en
+    // uploadNavesData (que además fuerza el acordeón abierto vía
+    // navesOpen en renderPUpload) — el borrador temporal ya no hace
+    // falta.
+    window._uplNavesDraft = '';
     buildNavesPreview();
     addUploadLog(true, (isCargas?'Cargas':'Diario') + ': ' + naves.length + ' naves · ' + cierresPuerto.length + ' cierres · ' + fecha);
   } catch (err) {
