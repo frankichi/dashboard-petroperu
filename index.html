@@ -26949,6 +26949,18 @@ function _renderVistaEjecutivaSimpleImpl() {
       if (btnExcel) { btnExcel.disabled = false; btnExcel.innerHTML = txtOriginal; }
     }
     var _plantaScopeXls = (window._execPlanta && window._execPlanta !== 'Nacional') ? window._execPlanta : null;
+    // ⚠️ AGREGADO — a pedido: se guarda ANTES de resolver el combo — es
+    // la única forma de distinguir las dos opciones del desplegable que
+    // terminan apuntando al mismo "Iquitos" canónico: "Refinería
+    // Iquitos" sola (🛢️, opción directa) vs. el combo "🔗 Iquitos + Ref.
+    // Iquitos" (clave interna). La refinería nunca despacha — solo se
+    // sube su inventario a mano en Coberturas. El combo, en cambio, SÍ
+    // debe combinar ese inventario con el despacho real de la Planta de
+    // Ventas Iquitos (un reporte aparte, de esa planta) — eso es
+    // intencional y no se toca. Solo cuando se elige la refinería SOLA
+    // se debe limpiar cualquier despacho — ver más abajo, después del
+    // filtro por planta.
+    var _esRefineriaIquitosSola = (window._execPlanta === 'Refinería Iquitos');
     // ⚠️ CORREGIDO — bug real confirmado (Refinería Iquitos): cuando la
     // planta elegida es una "vista combinada" (ej. Iquitos, Conchán —
     // las que aparecen en el optgroup "Vistas combinadas planta +
@@ -26994,6 +27006,17 @@ function _renderVistaEjecutivaSimpleImpl() {
     // producto" no tendría sentido como reporte de planta.
     if (scope === 'planta' && _plantaScopeXls) {
       filasNac = filasNac.filter(function(r) { return r.planta === _plantaScopeXls; });
+    }
+    // ⚠️ AGREGADO — a pedido: cuando se eligió "Refinería Iquitos" SOLA
+    // (no el combo), el despacho/pronóstico que trae la fila es el de la
+    // Planta de Ventas Iquitos (una fuente distinta) — la refinería en sí
+    // no despacha, ese dato no le corresponde a esta exportación. Se
+    // limpia solo para este caso puntual; el combo sigue trayendo el
+    // despacho combinado tal como está pensado.
+    if (_esRefineriaIquitosSola) {
+      filasNac = filasNac.map(function(r) {
+        return Object.assign({}, r, { desp: 0, pron: 0, cob: null });
+      });
     }
     if (!filasNac.length) { alert('No hay datos de inventario para el período elegido' + (scope === 'planta' ? (' en ' + (_plantaScopeXls||'')) : '') + '.'); return; }
 
@@ -27100,6 +27123,9 @@ function _renderVistaEjecutivaSimpleImpl() {
     var _diasExportPdf = (!periodo || periodo === 'hoy') ? [fechaHoy] : (periodo.indexOf('mes:') === 0 ? (DATES || []).filter(function(d){ return d.slice(0,7) === periodo.slice(4); }) : (DATES || []).slice(-(parseInt(periodo, 10) || 1)));
     var _esMultiDia = _diasExportPdf.length > 1;
     var _plantaScope = (window._execPlanta && window._execPlanta !== 'Nacional') ? window._execPlanta : null;
+    // ⚠️ AGREGADO — a pedido: mismo distingo que en Excel (ver
+    // _esRefineriaIquitosSola) — se guarda ANTES de resolver el combo.
+    var _esRefineriaIquitosSolaPdf = (window._execPlanta === 'Refinería Iquitos');
     // ⚠️ CORREGIDO — mismo bug y mismo fix que en la exportación a Excel
     // (ver _plantaScopeXls, más arriba en este archivo) — window._execPlanta
     // puede traer la clave interna de un combo ('__COMBO_IQUITOS__') en
@@ -27115,6 +27141,14 @@ function _renderVistaEjecutivaSimpleImpl() {
     var filasNacPdf = _execReporteFilasNacional(_diasExportPdf);
     if (scope === 'planta' && _plantaScope) {
       filasNacPdf = filasNacPdf.filter(function(r) { return r.planta === _plantaScope; });
+    }
+    // ⚠️ AGREGADO — a pedido: mismo caso puntual que en Excel — "Refinería
+    // Iquitos" sola no despacha, ese dato de la fila combinada le
+    // pertenece a la Planta de Ventas Iquitos, no a la refinería.
+    if (_esRefineriaIquitosSolaPdf) {
+      filasNacPdf = filasNacPdf.map(function(r) {
+        return Object.assign({}, r, { desp: 0, pron: 0, cob: null });
+      });
     }
     if (!filasNacPdf.length) { alert('No hay datos de inventario para el período elegido' + (scope === 'planta' ? (' en ' + (_plantaScope||'')) : '') + '.'); return; }
 
