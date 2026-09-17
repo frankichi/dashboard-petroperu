@@ -1023,16 +1023,24 @@ function rdMsg(elId, text, ok) {
   el.className = 'msgbox ' + (ok ? 'ok' : 'error');
 }
 
-function rdPost(action, payload) {
-  payload = payload || {};
-  payload.action = action;
-  // Modo soporte admin: adjuntar la planta que se está "viendo como",
-  // para que este guardado/consulta se comporte igual que si esa planta
-  // hubiera iniciado sesión. El backend solo lo honra si el token
-  // realmente pertenece a un admin — nunca confía en esto por sí solo.
-  if (RD.rol === 'admin' && RD.plantaAdminVista) payload.plantaAdmin = RD.plantaAdminVista;
+// ⚠️ CORREGIDO — a pedido ("a algunos usuarios les aparece 'No se pudo
+// conectar' al Guardar reporte"): antes se hacía UN solo intento con 30s
+// de margen — cualquier arranque en frío de Apps Script, encolamiento por
+// varias plantas guardando casi a la vez (fin de turno), o un hipo de red
+// puntual, hacía abortar la petición y mostraba el error aunque el
+// backend hubiera respondido bien un par de segundos después. Causa de
+// fondo (ver handleRdGuardarReporte en Code.gs): esa función lee las
+// hojas 'reporte_diario' e 'inventario' COMPLETAS en cada guardado, y su
+// tiempo de ejecución crece con el historial acumulado — cuanto más meses
+// pasan, más lento se pone, y con varias plantas guardando junto el
+// margen de 30s a veces no alcanza. Mientras esa causa de fondo se
+// optimiza en el backend, acá se agrega UN reintento automático (con
+// timeout ampliado a 45s) antes de darle al operador el mensaje de error
+// — así una demora puntual ya no obliga a que vuelva a hacer clic en
+// Guardar él mismo.
+function rdPostIntento(action, payload, timeoutMs) {
   var ctrl = new AbortController();
-  var tid  = setTimeout(function(){ ctrl.abort(); }, 30000);
+  var tid  = setTimeout(function(){ ctrl.abort(); }, timeoutMs);
   return fetch(API_URL, {
     method: 'POST',
     redirect: 'follow',
@@ -1042,6 +1050,22 @@ function rdPost(action, payload) {
   })
     .then(function(r) { clearTimeout(tid); return r.json(); })
     .catch(function(e) { clearTimeout(tid); throw e; });
+}
+function rdPost(action, payload) {
+  payload = payload || {};
+  payload.action = action;
+  // Modo soporte admin: adjuntar la planta que se está "viendo como",
+  // para que este guardado/consulta se comporte igual que si esa planta
+  // hubiera iniciado sesión. El backend solo lo honra si el token
+  // realmente pertenece a un admin — nunca confía en esto por sí solo.
+  if (RD.rol === 'admin' && RD.plantaAdminVista) payload.plantaAdmin = RD.plantaAdminVista;
+  return rdPostIntento(action, payload, 30000).catch(function(e) {
+    // Primer intento falló (timeout o red) — un solo reintento con más
+    // margen antes de rendirse. No se reintenta si el problema fue que
+    // el propio backend devolvió un error de negocio (eso ya llega como
+    // JSON válido con success:false, y no pasa por este catch).
+    return rdPostIntento(action, payload, 45000);
+  });
 }
 function rdGet(action, params) {
   // ⚠️ IMPORTANTE: sin esto, el navegador puede servir una respuesta
