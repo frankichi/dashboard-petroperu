@@ -1,0 +1,1242 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2064%2064%22%3E%0A%3Cdefs%3E%0A%3ClinearGradient%20id%3D%22g%22%20x1%3D%220%22%20y1%3D%220%22%20x2%3D%221%22%20y2%3D%221%22%3E%0A%3Cstop%20offset%3D%220%25%22%20stop-color%3D%22%230071A4%22/%3E%0A%3Cstop%20offset%3D%22100%25%22%20stop-color%3D%22%230a3a5c%22/%3E%0A%3C/linearGradient%3E%0A%3C/defs%3E%0A%3Crect%20width%3D%2264%22%20height%3D%2264%22%20rx%3D%2214%22%20fill%3D%22url%28%23g%29%22/%3E%0A%3Cpath%20d%3D%22M32%2012%20C23%2025%2018%2034%2018%2041%20a14%2014%200%200%200%2028%200%20c0-7-5-16-14-29z%22%20fill%3D%22%23ffffff%22/%3E%0A%3Ccircle%20cx%3D%2232%22%20cy%3D%2243%22%20r%3D%224.2%22%20fill%3D%22%23DC271C%22/%3E%0A%3C/svg%3E">
+<title>Transporte Marítimo y Fluvial — Reportes | Petroperú</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root{
+    --azul:#0071A4; --azul-osc:#0a3a5c; --rojo:#DC271C; --gris:#2B2B2B;
+    --bg:#f1f5f9; --card:#ffffff; --bdr:#e2e8f0; --txt:#1e293b; --txt2:#475569; --txt3:#94a3b8;
+    --verde:#16a34a; --ambar:#d97706; --azul-cl:#eff6ff;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--txt);min-height:100vh;padding-bottom:60px}
+  header{background:linear-gradient(135deg,var(--azul-osc) 0%,#1e3a8a 60%,var(--azul) 100%);padding:20px 24px;position:sticky;top:0;z-index:100;box-shadow:0 2px 12px rgba(0,0,0,.15)}
+  .hdr-row{max-width:1100px;margin:0 auto;display:flex;align-items:center;gap:16px;flex-wrap:wrap;justify-content:space-between}
+  .hdr-left{display:flex;align-items:center;gap:14px}
+  .logo{width:44px;height:44px;background:rgba(255,255,255,.15);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:20px;border:1.5px solid rgba(255,255,255,.25)}
+  .hdr-title{color:#fff;font-size:18px;font-weight:800;letter-spacing:-.2px}
+  .hdr-sub{color:rgba(255,255,255,.75);font-size:11.5px;margin-top:2px}
+  .hdr-right{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+  .hdr-date{color:#fff;font-size:11px;background:rgba(255,255,255,.12);padding:6px 12px;border-radius:8px;font-weight:600}
+  .hdr-user{display:flex;align-items:center;gap:8px;background:rgba(255,255,255,.12);padding:6px 12px;border-radius:8px}
+  .hdr-user-info{color:#fff;font-size:11.5px;font-weight:700;line-height:1.3}
+  .hdr-user-cargo{color:rgba(255,255,255,.7);font-size:9.5px;font-weight:600;text-transform:uppercase}
+  .logout-btn{background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);color:#fff;padding:6px 12px;border-radius:7px;font-size:11px;font-weight:700;cursor:pointer}
+  .logout-btn:hover{background:rgba(255,255,255,.25)}
+  .tabs{display:flex;gap:6px;max-width:1100px;margin:16px auto 0;padding:0 24px}
+  .tab-btn{flex:1;padding:12px 16px;border:none;border-radius:10px 10px 0 0;background:var(--card);color:var(--txt3);font-size:13px;font-weight:700;cursor:pointer;border:1px solid var(--bdr);border-bottom:none;transition:.15s}
+  .tab-btn.active{background:var(--azul-osc);color:#fff}
+  .tab-btn:not(.active):hover{background:#e8eef3}
+  main{max-width:1100px;margin:0 auto;padding:0 24px}
+  .panel{background:var(--card);border:1px solid var(--bdr);border-radius:0 12px 12px 12px;padding:24px;display:none}
+  .panel.active{display:block}
+  .panel-title{font-size:16px;font-weight:800;color:var(--txt);margin-bottom:4px}
+  .panel-sub{font-size:12px;color:var(--txt3);margin-bottom:18px}
+  .top-bar{display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin-bottom:20px;padding:14px 16px;background:var(--azul-cl);border-radius:10px;border:1px solid #bfdbfe}
+  .top-bar label{font-size:11px;font-weight:700;color:var(--azul-osc)}
+  .top-bar input[type=date]{padding:7px 10px;border:1.5px solid #93c5fd;border-radius:7px;font-size:12.5px;font-weight:700;color:var(--txt)}
+  .add-btn{background:var(--azul);color:#fff;border:none;padding:10px 18px;border-radius:8px;font-size:12.5px;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:6px;transition:.15s}
+  .add-btn:hover{background:var(--azul-osc)}
+  .save-btn{background:var(--rojo);color:#fff;border:none;padding:12px 22px;border-radius:9px;font-size:13.5px;font-weight:800;cursor:pointer;display:inline-flex;align-items:center;gap:8px}
+  .save-btn:hover{background:#b91c15}
+  .save-btn:disabled{opacity:.5;cursor:not-allowed}
+  .buque-card{border:1.5px solid var(--bdr);border-radius:12px;margin-bottom:16px;overflow:hidden;background:#fafcfe}
+  .buque-hdr{display:flex;align-items:center;gap:10px;padding:12px 16px;background:var(--azul-osc);color:#fff;cursor:pointer;flex-wrap:wrap}
+  .buque-hdr-title{font-weight:800;font-size:13px;flex:1}
+  .buque-hdr-sub{font-size:10.5px;color:rgba(255,255,255,.7)}
+  .buque-body{padding:16px}
+  .field-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:14px}
+  .field label{display:block;font-size:10px;font-weight:800;color:var(--txt3);text-transform:uppercase;letter-spacing:.04em;margin-bottom:5px}
+  .field input,.field select{width:100%;padding:9px 10px;border:1.5px solid var(--bdr);border-radius:7px;font-size:12.5px;color:var(--txt);font-family:inherit;background:#fff}
+  .field input:focus,.field select:focus{outline:none;border-color:var(--azul)}
+  .field.critico label{color:var(--verde)}
+  .field.critico input{border-color:#86efac;background:#f0fdf4}
+  .tramo-row{display:grid;grid-template-columns:1.3fr 1fr 1fr 1.1fr .8fr .9fr auto;gap:8px;align-items:end;padding:10px;background:#fff;border:1px solid var(--bdr);border-radius:8px;margin-bottom:8px}
+  .tramo-row label{font-size:9px;font-weight:800;color:var(--txt3);text-transform:uppercase;display:block;margin-bottom:3px}
+  .tramo-row input,.tramo-row select{width:100%;padding:6px 8px;border:1.5px solid var(--bdr);border-radius:6px;font-size:11.5px}
+  .rm-btn{background:#fef2f2;color:var(--rojo);border:1px solid #fecaca;border-radius:6px;width:30px;height:30px;cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center}
+  .rm-btn:hover{background:#fee2e2}
+  .rm-buque{background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);color:#fff;border-radius:6px;padding:5px 10px;font-size:10.5px;cursor:pointer;font-weight:700}
+  .add-tramo-btn{background:#eff6ff;color:var(--azul);border:1.5px dashed #93c5fd;border-radius:8px;padding:9px 14px;font-size:11.5px;font-weight:700;cursor:pointer;width:100%;margin-top:4px}
+  .add-tramo-btn:hover{background:#dbeafe}
+  .cap-bar-wrap{margin-bottom:14px}
+  .cap-bar-track{height:10px;background:var(--bg);border-radius:6px;overflow:hidden;border:1px solid var(--bdr)}
+  .cap-bar-fill{height:100%;border-radius:6px;transition:width .3s}
+  .cap-bar-label{display:flex;justify-content:space-between;font-size:10.5px;font-weight:700;color:var(--txt2);margin-top:5px}
+  .escala-row{display:grid;grid-template-columns:1.2fr 1.1fr .9fr 1fr .8fr auto;gap:8px;align-items:end;padding:10px;background:#fff;border:1px solid var(--bdr);border-radius:8px;margin-bottom:8px}
+  .escala-row label{font-size:9px;font-weight:800;color:var(--txt3);text-transform:uppercase;display:block;margin-bottom:3px}
+  .escala-row input,.escala-row select{width:100%;padding:6px 8px;border:1.5px solid var(--bdr);border-radius:6px;font-size:11.5px}
+  .escala-card{background:#fff;border:1.5px solid var(--bdr);border-radius:9px;padding:12px;margin-bottom:10px}
+  .escala-hdr{display:flex;gap:8px;align-items:end;flex-wrap:wrap}
+  .escala-hdr label{font-size:9px;font-weight:800;color:var(--txt3);text-transform:uppercase;display:block;margin-bottom:3px}
+  .escala-hdr input,.escala-hdr select{width:100%;padding:6px 8px;border:1.5px solid var(--bdr);border-radius:6px;font-size:11.5px}
+  .prod-row{display:flex;gap:8px;align-items:center;margin-bottom:6px}
+  .prod-row select,.prod-row input{padding:6px 8px;border:1.5px solid var(--bdr);border-radius:6px;font-size:11.5px}
+  .escala-card details summary::-webkit-details-marker{color:var(--azul)}
+  .empty-state{text-align:center;padding:40px 20px;color:var(--txt3)}
+  .empty-state-icon{font-size:32px;margin-bottom:10px}
+  .status-msg{margin-top:14px;padding:12px 14px;border-radius:9px;font-size:12.5px;font-weight:700;display:none}
+  .status-msg.ok{display:block;background:#f0fdf4;color:var(--verde);border:1px solid #bbf7d0}
+  .status-msg.err{display:block;background:#fef2f2;color:var(--rojo);border:1px solid #fecaca}
+  .hint-box{background:#fffbeb;border:1px solid #fde68a;border-radius:9px;padding:12px 14px;font-size:11.5px;color:#92400e;margin-bottom:18px;line-height:1.6}
+  .footer-actions{display:flex;gap:10px;align-items:center;margin-top:18px;flex-wrap:wrap}
+  .glossary{margin-top:24px;border-top:1px solid var(--bdr);padding-top:16px}
+  .glossary summary{cursor:pointer;font-size:12px;font-weight:700;color:var(--azul);padding:6px 0}
+  .glossary-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;margin-top:10px}
+  .glossary-item{font-size:11px;color:var(--txt2);padding:8px 10px;background:var(--bg);border-radius:7px}
+  .glossary-item b{color:var(--txt)}
+  /* ── Login ── */
+  #login-screen{min-height:100vh;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,var(--azul-osc) 0%,#1e3a8a 60%,var(--azul) 100%);padding:20px}
+  .login-card{background:#fff;border-radius:16px;padding:32px;width:100%;max-width:400px;box-shadow:0 20px 60px rgba(0,0,0,.3)}
+  .login-logo{width:56px;height:56px;background:var(--azul-cl);border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:26px;margin:0 auto 16px}
+  .login-title{text-align:center;font-size:17px;font-weight:800;color:var(--txt)}
+  .login-sub{text-align:center;font-size:11.5px;color:var(--txt3);margin-top:4px;margin-bottom:22px}
+  .login-field{margin-bottom:14px}
+  .login-field label{display:block;font-size:11px;font-weight:700;color:var(--txt2);margin-bottom:6px}
+  .login-field input,.login-field select{width:100%;padding:11px 12px;border:1.5px solid var(--bdr);border-radius:8px;font-size:13px;font-family:inherit}
+  .login-field input:focus,.login-field select:focus{outline:none;border-color:var(--azul)}
+  .login-btn{width:100%;background:var(--rojo);color:#fff;border:none;padding:12px;border-radius:9px;font-size:13.5px;font-weight:800;cursor:pointer;margin-top:6px}
+  .login-btn:hover{background:#b91c15}
+  .login-btn:disabled{opacity:.5;cursor:not-allowed}
+  .login-switch{text-align:center;margin-top:16px;font-size:12px;color:var(--txt3)}
+  .login-switch a{color:var(--azul);font-weight:700;cursor:pointer;text-decoration:none}
+  .login-err{background:#fef2f2;color:var(--rojo);border:1px solid #fecaca;border-radius:8px;padding:10px 12px;font-size:11.5px;font-weight:600;margin-bottom:14px;display:none}
+  /* ── Mis Registros ── */
+  .hist-toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:18px}
+  .filter-select{padding:8px 12px;border:1.5px solid var(--bdr);border-radius:7px;font-size:12px;font-family:inherit}
+  .export-btn{background:#fff;border:1.5px solid var(--bdr);color:var(--txt2);padding:8px 14px;border-radius:7px;font-size:11.5px;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:6px}
+  .export-btn.xlsx{border-color:#86efac;color:var(--verde)}
+  .export-btn.xlsx:hover{background:#f0fdf4}
+  .export-btn.pdf{border-color:#93c5fd;color:var(--azul)}
+  .export-btn.pdf:hover{background:var(--azul-cl)}
+  .hist-table{width:100%;border-collapse:collapse;font-size:11.5px}
+  .hist-table th{background:var(--bg);color:var(--txt3);font-size:9.5px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;padding:8px 10px;text-align:left;border-bottom:2px solid var(--bdr);white-space:nowrap}
+  .hist-table td{padding:8px 10px;border-bottom:1px solid var(--bdr);white-space:nowrap}
+  .hist-table tr:hover{background:var(--bg)}
+  .hist-scroll{overflow-x:auto;border:1px solid var(--bdr);border-radius:10px;max-height:520px;overflow-y:auto}
+  .pill{display:inline-block;padding:2px 8px;border-radius:12px;font-size:9.5px;font-weight:800}
+  .pill.PROGRAMADO{background:#dbeafe;color:#1e40af}
+  .pill.ACTUAL{background:#fef3c7;color:#92400e}
+  .pill.COMPLETADO{background:#dcfce7;color:#166534}
+  .hist-sub-title{font-size:12.5px;font-weight:800;color:var(--txt);margin:18px 0 8px;display:flex;align-items:center;gap:8px}
+  @media(max-width:640px){
+    .hdr-title{font-size:15px} .hdr-sub{font-size:10px} main{padding:0 12px}
+    .tabs{padding:0 12px} .panel{padding:16px;border-radius:0 0 12px 12px}
+    .tramo-row{grid-template-columns:1fr 1fr}
+    .field-grid{grid-template-columns:1fr 1fr}
+    .login-card{padding:22px}
+  }
+  @media print{
+    header,.tabs,.top-bar,.add-btn,.footer-actions,.glossary,.hint-box,.hist-toolbar,.buque-card{display:none!important}
+    body{background:#fff}
+    .panel{display:block!important;border:none;box-shadow:none}
+  }
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════ LOGIN ═══════════════════════════ -->
+<div id="login-screen">
+  <div class="login-card">
+    <div class="login-logo">🚢</div>
+    <div class="login-title">Transporte Marítimo y Fluvial</div>
+    <div class="login-sub">Jefatura Flota · Petroperú</div>
+    <div class="login-err" id="login-err"></div>
+
+    <!-- Iniciar sesión -->
+    <div id="login-form-in">
+      <div class="login-field"><label>Correo electrónico</label><input type="email" id="li-usuario" placeholder="nombre.apellido@petroperu.com.pe" autocomplete="username" onkeydown="if(event.key==='Enter'){document.getElementById('li-password').focus();}"></div>
+      <div class="login-field"><label>Contraseña</label><input type="password" id="li-password" placeholder="••••••••" autocomplete="current-password" onkeydown="if(event.key==='Enter'){doLogin();}"></div>
+      <button class="login-btn" id="li-btn" onclick="doLogin()">Iniciar sesión</button>
+      <div class="login-switch">¿No tienes cuenta? <a onclick="showRegistro()">Crear una</a></div>
+    </div>
+
+    <!-- Crear cuenta -->
+    <div id="login-form-up" style="display:none">
+      <div class="field-grid" style="grid-template-columns:1fr 1fr">
+        <div class="login-field"><label>Nombre</label><input type="text" id="up-nombre" placeholder="Ej. Juan" onkeydown="if(event.key==='Enter'){document.getElementById('up-apellido').focus();}"></div>
+        <div class="login-field"><label>Apellido</label><input type="text" id="up-apellido" placeholder="Ej. Pérez" onkeydown="if(event.key==='Enter'){document.getElementById('up-usuario').focus();}"></div>
+      </div>
+      <div class="login-field"><label>Cargo</label>
+        <select id="up-cargo">
+          <option value="Jefe">Jefe</option>
+          <option value="Supervisor" selected>Supervisor</option>
+          <option value="Auxiliar">Auxiliar</option>
+        </select>
+      </div>
+      <div class="login-field"><label>Correo electrónico (para iniciar sesión)</label><input type="email" id="up-usuario" placeholder="nombre.apellido@petroperu.com.pe" onkeydown="if(event.key==='Enter'){document.getElementById('up-password').focus();}"></div>
+      <div class="login-field"><label>Contraseña (mínimo 8 caracteres)</label><input type="password" id="up-password" placeholder="••••••••" onkeydown="if(event.key==='Enter'){doRegistro();}"></div>
+      <button class="login-btn" id="up-btn" onclick="doRegistro()">Crear cuenta</button>
+      <div class="login-switch">¿Ya tienes cuenta? <a onclick="showLogin()">Iniciar sesión</a></div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════ APP ═══════════════════════════ -->
+<div id="app-screen" style="display:none">
+<header>
+  <div class="hdr-row">
+    <div class="hdr-left">
+      <div class="logo">🚢</div>
+      <div>
+        <div class="hdr-title">Transporte Marítimo y Fluvial</div>
+        <div class="hdr-sub">Jefatura Flota · Petroperú — Reportes en línea</div>
+      </div>
+    </div>
+    <div class="hdr-right">
+      <div class="hdr-date" id="hdr-clock"></div>
+      <div class="hdr-user">
+        <span>👤</span>
+        <div>
+          <div class="hdr-user-info" id="hdr-user-nombre"></div>
+          <div class="hdr-user-cargo" id="hdr-user-cargo"></div>
+        </div>
+      </div>
+      <button class="logout-btn" onclick="doLogout()">Salir</button>
+    </div>
+  </div>
+</header>
+
+<main>
+  <div class="tabs">
+    <button class="tab-btn active" onclick="cambiarTab('cargas')">📦 Cargas de Naves</button>
+    <button class="tab-btn" onclick="cambiarTab('pos')">📍 Posicionamiento de Naves</button>
+    <button class="tab-btn" onclick="cambiarTab('sim')">🗓️ Programar Buques</button>
+    <button class="tab-btn" onclick="cambiarTab('hist')">📋 Mis Registros</button>
+  </div>
+
+  <!-- ═══════════════ TAB: CARGAS DE NAVES ═══════════════ -->
+  <div class="panel active" id="panel-cargas">
+    <div class="panel-title">Cargas de Naves</div>
+    <div class="panel-sub">Ruta, productos y volúmenes planeados por tramo — reemplaza al PDF diario.</div>
+
+    <div class="top-bar">
+      <label>📅 Fecha del reporte</label>
+      <input type="date" id="cargas-fecha">
+      <span style="font-size:10.5px;color:var(--txt3)">Esta es la fecha con la que se guardará todo lo que agregues abajo</span>
+    </div>
+
+    <div id="cargas-lista"></div>
+
+    <button class="add-btn" onclick="agregarBuqueCargas()">➕ Agregar buque</button>
+
+    <div class="footer-actions">
+      <button class="save-btn" id="cargas-save-btn" onclick="enviarCargas()">💾 Guardar Cargas de Naves</button>
+      <span id="cargas-status" class="status-msg"></span>
+    </div>
+
+    <details class="glossary">
+      <summary>ℹ️ ¿Cómo se usa este formulario?</summary>
+      <div class="glossary-grid">
+        <div class="glossary-item"><b>1 buque = 1 tarjeta.</b> Un buque puede visitar varios terminales en el mismo viaje — agrega un "tramo" por cada uno.</div>
+        <div class="glossary-item"><b>Origen</b> es de dónde sale cargado el producto (casi siempre Talara o Bayóvar). El terminal de cada tramo es donde descarga.</div>
+        <div class="glossary-item"><b>Estado del tramo:</b> PROGRAMADO (aún no llega) → ACTUAL (en muelle ahora) → COMPLETADO (ya terminó de descargar ahí).</div>
+        <div class="glossary-item">Si vuelves a guardar el mismo día, se reemplaza lo anterior — puedes corregir sin duplicar.</div>
+      </div>
+    </details>
+  </div>
+
+  <!-- ═══════════════ TAB: POSICIONAMIENTO DE NAVES ═══════════════ -->
+  <div class="panel" id="panel-pos">
+    <div class="panel-title">Posicionamiento de Naves</div>
+    <div class="panel-sub">Hora real de cada evento — esto es lo que le dice al dashboard "el buque YA descargó aquí".</div>
+
+    <div class="hint-box">
+      💡 <b>El campo más importante es T.D. (Término de Descarga).</b> En cuanto lo registras, el sistema marca esa reposición como confirmada en todo el dashboard — sin depender de que alguien más lo actualice a mano. Los demás campos son opcionales, pero mientras más completos, más preciso queda el seguimiento.
+    </div>
+
+    <div class="top-bar">
+      <label>📅 Fecha del reporte</label>
+      <input type="date" id="pos-fecha">
+      <span style="font-size:10.5px;color:var(--txt3)">Fecha del parte de posicionamiento que estás reportando</span>
+    </div>
+
+    <div id="pos-lista"></div>
+
+    <button class="add-btn" onclick="agregarBuquePos()">➕ Agregar buque</button>
+
+    <div class="footer-actions">
+      <button class="save-btn" id="pos-save-btn" onclick="enviarPosicionamiento()">💾 Guardar Posicionamiento</button>
+      <span id="pos-status" class="status-msg"></span>
+    </div>
+
+    <details class="glossary">
+      <summary>ℹ️ Glosario de términos</summary>
+      <div class="glossary-grid">
+        <div class="glossary-item"><b>ARRIBÓ / FONDEÓ</b> — la nave llegó a la rada/bahía del puerto (aún no necesariamente atracada).</div>
+        <div class="glossary-item"><b>AMARRÓ</b> — quedó atracada en el muelle/boya, ya puede empezar a operar.</div>
+        <div class="glossary-item"><b>I.D. (Inicio de Descarga)</b> — arrancó a descargar producto en ese puerto.</div>
+        <div class="glossary-item"><b>T.D. (Término de Descarga)</b> — terminó de descargar. El dato más importante para el dashboard.</div>
+        <div class="glossary-item"><b>I.C. (Inicio de Carga)</b> — arrancó a cargar (naves cargando en un puerto de origen, ej. Talara).</div>
+        <div class="glossary-item"><b>E.T. Operaciones</b> — estimado de cuándo termina toda la operación en ese puerto.</div>
+        <div class="glossary-item"><b>ZARPÓ</b> — salió del puerto, en tránsito al siguiente.</div>
+        <div class="glossary-item"><b>ETA [puerto]</b> — hora estimada de llegada al próximo puerto de la rotación.</div>
+      </div>
+    </details>
+  </div>
+
+  <!-- ═══════════════ TAB: PROGRAMAR BUQUES ═══════════════ -->
+  <div class="panel" id="panel-sim">
+    <div class="panel-title">Programar Buques Tanque</div>
+    <div class="panel-sub">Planifica la rotación de un buque antes de zarpar — capacidad total y cuánto se asigna a cada planta/producto.</div>
+
+    <div class="hint-box">
+      💡 Esto guarda las escalas como <b>PROGRAMADO</b> en Cargas de Naves — se refleja de inmediato en el dashboard como una reposición futura, sin necesitar que el buque ya haya zarpado. Corrígelo aquí mismo cuando cambie el plan.
+    </div>
+
+    <div id="sim-lista"></div>
+
+    <button class="add-btn" onclick="agregarBuqueSim()">➕ Programar un buque</button>
+
+    <div class="footer-actions">
+      <button class="save-btn" id="sim-save-btn" onclick="enviarSim()">💾 Guardar Programación</button>
+      <span id="sim-status" class="status-msg"></span>
+    </div>
+  </div>
+
+  <!-- ═══════════════ TAB: MIS REGISTROS ═══════════════ -->
+  <div class="panel" id="panel-hist">
+    <div class="panel-title">Mis Registros</div>
+    <div class="panel-sub">Historial de todo lo que el equipo de Flota ha reportado — trazable por persona y fecha.</div>
+
+    <div class="hist-toolbar">
+      <select class="filter-select" id="hist-filtro-usuario" onchange="renderHistorial()">
+        <option value="">Todos los usuarios</option>
+      </select>
+      <select class="filter-select" id="hist-filtro-dias" onchange="renderHistorial()">
+        <option value="7">Últimos 7 días</option>
+        <option value="15" selected>Últimos 15 días</option>
+        <option value="30">Últimos 30 días</option>
+        <option value="9999">Todo el historial</option>
+      </select>
+      <button class="add-btn" onclick="cargarHistorial()">🔄 Actualizar</button>
+      <span style="flex:1"></span>
+    </div>
+
+    <div class="hist-sub-title">📦 Cargas de Naves
+      <button class="export-btn xlsx" onclick="exportarExcel('cargas')">📊 Excel</button>
+      <button class="export-btn pdf" onclick="exportarPDF('cargas')">📄 PDF</button>
+    </div>
+    <div class="hist-scroll">
+      <table class="hist-table" id="tabla-cargas">
+        <thead><tr>
+          <th>Fecha</th><th>Buque</th><th>Viaje</th><th>Origen</th><th>Terminal</th>
+          <th>Desde</th><th>Hasta</th><th>Producto</th><th>Vol. MB</th><th>Estado</th><th>Reportado por</th>
+        </tr></thead>
+        <tbody id="tbody-cargas"></tbody>
+      </table>
+    </div>
+
+    <div class="hist-sub-title">📍 Posicionamiento de Naves
+      <button class="export-btn xlsx" onclick="exportarExcel('pos')">📊 Excel</button>
+      <button class="export-btn pdf" onclick="exportarPDF('pos')">📄 PDF</button>
+    </div>
+    <div class="hist-scroll">
+      <table class="hist-table" id="tabla-pos">
+        <thead><tr>
+          <th>Fecha</th><th>Buque</th><th>Agencia</th><th>Estado Nav.</th><th>Puerto</th>
+          <th>Arribó</th><th>Amarró</th><th>I.D.</th><th>T.D.</th><th>Zarpó</th>
+          <th>ETA Puerto</th><th>ETA Fecha</th><th>Reportado por</th>
+        </tr></thead>
+        <tbody id="tbody-pos"></tbody>
+      </table>
+    </div>
+  </div>
+</main>
+</div>
+
+<script>
+const API_URL = 'https://script.google.com/macros/s/AKfycbwRwsaAq4C-tRntaDf3HH4kAt24QG1GFo5_-V3hvaQiatCeTuKxuPxzWN_f6mn7vxRZ_g/exec';
+
+const TERMINALES = ['Talara','Piura','Eten','Salaverry','Chimbote','Supe','Callao','Conchán','Pisco','Mollendo','Ilo','Juliaca','Cusco','Iquitos','Pucallpa','Tarapoto','Yurimaguas','El Milagro','Bayóvar'];
+const PRODUCTOS_NAVES = ['Diesel B5 S-50','Diesel 2 S-50','Gasolina Regular','Gasolina Premium','Turbo A-1','GLP','Residual Asfáltico','Nafta Primaria','Aceite Cic. Lig. (LCO)'];
+const ESTADOS_TRAMO = ['PROGRAMADO','ACTUAL','COMPLETADO'];
+const AGENCIAS = ['INTERTEK','MARCONSULT','OTRA'];
+const ESTADOS_NAV = ['NAVEGANDO A','CARGANDO EN','DESCARGANDO EN','FONDEADO EN','AMARRADO EN','EN BAHÍA DE'];
+// ⚠️ AGREGADO — a pedido: Transporte Marítimo reporta el movimiento de
+// TODOS los buques (importación, crudos y cabotaje), pero Planificación
+// de Suministro solo lleva a Vista Ejecutiva/gerencia el CABOTAJE, por
+// ahora. Sin este campo, ese filtro tendría que hacerse a mano — con
+// el tipo capturado desde el origen, el filtro es automático y no
+// depende de que alguien lo revise caso por caso.
+const TIPOS_BUQUE = ['Cabotaje','Importación','Crudos'];
+
+// ══════════════════════ SESIÓN ══════════════════════
+var SESION = {
+  token: localStorage.getItem('flota_token') || null,
+  usuario: localStorage.getItem('flota_usuario') || '',
+  nombre: localStorage.getItem('flota_nombre') || '',
+  apellido: localStorage.getItem('flota_apellido') || '',
+  cargo: localStorage.getItem('flota_cargo') || ''
+};
+function guardarSesion() {
+  localStorage.setItem('flota_token', SESION.token);
+  localStorage.setItem('flota_usuario', SESION.usuario);
+  localStorage.setItem('flota_nombre', SESION.nombre);
+  localStorage.setItem('flota_apellido', SESION.apellido);
+  localStorage.setItem('flota_cargo', SESION.cargo);
+}
+function limpiarSesion() {
+  SESION = { token:null, usuario:'', nombre:'', apellido:'', cargo:'' };
+  ['flota_token','flota_usuario','flota_nombre','flota_apellido','flota_cargo'].forEach(function(k){ localStorage.removeItem(k); });
+}
+function showLogin() { document.getElementById('login-form-up').style.display='none'; document.getElementById('login-form-in').style.display='block'; document.getElementById('login-err').style.display='none'; }
+function showRegistro() { document.getElementById('login-form-in').style.display='none'; document.getElementById('login-form-up').style.display='block'; document.getElementById('login-err').style.display='none'; }
+function mostrarErrorLogin(msg) { var el = document.getElementById('login-err'); el.textContent = msg; el.style.display='block'; }
+
+async function doLogin() {
+  var usuario = document.getElementById('li-usuario').value.trim();
+  var password = document.getElementById('li-password').value;
+  if (!usuario || !password) { mostrarErrorLogin('Ingresa tu usuario y contraseña.'); return; }
+  var btn = document.getElementById('li-btn'); btn.disabled = true; btn.textContent = 'Ingresando...';
+  try {
+    var res = await fetch(API_URL, {
+      method: 'POST', redirect: 'follow', headers: {'Content-Type':'text/plain;charset=utf-8'},
+      body: JSON.stringify({ action:'flotaLogin', usuario: usuario, password: password })
+    });
+    var data = await res.json().catch(function(){ return null; });
+    if (!data || data.success === false) throw new Error((data && data.message) || 'No se pudo iniciar sesión.');
+    SESION = { token: data.token, usuario: data.usuario, nombre: data.nombre, apellido: data.apellido, cargo: data.cargo };
+    guardarSesion();
+    mostrarApp();
+  } catch (err) {
+    mostrarErrorLogin('❌ ' + err.message);
+  } finally {
+    btn.disabled = false; btn.textContent = 'Iniciar sesión';
+  }
+}
+async function doRegistro() {
+  var nombre = document.getElementById('up-nombre').value.trim();
+  var apellido = document.getElementById('up-apellido').value.trim();
+  var cargo = document.getElementById('up-cargo').value;
+  var usuario = document.getElementById('up-usuario').value.trim();
+  var password = document.getElementById('up-password').value;
+  if (!nombre || !apellido || !usuario || !password) { mostrarErrorLogin('Completa todos los campos.'); return; }
+  if (password.length < 8) { mostrarErrorLogin('La contraseña debe tener al menos 8 caracteres.'); return; }
+  var btn = document.getElementById('up-btn'); btn.disabled = true; btn.textContent = 'Creando...';
+  try {
+    var res = await fetch(API_URL, {
+      method: 'POST', redirect: 'follow', headers: {'Content-Type':'text/plain;charset=utf-8'},
+      body: JSON.stringify({ action:'flotaRegistrar', nombre:nombre, apellido:apellido, cargo:cargo, usuario:usuario, password:password })
+    });
+    var data = await res.json().catch(function(){ return null; });
+    if (!data || data.success === false) throw new Error((data && data.message) || 'No se pudo crear la cuenta.');
+    document.getElementById('li-usuario').value = usuario;
+    showLogin();
+    mostrarErrorLogin('✅ Cuenta creada. Ya puedes iniciar sesión.');
+    document.getElementById('login-err').style.color = 'var(--verde)';
+    document.getElementById('login-err').style.background = '#f0fdf4';
+    document.getElementById('login-err').style.borderColor = '#bbf7d0';
+  } catch (err) {
+    mostrarErrorLogin('❌ ' + err.message);
+  } finally {
+    btn.disabled = false; btn.textContent = 'Crear cuenta';
+  }
+}
+function doLogout() {
+  if (!confirm('¿Cerrar sesión?')) return;
+  limpiarSesion();
+  location.reload();
+}
+function mostrarApp() {
+  document.getElementById('login-screen').style.display = 'none';
+  document.getElementById('app-screen').style.display = 'block';
+  document.getElementById('hdr-user-nombre').textContent = SESION.nombre + ' ' + SESION.apellido;
+  document.getElementById('hdr-user-cargo').textContent = SESION.cargo;
+  init();
+}
+// (el auto-login para sesión guardada se dispara al final del script,
+// después de que todas las variables de estado ya se inicializaron —
+// ver el cierre del archivo)
+
+// ⚠️ AGREGADO — convierte un valor de <input type="datetime-local">
+// (formato "YYYY-MM-DDTHH:MM") al formato "DD/HH:MM" que ya reconocen
+// los patrones de _parseNavEvents en Vista Ejecutiva (ej. "09/04:36").
+// Sirve para sintetizar texto de respaldo dentro de estado_nav.
+function _fmtFechaCorta(valorDatetimeLocal) {
+  if (!valorDatetimeLocal) return '';
+  var m = valorDatetimeLocal.match(/^\d{4}-\d{2}-(\d{2})T(\d{2}:\d{2})/);
+  return m ? (m[1] + '/' + m[2]) : '';
+}
+function hoyLima() {
+  var d = new Date(new Date().toLocaleString('en-US', {timeZone:'America/Lima'}));
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+}
+function tickClock() {
+  var now = new Date();
+  var s = now.toLocaleString('es-PE', {timeZone:'America/Lima', day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit'});
+  document.getElementById('hdr-clock').textContent = s + ' · Lima';
+}
+function cambiarTab(tab) {
+  document.querySelectorAll('.tab-btn').forEach(function(b,i){ b.classList.toggle('active', (tab==='cargas'&&i===0)||(tab==='pos'&&i===1)||(tab==='sim'&&i===2)||(tab==='hist'&&i===3)); });
+  document.getElementById('panel-cargas').classList.toggle('active', tab==='cargas');
+  document.getElementById('panel-pos').classList.toggle('active', tab==='pos');
+  document.getElementById('panel-sim').classList.toggle('active', tab==='sim');
+  document.getElementById('panel-hist').classList.toggle('active', tab==='hist');
+  if (tab === 'hist' && !historialCache) cargarHistorial();
+}
+function selectOptions(list, current) {
+  return list.map(function(v){ return '<option value="'+v+'"'+(v===current?' selected':'')+'>'+v+'</option>'; }).join('');
+}
+function uid() { return 'x'+Math.random().toString(36).slice(2,9); }
+
+function init() {
+  document.getElementById('cargas-fecha').value = hoyLima();
+  document.getElementById('pos-fecha').value = hoyLima();
+  tickClock(); setInterval(tickClock, 30000);
+  renderCargas();
+  renderPos();
+  renderSim();
+}
+
+// ══════════════════════ CARGAS DE NAVES ══════════════════════
+var cargasBuques = [];
+function agregarBuqueCargas() {
+  cargasBuques.push({ id: uid(), buque:'', viaje:'', origen:'Talara', tipo:'Cabotaje', tramos: [{ id: uid(), terminal:'', fecha_desde:hoyLima(), fecha_hasta:hoyLima(), producto:'', volumen_mb:'', estado:'PROGRAMADO' }] });
+  renderCargas();
+}
+function quitarBuqueCargas(bid) {
+  cargasBuques = cargasBuques.filter(function(b){ return b.id !== bid; });
+  renderCargas();
+}
+function agregarTramo(bid) {
+  var b = cargasBuques.find(function(x){ return x.id===bid; });
+  if (b) b.tramos.push({ id: uid(), terminal:'', fecha_desde:hoyLima(), fecha_hasta:hoyLima(), producto:'', volumen_mb:'', estado:'PROGRAMADO' });
+  renderCargas();
+}
+function quitarTramo(bid, tid) {
+  var b = cargasBuques.find(function(x){ return x.id===bid; });
+  if (b) b.tramos = b.tramos.filter(function(t){ return t.id !== tid; });
+  renderCargas();
+}
+function syncBuqueField(bid, campo, valor) {
+  var b = cargasBuques.find(function(x){ return x.id===bid; });
+  if (b) b[campo] = valor;
+}
+function syncTramoField(bid, tid, campo, valor) {
+  var b = cargasBuques.find(function(x){ return x.id===bid; });
+  if (!b) return;
+  var t = b.tramos.find(function(x){ return x.id===tid; });
+  if (t) t[campo] = valor;
+}
+function renderCargas() {
+  var wrap = document.getElementById('cargas-lista');
+  if (!cargasBuques.length) {
+    wrap.innerHTML = '<div class="empty-state"><div class="empty-state-icon">🚢</div>Aún no agregaste ningún buque.<br>Presiona "➕ Agregar buque" para empezar.</div>';
+    return;
+  }
+  wrap.innerHTML = cargasBuques.map(function(b) {
+    var nTramos = b.tramos.length;
+    var totalVol = b.tramos.reduce(function(s,t){ return s + (parseFloat(t.volumen_mb)||0); }, 0);
+    return '<div class="buque-card">'
+      // ⚠️ AGREGADO — a pedido: badge de tipo (Cabotaje/Importación/
+      // Crudos) visible directo en el encabezado, sin tener que abrir
+      // la tarjeta — así el equipo ve de un vistazo qué es cabotaje
+      // (lo único que hoy llega a Vista Ejecutiva) sin adivinar.
+      + '<div class="buque-hdr"><span class="buque-hdr-title">🚢 ' + (b.buque||'Buque sin nombre') + (b.viaje?' · '+b.viaje:'') + '</span>'
+      + '<span style="font-size:9.5px;font-weight:800;padding:2px 8px;border-radius:10px;background:' + (b.tipo==='Cabotaje'?'rgba(0,113,164,.15);color:#0071A4':'rgba(217,119,6,.15);color:#b45309') + '">' + (b.tipo||'Cabotaje') + '</span>'
+      + '<span class="buque-hdr-sub">' + nTramos + ' tramo(s) · ' + totalVol.toFixed(1) + ' MB total</span>'
+      + '<button class="rm-buque" onclick="quitarBuqueCargas(\''+b.id+'\')">✕ Quitar</button></div>'
+      + '<div class="buque-body">'
+      + '<div class="field-grid">'
+        + '<div class="field"><label>Buque</label><input list="dl-buques" value="'+b.buque+'" onchange="syncBuqueField(\''+b.id+'\',\'buque\',this.value.toUpperCase())" placeholder="Ej. MOCHE"></div>'
+        + '<div class="field"><label>Viaje</label><input value="'+b.viaje+'" onchange="syncBuqueField(\''+b.id+'\',\'viaje\',this.value)" placeholder="Ej. V.010-2026"></div>'
+        + '<div class="field"><label>Origen (puerto de carga)</label><select onchange="syncBuqueField(\''+b.id+'\',\'origen\',this.value)">'+selectOptions(TERMINALES.concat(['Bayóvar']), b.origen)+'</select></div>'
+        + '<div class="field"><label>Tipo</label><select onchange="syncBuqueField(\''+b.id+'\',\'tipo\',this.value)">'+selectOptions(TIPOS_BUQUE, b.tipo||'Cabotaje')+'</select></div>'
+      + '</div>'
+      + '<div style="font-size:10px;font-weight:800;color:var(--txt3);text-transform:uppercase;letter-spacing:.05em;margin:10px 0 6px">Tramos (destino, fechas, producto)</div>'
+      + b.tramos.map(function(t) {
+          return '<div class="tramo-row">'
+            + '<div><label>Terminal destino</label><select onchange="syncTramoField(\''+b.id+'\',\''+t.id+'\',\'terminal\',this.value)">'+ '<option value="">— elegir —</option>' + selectOptions(TERMINALES, t.terminal) + '</select></div>'
+            + '<div><label>Desde</label><input type="date" value="'+t.fecha_desde+'" onchange="syncTramoField(\''+b.id+'\',\''+t.id+'\',\'fecha_desde\',this.value)"></div>'
+            + '<div><label>Hasta</label><input type="date" value="'+t.fecha_hasta+'" onchange="syncTramoField(\''+b.id+'\',\''+t.id+'\',\'fecha_hasta\',this.value)"></div>'
+            + '<div><label>Producto</label><select onchange="syncTramoField(\''+b.id+'\',\''+t.id+'\',\'producto\',this.value)">'+ '<option value="">— elegir —</option>' + selectOptions(PRODUCTOS_NAVES, t.producto) + '</select></div>'
+            + '<div><label>Vol. (MB)</label><input type="number" step="0.1" min="0" value="'+t.volumen_mb+'" onchange="syncTramoField(\''+b.id+'\',\''+t.id+'\',\'volumen_mb\',this.value)" placeholder="0.0"></div>'
+            + '<div><label>Estado</label><select onchange="syncTramoField(\''+b.id+'\',\''+t.id+'\',\'estado\',this.value)">'+selectOptions(ESTADOS_TRAMO, t.estado)+'</select></div>'
+            + '<button class="rm-btn" onclick="quitarTramo(\''+b.id+'\',\''+t.id+'\')" title="Quitar tramo">✕</button>'
+            + '</div>';
+        }).join('')
+      + '<button class="add-tramo-btn" onclick="agregarTramo(\''+b.id+'\')">➕ Agregar otro tramo/destino para este buque</button>'
+      + '</div></div>';
+  }).join('');
+}
+async function enviarCargas() {
+  if (!cargasBuques.length) { alert('Agrega al menos un buque antes de guardar.'); return; }
+  var fecha = document.getElementById('cargas-fecha').value;
+  if (!fecha) { alert('Selecciona la fecha del reporte.'); return; }
+  var records = [];
+  var incompletos = 0;
+  cargasBuques.forEach(function(b) {
+    if (!b.buque) { incompletos++; return; }
+    b.tramos.forEach(function(t) {
+      if (!t.terminal || !t.producto || !t.volumen_mb) { incompletos++; return; }
+      records.push({
+        fecha_reporte: fecha, buque: b.buque, viaje: b.viaje, origen: b.origen,
+        terminal: t.terminal, fecha_desde: t.fecha_desde, fecha_hasta: t.fecha_hasta,
+        producto: t.producto, volumen_mb: parseFloat(t.volumen_mb)||0, estado: t.estado,
+        tipo: b.tipo || 'Cabotaje'
+      });
+    });
+  });
+  if (!records.length) { alert('No hay ningún tramo completo para guardar. Revisa que cada tramo tenga terminal, producto y volumen.'); return; }
+  var btn = document.getElementById('cargas-save-btn');
+  var st  = document.getElementById('cargas-status');
+  btn.disabled = true;
+  st.className = 'status-msg'; st.style.display='block'; st.textContent = '⏳ Guardando...';
+  try {
+    var res = await fetch(API_URL, {
+      method: 'POST', redirect: 'follow', headers: {'Content-Type':'text/plain;charset=utf-8'},
+      body: JSON.stringify({ action: 'uploadCargasNaves', fecha_reporte: fecha, records: records, token: SESION.token })
+    });
+    var data = await res.json().catch(function(){ return { success:true }; });
+    if (data && data.success === false) throw new Error(data.message || 'Error al guardar');
+    st.className = 'status-msg ok';
+    st.textContent = '✅ ' + records.length + ' tramo(s) de ' + cargasBuques.length + ' buque(s) guardados para ' + fecha + ' — quedó registrado a nombre de ' + SESION.nombre + ' ' + SESION.apellido
+      + (incompletos ? ' — ⚠ ' + incompletos + ' fila(s) se omitieron por estar incompletas.' : '');
+    historialCache = null;
+  } catch (err) {
+    st.className = 'status-msg err';
+    st.textContent = '❌ Error al guardar: ' + err.message;
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+// ══════════════════════ PROGRAMAR BUQUES (Simulador) ══════════════════════
+var simBuques = [];
+function agregarBuqueSim() {
+  simBuques.push({
+    id: uid(), buque:'', capacidad_mb:'', origen:'Talara', fecha_zarpe: hoyLima(), agencia:'INTERTEK',
+    escalas: [_nuevaEscala()]
+  });
+  renderSim();
+}
+function _nuevaEscala() {
+  return {
+    id: uid(), terminal:'', fecha_eta: hoyLima(), estado: 'PROGRAMADO',
+    productos: [{ id: uid(), producto:'', volumen_mb:'' }],
+    // Estado real (opcional) — si se llena, esta escala también
+    // alimenta Posicionamiento de Naves, no solo Cargas de Naves.
+    fecha_arribo:'', fecha_amarro:'', fecha_inicio_descarga:'', fecha_termino_descarga:''
+  };
+}
+function quitarBuqueSim(bid) {
+  simBuques = simBuques.filter(function(b){ return b.id !== bid; });
+  renderSim();
+}
+function agregarEscala(bid) {
+  var b = simBuques.find(function(x){ return x.id===bid; });
+  if (b) b.escalas.push(_nuevaEscala());
+  renderSim();
+}
+function quitarEscala(bid, eid) {
+  var b = simBuques.find(function(x){ return x.id===bid; });
+  if (b) b.escalas = b.escalas.filter(function(e){ return e.id !== eid; });
+  renderSim();
+}
+function agregarProductoEscala(bid, eid) {
+  var b = simBuques.find(function(x){ return x.id===bid; });
+  if (!b) return;
+  var e = b.escalas.find(function(x){ return x.id===eid; });
+  if (e) e.productos.push({ id: uid(), producto:'', volumen_mb:'' });
+  renderSim();
+}
+function quitarProductoEscala(bid, eid, pid) {
+  var b = simBuques.find(function(x){ return x.id===bid; });
+  if (!b) return;
+  var e = b.escalas.find(function(x){ return x.id===eid; });
+  if (e) e.productos = e.productos.filter(function(p){ return p.id !== pid; });
+  renderSim();
+}
+function syncSimBuqueField(bid, campo, valor) {
+  var b = simBuques.find(function(x){ return x.id===bid; });
+  if (b) b[campo] = valor;
+  if (campo === 'capacidad_mb' || campo === 'buque') actualizarBarraCapacidad(bid);
+}
+function syncSimEscalaField(bid, eid, campo, valor) {
+  var b = simBuques.find(function(x){ return x.id===bid; });
+  if (!b) return;
+  var e = b.escalas.find(function(x){ return x.id===eid; });
+  if (e) e[campo] = valor;
+  if (campo === 'fecha_termino_descarga' && valor) e.estado = 'COMPLETADO';
+  renderSim();
+}
+function syncSimProductoField(bid, eid, pid, campo, valor) {
+  var b = simBuques.find(function(x){ return x.id===bid; });
+  if (!b) return;
+  var e = b.escalas.find(function(x){ return x.id===eid; });
+  if (!e) return;
+  var p = e.productos.find(function(x){ return x.id===pid; });
+  if (p) p[campo] = valor;
+  actualizarBarraCapacidad(bid);
+}
+function _totalAsignadoBuque(b) {
+  return b.escalas.reduce(function(s,e){
+    return s + e.productos.reduce(function(s2,p){ return s2 + (parseFloat(p.volumen_mb)||0); }, 0);
+  }, 0);
+}
+function actualizarBarraCapacidad(bid) {
+  var b = simBuques.find(function(x){ return x.id===bid; });
+  if (!b) return;
+  var cap = parseFloat(b.capacidad_mb) || 0;
+  var asignado = _totalAsignadoBuque(b);
+  var pct = cap > 0 ? Math.min(100, (asignado/cap)*100) : 0;
+  var color = pct > 100 ? '#dc2626' : pct > 90 ? '#d97706' : '#16a34a';
+  var fill = document.getElementById('sim-fill-'+bid);
+  var label = document.getElementById('sim-label-'+bid);
+  if (fill) { fill.style.width = pct + '%'; fill.style.background = color; }
+  if (label) label.innerHTML = '<span>' + asignado.toFixed(1) + ' / ' + (cap||'?') + ' MB asignados</span><span style="color:'+color+'">' + (cap>0 ? Math.round(asignado/cap*100)+'%' : '—') + '</span>';
+}
+function renderSim() {
+  var wrap = document.getElementById('sim-lista');
+  if (!simBuques.length) {
+    wrap.innerHTML = '<div class="empty-state"><div class="empty-state-icon">🗓️</div>Aún no programaste ningún buque.<br>Presiona "➕ Programar un buque" para empezar.</div>';
+    return;
+  }
+  wrap.innerHTML = simBuques.map(function(b) {
+    var cap = parseFloat(b.capacidad_mb) || 0;
+    var asignado = _totalAsignadoBuque(b);
+    var pct = cap > 0 ? Math.min(100, (asignado/cap)*100) : 0;
+    var color = pct > 100 ? '#dc2626' : pct > 90 ? '#d97706' : '#16a34a';
+    return '<div class="buque-card">'
+      + '<div class="buque-hdr"><span class="buque-hdr-title">🗓️ ' + (b.buque||'Buque sin nombre') + '</span>'
+      + '<span class="buque-hdr-sub">' + b.escalas.length + ' escala(s)</span>'
+      + '<button class="rm-buque" onclick="quitarBuqueSim(\''+b.id+'\')">✕ Quitar</button></div>'
+      + '<div class="buque-body">'
+      + '<div class="field-grid">'
+        + '<div class="field"><label>Buque</label><input list="dl-buques" value="'+b.buque+'" onchange="syncSimBuqueField(\''+b.id+'\',\'buque\',this.value.toUpperCase())" placeholder="Ej. MOCHE"></div>'
+        + '<div class="field"><label>Agencia</label><select onchange="syncSimBuqueField(\''+b.id+'\',\'agencia\',this.value)">'+selectOptions(AGENCIAS, b.agencia)+'</select></div>'
+        + '<div class="field"><label>Capacidad total (MB)</label><input type="number" step="0.1" min="0" value="'+b.capacidad_mb+'" oninput="syncSimBuqueField(\''+b.id+'\',\'capacidad_mb\',this.value)" placeholder="Ej. 380"></div>'
+        + '<div class="field"><label>Origen (puerto de carga)</label><select onchange="syncSimBuqueField(\''+b.id+'\',\'origen\',this.value)">'+selectOptions(TERMINALES.concat(['Bayóvar']), b.origen)+'</select></div>'
+        + '<div class="field"><label>Fecha de zarpe estimada</label><input type="date" value="'+b.fecha_zarpe+'" onchange="syncSimBuqueField(\''+b.id+'\',\'fecha_zarpe\',this.value)"></div>'
+      + '</div>'
+      + '<div class="cap-bar-wrap"><div class="cap-bar-track"><div class="cap-bar-fill" id="sim-fill-'+b.id+'" style="width:'+pct+'%;background:'+color+'"></div></div>'
+      + '<div class="cap-bar-label" id="sim-label-'+b.id+'"><span>'+asignado.toFixed(1)+' / '+(cap||'?')+' MB asignados</span><span style="color:'+color+'">'+(cap>0?Math.round(asignado/cap*100)+'%':'—')+'</span></div></div>'
+      + '<div style="font-size:10px;font-weight:800;color:var(--txt3);text-transform:uppercase;letter-spacing:.05em;margin:10px 0 6px">Escalas planeadas — cada una puede tener varios productos, igual que en el Simulador BT del dashboard principal</div>'
+      + b.escalas.map(function(e) {
+          var tieneEstadoReal = e.fecha_arribo || e.fecha_amarro || e.fecha_inicio_descarga || e.fecha_termino_descarga;
+          return '<div class="escala-card">'
+            + '<div class="escala-hdr">'
+              + '<div class="field" style="margin:0;flex:1"><label>Terminal destino</label><select onchange="syncSimEscalaField(\''+b.id+'\',\''+e.id+'\',\'terminal\',this.value)">'+ '<option value="">— elegir —</option>' + selectOptions(TERMINALES, e.terminal) + '</select></div>'
+              + '<div class="field" style="margin:0;width:130px"><label>ETA estimada</label><input type="date" value="'+e.fecha_eta+'" onchange="syncSimEscalaField(\''+b.id+'\',\''+e.id+'\',\'fecha_eta\',this.value)"></div>'
+              + '<div class="field" style="margin:0;width:140px"><label>Estado</label><select onchange="syncSimEscalaField(\''+b.id+'\',\''+e.id+'\',\'estado\',this.value)">'+selectOptions(ESTADOS_TRAMO, e.estado)+'</select></div>'
+              + '<button class="rm-btn" onclick="quitarEscala(\''+b.id+'\',\''+e.id+'\')" title="Quitar escala" style="margin-top:16px">✕</button>'
+            + '</div>'
+            + '<div style="font-size:9px;font-weight:800;color:var(--txt3);text-transform:uppercase;letter-spacing:.05em;margin:10px 0 5px">Productos en esta escala</div>'
+            + e.productos.map(function(p) {
+                return '<div class="prod-row">'
+                  + '<select onchange="syncSimProductoField(\''+b.id+'\',\''+e.id+'\',\''+p.id+'\',\'producto\',this.value)" style="flex:1.3"><option value="">— producto —</option>'+selectOptions(PRODUCTOS_NAVES, p.producto)+'</select>'
+                  + '<input type="number" step="0.1" min="0" value="'+p.volumen_mb+'" oninput="syncSimProductoField(\''+b.id+'\',\''+e.id+'\',\''+p.id+'\',\'volumen_mb\',this.value)" placeholder="MB" style="width:90px">'
+                  + '<button class="rm-btn" onclick="quitarProductoEscala(\''+b.id+'\',\''+e.id+'\',\''+p.id+'\')" title="Quitar producto" style="width:26px;height:26px">✕</button>'
+                  + '</div>';
+              }).join('')
+            + '<button type="button" class="add-tramo-btn" style="padding:6px 10px;font-size:10.5px;margin-top:2px" onclick="agregarProductoEscala(\''+b.id+'\',\''+e.id+'\')">➕ Agregar otro producto a esta escala</button>'
+            + '<details style="margin-top:10px"' + (tieneEstadoReal ? ' open' : '') + '>'
+              + '<summary style="cursor:pointer;font-size:10px;font-weight:800;color:var(--azul);text-transform:uppercase;letter-spacing:.05em">📍 Estado real (opcional) — si el buque ya se movió, regístralo aquí</summary>'
+              + '<div class="field-grid" style="margin-top:8px">'
+                + '<div class="field"><label>Arribó (fecha y hora)</label><input type="datetime-local" value="'+e.fecha_arribo+'" onchange="syncSimEscalaField(\''+b.id+'\',\''+e.id+'\',\'fecha_arribo\',this.value)"></div>'
+                + '<div class="field"><label>Amarró (fecha y hora)</label><input type="datetime-local" value="'+e.fecha_amarro+'" onchange="syncSimEscalaField(\''+b.id+'\',\''+e.id+'\',\'fecha_amarro\',this.value)"></div>'
+                + '<div class="field"><label>I.D. — Inicio de descarga</label><input type="datetime-local" value="'+e.fecha_inicio_descarga+'" onchange="syncSimEscalaField(\''+b.id+'\',\''+e.id+'\',\'fecha_inicio_descarga\',this.value)"></div>'
+                + '<div class="field critico"><label>⭐ T.D. — Término de descarga</label><input type="datetime-local" value="'+e.fecha_termino_descarga+'" onchange="syncSimEscalaField(\''+b.id+'\',\''+e.id+'\',\'fecha_termino_descarga\',this.value)"></div>'
+              + '</div>'
+              + '<div style="font-size:9.5px;color:var(--txt3);margin-top:4px">Si llenas el T.D., esta escala se marca automáticamente como COMPLETADO y se refleja de inmediato en el dashboard como reposición confirmada.</div>'
+            + '</details>'
+          + '</div>';
+        }).join('')
+      + '<button class="add-tramo-btn" onclick="agregarEscala(\''+b.id+'\')">➕ Agregar otra escala/destino para este buque</button>'
+      + '</div></div>';
+  }).join('');
+}
+async function enviarSim() {
+  if (!simBuques.length) { alert('Programa al menos un buque antes de guardar.'); return; }
+  var records = [];       // cargas_naves — uno por cada producto de cada escala
+  var posRecords = [];    // posicionamiento_naves — uno por escala CON estado real llenado
+  var incompletos = 0;
+  simBuques.forEach(function(b) {
+    if (!b.buque) { incompletos++; return; }
+    b.escalas.forEach(function(e) {
+      if (!e.terminal) { incompletos++; return; }
+      var algunProductoValido = false;
+      e.productos.forEach(function(p) {
+        if (!p.producto || !p.volumen_mb) { incompletos++; return; }
+        algunProductoValido = true;
+        records.push({
+          fecha_reporte: hoyLima(), buque: b.buque, viaje: 'PROGRAMADO-' + hoyLima(), origen: b.origen,
+          terminal: e.terminal, fecha_desde: b.fecha_zarpe, fecha_hasta: e.fecha_eta,
+          producto: p.producto, volumen_mb: parseFloat(p.volumen_mb)||0, estado: e.estado,
+          // Este simulador programa la rotación de la FLOTA PROPIA de
+          // Petroperú (cabotaje) — no se usa para naves de
+          // importación/crudos de terceros, así que se fija directo,
+          // sin agregar un selector extra a un formulario que ya tiene
+          // bastantes campos.
+          tipo: 'Cabotaje'
+        });
+      });
+      // Si esta escala tiene cualquier timestamp de estado real, también
+      // alimenta Posicionamiento de Naves — así el "ya descargó" queda
+      // registrado de una vez, sin tener que ir a la otra pestaña.
+      var tieneEstadoReal = e.fecha_arribo || e.fecha_amarro || e.fecha_inicio_descarga || e.fecha_termino_descarga;
+      if (algunProductoValido && tieneEstadoReal) {
+        posRecords.push({
+          fecha_reporte: hoyLima(), buque: b.buque, agencia: b.agencia || '',
+          estado_nav: (e.estado === 'COMPLETADO' ? 'DESCARGANDO EN ' : 'NAVEGANDO A ') + e.terminal,
+          puerto_ultimo: e.terminal,
+          fecha_arribo: e.fecha_arribo || '', fecha_amarro: e.fecha_amarro || '', fecha_fondeo: '',
+          fecha_inicio_descarga: e.fecha_inicio_descarga || '', fecha_termino_descarga: e.fecha_termino_descarga || '',
+          fecha_inicio_carga: '', fecha_termino_carga: '', fecha_et_operaciones: '', fecha_zarpe: '',
+          rotacion_raw: b.origen + '(C)-' + e.terminal + '(D)',
+          puerto_eta: '', fecha_eta: '', observaciones: ''
+        });
+      }
+    });
+  });
+  if (!records.length) { alert('No hay ninguna escala completa para guardar. Revisa que cada una tenga terminal y al menos un producto con volumen.'); return; }
+  var btn = document.getElementById('sim-save-btn');
+  var st  = document.getElementById('sim-status');
+  btn.disabled = true;
+  st.className = 'status-msg'; st.style.display='block'; st.textContent = '⏳ Guardando programación...';
+  try {
+    var res = await fetch(API_URL, {
+      method: 'POST', redirect: 'follow', headers: {'Content-Type':'text/plain;charset=utf-8'},
+      body: JSON.stringify({ action: 'uploadCargasNaves', fecha_reporte: hoyLima(), records: records, token: SESION.token })
+    });
+    var data = await res.json().catch(function(){ return { success:true }; });
+    if (data && data.success === false) throw new Error(data.message || 'Error al guardar');
+    var mensajeExtra = '';
+    if (posRecords.length) {
+      try {
+        var res2 = await fetch(API_URL, {
+          method: 'POST', redirect: 'follow', headers: {'Content-Type':'text/plain;charset=utf-8'},
+          body: JSON.stringify({ action: 'uploadPosicionamientoNaves', fecha_reporte: hoyLima(), records: posRecords, token: SESION.token })
+        });
+        var data2 = await res2.json().catch(function(){ return { success:true }; });
+        if (data2 && data2.success !== false) {
+          var conTD = posRecords.filter(function(r){ return r.fecha_termino_descarga; }).length;
+          mensajeExtra = ' — ' + posRecords.length + ' escala(s) con estado real' + (conTD ? ' (' + conTD + ' con T.D. confirmado)' : '') + ' también registradas en Posicionamiento.';
+        }
+      } catch (eP) { mensajeExtra = ' — ⚠ no se pudo registrar el estado real, revisa e intenta de nuevo.'; }
+    }
+    st.className = 'status-msg ok';
+    st.textContent = '✅ ' + records.length + ' producto(s) en ' + simBuques.reduce(function(s,b){return s+b.escalas.length;},0) + ' escala(s) de ' + simBuques.length + ' buque(s) programados — ya visibles en el dashboard'
+      + mensajeExtra
+      + (incompletos ? ' — ⚠ ' + incompletos + ' fila(s) se omitieron por estar incompletas.' : '');
+    historialCache = null;
+  } catch (err) {
+    st.className = 'status-msg err';
+    st.textContent = '❌ Error al guardar: ' + err.message;
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+// ══════════════════════ POSICIONAMIENTO DE NAVES ══════════════════════
+var posBuques = [];
+function agregarBuquePos() {
+  posBuques.push({
+    id: uid(), buque:'', agencia:'INTERTEK', estado_nav:'NAVEGANDO A', destino_nav:'',
+    puerto_ultimo:'', fecha_arribo:'', fecha_amarro:'',
+    // ⚠️ AGREGADO — a pedido: FONDEÓ (ancló en la bahía, esperando
+    // muelle) es un evento DISTINTO de ARRIBÓ (llegó a la zona del
+    // puerto) — un buque puede tener ambos el mismo día, con horas
+    // distintas. Antes no había ningún campo para esto en el
+    // formulario — el equipo no tenía dónde registrarlo aunque el
+    // dashboard ya lo sepa interpretar (columna FECHA_FONDEO agregada
+    // en Code.gs).
+    fecha_fondeo:'',
+    fecha_inicio_descarga:'', fecha_termino_descarga:'',
+    fecha_inicio_carga:'',
+    // ⚠️ AGREGADO — T.C. (Término de Carga) real — antes solo existía
+    // "E.T. Operaciones" (estimado), sin campo para la hora REAL en
+    // que terminó de cargar. Sin esto, el dashboard no tenía forma de
+    // saber si un buque ya zarpó tras cargar o seguía cargando.
+    fecha_termino_carga:'', fecha_et_operaciones:'',
+    fecha_zarpe:'', rotacion_raw:'', puerto_eta:'', fecha_eta:'',
+    // ⚠️ AGREGADO — nota libre por buque (ej. "esperando apertura de
+    // puerto", averías, demoras por clima) — antes esta información
+    // solo podía colarse dentro del texto libre pegado en el panel
+    // admin; acá no había ningún campo para capturarla directamente.
+    observaciones:''
+  });
+  renderPos();
+}
+function quitarBuquePos(bid) {
+  posBuques = posBuques.filter(function(b){ return b.id !== bid; });
+  renderPos();
+}
+function syncPosField(bid, campo, valor) {
+  var b = posBuques.find(function(x){ return x.id===bid; });
+  if (b) b[campo] = valor;
+}
+function renderPos() {
+  var wrap = document.getElementById('pos-lista');
+  if (!posBuques.length) {
+    wrap.innerHTML = '<div class="empty-state"><div class="empty-state-icon">📍</div>Aún no agregaste ningún buque.<br>Presiona "➕ Agregar buque" para empezar.</div>';
+    return;
+  }
+  wrap.innerHTML = posBuques.map(function(b) {
+    var tdOk = !!b.fecha_termino_descarga;
+    return '<div class="buque-card">'
+      + '<div class="buque-hdr"><span class="buque-hdr-title">🚢 ' + (b.buque||'Buque sin nombre') + '</span>'
+      + '<span class="buque-hdr-sub">' + (tdOk ? '✅ T.D. registrado' : '⏳ sin T.D. aún') + '</span>'
+      + '<button class="rm-buque" onclick="quitarBuquePos(\''+b.id+'\')">✕ Quitar</button></div>'
+      + '<div class="buque-body">'
+      + '<div class="field-grid">'
+        + '<div class="field"><label>Buque</label><input list="dl-buques" value="'+b.buque+'" onchange="syncPosField(\''+b.id+'\',\'buque\',this.value.toUpperCase())" placeholder="Ej. URUBAMBA"></div>'
+        + '<div class="field"><label>Agencia</label><select onchange="syncPosField(\''+b.id+'\',\'agencia\',this.value)">'+selectOptions(AGENCIAS, b.agencia)+'</select></div>'
+        + '<div class="field"><label>Estado de navegación</label><select onchange="syncPosField(\''+b.id+'\',\'estado_nav\',this.value)">'+selectOptions(ESTADOS_NAV, b.estado_nav)+'</select></div>'
+        + '<div class="field"><label>Destino / ubicación actual</label><input list="dl-terminales" value="'+b.destino_nav+'" onchange="syncPosField(\''+b.id+'\',\'destino_nav\',this.value)" placeholder="Ej. Callao"></div>'
+      + '</div>'
+      + '<div style="font-size:10px;font-weight:800;color:var(--txt3);text-transform:uppercase;letter-spacing:.05em;margin:14px 0 6px">Llegada al último puerto</div>'
+      + '<div class="field-grid">'
+        + '<div class="field"><label>Puerto (ARRIBÓ / FONDEÓ)</label><input list="dl-terminales" value="'+b.puerto_ultimo+'" onchange="syncPosField(\''+b.id+'\',\'puerto_ultimo\',this.value)" placeholder="Ej. Pisco"></div>'
+        + '<div class="field"><label>Fecha y hora de arribo</label><input type="datetime-local" value="'+b.fecha_arribo+'" onchange="syncPosField(\''+b.id+'\',\'fecha_arribo\',this.value)"></div>'
+        + '<div class="field"><label>Fecha y hora de amarre</label><input type="datetime-local" value="'+b.fecha_amarro+'" onchange="syncPosField(\''+b.id+'\',\'fecha_amarro\',this.value)"></div>'
+        // ⚠️ AGREGADO — FONDEÓ es un evento DISTINTO de ARRIBÓ (ancló
+        // en la bahía, esperando muelle — no necesariamente amarrado
+        // todavía). Puede tener su propia hora, distinta de arribo.
+        + '<div class="field"><label>⚓ Fecha y hora de fondeo</label><input type="datetime-local" value="'+b.fecha_fondeo+'" onchange="syncPosField(\''+b.id+'\',\'fecha_fondeo\',this.value)"></div>'
+      + '</div>'
+      + '<div style="font-size:10px;font-weight:800;color:var(--txt3);text-transform:uppercase;letter-spacing:.05em;margin:14px 0 6px">Descarga en este puerto</div>'
+      + '<div class="field-grid">'
+        + '<div class="field"><label>I.D. — Inicio de descarga</label><input type="datetime-local" value="'+b.fecha_inicio_descarga+'" onchange="syncPosField(\''+b.id+'\',\'fecha_inicio_descarga\',this.value)"></div>'
+        + '<div class="field critico"><label>⭐ T.D. — Término de descarga</label><input type="datetime-local" value="'+b.fecha_termino_descarga+'" onchange="syncPosField(\''+b.id+'\',\'fecha_termino_descarga\',this.value)"></div>'
+      + '</div>'
+      + '<div style="font-size:10px;font-weight:800;color:var(--txt3);text-transform:uppercase;letter-spacing:.05em;margin:14px 0 6px">Si está cargando (ej. en Talara)</div>'
+      + '<div class="field-grid">'
+        + '<div class="field"><label>I.C. — Inicio de carga</label><input type="datetime-local" value="'+b.fecha_inicio_carga+'" onchange="syncPosField(\''+b.id+'\',\'fecha_inicio_carga\',this.value)"></div>'
+        // ⚠️ AGREGADO — T.C. REAL (Término de Carga) — antes solo
+        // existía el campo "estimado" (E.T. Operaciones); sin el real,
+        // el dashboard no podía saber si un buque ya terminó de cargar
+        // de verdad, solo cuándo se ESPERABA que terminara.
+        + '<div class="field critico"><label>⭐ T.C. — Término de carga</label><input type="datetime-local" value="'+b.fecha_termino_carga+'" onchange="syncPosField(\''+b.id+'\',\'fecha_termino_carga\',this.value)"></div>'
+        + '<div class="field"><label>E.T. Operaciones (estimado fin)</label><input type="datetime-local" value="'+b.fecha_et_operaciones+'" onchange="syncPosField(\''+b.id+'\',\'fecha_et_operaciones\',this.value)"></div>'
+      + '</div>'
+      + '<div style="font-size:10px;font-weight:800;color:var(--txt3);text-transform:uppercase;letter-spacing:.05em;margin:14px 0 6px">Próximo destino</div>'
+      + '<div class="field-grid">'
+        + '<div class="field"><label>Zarpó (fecha y hora)</label><input type="datetime-local" value="'+b.fecha_zarpe+'" onchange="syncPosField(\''+b.id+'\',\'fecha_zarpe\',this.value)"></div>'
+        + '<div class="field"><label>Puerto ETA (próxima escala)</label><input list="dl-terminales" value="'+b.puerto_eta+'" onchange="syncPosField(\''+b.id+'\',\'puerto_eta\',this.value)" placeholder="Ej. Callao"></div>'
+        + '<div class="field"><label>Fecha y hora ETA</label><input type="datetime-local" value="'+b.fecha_eta+'" onchange="syncPosField(\''+b.id+'\',\'fecha_eta\',this.value)"></div>'
+      + '</div>'
+      + '<div class="field" style="margin-top:8px"><label>Rotación completa (texto libre)</label><input value="'+b.rotacion_raw+'" onchange="syncPosField(\''+b.id+'\',\'rotacion_raw\',this.value)" placeholder="Ej. TALARA(C)-CONCHÁN(C/D)-PISCO(D)-CALLAO(D)"></div>'
+      // ⚠️ AGREGADO — nota libre por buque (ej. "esperando apertura de
+      // puerto", averías, demoras por clima) — antes no había dónde
+      // capturar esto directamente en el formulario.
+      + '<div class="field" style="margin-top:8px"><label>📝 Observaciones (opcional)</label><input value="'+(b.observaciones||'')+'" onchange="syncPosField(\''+b.id+'\',\'observaciones\',this.value)" placeholder="Ej. Esperando apertura de puerto"></div>'
+      + '</div></div>';
+  }).join('');
+}
+async function enviarPosicionamiento() {
+  if (!posBuques.length) { alert('Agrega al menos un buque antes de guardar.'); return; }
+  var fecha = document.getElementById('pos-fecha').value;
+  if (!fecha) { alert('Selecciona la fecha del reporte.'); return; }
+  var records = posBuques.filter(function(b){ return b.buque; }).map(function(b) {
+    // ⚠️ AGREGADO — se sintetiza texto descriptivo adicional dentro de
+    // estado_nav (fondeo, T.C., observaciones) para que el popup de
+    // Cobertura en Vista Ejecutiva (que interpreta texto con
+    // _parseNavEvents como respaldo) también pueda detectarlos aunque
+    // todavía no lea directo estos campos estructurados nuevos.
+    var estadoTexto = b.estado_nav + (b.destino_nav ? ' ' + b.destino_nav : '');
+    if (b.fecha_fondeo) estadoTexto += '  FONDEÓ: ' + _fmtFechaCorta(b.fecha_fondeo) + ' HRS.';
+    if (b.fecha_termino_carga) estadoTexto += '  T.C.: ' + _fmtFechaCorta(b.fecha_termino_carga) + ' HRS.';
+    if (b.observaciones) estadoTexto += '  ' + b.observaciones;
+    return {
+      fecha_reporte: fecha, buque: b.buque, agencia: b.agencia,
+      estado_nav: estadoTexto,
+      puerto_ultimo: b.puerto_ultimo,
+      fecha_arribo: b.fecha_arribo, fecha_amarro: b.fecha_amarro,
+      fecha_fondeo: b.fecha_fondeo,
+      fecha_inicio_descarga: b.fecha_inicio_descarga, fecha_termino_descarga: b.fecha_termino_descarga,
+      fecha_inicio_carga: b.fecha_inicio_carga, fecha_termino_carga: b.fecha_termino_carga, fecha_et_operaciones: b.fecha_et_operaciones,
+      fecha_zarpe: b.fecha_zarpe, rotacion_raw: b.rotacion_raw,
+      puerto_eta: b.puerto_eta, fecha_eta: b.fecha_eta,
+      observaciones: b.observaciones || ''
+    };
+  });
+  if (!records.length) { alert('Cada buque necesita al menos su nombre para poder guardarse.'); return; }
+  var btn = document.getElementById('pos-save-btn');
+  var st  = document.getElementById('pos-status');
+  btn.disabled = true;
+  st.className = 'status-msg'; st.style.display='block'; st.textContent = '⏳ Guardando...';
+  try {
+    var res = await fetch(API_URL, {
+      method: 'POST', redirect: 'follow', headers: {'Content-Type':'text/plain;charset=utf-8'},
+      body: JSON.stringify({ action: 'uploadPosicionamientoNaves', fecha_reporte: fecha, records: records, token: SESION.token })
+    });
+    var data = await res.json().catch(function(){ return { success:true }; });
+    if (data && data.success === false) throw new Error(data.message || 'Error al guardar');
+    var conTD = records.filter(function(r){ return r.fecha_termino_descarga; }).length;
+    st.className = 'status-msg ok';
+    st.textContent = '✅ ' + records.length + ' buque(s) guardados para ' + fecha + ' — quedó registrado a nombre de ' + SESION.nombre + ' ' + SESION.apellido
+      + (conTD ? ' — ' + conTD + ' con T.D. confirmado (se reflejará de inmediato en el dashboard).' : '');
+    historialCache = null;
+  } catch (err) {
+    st.className = 'status-msg err';
+    st.textContent = '❌ Error al guardar: ' + err.message;
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+// ══════════════════════ MIS REGISTROS (historial) ══════════════════════
+var historialCache = null;
+async function cargarHistorial() {
+  var tb1 = document.getElementById('tbody-cargas'), tb2 = document.getElementById('tbody-pos');
+  tb1.innerHTML = '<tr><td colspan="11" style="text-align:center;color:var(--txt3);padding:20px">⏳ Cargando...</td></tr>';
+  tb2.innerHTML = '<tr><td colspan="13" style="text-align:center;color:var(--txt3);padding:20px">⏳ Cargando...</td></tr>';
+  try {
+    var res = await fetch(API_URL + '?action=flotaGetHistorial&_t=' + Date.now(), { cache:'no-store' });
+    historialCache = await res.json();
+    var usuarios = new Set();
+    (historialCache.cargas||[]).forEach(function(r){ if (r.reportado_por) usuarios.add(r.reportado_por); });
+    (historialCache.posicionamiento||[]).forEach(function(r){ if (r.reportado_por) usuarios.add(r.reportado_por); });
+    var sel = document.getElementById('hist-filtro-usuario');
+    var actual = sel.value;
+    sel.innerHTML = '<option value="">Todos los usuarios</option>' + Array.from(usuarios).sort().map(function(u){ return '<option value="'+u+'"'+(u===actual?' selected':'')+'>'+u+'</option>'; }).join('');
+    renderHistorial();
+  } catch (err) {
+    tb1.innerHTML = '<tr><td colspan="11" style="color:var(--rojo);padding:20px">❌ ' + err.message + '</td></tr>';
+    tb2.innerHTML = '';
+  }
+}
+function _dentroDeRango(fecha, dias) {
+  if (dias >= 9999) return true;
+  var limite = new Date(); limite.setDate(limite.getDate() - dias);
+  var f = new Date(fecha);
+  return !isNaN(f.getTime()) && f >= limite;
+}
+function renderHistorial() {
+  if (!historialCache) return;
+  var filtroUsuario = document.getElementById('hist-filtro-usuario').value;
+  var dias = parseInt(document.getElementById('hist-filtro-dias').value, 10);
+  var cargas = (historialCache.cargas||[]).filter(function(r) {
+    return (!filtroUsuario || r.reportado_por === filtroUsuario) && _dentroDeRango(r.fecha_reporte, dias);
+  });
+  var pos = (historialCache.posicionamiento||[]).filter(function(r) {
+    return (!filtroUsuario || r.reportado_por === filtroUsuario) && _dentroDeRango(r.fecha_reporte, dias);
+  });
+  document.getElementById('tbody-cargas').innerHTML = cargas.length
+    ? cargas.map(function(r) {
+        return '<tr><td>'+r.fecha_reporte+'</td><td><b>'+r.buque+'</b></td><td>'+r.viaje+'</td><td>'+r.origen+'</td><td>'+r.terminal+'</td>'
+          + '<td>'+r.fecha_desde+'</td><td>'+r.fecha_hasta+'</td><td>'+r.producto+'</td><td>'+r.volumen_mb.toFixed(1)+'</td>'
+          + '<td><span class="pill '+r.estado+'">'+r.estado+'</span></td><td>'+r.reportado_por+'</td></tr>';
+      }).join('')
+    : '<tr><td colspan="11" style="text-align:center;color:var(--txt3);padding:20px">Sin registros en este rango.</td></tr>';
+  document.getElementById('tbody-pos').innerHTML = pos.length
+    ? pos.map(function(r) {
+        return '<tr><td>'+r.fecha_reporte+'</td><td><b>'+r.buque+'</b></td><td>'+r.agencia+'</td><td>'+r.estado_nav+'</td><td>'+r.puerto_ultimo+'</td>'
+          + '<td>'+(r.fecha_arribo||'—')+'</td><td>'+(r.fecha_amarro||'—')+'</td><td>'+(r.fecha_inicio_descarga||'—')+'</td>'
+          + '<td>'+(r.fecha_termino_descarga ? '<b style="color:var(--verde)">'+r.fecha_termino_descarga+'</b>' : '—')+'</td>'
+          + '<td>'+(r.fecha_zarpe||'—')+'</td><td>'+(r.puerto_eta||'—')+'</td><td>'+(r.fecha_eta||'—')+'</td><td>'+r.reportado_por+'</td></tr>';
+      }).join('')
+    : '<tr><td colspan="13" style="text-align:center;color:var(--txt3);padding:20px">Sin registros en este rango.</td></tr>';
+}
+
+// ══════════════════════ EXPORTAR ══════════════════════
+function _filaVisibleCargas() {
+  var filtroUsuario = document.getElementById('hist-filtro-usuario').value;
+  var dias = parseInt(document.getElementById('hist-filtro-dias').value, 10);
+  return (historialCache.cargas||[]).filter(function(r) {
+    return (!filtroUsuario || r.reportado_por === filtroUsuario) && _dentroDeRango(r.fecha_reporte, dias);
+  });
+}
+function _filaVisiblePos() {
+  var filtroUsuario = document.getElementById('hist-filtro-usuario').value;
+  var dias = parseInt(document.getElementById('hist-filtro-dias').value, 10);
+  return (historialCache.posicionamiento||[]).filter(function(r) {
+    return (!filtroUsuario || r.reportado_por === filtroUsuario) && _dentroDeRango(r.fecha_reporte, dias);
+  });
+}
+function exportarExcel(tipo) {
+  if (!historialCache) { alert('Primero carga el historial.'); return; }
+  if (typeof XLSX === 'undefined') { alert('La librería de Excel todavía está cargando, intenta de nuevo en unos segundos.'); return; }
+  var aoa, nombre;
+  if (tipo === 'cargas') {
+    var filas = _filaVisibleCargas();
+    aoa = [['Fecha','Buque','Viaje','Origen','Tipo','Terminal','Desde','Hasta','Producto','Volumen MB','Estado','Reportado por']]
+      .concat(filas.map(function(r){ return [r.fecha_reporte,r.buque,r.viaje,r.origen,r.tipo||'Cabotaje',r.terminal,r.fecha_desde,r.fecha_hasta,r.producto,r.volumen_mb,r.estado,r.reportado_por]; }));
+    nombre = 'Cargas_de_Naves_' + hoyLima() + '.xlsx';
+  } else {
+    var filasP = _filaVisiblePos();
+    aoa = [['Fecha','Buque','Agencia','Estado Nav.','Puerto','Arribó','Fondeó','Amarró','I.D.','T.D.','I.C.','T.C.','E.T.Operaciones','Zarpó','ETA Puerto','ETA Fecha','Rotación','Observaciones','Reportado por']]
+      .concat(filasP.map(function(r){ return [r.fecha_reporte,r.buque,r.agencia,r.estado_nav,r.puerto_ultimo,r.fecha_arribo,r.fecha_fondeo||'',r.fecha_amarro,r.fecha_inicio_descarga,r.fecha_termino_descarga,r.fecha_inicio_carga,r.fecha_termino_carga||'',r.fecha_et_operaciones,r.fecha_zarpe,r.puerto_eta,r.fecha_eta,r.rotacion_raw,r.observaciones||'',r.reportado_por]; }));
+    nombre = 'Posicionamiento_de_Naves_' + hoyLima() + '.xlsx';
+  }
+  var ws = XLSX.utils.aoa_to_sheet(aoa);
+  var wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Reporte');
+  XLSX.writeFile(wb, nombre);
+}
+// ⚠️ REESCRITO — a pedido: el PDF anterior era una tabla plana
+// genérica (Fecha | Buque | Viaje | ...), que no se parecía en nada al
+// formato institucional real que el equipo ya maneja (el mismo PDF
+// firmado digitalmente que se comparte con gerencia). Se reconstruye
+// desde cero replicando esa estructura: bloques por buque en
+// Posicionamiento (estado + eventos + rotación + ETA), y tabla pivote
+// por puerto de carga en Cargas de Naves — separando Cabotaje de
+// Importación/Crudos, que es justo la distinción que le importa a
+// Suministro. Sigue usando window.print() (sin librerías nuevas) — el
+// navegador se encarga de generar el PDF real.
+function _pdfEstiloBase() {
+  return '<style>'
+    + '@page{size:A4 landscape;margin:10mm}'
+    + '@media print{.no-print{display:none!important}}'
+    + '*{box-sizing:border-box}'
+    + 'body{font-family:Arial,Helvetica,sans-serif;color:#111;font-size:9.5px}'
+    + '.pdf-hdr{text-align:center;border:1px solid #000;padding:6px 10px;margin-bottom:0}'
+    + '.pdf-hdr .logo-row{display:flex;align-items:center;justify-content:center;gap:10px;font-size:15px;font-weight:800;color:#c41717}'
+    + '.pdf-hdr .sub{font-size:11px;font-weight:700;margin-top:2px}'
+    + '.pdf-hdr .fecha{font-size:10px;font-style:italic;margin-top:1px}'
+    + '.pdf-titulo{text-align:center;font-size:13px;font-weight:800;border:1px solid #000;border-top:none;padding:4px;background:#f1f1f1}'
+    + 'table.pdf-tbl{width:100%;border-collapse:collapse}'
+    + 'table.pdf-tbl td,table.pdf-tbl th{border:1px solid #000;padding:3px 6px;vertical-align:top}'
+    + '.seccion-tit{text-align:center;font-weight:800;font-size:10.5px;border:1px solid #000;border-top:none;padding:3px;background:#e8e8e8}'
+    + '.buque-nom{font-weight:800}'
+    + '.buque-ag{font-style:italic;font-size:8.5px}'
+    + '.campo-lbl{font-weight:700}'
+    + '.firma-box{border:1px solid #000;border-top:none;padding:14px;font-size:9px}'
+    + '.firma-box .cargo{font-weight:700;margin-bottom:22px}'
+    + '</style>';
+}
+function _pdfHeaderHTML(titulo, fechaTitulo) {
+  return '<div class="pdf-hdr">'
+    + '<div class="logo-row">🔺 Petroperú</div>'
+    + '<div class="sub">GERENCIA DISTRIBUCIÓN / UNIDAD TRANSPORTE MARÍTIMO Y FLUVIAL</div>'
+    + '<div class="fecha">' + fechaTitulo + '</div>'
+    + '</div>'
+    + '<div class="pdf-titulo">' + titulo + '</div>';
+}
+// Arma el bloque de una nave para Posicionamiento — 4 columnas:
+// [Buque+Agencia] [Estado_nav | Fondeó/Arribó] [Amarró/T.C./Zarpó] [I.C./T.D. + ROTACIÓN + ETA]
+function _pdfFilaBuquePos(r) {
+  var col2 = [r.estado_nav || '—'];
+  if (r.fecha_arribo) col2.push('ARRIBÓ: ' + r.fecha_arribo.replace('T',' '));
+  if (r.fecha_fondeo) col2.push('⚓ FONDEÓ: ' + r.fecha_fondeo.replace('T',' '));
+  var col3 = [];
+  if (r.fecha_amarro) col3.push('AMARRÓ: ' + r.fecha_amarro.replace('T',' '));
+  if (r.fecha_termino_carga) col3.push('T.C.: ' + r.fecha_termino_carga.replace('T',' '));
+  if (r.fecha_termino_descarga) col3.push('T.D.: ' + r.fecha_termino_descarga.replace('T',' '));
+  if (r.fecha_zarpe) col3.push('ZARPÓ: ' + r.fecha_zarpe.replace('T',' '));
+  var col4 = [];
+  if (r.fecha_inicio_carga) col4.push('I.C.: ' + r.fecha_inicio_carga.replace('T',' '));
+  if (r.fecha_inicio_descarga) col4.push('I.D.: ' + r.fecha_inicio_descarga.replace('T',' '));
+  if (r.rotacion_raw) col4.push('<span class="campo-lbl">ROTACIÓN:</span> ' + r.rotacion_raw);
+  if (r.puerto_eta || r.fecha_eta) col4.push('E.T.A. ' + (r.puerto_eta||'') + ': ' + (r.fecha_eta?r.fecha_eta.replace('T',' '):'—'));
+  if (r.observaciones) col4.push('📝 ' + r.observaciones);
+  return '<tr>'
+    + '<td style="width:13%"><div class="buque-nom">' + r.buque + '</div><div class="buque-ag">(' + (r.agencia||'—') + ')</div></td>'
+    + '<td style="width:29%">' + col2.join('<br>') + '</td>'
+    + '<td style="width:29%">' + col3.join('<br>') + '</td>'
+    + '<td style="width:29%">' + col4.join('<br>') + '</td>'
+    + '</tr>';
+}
+function _pdfTablaPosicionamiento(filas) {
+  if (!filas.length) return '<div style="padding:8px;border:1px solid #000;border-top:none;text-align:center;color:#888">Sin registros</div>';
+  return '<table class="pdf-tbl"><tbody>' + filas.map(_pdfFilaBuquePos).join('') + '</tbody></table>';
+}
+// Cargas de Naves — pivote por puerto de carga: agrupa por buque+viaje,
+// arma una tabla con una columna por terminal (en orden cronológico) y
+// una fila por producto, con fila TOTAL al pie — igual que el reporte real.
+function _pdfPivoteCargas(filasViaje) {
+  var terminales = [];
+  filasViaje.forEach(function(r){ if (terminales.indexOf(r.terminal) === -1) terminales.push(r.terminal); });
+  terminales.sort(function(a,b){
+    var fa = filasViaje.find(function(r){return r.terminal===a;}).fecha_hasta || '';
+    var fb = filasViaje.find(function(r){return r.terminal===b;}).fecha_hasta || '';
+    return fa.localeCompare(fb);
+  });
+  var productos = [];
+  filasViaje.forEach(function(r){ if (productos.indexOf(r.producto) === -1) productos.push(r.producto); });
+  var celda = {};
+  filasViaje.forEach(function(r){ celda[r.producto+'|'+r.terminal] = (celda[r.producto+'|'+r.terminal]||0) + (r.volumen_mb||0); });
+  var totales = {};
+  terminales.forEach(function(t){ totales[t] = productos.reduce(function(s,p){ return s + (celda[p+'|'+t]||0); }, 0); });
+  var totalGeneral = terminales.reduce(function(s,t){ return s + totales[t]; }, 0);
+  var html = '<table class="pdf-tbl" style="margin-bottom:6px"><thead>'
+    + '<tr><th colspan="' + (terminales.length+1) + '" style="background:#dbe5f1">PUERTO DE CARGA</th></tr>'
+    + '<tr><th></th>' + terminales.map(function(t){
+        var f = filasViaje.find(function(r){return r.terminal===t;});
+        return '<th>' + t + '<br><span style="font-weight:400;font-size:8px">' + (f.fecha_desde||'') + ' — ' + (f.fecha_hasta||'') + '</span></th>';
+      }).join('') + '</tr></thead><tbody>'
+    + productos.map(function(p){
+        return '<tr><td class="campo-lbl">' + p + '</td>' + terminales.map(function(t){
+          var v = celda[p+'|'+t];
+          return '<td style="text-align:right">' + (v ? v.toFixed(1) : '-') + '</td>';
+        }).join('') + '</tr>';
+      }).join('')
+    + '<tr style="font-weight:800"><td>TOTAL</td>' + terminales.map(function(t){ return '<td style="text-align:right">' + totales[t].toFixed(1) + '</td>'; }).join('') + '</tr>'
+    + '</tbody></table>';
+  return html;
+}
+function _pdfBloqueCargas(filas) {
+  var porBuque = {};
+  filas.forEach(function(r){ (porBuque[r.buque] = porBuque[r.buque] || []).push(r); });
+  return Object.keys(porBuque).map(function(buque){
+    var porViaje = {};
+    porBuque[buque].forEach(function(r){ (porViaje[r.viaje||'—'] = porViaje[r.viaje||'—'] || []).push(r); });
+    var tipo = porBuque[buque][0].tipo || 'Cabotaje';
+    return '<div style="margin-bottom:10px">'
+      + '<div style="font-weight:800;font-size:11px;margin-bottom:3px">🚢 B/T ' + buque + ' <span style="font-weight:400;font-size:9px">(' + tipo + ')</span></div>'
+      + Object.keys(porViaje).map(function(viaje){
+          return '<div style="font-size:9px;font-weight:700;margin-bottom:2px">' + viaje + '</div>' + _pdfPivoteCargas(porViaje[viaje]);
+        }).join('')
+      + '</div>';
+  }).join('');
+}
+function _pdfFirmaHTML() {
+  var nombre = (SESION && SESION.nombre) ? SESION.nombre : '—';
+  return '<div class="firma-box" style="display:flex;gap:40px">'
+    + '<div style="flex:1"><div class="cargo">ELABORADO POR:</div><div>' + nombre + '</div></div>'
+    + '<div style="flex:1"><div class="cargo">REVISADO POR:</div><div>&nbsp;</div></div>'
+    + '</div>';
+}
+function exportarPDF(tipo) {
+  if (!historialCache) { alert('Primero carga el historial.'); return; }
+  var filas = tipo === 'cargas' ? _filaVisibleCargas() : _filaVisiblePos();
+  var fechaTitulo = new Date(hoyLima()+'T12:00:00').toLocaleDateString('es-PE', {day:'2-digit',month:'short',year:'numeric'}).replace('.','').replace(/^0/,'');
+  var cuerpo;
+  if (tipo === 'cargas') {
+    var cabotaje = filas.filter(function(r){ return (r.tipo||'Cabotaje') === 'Cabotaje'; });
+    var otros = filas.filter(function(r){ return (r.tipo||'Cabotaje') !== 'Cabotaje'; });
+    cuerpo = _pdfHeaderHTML('CARGAS DE NAVES', fechaTitulo)
+      + '<div class="seccion-tit">CABOTAJE</div>'
+      + '<div style="border:1px solid #000;border-top:none;padding:8px">' + (cabotaje.length ? _pdfBloqueCargas(cabotaje) : '<div style="text-align:center;color:#888">Sin registros</div>') + '</div>'
+      + (otros.length ? '<div class="seccion-tit">IMPORTACIÓN / CRUDOS</div><div style="border:1px solid #000;border-top:none;padding:8px">' + _pdfBloqueCargas(otros) + '</div>' : '')
+      + _pdfFirmaHTML();
+  } else {
+    var posCabotaje = filas; // Posicionamiento no distingue tipo hoy — todas las naves que se les hace seguimiento
+    cuerpo = _pdfHeaderHTML('POSICIONAMIENTO DE NAVES', fechaTitulo)
+      + _pdfTablaPosicionamiento(posCabotaje)
+      + _pdfFirmaHTML();
+  }
+  var overlay = document.createElement('div');
+  overlay.id = 'export-pdf-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:#fff;z-index:999999;overflow:auto;padding:16px';
+  overlay.innerHTML = _pdfEstiloBase()
+    + '<div class="no-print" style="margin-bottom:14px;display:flex;gap:10px">'
+    +   '<button onclick="window.print()" style="background:#0a3a5c;color:#fff;border:none;padding:8px 18px;border-radius:6px;font-weight:700;cursor:pointer">🖨️ Imprimir / Guardar PDF</button>'
+    +   '<button onclick="document.getElementById(\'export-pdf-overlay\').remove()" style="background:#e2e8f0;color:#0f1e3c;border:none;padding:8px 18px;border-radius:6px;font-weight:700;cursor:pointer">Cerrar</button>'
+    + '</div>'
+    + cuerpo;
+  document.body.appendChild(overlay);
+  document.title = (tipo==='cargas'?'Cargas_de_Naves_':'Posicionamiento_de_Naves_') + hoyLima();
+}
+if (SESION.token) { mostrarApp(); }
+</script>
+
+<datalist id="dl-buques">
+  <option value="URUBAMBA"><option value="MOCHE"><option value="UCAYALI">
+  <option value="TROMPETEROS"><option value="MANTARO"><option value="CHASE OCEAN"><option value="COLCA">
+</datalist>
+<datalist id="dl-terminales">
+  <option value="Talara"><option value="Piura"><option value="Eten"><option value="Salaverry">
+  <option value="Chimbote"><option value="Supe"><option value="Callao"><option value="Conchán">
+  <option value="Pisco"><option value="Mollendo"><option value="Ilo"><option value="Iquitos">
+  <option value="Pucallpa"><option value="Yurimaguas"><option value="Bayóvar">
+</datalist>
+
+</body>
+</html>
