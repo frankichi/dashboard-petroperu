@@ -17686,12 +17686,17 @@ async function loadRefTalaraInvPDF(input) {
     // Fecha: "Hasta: DD/MM/AAAA HH:MM:SS" — es el CIERRE del día que
     // reporta (a pedido: si dice "09/09/2026 23:59:59", el dato es del
     // día 9, no del día en que se emite/sube el PDF).
-    var mFecha = /Hasta:\s*(\d{2})\/(\d{2})\/(\d{4})/i.exec(fullText);
+    // ⚠️ CORREGIDO — a pedido: mismo bug real que en el parser de Ref.
+    // Conchán (ver ahí) — un día/mes de un solo dígito sin cero a la
+    // izquierda no matcheaba con \d{2}. Se endurece igual acá de forma
+    // preventiva, aunque el PDF de Talara probado hasta ahora siempre
+    // trajo cero a la izquierda.
+    var mFecha = /Hasta:\s*(\d{1,2})\/(\d{1,2})\/(\d{4})/i.exec(fullText);
     if (!mFecha) {
       if (statusEl) { statusEl.textContent = '❌ No se encontró la fecha "Hasta:" en la cabecera del PDF — verifica que sea el reporte correcto.'; statusEl.style.color = 'var(--red)'; }
       return;
     }
-    var fecha = mFecha[3] + '-' + mFecha[2] + '-' + mFecha[1];
+    var fecha = mFecha[3] + '-' + mFecha[2].padStart(2,'0') + '-' + mFecha[1].padStart(2,'0');
 
     var valores = {}, faltantes = [];
     REF_TALARA_INV_PRODUCTOS.forEach(function(p) {
@@ -17876,12 +17881,21 @@ async function loadRefConchanInvPDF(input) {
     var fullText = lines.join('\n');
     if (statusEl) statusEl.textContent = '⏳ Buscando día operativo y productos...';
 
-    var mDia = /D[IÍ]A\s*OPERATIVO\s*:?\s*(\d{2})\/(\d{2})\/(\d{4})/i.exec(fullText);
+    // ⚠️ CORREGIDO — a pedido: bug real confirmado con el reporte del
+    // 09.09.2026 ("DÍA OPERATIVO: 8/09/2026" — día de UN SOLO dígito,
+    // sin cero a la izquierda). El regex exigía exactamente 2 dígitos
+    // para día y mes (\d{2}), así que cualquier día/mes del 1 al 9 sin
+    // relleno ("8/09/2026", "9/9/2026") no matcheaba nunca y el PDF se
+    // rechazaba como si le faltara la cabecera, cuando en realidad sí
+    // estaba — solo con formato de fecha distinto al del PDF de prueba
+    // original. Ahora acepta 1 o 2 dígitos (\d{1,2}) y rellena con cero
+    // a la izquierda al construir la fecha.
+    var mDia = /D[IÍ]A\s*OPERATIVO\s*:?\s*(\d{1,2})\/(\d{1,2})\/(\d{4})/i.exec(fullText);
     if (!mDia) {
       if (statusEl) { statusEl.textContent = '❌ No se encontró "DÍA OPERATIVO" en la cabecera del PDF — verifica que sea el reporte correcto.'; statusEl.style.color = 'var(--red)'; }
       return;
     }
-    var fecha = mDia[3] + '-' + mDia[2] + '-' + mDia[1];
+    var fecha = mDia[3] + '-' + mDia[2].padStart(2,'0') + '-' + mDia[1].padStart(2,'0');
 
     // Acotar la búsqueda a la sección de inventarios — ver comentario (6) arriba.
     var startIdx = fullText.search(/INVENTARIOS\s+DE\s+PRODUCTOS/i);
