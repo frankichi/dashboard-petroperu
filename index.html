@@ -15827,16 +15827,36 @@ function parsePPSalesFile(file, callback) {
   reader.onerror = function() { callback('Error al leer el archivo'); };
   reader.readAsArrayBuffer(file);
 }
+async function _ppvPostIntento(mes, records) {
+  var res = await fetch(CONFIG.API_URL, {
+    method:'POST', redirect:'follow',
+    headers:{'Content-Type':'text/plain;charset=utf-8'},
+    body: JSON.stringify({ action:'uploadVentasPP', mes:mes, records:records })
+  });
+  var txt = await res.text();
+  return JSON.parse(txt); // si viene HTML (cold start / timeout), esto lanza y el llamador reintenta
+}
 async function uploadPPVentasToSheets(mes, records) {
   var statusEl = document.getElementById('ppv-status');
   if (statusEl) statusEl.textContent = '⏳ Subiendo ' + records.length + ' registros…';
   try {
-    var res = await fetch(CONFIG.API_URL, {
-      method:'POST', redirect:'follow',
-      headers:{'Content-Type':'text/plain;charset=utf-8'},
-      body: JSON.stringify({ action:'uploadVentasPP', mes:mes, records:records })
-    });
-    var j = await res.json();
+    // ⚠️ CORREGIDO — bug real confirmado: "❌ Error: Unexpected token '<',
+    // "<!DOCTYPE "... is not valid JSON" al subir Ventas Diarias PP. Esta
+    // función llamaba a res.json() directo, sin el mismo manejo de
+    // "cold start" que ya tienen fetchData() y registro-diario.html — si
+    // el backend (lento, ver diagnóstico de hoy) devuelve una página de
+    // error HTML en vez de JSON, res.json() explota con ese mensaje
+    // exacto. El guardado en Code.gs (handleUploadVentasPP) es "upsert"
+    // por fecha+producto, así que reintentar es seguro: no duplica
+    // filas, como mucho vuelve a escribir el mismo valor.
+    var j;
+    try {
+      j = await _ppvPostIntento(mes, records);
+    } catch (eParse) {
+      if (statusEl) statusEl.textContent = '⏳ El servidor tardó en responder, reintentando…';
+      await new Promise(function(r){ setTimeout(r, 3000); });
+      j = await _ppvPostIntento(mes, records);
+    }
     if (statusEl) statusEl.textContent = '✅ Guardado: ' + (j.inserted||0) + ' nuevos, ' + (j.updated||0) + ' actualizados';
     _ppVentasCache[mes] = records;
     // Actualizar el indicador de fecha sin recargar todo el acordeón (no perder el mensaje de éxito)
@@ -19339,6 +19359,21 @@ const MONTH_NAME_MAP = {
   'enero':1,'february':2,'febrero':2,'marzo':3,'march':3,
   'abril':4,'april':4,'mayo':5,'may':5,'junio':6,'june':6,
   'julio':7,'july':7,'agosto':8,'august':8,
+  // ⚠️ CORREGIDO — bug real confirmado: el reporte de Cognos usa la
+  // ortografía peruana "Setiembre" (sin "p") en sus encabezados ("Mes
+  // actual - P" / "Mes actual - R"), pero aquí solo existía
+  // "septiembre" — como "setiembre" no matcheaba, la detección de mes
+  // caía al escaneo genérico de respaldo, que sí encontraba "agosto"
+  // (la columna de "Mes anterior", que queda como referencia en la
+  // misma fila) ANTES de llegar a la columna de Setiembre — y esa
+  // captura de agosto no era descartada. Resultado: un archivo de
+  // Setiembre se guardaba con fecha de Agosto. Se agrega la variante
+  // sin "p" para los demás meses también, por si el mismo reporte la
+  // usa en otros meses con "p" en la ortografía (séptimo -> setiembre
+  // es el único caso real en español, pero se cubre cualquier futuro
+  // typo equivalente de forma explícita en vez de con una normalización
+  // genérica que podría dar falsos positivos).
+  'setiembre':9,
   'septiembre':9,'september':9,'octubre':10,'october':10,
   'noviembre':11,'november':11,'diciembre':12,'december':12
 };
