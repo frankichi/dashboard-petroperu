@@ -1190,7 +1190,7 @@ var _mapLibsLoaded=false;
 // ═══ AUTH INLINE — corre sincrónicamente al parsear el body ═══════════
 (function() {
   var OVERLAY_ID = '_auth_overlay';
-  var API = 'https://script.google.com/macros/s/AKfycbwL5Gec0EmZgha2rNUaORMDT6MBuouyIlV07tlMpQo9O1YcgkiWJdoQUmIafMQhF2kgUg/exec';
+  var API = 'https://script.google.com/macros/s/AKfycbwRwsaAq4C-tRntaDf3HH4kAt24QG1GFo5_-V3hvaQiatCeTuKxuPxzWN_f6mn7vxRZ_g/exec';
 
   // 1. Vistas públicas: sin login
   var view = new URLSearchParams(window.location.search).get('view') || '';
@@ -1729,7 +1729,7 @@ function _solLoad(_isRetry) {
   // llegue a la declaración "const CONFIG = {...}" más abajo — acceder a
   // un const antes de su línea de declaración lanza ReferenceError (zona
   // muerta temporal). Se usa la URL directa como referencia segura.
-  var API_URL_SAFE = 'https://script.google.com/macros/s/AKfycbwL5Gec0EmZgha2rNUaORMDT6MBuouyIlV07tlMpQo9O1YcgkiWJdoQUmIafMQhF2kgUg/exec';
+  var API_URL_SAFE = 'https://script.google.com/macros/s/AKfycbwRwsaAq4C-tRntaDf3HH4kAt24QG1GFo5_-V3hvaQiatCeTuKxuPxzWN_f6mn7vxRZ_g/exec';
   var _p = fetch(API_URL_SAFE + '?action=getTodasSolicitudes&token=' + sess.token, {redirect:'follow'})
     .then(function(r){ return r.text(); })
     .then(function(txt) {
@@ -1950,7 +1950,7 @@ function _solResponder(id, aprobado) {
   if (btn) { btn.disabled = true; btn.textContent = aprobado ? 'Aplicando\u2026' : 'Rechazando\u2026'; }
   var sess = window._dashSession || {};
   if (!sess.token) { alert('Sesión no válida. Recarga la página.'); return; }
-  var API_URL_SAFE2 = 'https://script.google.com/macros/s/AKfycbwL5Gec0EmZgha2rNUaORMDT6MBuouyIlV07tlMpQo9O1YcgkiWJdoQUmIafMQhF2kgUg/exec';
+  var API_URL_SAFE2 = 'https://script.google.com/macros/s/AKfycbwRwsaAq4C-tRntaDf3HH4kAt24QG1GFo5_-V3hvaQiatCeTuKxuPxzWN_f6mn7vxRZ_g/exec';
   fetch(API_URL_SAFE2, {
     method: 'POST',
     redirect: 'follow',
@@ -2120,7 +2120,7 @@ function _refreshAllData() {
 }
 
 window._pdLoadData = function(cb) {
-  var API = 'https://script.google.com/macros/s/AKfycbwL5Gec0EmZgha2rNUaORMDT6MBuouyIlV07tlMpQo9O1YcgkiWJdoQUmIafMQhF2kgUg/exec';
+  var API = 'https://script.google.com/macros/s/AKfycbwRwsaAq4C-tRntaDf3HH4kAt24QG1GFo5_-V3hvaQiatCeTuKxuPxzWN_f6mn7vxRZ_g/exec';
   var nc  = '&nocache=' + Date.now();
   // Cargar viajes fluviales (barcazas) y terrestres (cisternas) en paralelo
   Promise.all([
@@ -2874,7 +2874,7 @@ window._pdSaveFromForm = function(id, tipo) {
     payload.status_embarque = val('emb_status');
   }
 
-  var API_URL_SAFE_PD = 'https://script.google.com/macros/s/AKfycbwL5Gec0EmZgha2rNUaORMDT6MBuouyIlV07tlMpQo9O1YcgkiWJdoQUmIafMQhF2kgUg/exec';
+  var API_URL_SAFE_PD = 'https://script.google.com/macros/s/AKfycbwRwsaAq4C-tRntaDf3HH4kAt24QG1GFo5_-V3hvaQiatCeTuKxuPxzWN_f6mn7vxRZ_g/exec';
   fetch(API_URL_SAFE_PD, {
     method: 'POST', redirect: 'follow',
     headers: { 'Content-Type': 'text/plain;charset=utf-8' },
@@ -3423,7 +3423,7 @@ window._pdSaRefresh = function() {
 (function() {
 'use strict';
 
-var _RT_GAS = 'https://script.google.com/macros/s/AKfycbwL5Gec0EmZgha2rNUaORMDT6MBuouyIlV07tlMpQo9O1YcgkiWJdoQUmIafMQhF2kgUg/exec';
+var _RT_GAS = 'https://script.google.com/macros/s/AKfycbwRwsaAq4C-tRntaDf3HH4kAt24QG1GFo5_-V3hvaQiatCeTuKxuPxzWN_f6mn7vxRZ_g/exec';
 var _RT_INTERVAL  = 20000;   // 20 segundos
 var _RT_LAST_POLL = '';       // ISO timestamp del último poll
 var _RT_TIMER     = null;
@@ -3687,7 +3687,7 @@ if (document.readyState === 'loading') {
 </script>
 <script>
 const CONFIG = {
-  API_URL: 'https://script.google.com/macros/s/AKfycbwL5Gec0EmZgha2rNUaORMDT6MBuouyIlV07tlMpQo9O1YcgkiWJdoQUmIafMQhF2kgUg/exec',
+  API_URL: 'https://script.google.com/macros/s/AKfycbwRwsaAq4C-tRntaDf3HH4kAt24QG1GFo5_-V3hvaQiatCeTuKxuPxzWN_f6mn7vxRZ_g/exec',
   // Criterio de severidad de cobertura (días) — unificado en todo el
   // dashboard: ≤7 días = Crítico · 8–14 días = Alerta/Atención · ≥15 días = Normal.
   COB_RED: 8,  // < 8 días (es decir ≤7) = Crítico
@@ -4111,7 +4111,7 @@ function _authShowLogin() {
   document.body.appendChild(ov);
 
   var apiUrl = (typeof CONFIG !== 'undefined' && CONFIG.API_URL) ||
-    'https://script.google.com/macros/s/AKfycbwL5Gec0EmZgha2rNUaORMDT6MBuouyIlV07tlMpQo9O1YcgkiWJdoQUmIafMQhF2kgUg/exec';
+    'https://script.google.com/macros/s/AKfycbwRwsaAq4C-tRntaDf3HH4kAt24QG1GFo5_-V3hvaQiatCeTuKxuPxzWN_f6mn7vxRZ_g/exec';
 
   function showMsg(txt, ok) {
     var el = document.getElementById('_auth_msg');
