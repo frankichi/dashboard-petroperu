@@ -15964,6 +15964,31 @@ function renderPUpload() {
         + '<button class="upload-btn upload-btn-secondary" onclick="clearRefTalaraInv()">✕ Limpiar</button>'
         + '<span class="upload-status" id="ref-talara-inv-send-status"></span></div>'
     , (window._refTalaraInvLastFecha || null))
+    // ⚠️ AGREGADO — a pedido: mismo mecanismo que Ref. Talara, pero para
+    // el "Reporte Diario" (Gerencia Operaciones Conchán) que tiene un
+    // formato DISTINTO — sin códigos SAP, ya en MB (no en bbl, por lo
+    // que NO se divide entre 1000), y con una fecha de cabecera que
+    // NO es la fecha a usar: hay que leer "DÍA OPERATIVO" (el cierre
+    // real de ese reporte), no "FECHA ACTUAL" (que es un día después,
+    // cuando se emite el reporte). Columna objetivo: "Inventario Disp."
+    // (penúltima de las 4 columnas finales de cada fila de producto,
+    // antes de "Cobertura (días)").
+    + _uplAccordion('acc-ref-conchan-inv', '🏭', 'Inventario Refinería Conchán — PDF Diario',
+        'Reporte Diario GOCN (Gerencia Operaciones Conchán) — extrae Inventario Disp. de los 4 productos de Ref. Conchán y lo refleja en Coberturas',
+        '', false,
+        '<div class="upload-dropzone" id="dropzone-ref-conchan-inv">'
+        + '<div class="upload-dropzone-icon">📄</div>'
+        + '<div class="upload-dropzone-text">Arrastra el PDF aquí o haz clic</div>'
+        + '<div class="upload-dropzone-hint">Reporte_Diario_GOCN_*.pdf — la fecha se toma de "DÍA OPERATIVO", no de "FECHA ACTUAL"</div>'
+        + '<input type="file" id="file-ref-conchan-inv" accept=".pdf"></div>'
+        + '<div id="ref-conchan-inv-filename" style="font-size:9.5px;color:var(--txt3);margin-top:6px;padding-left:2px"></div>'
+        + '<div id="ref-conchan-inv-status" style="font-size:10.5px;color:var(--txt3);margin-top:4px"></div>'
+        + '<div id="ref-conchan-inv-preview"></div>'
+        + '<div id="ref-conchan-inv-actions" class="upload-actions" style="display:none">'
+        + '<button class="upload-btn upload-btn-primary" id="ref-conchan-inv-send-btn" onclick="sendRefConchanInvToGS()">📤 Guardar en Coberturas</button>'
+        + '<button class="upload-btn upload-btn-secondary" onclick="clearRefConchanInv()">✕ Limpiar</button>'
+        + '<span class="upload-status" id="ref-conchan-inv-send-status"></span></div>'
+    , (window._refConchanInvLastFecha || null))
     + _uplAccordion('acc-cognos', '💹', 'Ventas Diarias — Dashboard Cognos',
         'Exportación de ventas reales desde el sistema Cognos (.xlsx)',
         uploadVentasData ? '✅ Datos cargados' : '', false,
@@ -16209,6 +16234,9 @@ function _bindUploadEvents() {
   });
   initDropzone('dropzone-ref-talara-inv', 'file-ref-talara-inv', function(file) {
     loadRefTalaraInvPDF({ files: [file] });
+  });
+  initDropzone('dropzone-ref-conchan-inv', 'file-ref-conchan-inv', function(file) {
+    loadRefConchanInvPDF({ files: [file] });
   });
   var navesOnFile = function(f) {
     if (!f) return;
@@ -17766,6 +17794,208 @@ function clearRefTalaraInv() {
   var act = document.getElementById('ref-talara-inv-actions'); if (act) act.style.display = 'none';
 }
 window.clearRefTalaraInv = clearRefTalaraInv;
+
+// ⚠️ AGREGADO — a pedido: carga del inventario diario de Refinería
+// Conchán desde su "Reporte Diario" (Gerencia Operaciones Conchán).
+// Mismo destino final que Ref. Talara (updateFieldFull, campo 'inv',
+// planta 'Refinería Conchán'), pero el PDF de origen tiene un formato
+// bien distinto:
+//  1) La fecha a usar es "DÍA OPERATIVO", NO "FECHA ACTUAL" (que es la
+//     fecha de EMISIÓN del reporte, un día después del cierre real —
+//     a pedido explícito: "el reporte dice 14.09.2026 pero su día
+//     operativo es 13.09.2026, el registro debe guardarse con fecha
+//     13.09").
+//  2) La tabla no tiene códigos SAP — cada producto se ancla por su
+//     nombre exacto al INICIO de su línea (los 4 productos que interesan
+//     no tienen dígitos en el nombre, así que no hay la ambigüedad de
+//     "GASOLINA 84"/"DIESEL 2" que sí hubo que resolver para Talara).
+//  3) La columna objetivo es "Inventario Disp." (penúltima de las 4
+//     columnas finales de cada fila: Vacío Disponible / Inventario
+//     Total / Inventario Disp. / Cobertura(días)) — se toma el 3° de
+//     los últimos 4 números de la línea, preservando los guiones "-"
+//     como marcador posicional de "sin dato" (si no se preservaran, la
+//     cuenta de columnas se correría y se leería el valor equivocado).
+//  4) La cabecera de esta tabla ya dice "(MB)" — el reporte de Talara
+//     estaba en barriles y había que dividir entre 1000; este de
+//     Conchán YA viene en miles de barriles, no se vuelve a dividir.
+//  5) El nombre de fila "GASOLINA REGULAR" es una porción literal del
+//     inicio de "GASOLINA REGULAR HS" — se usa un lookahead negativo
+//     para no confundir una fila con la otra.
+//  6) La búsqueda se acota a la sección "INVENTARIOS DE PRODUCTOS" del
+//     reporte (entre ese título y "PROGRAMA DE ENTREGAS"): más abajo en
+//     el mismo PDF hay tablas de buques/retiros que repiten estos mismos
+//     nombres de producto en otro contexto (ej. "GASOLINA PREMIUM" en
+//     "RETIROS POR BUQUE") — sin acotar, se podría enganchar por
+//     accidente con la fila equivocada de esa otra tabla.
+var REF_CONCHAN_INV_PRODUCTOS = [
+  { producto: 'Diesel',        nombre: 'DIESEL\\s+B5\\s+S-?50' },
+  { producto: 'G. Regular',    nombre: 'GASOLINA\\s+REGULAR(?!\\s*HS)' },
+  { producto: 'G. Regular HS', nombre: 'GASOLINA\\s+REGULAR\\s+HS' },
+  { producto: 'G. Premium',    nombre: 'GASOLINA\\s+PREMIUM' }
+];
+var _refConchanInvData = null;
+var _refConchanInvLastFecha = null;
+window._refConchanInvLastFecha = null;
+async function loadRefConchanInvPDF(input) {
+  var file = input && input.files && input.files[0];
+  if (!file) return;
+  var statusEl = document.getElementById('ref-conchan-inv-status');
+  var fnEl     = document.getElementById('ref-conchan-inv-filename');
+  var prevEl   = document.getElementById('ref-conchan-inv-preview');
+  var actEl    = document.getElementById('ref-conchan-inv-actions');
+  if (fnEl) fnEl.textContent = file.name;
+  if (statusEl) { statusEl.textContent = '⏳ Leyendo PDF...'; statusEl.style.color = 'var(--txt3)'; }
+  if (prevEl) prevEl.innerHTML = '';
+  if (actEl) actEl.style.display = 'none';
+  _refConchanInvData = null;
+  try {
+    await _loadPdfJs();
+    var ab = await file.arrayBuffer();
+    var pdf = await pdfjsLib.getDocument({ data: ab }).promise;
+    var lines = [];
+    for (var p = 1; p <= pdf.numPages; p++) {
+      var page  = await pdf.getPage(p);
+      var tc    = await page.getTextContent();
+      var items = tc.items.slice().sort(function(a,b) {
+        var dy = Math.round((b.transform[5] - a.transform[5]) / 3);
+        return dy !== 0 ? dy : a.transform[4] - b.transform[4];
+      });
+      var lineMap = {};
+      items.forEach(function(it) {
+        var y = Math.round(it.transform[5] / 4) * 4;
+        if (!lineMap[y]) lineMap[y] = [];
+        lineMap[y].push({ x: it.transform[4], str: it.str });
+      });
+      var sortedY = Object.keys(lineMap).map(Number).sort(function(a,b){ return b - a; });
+      sortedY.forEach(function(y) {
+        var sortedX = lineMap[y].sort(function(a,b){ return a.x - b.x; });
+        var lineStr = sortedX.map(function(it){ return it.str; }).join('  ');
+        if (lineStr.trim()) lines.push(lineStr);
+      });
+    }
+    var fullText = lines.join('\n');
+    if (statusEl) statusEl.textContent = '⏳ Buscando día operativo y productos...';
+
+    var mDia = /D[IÍ]A\s*OPERATIVO\s*:?\s*(\d{2})\/(\d{2})\/(\d{4})/i.exec(fullText);
+    if (!mDia) {
+      if (statusEl) { statusEl.textContent = '❌ No se encontró "DÍA OPERATIVO" en la cabecera del PDF — verifica que sea el reporte correcto.'; statusEl.style.color = 'var(--red)'; }
+      return;
+    }
+    var fecha = mDia[3] + '-' + mDia[2] + '-' + mDia[1];
+
+    // Acotar la búsqueda a la sección de inventarios — ver comentario (6) arriba.
+    var startIdx = fullText.search(/INVENTARIOS\s+DE\s+PRODUCTOS/i);
+    if (startIdx < 0) startIdx = 0;
+    var endIdx = fullText.indexOf('\n', fullText.search(/PROGRAMA\s+DE\s+ENTREGAS/i));
+    if (endIdx < 0 || endIdx <= startIdx) endIdx = fullText.length;
+    var scoped = fullText.slice(startIdx, endIdx);
+    var scopedLines = scoped.split('\n');
+
+    var valores = {}, faltantes = [];
+    REF_CONCHAN_INV_PRODUCTOS.forEach(function(pr) {
+      var re = new RegExp('^\\s*' + pr.nombre + '\\b(.*)$', 'i');
+      var restante = null;
+      for (var li = 0; li < scopedLines.length; li++) {
+        var m = re.exec(scopedLines[li].trim());
+        if (m) { restante = m[1]; break; } // primera coincidencia dentro de la sección acotada
+      }
+      if (restante === null) { faltantes.push(pr.producto); return; }
+      var toks = restante.match(/(\d[\d,]*\.?\d*|-)/g) || [];
+      if (toks.length < 4) { faltantes.push(pr.producto); return; }
+      var last4 = toks.slice(-4);
+      var invDispTok = last4[2]; // [vacío disp., inventario total, INVENTARIO DISP., cobertura días]
+      valores[pr.producto] = _rtiParseNum(invDispTok); // ya viene en MB — sin dividir entre 1000
+    });
+
+    _refConchanInvData = { fecha: fecha, valores: valores, faltantes: faltantes };
+    var okCount = Object.keys(valores).length;
+    if (!okCount) {
+      if (statusEl) { statusEl.textContent = '❌ No se pudo leer ningún producto — el formato del PDF pudo haber cambiado. Revisa el archivo o carga los valores a mano en Coberturas.'; statusEl.style.color = 'var(--red)'; }
+      return;
+    }
+    if (statusEl) {
+      statusEl.textContent = faltantes.length
+        ? '⚠️ ' + okCount + ' de ' + REF_CONCHAN_INV_PRODUCTOS.length + ' productos leídos — faltan: ' + faltantes.join(', ') + ' (verifica esos valores a mano)'
+        : '✅ ' + okCount + ' productos leídos correctamente para el ' + fecha + ' (día operativo)';
+      statusEl.style.color = faltantes.length ? 'var(--yel)' : 'var(--grn)';
+    }
+    if (prevEl) prevEl.innerHTML = _buildRefConchanInvPreview(_refConchanInvData);
+    if (actEl) actEl.style.display = 'flex';
+  } catch (err) {
+    console.error('[RefConchanInv]', err);
+    if (statusEl) { statusEl.textContent = '❌ ' + err.message; statusEl.style.color = 'var(--red)'; }
+  }
+}
+window.loadRefConchanInvPDF = loadRefConchanInvPDF;
+function _buildRefConchanInvPreview(data) {
+  var d = new Date(data.fecha + 'T12:00:00');
+  var fechaLbl = d.toLocaleDateString('es-PE', { weekday:'long', day:'2-digit', month:'long', year:'numeric' });
+  var rows = REF_CONCHAN_INV_PRODUCTOS.map(function(p) {
+    var v = data.valores[p.producto];
+    var falta = v === undefined;
+    return '<div style="display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center;padding:6px 14px;border-bottom:1px solid var(--bdr)22">'
+      + '<span style="font-size:11.5px;font-weight:700;color:var(--txt)">' + p.producto + '</span>'
+      + (falta
+          ? '<span style="font-size:10.5px;color:var(--red)">⚠️ no encontrado</span>'
+          : '<span style="font-size:12px;font-weight:800;font-family:var(--mono);color:var(--txt)">' + v.toFixed(2) + ' MB</span>')
+      + '</div>';
+  }).join('');
+  return '<div style="border:1px solid var(--bdr);border-radius:10px;overflow:hidden;margin-top:8px">'
+    + '<div style="background:var(--bg3);padding:8px 14px;font-size:11px;font-weight:800;color:var(--txt);border-bottom:1px solid var(--bdr)">'
+    + '🏭 Refinería Conchán · Día operativo ' + fechaLbl + '</div>'
+    + rows
+    + '</div>'
+    + '<div style="font-size:9px;color:var(--txt3);margin-top:6px;padding-left:2px">Se guardará como "Existencia/V.Factible" (campo <code>inv</code>) de la fila "Refinería Conchán" en Coberturas — mismo destino que el botón manual "✏️ Editar" de esa fila.</div>';
+}
+async function sendRefConchanInvToGS() {
+  if (!_refConchanInvData || !Object.keys(_refConchanInvData.valores).length) return;
+  var btn = document.getElementById('ref-conchan-inv-send-btn');
+  var st  = document.getElementById('ref-conchan-inv-send-status');
+  if (btn) btn.disabled = true;
+  if (st) { st.textContent = '⏳ Guardando...'; st.className = 'upload-status'; }
+  var updates = Object.keys(_refConchanInvData.valores).map(function(producto) {
+    return { fecha: _refConchanInvData.fecha, planta: 'Refinería Conchán', producto: producto, field: 'inv', value: _refConchanInvData.valores[producto] };
+  });
+  function _doSend() {
+    return fetch(CONFIG.API_URL, {
+      method: 'POST', redirect: 'follow',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ action: 'updateFieldFull', updates: updates })
+    }).then(function(r){ return r.json(); });
+  }
+  try {
+    var res = await _doSend().catch(function() {
+      console.warn('[RefConchanInv] Respuesta no-JSON (posible arranque en frío), reintentando en 1.5s...');
+      return new Promise(function(resolve) {
+        setTimeout(function() { _doSend().then(resolve).catch(function(){ resolve({ success:false, message:'Respuesta inválida del servidor (tras reintento)' }); }); }, 1500);
+      });
+    });
+    if (res && res.success && res.updated > 0) {
+      if (st) { st.textContent = '✅ ' + updates.length + ' producto(s) guardados en Coberturas para el ' + _refConchanInvData.fecha; st.className = 'upload-status success'; }
+      addUploadLog(true, 'Ref. Conchán Inventario ' + _refConchanInvData.fecha + ': ' + updates.length + ' producto(s)');
+      window._refConchanInvLastFecha = _refConchanInvData.fecha;
+      _uplSetBadge('acc-ref-conchan-inv', _refConchanInvData.fecha);
+      setTimeout(function() { fetchData(true); }, 2000);
+    } else {
+      if (st) { st.textContent = '❌ ' + ((res && res.message) || 'Error desconocido al guardar'); st.className = 'upload-status error'; }
+    }
+  } catch (err) {
+    if (st) { st.textContent = '❌ ' + err.message; st.className = 'upload-status error'; }
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+window.sendRefConchanInvToGS = sendRefConchanInvToGS;
+function clearRefConchanInv() {
+  _refConchanInvData = null;
+  ['ref-conchan-inv-preview','ref-conchan-inv-status','ref-conchan-inv-send-status','ref-conchan-inv-filename'].forEach(function(id){
+    var el = document.getElementById(id); if (el) el.innerHTML = '';
+  });
+  var fi = document.getElementById('file-ref-conchan-inv'); if (fi) fi.value = '';
+  var act = document.getElementById('ref-conchan-inv-actions'); if (act) act.style.display = 'none';
+}
+window.clearRefConchanInv = clearRefConchanInv;
+
 // Convierte el formato naviero de fecha-hora a una fecha-hora completa,
 // usando la fecha del reporte como referencia. Se ven DOS variantes en
 // estos reportes: "DD/HH:MM" (solo día del mes, ej. "13/20:06") y
