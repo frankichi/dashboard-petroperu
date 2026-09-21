@@ -29698,12 +29698,29 @@ function _asegurarCapRefCache(fnRerender) {
     return PROD_ORDER.filter(p => found.includes(p)).concat(found.filter(p => !PROD_ORDER.includes(p)));
   }
   const PINV_EXCLUIR_PROD  = ['ULSD EXPO', 'Regular HS'];
+  // ⚠️ CAMBIADO — a pedido explícito de unificar "Inventario Nacional" del
+  // panel principal con el de Vista Ejecutiva (panel gerencial): antes esta
+  // función solo tomaba filas con `fecha === fecha exacta` — si una planta
+  // aún no había cerrado su reporte para ese día, simplemente NO se
+  // contaba (ni con 0, desaparecía del todo), dando un total nacional más
+  // bajo que Vista Ejecutiva, que sí arrastra/proyecta esos casos con
+  // `_invConProyeccion` (la misma función que ya usan más de 40 lugares
+  // del sistema). Ahora este panel usa EXACTAMENTE esa misma función por
+  // planta+producto, para que los dos "Inventario/Total Nacional" — que
+  // muestran la misma etiqueta y se comparan a simple vista — siempre den
+  // el mismo número, en vez de dos metodologías distintas conviviendo en
+  // silencio.
   function getRows(date, prod) {
-    const rawRows = (typeof RAW !== 'undefined' ? RAW : [])
+    var plantasBase = PLANTAS_18_OFICIALES.concat(typeof REFINERIAS !== 'undefined' ? REFINERIAS : []);
+    const rawRows = plantasBase
+      .map(pl2 => {
+        if (SKIP_COMBOS && SKIP_COMBOS.has(pl2 + '|' + prod)) return null;
+        var r = (typeof _invConProyeccion === 'function') ? _invConProyeccion(pl2, prod, date) : null;
+        return r ? Object.assign({}, r, { planta: pl2, producto: prod }) : null;
+      })
       .filter(r => {
-        if (r.fecha !== date || r.producto !== prod) return false;
+        if (!r) return false;
         if (PINV_EXCLUIR_PROD.some(x => r.producto && r.producto.toUpperCase().includes(x.toUpperCase()))) return false;
-        if (SKIP_COMBOS && SKIP_COMBOS.has((r.planta||'')+'|'+(r.producto||''))) return false;
         if (!invFilaValida(r)) return false; // dato en barriles, no MB — no participa hasta que se corrija
         return true;
       });
