@@ -15950,6 +15950,9 @@ function renderPUpload() {
   var refConchanInvFecha = (Array.isArray(RAW) && RAW.length)
     ? RAW.filter(function(r){ return r.planta === 'Refinería Conchán' && r.inv > 0; })
         .map(function(r){ return r.fecha; }).filter(Boolean).sort().pop() : null;
+  var refIquitosInvFecha = (Array.isArray(RAW) && RAW.length)
+    ? RAW.filter(function(r){ return r.planta === 'Refinería Iquitos' && r.inv > 0; })
+        .map(function(r){ return r.fecha; }).filter(Boolean).sort().pop() : null;
   var ppvFecha   = (function() {
     var fechas = [];
     Object.keys(_ppVentasCache).forEach(function(mes) {
@@ -16154,6 +16157,48 @@ function renderPUpload() {
         + '<button class="upload-btn upload-btn-secondary" onclick="clearRefConchanInv()">✕ Limpiar</button>'
         + '<span class="upload-status" id="ref-conchan-inv-send-status"></span></div>'
     , (refConchanInvFecha || window._refConchanInvLastFecha || null))
+    // ⚠️ AGREGADO — a pedido: mismo mecanismo que Ref. Talara y Ref.
+    // Conchán, ahora para el "Informe Diario Gerencia Operaciones Selva"
+    // (Refinería Iquitos + Planta Iquitos). Particularidades de este
+    // formato:
+    //  1) La fecha a usar es "Reporte día Operativo" (el cierre real),
+    //     NO la "Fecha" de la cabecera (que es la fecha de EMISIÓN, un
+    //     día después) — mismo criterio que Ref. Conchán con "DÍA
+    //     OPERATIVO". Viene como texto ("domingo, 20 de Setiembre de
+    //     2026"), no como DD/MM/AAAA, así que se parsea con
+    //     MONTH_NAME_MAP (el mismo diccionario que ya usa la carga de
+    //     Cognos para nombres de mes en español).
+    //  2) La tabla de esta sección ("Refinería Iquitos + Planta Iquitos")
+    //     ya trae el "Inv.Disp. Total (BLS)" como el PRIMER número
+    //     después del nombre del producto — mucho más simple que Talara/
+    //     Conchán (no hay que contar 4 columnas ni preservar guiones).
+    //  3) Los valores vienen en BARRILES (BLS) — sí hay que dividir entre
+    //     1000 para pasar a MB (miles de barriles), igual que Ref.
+    //     Talara.
+    //  4) Los mismos nombres de producto (Gasolina Regular, Gasolina 84,
+    //     Turbo A-1, Diesel B5) se repiten más abajo en el reporte para
+    //     "Planta Tarapoto + Aeropuerto Tarapoto" — la búsqueda se acota
+    //     a la sección de Iquitos (entre su encabezado y el de Tarapoto)
+    //     para no enganchar por error con esa otra tabla.
+    //  5) "Refinería Iquitos" ya existe como planta en el sistema (con
+    //     productos Diesel/G. Regular/G. 84/TA1/PI6) — "Pet. Ind. N°6"
+    //     de este reporte es exactamente PI6.
+    + _uplAccordion('acc-ref-iquitos-inv', '🏭', 'Inventario Refinería Iquitos — PDF Diario',
+        'Informe Diario GOSE (Gerencia Operaciones Selva) — extrae Inv.Disp. Total de los 5 productos de Ref. Iquitos y lo refleja en Coberturas',
+        '', false,
+        '<div class="upload-dropzone" id="dropzone-ref-iquitos-inv">'
+        + '<div class="upload-dropzone-icon">📄</div>'
+        + '<div class="upload-dropzone-text">Arrastra el PDF aquí o haz clic</div>'
+        + '<div class="upload-dropzone-hint">Informe_diario_GOSE_*.pdf — la fecha se toma de "Reporte día Operativo", no de "Fecha"</div>'
+        + '<input type="file" id="file-ref-iquitos-inv" accept=".pdf"></div>'
+        + '<div id="ref-iquitos-inv-filename" style="font-size:9.5px;color:var(--txt3);margin-top:6px;padding-left:2px"></div>'
+        + '<div id="ref-iquitos-inv-status" style="font-size:10.5px;color:var(--txt3);margin-top:4px"></div>'
+        + '<div id="ref-iquitos-inv-preview"></div>'
+        + '<div id="ref-iquitos-inv-actions" class="upload-actions" style="display:none">'
+        + '<button class="upload-btn upload-btn-primary" id="ref-iquitos-inv-send-btn" onclick="sendRefIquitosInvToGS()">📤 Guardar en Coberturas</button>'
+        + '<button class="upload-btn upload-btn-secondary" onclick="clearRefIquitosInv()">✕ Limpiar</button>'
+        + '<span class="upload-status" id="ref-iquitos-inv-send-status"></span></div>'
+    , (refIquitosInvFecha || window._refIquitosInvLastFecha || null))
     + _uplAccordion('acc-cognos', '💹', 'Ventas Diarias — Dashboard Cognos',
         'Exportación de ventas reales desde el sistema Cognos (.xlsx)',
         uploadVentasData ? '✅ Datos cargados' : '', false,
@@ -16417,6 +16462,9 @@ function _bindUploadEvents() {
   });
   initDropzone('dropzone-ref-conchan-inv', 'file-ref-conchan-inv', function(file) {
     loadRefConchanInvPDF({ files: [file] });
+  });
+  initDropzone('dropzone-ref-iquitos-inv', 'file-ref-iquitos-inv', function(file) {
+    loadRefIquitosInvPDF({ files: [file] });
   });
   var navesOnFile = function(f) {
     if (!f) return;
@@ -18216,6 +18264,267 @@ function clearRefConchanInv() {
   var act = document.getElementById('ref-conchan-inv-actions'); if (act) act.style.display = 'none';
 }
 window.clearRefConchanInv = clearRefConchanInv;
+
+// ⚠️ AGREGADO — a pedido: carga del inventario diario de Refinería
+// Iquitos desde su "Informe Diario Gerencia Operaciones Selva" (GOSE).
+// Mismo destino final que Ref. Talara/Conchán (updateFieldFull, campo
+// 'inv', planta 'Refinería Iquitos'), con estas particularidades:
+//  1) La fecha a usar es "Reporte día Operativo" (el cierre real del
+//     reporte), NO "Fecha" (la de emisión, un día después) — mismo
+//     criterio que Ref. Conchán con "DÍA OPERATIVO". Viene en español
+//     con nombre de mes ("domingo, 20 de Setiembre de 2026"), así que se
+//     parsea con MONTH_NAME_MAP en vez de un DD/MM/AAAA numérico.
+//  2) La sección de interés es la tabla "Refinería Iquitos + Planta
+//     Iquitos" — el "Inv.Disp. Total (BLS)" es el PRIMER número después
+//     del nombre del producto en esa fila (no hay que contar columnas
+//     como en Talara/Conchán).
+//  3) Los valores vienen en BARRILES — se dividen entre 1000 para MB.
+//  4) Los mismos nombres de producto se repiten más abajo para "Planta
+//     Tarapoto + Aeropuerto Tarapoto" — se acota la búsqueda entre el
+//     encabezado de Iquitos y el de Tarapoto para no leer esa otra tabla
+//     por error.
+var REF_IQUITOS_INV_PRODUCTOS = [
+  { producto: 'Diesel',     nombre: 'Diesel\\s*B5' },
+  { producto: 'G. Regular', nombre: 'Gasolina\\s+Regular' },
+  { producto: 'G. 84',      nombre: 'Gasolina\\s+84' },
+  { producto: 'TA1',        nombre: 'Turbo\\s+A-?1' },
+  { producto: 'PI6',        nombre: 'Pet\\.?\\s*Ind\\.?\\s*N°?\\s*6' }
+];
+var _refIquitosInvData = null;
+var _refIquitosInvLastFecha = null;
+window._refIquitosInvLastFecha = null;
+async function loadRefIquitosInvPDF(input) {
+  var file = input && input.files && input.files[0];
+  if (!file) return;
+  var statusEl = document.getElementById('ref-iquitos-inv-status');
+  var fnEl     = document.getElementById('ref-iquitos-inv-filename');
+  var prevEl   = document.getElementById('ref-iquitos-inv-preview');
+  var actEl    = document.getElementById('ref-iquitos-inv-actions');
+  if (fnEl) fnEl.textContent = file.name;
+  if (statusEl) { statusEl.textContent = '⏳ Leyendo PDF...'; statusEl.style.color = 'var(--txt3)'; }
+  if (prevEl) prevEl.innerHTML = '';
+  if (actEl) actEl.style.display = 'none';
+  _refIquitosInvData = null;
+  try {
+    await _loadPdfJs();
+    var ab = await file.arrayBuffer();
+    var pdf = await pdfjsLib.getDocument({ data: ab }).promise;
+    var lines = [];
+    // ⚠️ IMPORTANTE — a diferencia de Talara/Conchán, este PDF (Informe
+    // GOSE) trae los gráficos de torta ("Inv. Iquitos (bls)", con la
+    // leyenda de cada producto y su valor) posicionados a la MISMA altura
+    // vertical que las filas de la tabla de texto. Con el bucket de 4
+    // unidades que usan los demás cargadores, la leyenda del gráfico se
+    // mezclaba carácter por carácter con la fila de la tabla (confirmado
+    // extrayendo el PDF real: salía "Gasolina Regular (B L S 6),732 ( B D
+    // C..." en vez de una línea limpia). Un bucket más fino (redondeo a
+    // la unidad, sin dividir/multiplicar) sí separa cada línea real,
+    // porque en este PDF en particular todos los caracteres de una misma
+    // fila comparten exactamente el mismo valor de Y.
+    for (var p = 1; p <= pdf.numPages; p++) {
+      var page  = await pdf.getPage(p);
+      var tc    = await page.getTextContent();
+      var items = tc.items.slice().sort(function(a,b) {
+        var dy = Math.round((b.transform[5] - a.transform[5]) / 3);
+        return dy !== 0 ? dy : a.transform[4] - b.transform[4];
+      });
+      var lineMap = {};
+      items.forEach(function(it) {
+        var y = Math.round(it.transform[5]);
+        if (!lineMap[y]) lineMap[y] = [];
+        lineMap[y].push({ x: it.transform[4], w: it.width || 0, str: it.str });
+      });
+      var sortedY = Object.keys(lineMap).map(Number).sort(function(a,b){ return b - a; });
+      // ⚠️ Este PDF además parte un mismo número en varios "items" de texto
+      // (p.ej. "8" y ",060" quedan como 2 fragmentos de "8,060"), con un
+      // hueco horizontal minúsculo entre ellos — muy distinto del hueco real
+      // entre columnas de la tabla. Se detecta por el tamaño del hueco en X:
+      // si es menor a RTI_GAP_UMBRAL se pegan sin espacio (mismo número/celda
+      // partida), si no se separan con doble espacio (columnas distintas).
+      var RTI_GAP_UMBRAL = 6;
+      sortedY.forEach(function(y) {
+        var sortedX = lineMap[y].sort(function(a,b){ return a.x - b.x; });
+        var lineStr = '';
+        sortedX.forEach(function(it, idx) {
+          if (idx > 0) {
+            var prev = sortedX[idx - 1];
+            var gap = it.x - (prev.x + prev.w);
+            // Solo se pega sin espacio cuando AMBOS fragmentos son numéricos
+            // (dígito/coma/punto) y el hueco es minúsculo — eso es un mismo
+            // número partido en dos "items". Cualquier otro hueco pequeño
+            // (texto normal con letras) se separa igual que siempre, para no
+            // pegar palabras entre sí por error.
+            var esUnionNumerica = gap < RTI_GAP_UMBRAL && /[\d,.]$/.test(prev.str) && /^[\d,.]/.test(it.str);
+            lineStr += (esUnionNumerica ? '' : '  ');
+          }
+          lineStr += it.str;
+        });
+        if (lineStr.trim()) lines.push(lineStr);
+      });
+    }
+    var fullText = lines.join('\n');
+    if (statusEl) statusEl.textContent = '⏳ Buscando día operativo y productos...';
+
+    // ⚠️ El PDF de Refinería Iquitos trae "Fecha:" (emisión) y "Operativo:" (cierre)
+    // muy cerca una de otra y en orden invertido tras el join de líneas, así que
+    // buscamos el patrón de fecha específicamente HACIA ADELANTE desde el literal
+    // "Operativo" (nunca hacia atrás/en una ventana simétrica, que podría capturar
+    // por error la fecha de "Fecha:").
+    var mDia = /Operativo\s*:?\s*[A-Za-zÁÉÍÓÚáéíóúñÑ]+,?\s*(\d{1,2})\s+de\s+([A-Za-zÁÉÍÓÚáéíóúñÑ]+)\s+de\s+(\d{4})/i.exec(fullText);
+    if (!mDia) {
+      if (statusEl) { statusEl.textContent = '❌ No se encontró "Reporte día Operativo" en la cabecera del PDF — verifica que sea el reporte correcto.'; statusEl.style.color = 'var(--red)'; }
+      return;
+    }
+    var mesNombre = mDia[2].toLowerCase();
+    var mesNum = MONTH_NAME_MAP[mesNombre];
+    if (!mesNum) {
+      if (statusEl) { statusEl.textContent = '❌ No se pudo interpretar el mes "' + mDia[2] + '" del "Reporte día Operativo".'; statusEl.style.color = 'var(--red)'; }
+      return;
+    }
+    var fecha = mDia[3] + '-' + String(mesNum).padStart(2,'0') + '-' + mDia[1].padStart(2,'0');
+
+    // Acotar la búsqueda a la sección "Refinería Iquitos + Planta Iquitos".
+    // ⚠️ CORREGIDO — el título de esta sección viene con las letras
+    // separadas carácter por carácter en el PDF real ("R e f in e r ía I
+    // quit os + P l a n ta Iquitos"), así que buscarlo tal cual con
+    // "Refinería Iquitos" nunca calzaba. La cabecera de la TABLA en
+    // cambio sí se extrae íntegra ("Producto  Inv.Disp.  Total..."), y es
+    // la primera vez que aparece ese texto exacto en el reporte — se usa
+    // eso como inicio de sección, y la SIGUIENTE vez que se repite (la
+    // cabecera de la tabla de Tarapoto) como fin — ver nota (4) arriba:
+    // los mismos nombres de producto se repiten en esas tablas de abajo.
+    var cabeceraTabla = /Producto\s+Inv\.?\s*Disp\.?\s*Total/i;
+    var startMatch = cabeceraTabla.exec(fullText);
+    var startIdx = startMatch ? startMatch.index : 0;
+    var endMatch = cabeceraTabla.exec(fullText.slice(startIdx + 20));
+    var endIdx = endMatch ? startIdx + 20 + endMatch.index : fullText.length;
+    var scoped = fullText.slice(startIdx, endIdx);
+    var scopedLines = scoped.split('\n');
+
+    // Un número "real" de esta columna siempre viene con separador de
+    // miles (ej. "6,732", "68,102") — un simple \d suelto no basta,
+    // porque el propio NOMBRE de varios productos ya trae dígitos (TA1
+    // como "A-1", G. 84, PI6 como "N°6"), y el gráfico de torta repite
+    // el nombre del producto (con esos mismos dígitos) sin ningún dato al
+    // lado. Exigir un número de 3+ dígitos consecutivos o con coma de
+    // miles descarta esos falsos positivos y solo acepta la fila real.
+    var _esNumeroReal = /\d,\d{3}|\d{3,}/;
+    var valores = {}, faltantes = [];
+    REF_IQUITOS_INV_PRODUCTOS.forEach(function(pr) {
+      var re = new RegExp('^\\s*' + pr.nombre + '\\b(.*)$', 'i');
+      var restante = null;
+      for (var li = 0; li < scopedLines.length; li++) {
+        var m = re.exec(scopedLines[li].trim());
+        if (!m) continue;
+        if (_esNumeroReal.test(m[1])) { restante = m[1]; break; } // esta sí trae el dato real
+      }
+      if (restante === null) { faltantes.push(pr.producto); return; }
+      // ⚠️ Este PDF en particular separa dígitos de un mismo número en
+      // "text runs" propios (ej. "6" y ",732" como dos ítems de texto
+      // distintos, unidos por el "  " de arriba) — sin esto, la regex de
+      // abajo capturaría solo "6" en vez de "6,732". Se compactan los
+      // espacios ÚNICAMENTE entre dígito/coma/punto consecutivos (nunca
+      // entre palabras), repitiendo hasta que no quede ninguno más, para
+      // no fusionar por error números que sí están en columnas distintas
+      // separadas por muchos espacios reales.
+      var restanteCompacto = restante;
+      var _prevCompacto;
+      do { _prevCompacto = restanteCompacto; restanteCompacto = restanteCompacto.replace(/([\d,.])\s+(?=[\d,.])/g, '$1'); } while (restanteCompacto !== _prevCompacto);
+      var toks = restanteCompacto.match(/(\d[\d,]*\.?\d*|-)/g) || [];
+      if (!toks.length) { faltantes.push(pr.producto); return; }
+      var invTotalBbl = _rtiParseNum(toks[0]); // "Inv.Disp. Total (BLS)" = primer número tras el nombre
+      if (invTotalBbl === null) { faltantes.push(pr.producto); return; }
+      valores[pr.producto] = Math.round((invTotalBbl / 1000) * 100) / 100; // bbl → MB
+    });
+
+    _refIquitosInvData = { fecha: fecha, valores: valores, faltantes: faltantes };
+    var okCount = Object.keys(valores).length;
+    if (!okCount) {
+      if (statusEl) { statusEl.textContent = '❌ No se pudo leer ningún producto — el formato del PDF pudo haber cambiado. Revisa el archivo o carga los valores a mano en Coberturas.'; statusEl.style.color = 'var(--red)'; }
+      return;
+    }
+    if (statusEl) {
+      statusEl.textContent = faltantes.length
+        ? '⚠️ ' + okCount + ' de ' + REF_IQUITOS_INV_PRODUCTOS.length + ' productos leídos — faltan: ' + faltantes.join(', ') + ' (verifica esos valores a mano)'
+        : '✅ ' + okCount + ' productos leídos correctamente para el ' + fecha + ' (día operativo)';
+      statusEl.style.color = faltantes.length ? 'var(--yel)' : 'var(--grn)';
+    }
+    if (prevEl) prevEl.innerHTML = _buildRefIquitosInvPreview(_refIquitosInvData);
+    if (actEl) actEl.style.display = 'flex';
+  } catch (err) {
+    console.error('[RefIquitosInv]', err);
+    if (statusEl) { statusEl.textContent = '❌ ' + err.message; statusEl.style.color = 'var(--red)'; }
+  }
+}
+window.loadRefIquitosInvPDF = loadRefIquitosInvPDF;
+function _buildRefIquitosInvPreview(data) {
+  var d = new Date(data.fecha + 'T12:00:00');
+  var fechaLbl = d.toLocaleDateString('es-PE', { weekday:'long', day:'2-digit', month:'long', year:'numeric' });
+  var rows = REF_IQUITOS_INV_PRODUCTOS.map(function(p) {
+    var v = data.valores[p.producto];
+    var falta = v === undefined;
+    return '<div style="display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center;padding:6px 14px;border-bottom:1px solid var(--bdr)22">'
+      + '<span style="font-size:11.5px;font-weight:700;color:var(--txt)">' + p.producto + '</span>'
+      + (falta
+          ? '<span style="font-size:10.5px;color:var(--red)">⚠️ no encontrado</span>'
+          : '<span style="font-size:12px;font-weight:800;font-family:var(--mono);color:var(--txt)">' + v.toFixed(2) + ' MB</span>')
+      + '</div>';
+  }).join('');
+  return '<div style="border:1px solid var(--bdr);border-radius:10px;overflow:hidden;margin-top:8px">'
+    + '<div style="background:var(--bg3);padding:8px 14px;font-size:11px;font-weight:800;color:var(--txt);border-bottom:1px solid var(--bdr)">'
+    + '🏭 Refinería Iquitos · Día operativo ' + fechaLbl + '</div>'
+    + rows
+    + '</div>'
+    + '<div style="font-size:9px;color:var(--txt3);margin-top:6px;padding-left:2px">Se guardará como "Existencia/V.Factible" (campo <code>inv</code>) de la fila "Refinería Iquitos" en Coberturas — mismo destino que el botón manual "✏️ Editar" de esa fila.</div>';
+}
+async function sendRefIquitosInvToGS() {
+  if (!_refIquitosInvData || !Object.keys(_refIquitosInvData.valores).length) return;
+  var btn = document.getElementById('ref-iquitos-inv-send-btn');
+  var st  = document.getElementById('ref-iquitos-inv-send-status');
+  if (btn) btn.disabled = true;
+  if (st) { st.textContent = '⏳ Guardando...'; st.className = 'upload-status'; }
+  var updates = Object.keys(_refIquitosInvData.valores).map(function(producto) {
+    return { fecha: _refIquitosInvData.fecha, planta: 'Refinería Iquitos', producto: producto, field: 'inv', value: _refIquitosInvData.valores[producto] };
+  });
+  function _doSend() {
+    return fetch(CONFIG.API_URL, {
+      method: 'POST', redirect: 'follow',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ action: 'updateFieldFull', updates: updates })
+    }).then(function(r){ return r.json(); });
+  }
+  try {
+    var res = await _doSend().catch(function() {
+      console.warn('[RefIquitosInv] Respuesta no-JSON (posible arranque en frío), reintentando en 1.5s...');
+      return new Promise(function(resolve) {
+        setTimeout(function() { _doSend().then(resolve).catch(function(){ resolve({ success:false, message:'Respuesta inválida del servidor (tras reintento)' }); }); }, 1500);
+      });
+    });
+    if (res && res.success && res.updated > 0) {
+      if (st) { st.textContent = '✅ ' + updates.length + ' producto(s) guardados en Coberturas para el ' + _refIquitosInvData.fecha; st.className = 'upload-status success'; }
+      addUploadLog(true, 'Ref. Iquitos Inventario ' + _refIquitosInvData.fecha + ': ' + updates.length + ' producto(s)');
+      window._refIquitosInvLastFecha = _refIquitosInvData.fecha;
+      _uplSetBadge('acc-ref-iquitos-inv', _refIquitosInvData.fecha);
+      setTimeout(function() { fetchData(true); }, 2000);
+    } else {
+      if (st) { st.textContent = '❌ ' + ((res && res.message) || 'Error desconocido al guardar'); st.className = 'upload-status error'; }
+    }
+  } catch (err) {
+    if (st) { st.textContent = '❌ ' + err.message; st.className = 'upload-status error'; }
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+window.sendRefIquitosInvToGS = sendRefIquitosInvToGS;
+function clearRefIquitosInv() {
+  _refIquitosInvData = null;
+  ['ref-iquitos-inv-preview','ref-iquitos-inv-status','ref-iquitos-inv-send-status','ref-iquitos-inv-filename'].forEach(function(id){
+    var el = document.getElementById(id); if (el) el.innerHTML = '';
+  });
+  var fi = document.getElementById('file-ref-iquitos-inv'); if (fi) fi.value = '';
+  var act = document.getElementById('ref-iquitos-inv-actions'); if (act) act.style.display = 'none';
+}
+window.clearRefIquitosInv = clearRefIquitosInv;
 
 // Convierte el formato naviero de fecha-hora a una fecha-hora completa,
 // usando la fecha del reporte como referencia. Se ven DOS variantes en
