@@ -1975,6 +1975,37 @@ function _solResponder(id, aprobado) {
 
 // ── Refrescar toda la data del dashboard (fuerza nueva carga desde GAS) ──
 function _refreshAllData() {
+  // ⚠️ CORREGIDO — bug real confirmado: "Actualizar" sí traía datos
+  // frescos de Sheets a RAW, pero NUNCA limpiaba cobOverrides /
+  // cobInvOverrides / cobDespachoOverrides / cobDespRealOverrides (las
+  // ediciones locales, sin guardar, de Coberturas). cobGetInv() y el
+  // getter de V. Factible PRIORIZAN esos overrides sobre el valor real
+  // de RAW — así que si quedaba una edición pendiente sin guardar
+  // (aunque fuera de una sesión de edición anterior, olvidada), Coberturas
+  // seguía mostrando ese valor "congelado" sin importar cuántas veces se
+  // presionara Actualizar. Exactamente el síntoma reportado: "el botón
+  // actualizar de coberturas no lee la data de Sheets". Ahora, si hay
+  // cambios pendientes, se avisa antes de descartarlos (igual que al
+  // cambiar de fecha); si el usuario cancela, se aborta el refresco para
+  // no perder ediciones reales sin confirmar.
+  try {
+    var _pendCob = (typeof cobOverrides !== 'undefined' ? Object.keys(cobOverrides).length : 0)
+                 + (typeof cobInvOverrides !== 'undefined' ? Object.keys(cobInvOverrides).length : 0)
+                 + (typeof cobDespachoOverrides !== 'undefined' ? Object.keys(cobDespachoOverrides).length : 0)
+                 + (typeof cobDespRealOverrides !== 'undefined' ? Object.keys(cobDespRealOverrides).length : 0);
+    if (_pendCob > 0) {
+      var _okRef = confirm(
+        '⚠️ Tienes ' + _pendCob + ' cambio' + (_pendCob !== 1 ? 's' : '') + ' sin guardar en Coberturas.\n\n' +
+        '¿Qué quieres hacer?\n\n' +
+        '• ACEPTAR: descartar esos cambios y traer los datos reales de Sheets\n' +
+        '• CANCELAR: quedarme como está (puedes guardar primero con 💾 Guardar cambios)'
+      );
+      if (!_okRef) return;
+      cobOverrides = {}; cobInvOverrides = {}; cobDespachoOverrides = {}; cobDespRealOverrides = {};
+      if (typeof cobPronOverrides !== 'undefined') cobPronOverrides = {};
+      if (typeof cobEditMode !== 'undefined') cobEditMode = false;
+    }
+  } catch(e) { console.warn('[Actualizar] no se pudo verificar overrides de Coberturas:', e && e.message); }
   var btn = document.getElementById('btn-refresh-global');
   if (btn) { btn.disabled = true; btn.textContent = '↻ Actualizando…'; }
   // Limpiar cachés del navegador que solo se cargan UNA VEZ por sesión.
@@ -4681,7 +4712,12 @@ async function fetchData(forceRefresh, _esReintento404) {
       mainPromise = _fetchConReintentos(url + (forceRefresh ? '' : '&_r=1'), fetchOpts, 3);
       response = await mainPromise;
     }
-    if (!response.ok) throw new Error('HTTP ' + response.status + ' — verifica que el GAS est\u00e9 publicado como \u201cAnyone\u201d');
+    // CORREGIDO -- a pedido: el mensaje decia "publicado como Anyone"
+    // (en ingles), pero Apps Script en espanol muestra esa opcion como
+    // "Cualquier usuario" -- la pantalla de error de mas abajo (con los
+    // pasos detallados) ya usaba ese termino correcto, asi que este
+    // mensaje corto quedaba inconsistente con sus propias instrucciones.
+    if (!response.ok) throw new Error('HTTP ' + response.status + ' — verifica que el GAS est\u00e9 publicado con acceso \u201cCualquier usuario\u201d');
     const raw = await response.json();
     var data, pronExtra = [];
     if (raw && raw.inventario) {
@@ -9642,7 +9678,16 @@ async function cobSaveToGS() {
     renderP1(); renderP2();
     if (typeof updateEventTicker === 'function') updateEventTicker();
     setTimeout(function() {
-      fetchData(true);
+      // ⚠️ CORREGIDO — a pedido: este refetch traía la data real ya
+      // confirmada en Sheets a RAW, pero nunca volvía a pintar la
+      // pantalla con ella — se quedaba para siempre con el valor
+      // "optimista" pintado justo después de guardar. Si el backend
+      // calculó algo distinto al valor optimista (ej. por el fallback
+      // de fila-clonada en ediciones retroactivas), la pantalla nunca
+      // lo reflejaba aunque Sheets sí tuviera el dato correcto.
+      fetchData(true).then(function() {
+        if (typeof rerenderActivePage === 'function') rerenderActivePage();
+      }).catch(function(e){ console.warn('[CobSave] refetch post-guardado falló:', e && e.message); });
       if (statusEl) setTimeout(function() { statusEl.textContent = ''; }, 3000);
     }, 3000);
   } catch (err) {
@@ -15801,6 +15846,23 @@ function renderPUpload() {
   var navFecha   = (function() { if (!_navPosData) return null; var fechas = Object.values(_navPosData).map(function(n){ return n.fecha||''; }).filter(Boolean); return fechas.length ? fechas.sort().pop() : null; })();
   var cargFecha  = (Array.isArray(_cargasNavesCache) && _cargasNavesCache.length)
     ? _cargasNavesCache.map(function(c){ return c.fecha_reporte||''; }).filter(Boolean).sort().pop() : null;
+  // ⚠️ AGREGADO — a pedido: el badge de fecha de estos dos acordeones
+  // (Ref. Talara / Ref. Conchán) dependía de una variable en memoria
+  // (window._refTalaraInvLastFecha/_refConchanInvLastFecha) que solo se
+  // llenaba DESPUÉS de un guardado exitoso EN ESTA MISMA sesión del
+  // navegador — al recargar la página, o en cualquier sesión nueva,
+  // volvía a quedar vacía aunque sí hubiera datos reales guardados. Se
+  // calcula ahora igual que 'cargFecha'/'edFecha' arriba: directo de RAW
+  // (los datos reales que ya trajo el dashboard), buscando la fecha más
+  // reciente con inventario real cargado para cada refinería — así el
+  // badge es correcto desde la primera carga de la página, sin depender
+  // de haber subido algo en esta sesión.
+  var refTalaraInvFecha = (Array.isArray(RAW) && RAW.length)
+    ? RAW.filter(function(r){ return r.planta === 'Refinería Talara' && r.inv > 0; })
+        .map(function(r){ return r.fecha; }).filter(Boolean).sort().pop() : null;
+  var refConchanInvFecha = (Array.isArray(RAW) && RAW.length)
+    ? RAW.filter(function(r){ return r.planta === 'Refinería Conchán' && r.inv > 0; })
+        .map(function(r){ return r.fecha; }).filter(Boolean).sort().pop() : null;
   var ppvFecha   = (function() {
     var fechas = [];
     Object.keys(_ppVentasCache).forEach(function(mes) {
@@ -15963,7 +16025,7 @@ function renderPUpload() {
         + '<button class="upload-btn upload-btn-primary" id="ref-talara-inv-send-btn" onclick="sendRefTalaraInvToGS()">📤 Guardar en Coberturas</button>'
         + '<button class="upload-btn upload-btn-secondary" onclick="clearRefTalaraInv()">✕ Limpiar</button>'
         + '<span class="upload-status" id="ref-talara-inv-send-status"></span></div>'
-    , (window._refTalaraInvLastFecha || null))
+    , (refTalaraInvFecha || window._refTalaraInvLastFecha || null))
     // ⚠️ AGREGADO — a pedido: mismo mecanismo que Ref. Talara, pero para
     // el "Reporte Diario" (Gerencia Operaciones Conchán) que tiene un
     // formato DISTINTO — sin códigos SAP, ya en MB (no en bbl, por lo
@@ -15988,7 +16050,7 @@ function renderPUpload() {
         + '<button class="upload-btn upload-btn-primary" id="ref-conchan-inv-send-btn" onclick="sendRefConchanInvToGS()">📤 Guardar en Coberturas</button>'
         + '<button class="upload-btn upload-btn-secondary" onclick="clearRefConchanInv()">✕ Limpiar</button>'
         + '<span class="upload-status" id="ref-conchan-inv-send-status"></span></div>'
-    , (window._refConchanInvLastFecha || null))
+    , (refConchanInvFecha || window._refConchanInvLastFecha || null))
     + _uplAccordion('acc-cognos', '💹', 'Ventas Diarias — Dashboard Cognos',
         'Exportación de ventas reales desde el sistema Cognos (.xlsx)',
         uploadVentasData ? '✅ Datos cargados' : '', false,
