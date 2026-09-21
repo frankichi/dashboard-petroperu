@@ -1680,8 +1680,38 @@ textarea.pd-inp{resize:vertical;min-height:44px;font-family:var(--sans)}
 var _solCache = [];
 var _solPanelOpen = false;
 var _solPrevPendingCount = -1; // -1 = aún no cargado, evita toast en la primera carga
+var _solLoading = false;      // ⚠️ AGREGADO — ver nota abajo
+var _solLoadPromise = null;   // la promesa de la carga en curso (para que otros llamadores puedan esperarla en vez de recibir un no-op)
 
 function _solLoad(_isRetry) {
+  // ⚠️ AGREGADO — a pedido: se reportaron múltiples "cold start" y 404
+  // seguidos en la misma sesión (getAll Y getTodasSolicitudes fallando
+  // a la vez). _solAutoPoll llama a _solLoad cada 10s SIN esperar a que
+  // la llamada anterior termine — y esta función ya puede tardar sola
+  // hasta ~2.4s por su propio reintento de cold-start (1.2s + 1.2s). Si
+  // el backend está lento/arrancando en frío, los sondeos se apilan uno
+  // sobre otro (varias llamadas en paralelo al MISMO Apps Script,
+  // compitiendo con getAll por el cupo de ejecuciones simultáneas de
+  // Apps Script), lo que puede ser justo lo que agrava o prolonga el
+  // "cold start" en vez de dejarlo terminar. Con este guard, un sondeo
+  // nuevo se salta por completo si el anterior todavía no terminó.
+  if (!_isRetry) {
+    // ⚠️ CORREGIDO — el guard original devolvía Promise.resolve() (un
+    // no-op) cuando ya había una carga en curso — eso estaba BIEN para
+    // el sondeo automático de fondo, pero rompía a quien llama a
+    // _solLoad() esperando datos realmente frescos (ej. _solResponder
+    // tras aprobar/rechazar, que encadena .then(_solRenderPanel)): si
+    // esa llamada coincidía con el sondeo de los 10s, el .then()
+    // corría sobre datos VIEJOS (todavía "PENDIENTE"), y la tarjeta
+    // solo pasaba a "APROBADA" en pantalla cuando algo más (ej. cambiar
+    // de pestaña) volvía a llamar _solRenderPanel() más tarde — el
+    // síntoma reportado. Ahora, si ya hay una carga en curso, se
+    // devuelve ESA MISMA promesa (no una nueva petición en paralelo, no
+    // un no-op) — quien esperaba datos frescos los recibe apenas la
+    // carga en curso termine de verdad.
+    if (_solLoading && _solLoadPromise) { return _solLoadPromise; }
+    _solLoading = true;
+  }
   var sess = window._dashSession || {};
   // ⚠️ CORREGIDO — a pedido: antes esta función no devolvía nada
   // aprovechable — quien la llamaba (ej. tras aprobar una solicitud)
@@ -1700,7 +1730,7 @@ function _solLoad(_isRetry) {
   // un const antes de su línea de declaración lanza ReferenceError (zona
   // muerta temporal). Se usa la URL directa como referencia segura.
   var API_URL_SAFE = 'https://script.google.com/macros/s/AKfycbwL5Gec0EmZgha2rNUaORMDT6MBuouyIlV07tlMpQo9O1YcgkiWJdoQUmIafMQhF2kgUg/exec';
-  return fetch(API_URL_SAFE + '?action=getTodasSolicitudes&token=' + sess.token, {redirect:'follow'})
+  var _p = fetch(API_URL_SAFE + '?action=getTodasSolicitudes&token=' + sess.token, {redirect:'follow'})
     .then(function(r){ return r.text(); })
     .then(function(txt) {
       var data;
@@ -1736,6 +1766,14 @@ function _solLoad(_isRetry) {
       if (!_isRetry) { return new Promise(function(resolve) { setTimeout(resolve, 1200); }).then(function(){ return _solLoad(true); }); }
       else console.warn('[solicitudes] error de red', e);
     });
+  // El guard _solLoading solo se levanta cuando la cadena COMPLETA (incluido
+  // cualquier reintento interno con _isRetry=true) terminó de verdad — así
+  // el siguiente sondeo automático (10s después) nunca se solapa con este.
+  if (!_isRetry) {
+    _p = _p.then(function(r){ _solLoading = false; _solLoadPromise = null; return r; }, function(e){ _solLoading = false; _solLoadPromise = null; throw e; });
+    _solLoadPromise = _p;
+  }
+  return _p;
 }
 
 function _solUpdateBadge() {
@@ -1771,7 +1809,11 @@ function _solShowToast(nuevas) {
 function _solOpenPanel() {
   _solPanelOpen = true;
   _solTab = 'pendientes';
-  _solLoad();
+  // Pintar de una vez con lo que ya haya en caché (no dejar el panel en
+  // blanco esperando red) y, apenas lleguen datos frescos de verdad,
+  // volver a pintar — así al abrir el panel nunca se ve un estado de
+  // hace hasta 10s si justo hubo un cambio.
+  _solLoad().then(function(){ if (_solPanelOpen) _solRenderPanel(); });
   var panel = document.getElementById('sol-panel');
   if (panel) { panel.style.display = 'flex'; _solRenderPanel(); return; }
   var p = document.createElement('div');
@@ -1958,14 +2000,28 @@ function _solResponder(id, aprobado) {
     var sess = window._dashSession || {};
     if (sess.token) {
       clearInterval(kick);
-      _solLoad();
+      // ⚠️ CORREGIDO — bug real confirmado: este sondeo actualizaba
+      // _solCache cada 10s en segundo plano, pero NUNCA volvía a pintar
+      // el panel si ya estaba abierto en pantalla — solo cambiar de
+      // pestaña (Solicitudes ↔ Historial) disparaba _solRenderPanel() y
+      // recién ahí se veía el dato ya actualizado. Por eso una solicitud
+      // nueva, o un cambio de estado que llegó tarde por el propio
+      // sondeo, solo aparecía "si tabulabas". Ahora, cada vez que el
+      // sondeo trae datos frescos, si el panel está abierto se vuelve a
+      // pintar de una vez.
+      var _solPoll = function() {
+        _solLoad().then(function() {
+          if (_solPanelOpen) _solRenderPanel();
+        });
+      };
+      _solPoll();
       // ⚠️ CORREGIDO — a pedido: "las notificaciones sean más veloces" —
       // antes se sondeaba cada 30 segundos, así que una solicitud nueva
       // (una planta pidiendo una corrección) podía tardar hasta medio
       // minuto en aparecer en el Panel de Control. Bajado a 10 segundos
       // — sigue siendo un sondeo liviano (una sola llamada GET), no
       // representa una carga significativa extra para el backend.
-      setInterval(_solLoad, 10000); // cada 10 segundos
+      setInterval(_solPoll, 10000); // cada 10 segundos
     } else if (tries > 40) { // ~20s máx esperando sesión
       clearInterval(kick);
     }
@@ -15905,6 +15961,22 @@ function renderPUpload() {
   if (!el) return;
   var edOpen    = !!uploadEDData;
   var navesOpen = !!uploadNavesData;
+  // ⚠️ AGREGADO — a pedido: renderPUpload() reconstruye TODO el innerHTML
+  // de "Carga de Datos" — y no se llama solo una vez al abrir la página:
+  // también se vuelve a disparar cuando termina de cargar SheetJS en
+  // segundo plano y cuando termina de precargar "PP Ventas" (líneas de
+  // arriba), ambas asíncronas y con tiempos variables. Antes de este fix,
+  // cada una de esas 2 recargas extra volvía a poner CADA acordeón (ej.
+  // Refinería Talara / Conchán) en su estado por defecto (casi siempre
+  // cerrado) — si la persona ya lo había abierto para subir un PDF,
+  // veía el acordeón "abrirse y cerrarse" hasta 3 veces seguidas sin
+  // haber tocado nada. Ahora se guarda qué acordeones estaban
+  // abiertos/cerrados ANTES de reconstruir el HTML, y se restaura ese
+  // mismo estado después — el usuario ya no ve el parpadeo.
+  var _uplPrevOpen = {};
+  el.querySelectorAll('.upl-accordion-body').forEach(function(b) {
+    _uplPrevOpen[b.id] = (b.style.display !== 'none');
+  });
   el.innerHTML =
     '<div class="page-header">'
     + '<div class="page-header-title">📤 Carga de Datos</div>'
@@ -16138,6 +16210,21 @@ function renderPUpload() {
         + '</div>' // end grid 2-col
     + '</div>'; // end padding wrapper
   _bindUploadEvents();
+  // Restaurar el estado abierto/cerrado de cada acordeón (ver nota arriba,
+  // junto a "_uplPrevOpen") — solo si difiere de su estado recién pintado.
+  Object.keys(_uplPrevOpen).forEach(function(bid) {
+    var b = document.getElementById(bid);
+    if (!b) return;
+    var wasOpen = _uplPrevOpen[bid];
+    var isOpen  = (b.style.display !== 'none');
+    if (wasOpen === isOpen) return;
+    var accId = bid.replace(/-body$/, '');
+    var hdr   = document.getElementById(accId + '-hdr');
+    var arrow = document.getElementById(accId + '-arrow');
+    b.style.display = wasOpen ? 'block' : 'none';
+    if (hdr)   hdr.classList.toggle('open', wasOpen);
+    if (arrow) arrow.classList.toggle('open', wasOpen);
+  });
 }
 function _uplAccordion(id, icon, title, desc, badge, openDefault, bodyHTML, lastDate) {
   var open = openDefault ? 'open' : '';
@@ -17968,15 +18055,42 @@ async function loadRefConchanInvPDF(input) {
     var scopedLines = scoped.split('\n');
 
     var valores = {}, faltantes = [];
+    // Una línea "huérfana" es puro números/guiones (sin ninguna letra) —
+    // en tablas como esta, es data que pdf.js separó de su propia etiqueta.
+    var _esLineaHuerfana = function(s) { return s && /\d/.test(s) && !/[A-Za-zÁÉÍÓÚÑáéíóúñ]/.test(s); };
     REF_CONCHAN_INV_PRODUCTOS.forEach(function(pr) {
       var re = new RegExp('^\\s*' + pr.nombre + '\\b(.*)$', 'i');
-      var restante = null;
+      var restante = null, li0 = -1;
       for (var li = 0; li < scopedLines.length; li++) {
         var m = re.exec(scopedLines[li].trim());
-        if (m) { restante = m[1]; break; } // primera coincidencia dentro de la sección acotada
+        if (m) { restante = m[1]; li0 = li; break; } // primera coincidencia dentro de la sección acotada
       }
       if (restante === null) { faltantes.push(pr.producto); return; }
       var toks = restante.match(/(\d[\d,]*\.?\d*|-)/g) || [];
+      // ⚠️ CORREGIDO — bug real confirmado con el reporte del 21.09.2026:
+      // la fila de "GASOLINA REGULAR HS" se partió en 2 líneas por un
+      // desfase mínimo de altura de texto en el PDF (pdf.js agrupa por
+      // coordenada Y redondeada) — la línea con la etiqueta solo traía
+      // los códigos de tanque (3 tokens), y los 4 valores reales
+      // quedaban en la línea INMEDIATAMENTE ANTERIOR, sin ninguna
+      // etiqueta ("huérfana"). Si la línea de la etiqueta no trae los 4
+      // tokens necesarios, se completan con los de esa línea huérfana
+      // adyacente (antes o después) antes de rendirse.
+      if (toks.length < 4) {
+        // La línea huérfana (ver nota arriba) suele traer, ELLA SOLA, la
+        // secuencia completa de valores (le falta el/los código(s) de
+        // tanque en medio, pero esos no forman parte de los últimos 4
+        // que necesitamos) — NO se debe concatenar con los tokens de la
+        // línea de la etiqueta (esos son solo códigos de tanque
+        // descarriados y corromperían cuáles 4 tokens son "los últimos").
+        var vecinas = [scopedLines[li0 - 1], scopedLines[li0 + 1]];
+        for (var vi = 0; vi < vecinas.length && toks.length < 4; vi++) {
+          var vecina = vecinas[vi];
+          if (!_esLineaHuerfana(vecina)) continue;
+          var toksVecina = vecina.match(/(\d[\d,]*\.?\d*|-)/g) || [];
+          if (toksVecina.length >= 4) toks = toksVecina;
+        }
+      }
       if (toks.length < 4) { faltantes.push(pr.producto); return; }
       var last4 = toks.slice(-4);
       var invDispTok = last4[2]; // [vacío disp., inventario total, INVENTARIO DISP., cobertura días]
