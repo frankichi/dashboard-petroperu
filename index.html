@@ -15804,7 +15804,18 @@ function parsePPSalesFile(file, callback) {
       var year  = mm[1] || String(new Date().getFullYear());
       var month = MONTHS[mm[2]] || '01';
       var mes   = year + '-' + month;
-      var COL_PROD = { F:'GLP', G:'TA1', L:'G. 84', M:'G. Premium', N:'G. Regular', T:'Diesel' };
+      // ⚠️ CORREGIDO — bug real confirmado con el reporte de Setiembre
+      // 2026: la columna G se leía como "TA1" (Turbo A1), pero en la
+      // estructura real del reporte esa columna es "Gasolina de
+      // Aviación" (parte del grupo GASOLINAS) — el TOTAL real de Turbo
+      // A1 (suma de MI+ME) está en la columna R. Y la columna T se leía
+      // como "Diesel" completo, pero solo es el componente B5-S50 —
+      // faltaba sumar la columna S (B5), así que el Diesel guardado
+      // quedaba SUBESTIMADO en cada carga anterior. Ahora se usan las
+      // columnas de TOTAL ya calculadas en el propio Excel (R y U) en
+      // vez de un solo componente, para no depender de que el reporte
+      // no agregue una columna nueva en el medio más adelante.
+      var COL_PROD = { F:'GLP', R:'TA1', L:'G. 84', M:'G. Premium', N:'G. Regular', U:'Diesel' };
       var records = [];
       for (var row = 10; row <= 40; row++) {
         var dayCell = ws['D' + row];
