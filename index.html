@@ -18283,13 +18283,31 @@ window.clearRefConchanInv = clearRefConchanInv;
 //     Tarapoto + Aeropuerto Tarapoto" — se acota la búsqueda entre el
 //     encabezado de Iquitos y el de Tarapoto para no leer esa otra tabla
 //     por error.
+// ⚠️ Nombres en TEXTO PLANO (no regex) — algunos reportes GOSE renderizan
+// el nombre del producto con cada LETRA como un ítem de texto aparte y
+// huecos irregulares entre ellas (ej. "G  a  s  o  l  in  a  84" en vez de
+// "Gasolina  84"), a diferencia de otros reportes donde sale normal. Por
+// eso el nombre se compara con _fuzzyNombre() más abajo, que tolera
+// cualquier cantidad de espacio entre cada letra.
 var REF_IQUITOS_INV_PRODUCTOS = [
-  { producto: 'Diesel',     nombre: 'Diesel\\s*B5' },
-  { producto: 'G. Regular', nombre: 'Gasolina\\s+Regular' },
-  { producto: 'G. 84',      nombre: 'Gasolina\\s+84' },
-  { producto: 'TA1',        nombre: 'Turbo\\s+A-?1' },
-  { producto: 'PI6',        nombre: 'Pet\\.?\\s*Ind\\.?\\s*N°?\\s*6' }
+  { producto: 'Diesel',     nombre: 'Diesel B5' },
+  { producto: 'G. Regular', nombre: 'Gasolina Regular' },
+  { producto: 'G. 84',      nombre: 'Gasolina 84' },
+  { producto: 'TA1',        nombre: 'Turbo A-1' },
+  { producto: 'PI6',        nombre: 'Pet. Ind. N°6' }
 ];
+// Convierte un nombre de producto en texto plano a una regex tolerante a
+// espacios sueltos entre cada letra (ver nota arriba). El "." se vuelve
+// opcional (algunos reportes lo omiten) y el "-" también.
+function _fuzzyNombre(txt) {
+  return txt.split('').map(function(ch) {
+    if (ch === ' ') return '\\s*';
+    if (ch === '.') return '\\.?\\s*';
+    if (ch === '-') return '-?\\s*';
+    if ('()[]{}*+?^$|\\'.indexOf(ch) !== -1) return '\\' + ch + '\\s*';
+    return ch + '\\s*';
+  }).join('');
+}
 var _refIquitosInvData = null;
 var _refIquitosInvLastFecha = null;
 window._refIquitosInvLastFecha = null;
@@ -18409,28 +18427,33 @@ async function loadRefIquitosInvPDF(input) {
     // lado. Exigir un número de 3+ dígitos consecutivos o con coma de
     // miles descarta esos falsos positivos y solo acepta la fila real.
     var _esNumeroReal = /\d,\d{3}|\d{3,}/;
+    // La leyenda del gráfico de torta a veces repite "nombre + valor +
+    // nombre" en una sola línea (ej. "Gasolina  84  457  Gasolina  84"),
+    // y ese "457" (3 dígitos, sin coma) sí pasa el filtro de arriba. Lo
+    // que la distingue de la fila real de la tabla: en la leyenda, el
+    // primer número viene INMEDIATAMENTE seguido del nombre del producto
+    // otra vez (en letras); en la fila real, el primer número siempre
+    // viene seguido de otra cifra, "-", "(" o "%" — nunca de una letra
+    // pegada justo después (aunque la fila real sí puede traer letras
+    // más adelante, como en Diesel B5, que repite el nombre AL FINAL de
+    // la fila, después de todas las columnas numéricas).
+    var _esLeyenda = /^\s*\d[\d,.]*\s+[A-Za-zÁÉÍÓÚáéíóúñÑ]/;
     var valores = {}, faltantes = [];
     REF_IQUITOS_INV_PRODUCTOS.forEach(function(pr) {
-      var re = new RegExp('^\\s*' + pr.nombre + '\\b(.*)$', 'i');
+      var re = new RegExp('^\\s*' + _fuzzyNombre(pr.nombre) + '(.*)$', 'i');
       var restante = null;
       for (var li = 0; li < scopedLines.length; li++) {
         var m = re.exec(scopedLines[li].trim());
         if (!m) continue;
-        if (_esNumeroReal.test(m[1])) { restante = m[1]; break; } // esta sí trae el dato real
+        if (_esNumeroReal.test(m[1]) && !_esLeyenda.test(m[1])) { restante = m[1]; break; } // esta sí trae el dato real
       }
       if (restante === null) { faltantes.push(pr.producto); return; }
-      // ⚠️ Este PDF en particular separa dígitos de un mismo número en
-      // "text runs" propios (ej. "6" y ",732" como dos ítems de texto
-      // distintos, unidos por el "  " de arriba) — sin esto, la regex de
-      // abajo capturaría solo "6" en vez de "6,732". Se compactan los
-      // espacios ÚNICAMENTE entre dígito/coma/punto consecutivos (nunca
-      // entre palabras), repitiendo hasta que no quede ninguno más, para
-      // no fusionar por error números que sí están en columnas distintas
-      // separadas por muchos espacios reales.
-      var restanteCompacto = restante;
-      var _prevCompacto;
-      do { _prevCompacto = restanteCompacto; restanteCompacto = restanteCompacto.replace(/([\d,.])\s+(?=[\d,.])/g, '$1'); } while (restanteCompacto !== _prevCompacto);
-      var toks = restanteCompacto.match(/(\d[\d,]*\.?\d*|-)/g) || [];
+      // Nota: los dígitos de un mismo número ya llegan pegados sin espacio
+      // desde la reconstrucción de líneas de arriba (que pega fragmentos
+      // numéricos separados por un hueco minúsculo en X) — aquí ya no hace
+      // falta volver a compactar espacios, y hacerlo fusionaría por error
+      // columnas distintas separadas por doble espacio real.
+      var toks = restante.match(/(\d[\d,]*\.?\d*|-)/g) || [];
       if (!toks.length) { faltantes.push(pr.producto); return; }
       var invTotalBbl = _rtiParseNum(toks[0]); // "Inv.Disp. Total (BLS)" = primer número tras el nombre
       if (invTotalBbl === null) { faltantes.push(pr.producto); return; }
