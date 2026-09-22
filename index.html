@@ -18383,12 +18383,25 @@ async function loadRefIquitosInvPDF(input) {
     var fullText = lines.join('\n');
     if (statusEl) statusEl.textContent = '⏳ Buscando día operativo y productos...';
 
-    // ⚠️ El PDF de Refinería Iquitos trae "Fecha:" (emisión) y "Operativo:" (cierre)
-    // muy cerca una de otra y en orden invertido tras el join de líneas, así que
-    // buscamos el patrón de fecha específicamente HACIA ADELANTE desde el literal
-    // "Operativo" (nunca hacia atrás/en una ventana simétrica, que podría capturar
-    // por error la fecha de "Fecha:").
-    var mDia = /Operativo\s*:?\s*[A-Za-zÁÉÍÓÚáéíóúñÑ]+,?\s*(\d{1,2})\s+de\s+([A-Za-zÁÉÍÓÚáéíóúñÑ]+)\s+de\s+(\d{4})/i.exec(fullText);
+    // ⚠️ CORREGIDO (confirmado con pdf.js real, no solo con la simulación en
+    // Python que se usó antes): el PDF trae "Fecha:" (emisión) y "Reporte día
+    // Operativo:" como dos etiquetas en columnas distintas de la MISMA fila
+    // visual, pero pdf.js las agrupa por línea según coordenada Y redondeada,
+    // así que el valor de la fecha puede terminar en una línea ANTERIOR o
+    // POSTERIOR al literal "Operativo" según el PDF (varía entre reportes).
+    // Por eso ya no anclamos la búsqueda solo "hacia adelante": buscamos TODAS
+    // las fechas con formato "día de mes de año" dentro de la cabecera del
+    // documento (antes de la sección "Carga UDP") y nos quedamos con la más
+    // cercana al literal "Operativo" — venga antes o después.
+    var idxCarga = fullText.indexOf('Carga UDP');
+    var cabecera = idxCarga > 0 ? fullText.slice(0, idxCarga) : fullText.slice(0, 1200);
+    var idxOperativo = cabecera.search(/Operativo/i);
+    var reFechaCab = /[A-Za-zÁÉÍÓÚáéíóúñÑ]+,?\s*(\d{1,2})\s+de\s+([A-Za-zÁÉÍÓÚáéíóúñÑ]+)\s+de\s+(\d{4})/ig;
+    var mDia = null, mejorDist = Infinity, mCandidato;
+    while ((mCandidato = reFechaCab.exec(cabecera))) {
+      var dist = idxOperativo >= 0 ? Math.abs(mCandidato.index - idxOperativo) : mCandidato.index;
+      if (dist < mejorDist) { mejorDist = dist; mDia = mCandidato; }
+    }
     if (!mDia) {
       if (statusEl) { statusEl.textContent = '❌ No se encontró "Reporte día Operativo" en la cabecera del PDF — verifica que sea el reporte correcto.'; statusEl.style.color = 'var(--red)'; }
       return;
