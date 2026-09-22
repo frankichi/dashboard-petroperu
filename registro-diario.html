@@ -1067,7 +1067,7 @@ function rdPost(action, payload) {
     return rdPostIntento(action, payload, 45000);
   });
 }
-function rdGet(action, params) {
+function rdGetIntento(action, params, timeoutMs) {
   // ⚠️ IMPORTANTE: sin esto, el navegador puede servir una respuesta
   // CACHEADA para esta misma URL (mismo token+fecha) en vez de ir a la
   // red — esto causaba que, justo después de guardar un reporte, el
@@ -1080,17 +1080,27 @@ function rdGet(action, params) {
   if (RD.rol === 'admin' && RD.plantaAdminVista) extra.plantaAdmin = RD.plantaAdminVista;
   var qs = new URLSearchParams(Object.assign(extra, params || {}));
   var ctrl = new AbortController();
-  // ⚠️ CORREGIDO — bug real confirmado ("No se pudo cargar tu reporte"):
-  // este límite era de solo 15 segundos, la MITAD que rdPost (30s) —
-  // sin ninguna razón real para que leer sea más rápido que guardar.
-  // Un arranque en frío de Google Apps Script (normal tras un rato sin
-  // uso) puede tardar más de 15s perfectamente bien — la petición se
-  // abortaba sola, aunque el backend hubiera respondido bien un segundo
-  // después. Ahora usa el mismo margen que rdPost.
-  var tid  = setTimeout(function(){ ctrl.abort(); }, 30000);
+  var tid  = setTimeout(function(){ ctrl.abort(); }, timeoutMs);
   return fetch(API_URL + '?' + qs.toString(), { method: 'GET', redirect: 'follow', cache: 'no-store', signal: ctrl.signal })
     .then(function(r) { clearTimeout(tid); return r.json(); })
     .catch(function(e) { clearTimeout(tid); throw e; });
+}
+// ⚠️ CORREGIDO — bug real confirmado ("no aparece el desplegable de
+// planta al crear cuenta"): rdGetPlantas (el catálogo de plantas que
+// llena el <select> de "Crear cuenta") se pedía UNA sola vez al cargar
+// la página, con un único intento de 15s y SIN reintento — a diferencia
+// de rdPost, que sí reintenta una vez con más margen. Un arranque en
+// frío de Apps Script (normal tras un rato sin uso) hacía que ese único
+// intento se abortara solo; el catch de rdLoadCatalogo solo hacía
+// console.warn (nada visible), así que el operador se quedaba viendo el
+// selector vacío ("Selecciona tu instalación…") sin ningún aviso ni
+// forma de reintentar salvo recargar toda la página a mano. Ahora usa el
+// mismo margen que rdPost (30s) y, si falla, reintenta una vez con 45s
+// antes de rendirse — igual que rdPost.
+function rdGet(action, params) {
+  return rdGetIntento(action, params, 30000).catch(function(e) {
+    return rdGetIntento(action, params, 45000);
+  });
 }
 
 function rdSaveSession(data) {
@@ -1152,14 +1162,28 @@ document.getElementById('btnLogin').addEventListener('click', function () {
   const email = document.getElementById('loginEmail').value.trim();
   const password = document.getElementById('loginPassword').value.trim();
   const btn = this; btn.disabled = true; btn.textContent = 'Ingresando…';
+  var loginMsgEl = document.getElementById('loginMsg');
+  loginMsgEl.textContent = ''; loginMsgEl.className = 'msgbox';
+  // ⚠️ AGREGADO — a pedido ("demora en acceder y solo dice 'ingresando'"):
+  // rdPost ya reintenta una vez si el primer intento se cae (30s + 45s de
+  // margen — un arranque en frío de Apps Script es normal y puede tardar
+  // eso), pero antes el botón se quedaba en "Ingresando…" todo ese tiempo
+  // sin ningún indicio de que seguía trabajando — parecía trabado aunque
+  // en realidad seguía intentando. Ahora, pasados unos segundos, se avisa
+  // que puede tardar un poco más (arranque en frío del servidor), en vez
+  // de dejar al usuario sin ninguna señal.
+  var avisoLento = setTimeout(function() {
+    rdMsg('loginMsg', '⏳ Esto está tardando más de lo normal (el servidor puede estar "despertando" tras un rato sin uso) — seguimos intentando, no cierres esta pantalla…', true);
+  }, 8000);
   rdPost('rdLogin', { email: email, password: password }).then(res => {
+    clearTimeout(avisoLento);
     btn.disabled = false; btn.textContent = 'Ingresar';
     if (res.success) {
       localStorage.removeItem('rd_planta_admin_vista'); RD.plantaAdminVista = '';
       rdSaveSession(res); rdRenderTopbar(); rdEnterApp();
     }
     else rdMsg('loginMsg', res.message || 'Error al iniciar sesión', false);
-  }).catch(() => { btn.disabled = false; btn.textContent = 'Ingresar'; rdMsg('loginMsg', 'No se pudo conectar. Intenta de nuevo.', false); });
+  }).catch(() => { clearTimeout(avisoLento); btn.disabled = false; btn.textContent = 'Ingresar'; rdMsg('loginMsg', 'No se pudo conectar. Intenta de nuevo.', false); });
 });
 
 document.getElementById('regPassword').addEventListener('input', function () {
@@ -4108,6 +4132,17 @@ function rdLoadPronostico() {
           + '<small style="color:var(--txt3)">El pron\u00f3stico es definido desde el Dashboard Nacional.</small></div>';
         return;
       }
+      // ⚠️ AGREGADO — defensa adicional para "el pronóstico se duplica en
+      // la gráfica": aunque ya se corrigió en el backend (deduplicado por
+      // mes+producto en handleRdGetPronosticoPlanta/handleGetPronostico),
+      // se deja también acá — por si el endpoint de respaldo (getPronostico,
+      // que no filtra por planta ya resuelta) devolviera 2 filas para el
+      // mismo mes+producto por cualquier otra causa — así el gráfico
+      // nunca muestra 2 barras para el mismo producto pase lo que pase
+      // del lado del servidor.
+      var _pronDedupMap = {};
+      datos.forEach(function(p) { _pronDedupMap[(p.mes||'') + '|' + (p.producto||'')] = p; });
+      datos = Object.keys(_pronDedupMap).map(function(k){ return _pronDedupMap[k]; });
       _pronData = datos;
       var meses = [...new Set(datos.map(function(p){ return p.mes || ''; }).filter(Boolean))].sort().reverse();
       var selMes = document.getElementById('pronMes');
@@ -4227,7 +4262,42 @@ function rdLoadCatalogo() {
       selChk.innerHTML = '<option value="">Elige una planta…</option>' +
         res.plantas.map(p => '<option value="' + p + '">' + plantaLabel(p) + '</option>').join('');
     }
-  }).catch(function(e) { console.warn('[rdLoadCatalogo] error:', e); });
+    rdMostrarErrorCatalogo(false);
+  }).catch(function(e) {
+    console.warn('[rdLoadCatalogo] error:', e);
+    rdMostrarErrorCatalogo(true);
+  });
+}
+// Antes, si rdGetPlantas fallaba (ver nota arriba en rdGet), el <select>
+// se quedaba mostrando solo "Selecciona tu instalación…" sin ninguna
+// pista de que en realidad faltó cargar la lista — parecía que la planta
+// simplemente "no tenía opciones". Ahora, si falla incluso tras el
+// reintento, se avisa explícitamente en el propio selector y se ofrece
+// un botón para reintentar sin tener que recargar toda la página.
+function rdMostrarErrorCatalogo(fallo) {
+  var mostrar = fallo === true;
+  ['regPlanta', 'checkPlanta'].forEach(function(id) {
+    var sel = document.getElementById(id);
+    if (sel && mostrar) sel.innerHTML = '<option value="">⚠️ No se pudo cargar la lista de plantas</option>';
+  });
+  var msg = document.getElementById('registroMsg');
+  if (msg && mostrar) {
+    msg.className = 'msgbox error';
+    msg.innerHTML = 'No se pudo cargar la lista de plantas (problema de conexión). '
+      + '<a href="#" onclick="event.preventDefault();rdReintentarCatalogo();" style="color:inherit;text-decoration:underline;font-weight:700">Reintentar</a>';
+  } else if (msg && !mostrar && msg.dataset.errCatalogo) {
+    msg.textContent = ''; msg.className = 'msgbox';
+  }
+  if (msg) msg.dataset.errCatalogo = mostrar ? '1' : '';
+}
+function rdReintentarCatalogo() {
+  var msg = document.getElementById('registroMsg');
+  if (msg) { msg.className = 'msgbox'; msg.textContent = 'Cargando lista de plantas…'; }
+  ['regPlanta', 'checkPlanta'].forEach(function(id) {
+    var sel = document.getElementById(id);
+    if (sel) sel.innerHTML = '<option value="">Cargando…</option>';
+  });
+  rdLoadCatalogo();
 }
 
 function rdToggleCheckPanel() {
