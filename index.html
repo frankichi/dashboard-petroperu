@@ -11077,6 +11077,17 @@ function renderP10() {
 let chartCobProd = null;
 let chartInvPlanta = null;
 function renderCharts() {
+  // ⚠️ AGREGADO — mismo guardia que en openWhatIf/Vista Ejecutiva: esta
+  // función se dispara al cambiar de tema (claro/oscuro) sin garantía de
+  // que Chart.js ya haya cargado, así que podía tronar con "Chart is not
+  // defined" igual que el bug reportado en el simulador What-If.
+  if (typeof Chart === 'undefined') {
+    if (typeof ensureChartJS === 'function') {
+      ensureChartJS().then(function(){ renderCharts(); })
+        .catch(function(e){ console.warn('[Charts] No se pudo cargar Chart.js:', e && e.message); });
+    }
+    return;
+  }
   const today = byLatest();
   if (!today.length) return;
   const byProd = {};
@@ -12708,7 +12719,17 @@ function _renderCisMap(records) {
 }
 function _renderCisTrend(history) {
   var canvas = document.getElementById('cisTrendChart');
-  if (!canvas || !window.Chart) return;
+  if (!canvas) return;
+  // ⚠️ CORREGIDO — antes hacía `return` en silencio si Chart.js no había
+  // cargado (sin error, pero también sin gráfico). Ahora dispara la carga
+  // y reintenta, igual que en el resto de vistas con gráficos.
+  if (!window.Chart) {
+    if (typeof ensureChartJS === 'function') {
+      ensureChartJS().then(function(){ _renderCisTrend(history); })
+        .catch(function(e){ console.warn('[Cis] No se pudo cargar Chart.js:', e && e.message); });
+    }
+    return;
+  }
   var byDate = {};
   (history||[]).forEach(function(r) {
     if (!byDate[r.fecha]) byDate[r.fecha] = {prog:0, carga:0, trans:0, desc:0, vol:0};
@@ -14357,6 +14378,18 @@ function _pTendRestoreHidden() {
   }
 }
 function renderPD() {
+  // ⚠️ AGREGADO — mismo guardia que en openWhatIf/Vista Ejecutiva/
+  // renderCharts: la página "pD" (curvas) se puede abrir directo desde el
+  // menú sin haber disparado antes la carga de Chart.js, y el código de
+  // esta vista arma sus gráficas con `new Chart(...)` sin verificar que
+  // la librería ya esté cargada.
+  if (typeof Chart === 'undefined') {
+    if (typeof ensureChartJS === 'function') {
+      ensureChartJS().then(function(){ if (document.getElementById('pD')?.classList.contains('active')) renderPD(); })
+        .catch(function(e){ console.warn('[pD] No se pudo cargar Chart.js:', e && e.message); });
+    }
+    return;
+  }
   const today = byLatest();
   const EXCLUIR = ['ULSD EXPO','Regular HS'];
   const active = today.filter(r => !EXCLUIR.some(x => r.producto && r.producto.toUpperCase().includes(x.toUpperCase())) && !SKIP_COMBOS.has((r.planta||'')+'|'+(r.producto||'')) && (typeof PRODUCTOS_POR_PLANTA_EXEC === 'undefined' || !PRODUCTOS_POR_PLANTA_EXEC[r.planta] || PRODUCTOS_POR_PLANTA_EXEC[r.planta].indexOf(r.producto) !== -1));
@@ -20009,6 +20042,22 @@ function addUploadLog(ok, msg) {
 }
 let whatIfChart = null;
 function openWhatIf(planta, producto) {
+  // ⚠️ CORREGIDO — bug real confirmado ("Uncaught ReferenceError: Chart is
+  // not defined" al abrir el simulador What-If desde Coberturas): Chart.js
+  // se carga bajo demanda (ensureChartJS) solo cuando una vista que YA
+  // dibuja gráficos la dispara (Tendencia, Pronóstico, Vista Ejecutiva...),
+  // pero el modal What-If se puede abrir desde Coberturas — una vista que
+  // no la disparaba — así que `Chart` podía seguir sin definirse cuando
+  // renderWhatIfChart() intentaba usarla. Mismo patrón ya usado en Vista
+  // Ejecutiva: si Chart.js no cargó, se dispara su carga y se reintenta
+  // abrir el modal apenas esté listo.
+  if (typeof Chart === 'undefined') {
+    if (typeof ensureChartJS === 'function') {
+      ensureChartJS().then(function(){ openWhatIf(planta, producto); })
+        .catch(function(e){ console.warn('[WhatIf] No se pudo cargar Chart.js:', e && e.message); });
+    }
+    return;
+  }
   var today = byLatest();
   var r = today.find(function(x) { return x.planta === planta && x.producto === producto; });
   if (!r) return;
@@ -23757,7 +23806,17 @@ function _iquiKpiRow(cards) {
 }
 // ── Charts (Chart.js) ──────────────────────────────────────────────────────
 function _iquiRenderCharts() {
-  if (typeof Chart === 'undefined') return;
+  // ⚠️ CORREGIDO — antes solo hacía `return` en silencio si Chart.js no
+  // había cargado (sin error, pero también sin gráfico — mismo patrón de
+  // bug reportado para el simulador What-If). Ahora dispara la carga y
+  // reintenta, igual que en el resto de vistas con gráficos.
+  if (typeof Chart === 'undefined') {
+    if (typeof ensureChartJS === 'function') {
+      ensureChartJS().then(function(){ _iquiRenderCharts(); })
+        .catch(function(e){ console.warn('[Iqui] No se pudo cargar Chart.js:', e && e.message); });
+    }
+    return;
+  }
   var plan = _iquiPlanCache || IQUI_PLAN_SEED;
   // Gantt (barras horizontales con offset simulando timeline)
   var gc = document.getElementById('iqui-gantt');
@@ -30519,6 +30578,16 @@ el.innerHTML = `
   }
   let _pInvModalChart = null;
   window._pInvOpenModal = function(r, prodColor) {
+    // ⚠️ AGREGADO — mismo guardia que en openWhatIf: este modal se abre
+    // con un clic desde la vista de Inventario y arma su gráfico con
+    // `new Chart(...)` sin verificar antes que Chart.js ya esté cargado.
+    if (typeof Chart === 'undefined') {
+      if (typeof ensureChartJS === 'function') {
+        ensureChartJS().then(function(){ window._pInvOpenModal(r, prodColor); })
+          .catch(function(e){ console.warn('[pInv] No se pudo cargar Chart.js:', e && e.message); });
+      }
+      return;
+    }
     const existing = document.getElementById('pinv-modal-overlay');
     if (existing) existing.remove();
     if (_pInvModalChart) { _pInvModalChart.destroy(); _pInvModalChart = null; }
