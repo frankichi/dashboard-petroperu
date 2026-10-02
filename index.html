@@ -1862,6 +1862,29 @@ function _solClosePanel() {
   _solPanelOpen = false;
 }
 
+// ⚠️ AGREGADO — a pedido ("demora muchísimo en aplicar la corrección...
+// que aparezca un modal o mensaje de avance... para no ir presionando
+// varias aprobaciones y encolando en vano"): aprobar una solicitud toma
+// un candado (LockService) del lado del servidor, así que si el usuario
+// hace clic en "Aprobar y aplicar" de VARIAS tarjetas seguidas mientras
+// la primera todavía está procesando (algo fácil de hacer, ya que antes
+// solo se deshabilitaba el botón de ESA tarjeta puntual, no el resto),
+// cada clic adicional queda esperando ese candado EN SERIE — justo lo
+// que hace que "se demore muchísimo": no es que cada aprobación sea
+// lenta, es que se están encolando una detrás de otra. Esta bandera
+// global bloquea TODOS los botones de aprobar/rechazar del panel (no
+// solo el de la tarjeta clickeada) mientras haya una corrección en
+// curso, y _solRenderPanel muestra un aviso de avance bien visible
+// arriba de la lista para que quede claro que sí está trabajando.
+var _solProcesando = false;
+function _solBannerProgreso() {
+  if (!_solProcesando) return '';
+  return '<div style="display:flex;align-items:center;gap:10px;background:#1a3a5c18;border:1px solid #1a3a5c40;border-radius:8px;padding:10px 14px;margin-bottom:14px">'
+    + '<div style="width:16px;height:16px;border:2.5px solid #1a3a5c40;border-top-color:#1a3a5c;border-radius:50%;animation:solSpin .7s linear infinite;flex-shrink:0"></div>'
+    + '<div style="font-size:11.5px;font-weight:700;color:var(--txt)">⏳ Aplicando corrección… puede tardar unos segundos (el sistema a veces arranca en frío). No cierres este panel ni vuelvas a hacer clic.</div>'
+    + '</div>'
+    + '<style>@keyframes solSpin{to{transform:rotate(360deg)}}</style>';
+}
 function _solRenderPanel() {
   var body = document.getElementById('sol-panel-body');
   if (!body) return;
