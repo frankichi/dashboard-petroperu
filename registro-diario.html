@@ -1698,6 +1698,7 @@ function rdRecalc(prod) {
       }
     }
   }
+  rdCheckExcesoCapacidad(prod, existencia, capacidad);
   var ref = (RD.detalle && RD.detalle[prod]) || {};
   var uc  = ref.ultimo_calculo;
   // Detección inteligente de reposición: si la existencia que se está
@@ -1799,6 +1800,44 @@ function rdToggleMinCheck(chk) {
   var prod = chk.dataset.prod;
   if (!RD.minFlags[prod]) RD.minFlags[prod] = { activo: true, confirmado: false, motivo: '' };
   RD.minFlags[prod].confirmado = chk.checked;
+}
+
+// ── Exceso sobre capacidad + margen ─────────────────────────────────────
+if (!RD.excesoFlags) RD.excesoFlags = {}; // { prod: { activo:bool, confirmado:bool } }
+
+function rdCheckExcesoCapacidad(prod, existenciaVal, capacidadVal) {
+  var pid = prod.replace(/[^a-z0-9]/gi, '_');
+  var box = document.getElementById('exceso-warn-' + pid);
+  if (!box) return;
+  var inp = document.querySelector('.rd-existencia[data-prod="' + prod + '"]');
+  var haVal = inp && inp.value.trim() !== '' && !isNaN(parseFloat(inp.value));
+  var capacidad = capacidadVal !== undefined ? capacidadVal
+    : rdParseNum(document.querySelector('.rd-capacidad[data-prod="' + prod + '"]'));
+  var exist = existenciaVal !== undefined ? existenciaVal : (haVal ? parseFloat(inp.value) : 0);
+  var margenMax = capacidad > 0 ? rdMargenPermitido(capacidad) : 0;
+  var activo = haVal && capacidad > 0 && exist > margenMax;
+
+  if (!RD.excesoFlags[prod]) RD.excesoFlags[prod] = { activo: false, confirmado: false };
+  RD.excesoFlags[prod].activo = activo;
+
+  var bodyEl = box.querySelector('[data-exceso-body="' + prod + '"]');
+  if (bodyEl) {
+    bodyEl.textContent = 'La existencia ingresada (' + rdFmt(exist) + ' MB) supera el máximo permitido ('
+      + rdFmt(margenMax) + ' MB — capacidad ' + rdFmt(capacidad) + ' MB + margen). Si de verdad llegó ese volumen (ej. una recepción grande), confirma y explica abajo para poder guardar.';
+  }
+  box.style.display = activo ? 'block' : 'none';
+  if (!activo) {
+    // Se resuelve solo: limpiar confirmación previa para no arrastrar estado obsoleto
+    var chk = box.querySelector('.rd-exceso-check');
+    if (chk) chk.checked = false;
+    RD.excesoFlags[prod].confirmado = false;
+  }
+}
+
+function rdToggleExcesoCheck(chk) {
+  var prod = chk.dataset.prod;
+  if (!RD.excesoFlags[prod]) RD.excesoFlags[prod] = { activo: true, confirmado: false };
+  RD.excesoFlags[prod].confirmado = chk.checked;
 }
 
 
@@ -1903,6 +1942,25 @@ function rdRenderProdRows(productos, valores, detalle, yaReportado) {
       +       '>'
       +       '<div class="fld-validation-err" id="err-exist-' + p.replace(/[^a-z0-9]/gi,'_') + '">⚠ Requerido</div>'
       +       '<div class="fld-unidad-warn" id="unidad-warn-exist-' + p.replace(/[^a-z0-9]/gi,'_') + '" style="display:none;font-size:10.5px;color:#a86a00;background:#fdf3e0;border:1px solid #e8a00050;border-radius:6px;padding:6px 9px;margin-top:5px;font-weight:600">⚠ Este valor parece muy alto para <b>miles de barriles (MB)</b>. ¿Lo escribiste en barriles por error? Recuerda: 1 MB = 1,000 barriles.</div>'
+      // ── Panel de justificación cuando el inventario supera el máximo
+      // permitido (capacidad + margen) — antes esto bloqueaba el guardado
+      // sin salida (había que pedirle a soporte que lo ajuste manualmente
+      // en la base). Ahora, igual que con "existencia mínima", se puede
+      // seguir con una justificación explícita (ej. recepción
+      // extraordinaria, préstamo de franja entre productos) en vez de
+      // quedar atascado.
+      +       (yaReportado ? '' : '<div class="exceso-warn" id="exceso-warn-' + p.replace(/[^a-z0-9]/gi,'_') + '" style="display:none;margin-top:8px;padding:10px 12px;background:#fdecec;border:1px solid #f3b4bd;border-radius:8px">'
+          +     '<div style="display:flex;align-items:center;gap:7px;margin-bottom:6px">'
+          +       '<span style="font-size:16px">⚠️</span>'
+          +       '<span style="font-size:12px;font-weight:800;color:#8a0d22">Inventario supera el máximo permitido</span>'
+          +     '</div>'
+          +     '<div style="font-size:11px;color:#8a0d22;margin-bottom:7px" data-exceso-body="' + p + '"></div>'
+          +     '<label style="display:flex;align-items:flex-start;gap:7px;font-size:11px;font-weight:600;color:#8a0d22;cursor:pointer;margin-bottom:6px">'
+          +       '<input type="checkbox" class="rd-exceso-check" data-prod="' + p + '" onchange="rdToggleExcesoCheck(this)" style="margin-top:2px">'
+          +       '<span>Confirmo que el exceso es real y explico el motivo abajo (no es un error de digitación)</span>'
+          +     '</label>'
+          +     '<textarea class="rd-exceso-motivo" data-prod="' + p + '" placeholder="Motivo (ej: recepción extraordinaria por cabotaje, préstamo de franja entre productos, etc.)" style="width:100%;min-height:50px;font-size:11px;padding:7px 9px;border:1px solid #f3b4bd;border-radius:6px;resize:vertical;box-sizing:border-box"></textarea>'
+          + '</div>')
       +     '</div>'
       // Despacho — no aplica a refinerías (no venden, solo procesan/almacenan)
       +     (esRefineria ? '' :
@@ -2422,12 +2480,33 @@ function rdConfirmarGuardar() {
   var btn = document.getElementById('btnConfirmarGuardar');
   btn.disabled = true; btn.textContent = 'Guardando\u2026';
 
+  // ⚠️ AGREGADO — a pedido: antes, si el inventario digitado (existencia)
+  // superaba la capacidad registrada + el margen permitido (ver
+  // rdMargenPermitido), el guardado se bloqueaba SIN SALIDA — el
+  // operador quedaba atascado aunque el exceso fuera real (ej. una
+  // recepción extraordinaria, como pasó en Mollendo con G. Premium:
+  // 26.314 MB vs. 25 MB permitidos tras una reposición de cabotaje
+  // marítimo de 23.02 MB) y terminaba pidiéndole a soporte que lo
+  // ajustara manualmente en la base cada vez. Ahora, igual que con
+  // "existencia mínima", se puede seguir adelante si el operador marca
+  // la casilla de confirmación y explica el motivo en el panel rojo que
+  // aparece bajo el campo (ver rdCheckExcesoCapacidad / exceso-warn) —
+  // el motivo queda guardado como parte del comentario del producto para
+  // que quede trazabilidad de por qué se superó el máximo. Si el exceso
+  // está presente pero NO fue confirmado, se sigue bloqueando (para
+  // seguir atajando errores reales de digitación).
   var productos = (RD.productos || []).map(function(p) {
     var comentProd = '';
     var tcEl = document.querySelector('.rd-coment-prod[data-prod="' + p + '"]');
     if (tcEl) comentProd = tcEl.value.trim();
     var minFlag = (RD.minFlags && RD.minFlags[p]) || { activo: false, confirmado: false };
     var motivoMinEl = document.querySelector('.rd-min-motivo[data-prod="' + p + '"]');
+    var excesoFlag = (RD.excesoFlags && RD.excesoFlags[p]) || { activo: false, confirmado: false };
+    var motivoExcesoEl = document.querySelector('.rd-exceso-motivo[data-prod="' + p + '"]');
+    var motivoExceso = motivoExcesoEl ? motivoExcesoEl.value.trim() : '';
+    if (excesoFlag.activo && excesoFlag.confirmado && motivoExceso) {
+      comentProd = (comentProd ? comentProd + ' | ' : '') + '⚠ Exceso sobre capacidad justificado: ' + motivoExceso;
+    }
     return {
       producto: p,
       existencia:       rdParseNum(document.querySelector('.rd-existencia[data-prod="' + p + '"]')),
@@ -2437,33 +2516,26 @@ function rdConfirmarGuardar() {
     despacho_diario:  rdParseNum(document.querySelector('.rd-despacho[data-prod="' + p + '"]')),
       comentario_prod:  comentProd,
       existencia_minima: !!(minFlag.activo && minFlag.confirmado),
-      motivo_minima:     motivoMinEl ? motivoMinEl.value.trim() : ''
+      motivo_minima:     motivoMinEl ? motivoMinEl.value.trim() : '',
+      _excesoActivo:     !!excesoFlag.activo,
+      _excesoConfirmado: !!(excesoFlag.activo && excesoFlag.confirmado && motivoExceso)
     };
   });
 
-  // ⚠️ AGREGADO — a pedido: bloquear el guardado si el inventario
-  // digitado (existencia + fondos) supera la capacidad registrada más
-  // el margen permitido (ver rdMargenPermitido) — para evitar cifras
-  // exageradas o dígitos de más por error, dejando igual un colchón
-  // razonable para el préstamo real de franja entre productos.
-  // ⚠️ CORREGIDO — mismo bug que en rdRecalc (ver comentario ahí): la
-  // validación usaba `bruta` (existencia + fondos), pero "Fondos" es
-  // una autorización financiera, no volumen físico — sumarlo antes de
-  // comparar contra la capacidad bloqueaba entregas reales y legítimas.
-  // Ahora compara solo `existencia` (el volumen físico real).
-  var productosExcedidos = productos.filter(function(pr) {
-    if (!(pr.capacidad > 0)) return false; // sin capacidad registrada, no hay contra qué comparar
-    return pr.existencia > rdMargenPermitido(pr.capacidad);
+  var productosExcedidosSinJustificar = productos.filter(function(pr) {
+    return pr._excesoActivo && !pr._excesoConfirmado;
   });
-  if (productosExcedidos.length > 0) {
-    var primero = productosExcedidos[0];
+  if (productosExcedidosSinJustificar.length > 0) {
+    var primero = productosExcedidosSinJustificar[0];
     var maxP = rdMargenPermitido(primero.capacidad);
-    rdToast('⚠️ ' + primero.producto + ': el inventario digitado (' + rdFmt(primero.existencia) + ' MB) supera el máximo permitido (' + rdFmt(maxP) + ' MB — capacidad ' + rdFmt(primero.capacidad) + ' MB + margen). Revisa la cifra antes de guardar.', 'error');
+    rdToast('⚠️ ' + primero.producto + ': el inventario digitado (' + rdFmt(primero.existencia) + ' MB) supera el máximo permitido (' + rdFmt(maxP) + ' MB — capacidad ' + rdFmt(primero.capacidad) + ' MB + margen). Marca la casilla de confirmación y explica el motivo en el aviso rojo para poder guardar, o corrige la cifra si fue un error.', 'error');
     var campoExcedido = document.querySelector('.rd-existencia[data-prod="' + primero.producto + '"]');
     if (campoExcedido) campoExcedido.scrollIntoView({ behavior: 'smooth', block: 'center' });
     btn.disabled = false; btn.textContent = 'Confirmar';
     return;
   }
+  // Limpiar los campos internos antes de enviar — no son parte del payload del backend
+  productos.forEach(function(pr) { delete pr._excesoActivo; delete pr._excesoConfirmado; });
 
   var comentarioGeneral = document.getElementById('comentario').value.trim();
   var payload = {
