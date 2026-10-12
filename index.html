@@ -1730,8 +1730,14 @@ function _solLoad(_isRetry) {
   // un const antes de su línea de declaración lanza ReferenceError (zona
   // muerta temporal). Se usa la URL directa como referencia segura.
   var API_URL_SAFE = 'https://script.google.com/macros/s/AKfycbwRwsaAq4C-tRntaDf3HH4kAt24QG1GFo5_-V3hvaQiatCeTuKxuPxzWN_f6mn7vxRZ_g/exec';
-  var _p = fetch(API_URL_SAFE + '?action=getTodasSolicitudes&token=' + sess.token, {redirect:'follow'})
-    .then(function(r){ return r.text(); })
+  // ⚠️ AGREGADO — sin timeout, un fetch colgado dejaba _solLoading=true
+  // para siempre: todos los sondeos siguientes devolvían esa misma promesa
+  // muerta y el panel dejaba de actualizarse hasta recargar/cambiar de
+  // pestaña. Ahora cada petición se aborta a los 20s y el ciclo continúa.
+  var _ctl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+  var _tmo = _ctl ? setTimeout(function(){ try { _ctl.abort(); } catch(e){} }, 20000) : null;
+  var _p = fetch(API_URL_SAFE + '?action=getTodasSolicitudes&token=' + sess.token + '&_t=' + Date.now(), {redirect:'follow', cache:'no-store', signal: _ctl ? _ctl.signal : undefined})
+    .then(function(r){ if (_tmo) clearTimeout(_tmo); return r.text(); })
     .then(function(txt) {
       var data;
       try { data = JSON.parse(txt); }
@@ -1893,6 +1899,11 @@ function _solRenderPanel() {
   var resolved = _solCache.filter(function(s){ return s.estado!=='PENDIENTE'; })
     .sort(function(a,b){ return b.fecha_resp < a.fecha_resp ? -1 : 1; });
   var list = _solTab === 'pendientes' ? pending : resolved;
+  // Contadores en vivo en las pestañas — se ve al instante que llegó algo
+  // sin tener que cambiar de pestaña.
+  var _tp = document.getElementById('sol-tab-pend'), _th = document.getElementById('sol-tab-hist');
+  if (_tp) _tp.textContent = 'Pendientes' + (pending.length ? ' (' + pending.length + ')' : '');
+  if (_th) _th.textContent = 'Historial' + (resolved.length ? ' (' + resolved.length + ')' : '');
 
   if (!_solCache.length) {
     body.innerHTML = '<div style="padding:60px 20px;text-align:center">'
@@ -1902,7 +1913,7 @@ function _solRenderPanel() {
     return;
   }
   if (!list.length) {
-    body.innerHTML = '<div style="padding:50px 20px;text-align:center;color:var(--txt3);font-size:12.5px">'
+    body.innerHTML = _solBannerProgreso() + '<div style="padding:50px 20px;text-align:center;color:var(--txt3);font-size:12.5px">'
       + (_solTab === 'pendientes' ? 'No hay solicitudes pendientes. \u2705' : 'Aún no hay solicitudes resueltas.')
       + '</div>';
     return;
@@ -1950,8 +1961,12 @@ function _solRenderPanel() {
       + (s.motivo ? '<div style="font-size:11px;color:var(--txt2);background:var(--bg2);border-radius:7px;padding:8px 11px;margin-bottom:10px;font-style:italic">\u201c' + escapeHtml(s.motivo) + '\u201d</div>' : '')
       + (isPend
         ? '<div style="display:flex;gap:8px">'
-          + '<button onclick="_solResponder(\'' + s.id + '\',true)" style="flex:1;padding:9px 14px;border-radius:8px;border:none;background:#1a7a44;color:#fff;font-size:12px;font-weight:800;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px">\u2713 Aprobar y aplicar</button>'
-          + '<button onclick="_solResponder(\'' + s.id + '\',false)" style="padding:9px 16px;border-radius:8px;border:1.5px solid #c8102e;background:#fff;color:#c8102e;font-size:12px;font-weight:800;cursor:pointer">\u2715 Rechazar</button>'
+          // ⚠️ AGREGADO — mientras _solProcesando es true (otra solicitud
+          // ya está aplicándose), estos botones se deshabilitan en TODAS
+          // las tarjetas, no solo en la clickeada — evita encolar varias
+          // aprobaciones seguidas contra el mismo candado del servidor.
+          + '<button' + (_solProcesando ? ' disabled' : ' onclick="_solResponder(\'' + s.id + '\',true)"') + ' style="flex:1;padding:9px 14px;border-radius:8px;border:none;background:#1a7a44;color:#fff;font-size:12px;font-weight:800;cursor:' + (_solProcesando?'not-allowed':'pointer') + ';opacity:' + (_solProcesando?'.5':'1') + ';display:flex;align-items:center;justify-content:center;gap:6px">\u2713 Aprobar y aplicar</button>'
+          + '<button' + (_solProcesando ? ' disabled' : ' onclick="_solResponder(\'' + s.id + '\',false)"') + ' style="padding:9px 16px;border-radius:8px;border:1.5px solid #c8102e;background:#fff;color:#c8102e;font-size:12px;font-weight:800;cursor:' + (_solProcesando?'not-allowed':'pointer') + ';opacity:' + (_solProcesando?'.5':'1') + '">\u2715 Rechazar</button>'
           + '</div>'
         : '<div style="font-size:10.5px;color:var(--txt3);display:flex;align-items:center;gap:6px">'
           + (s.estado==='APROBADA' ? '\u2705' : '\u274c') + ' ' + s.estado + ' por <b style="color:var(--txt2)">' + (s.resuelto_por||'\u2014') + '</b>'
@@ -1961,18 +1976,27 @@ function _solRenderPanel() {
       + '</div>';
   }
 
-  body.innerHTML = list.map(solCard).join('');
+  body.innerHTML = _solBannerProgreso() + list.map(solCard).join('');
 }
 
 function _solResponder(id, aprobado) {
-  var btn = event && event.target;
+  // ⚠️ AGREGADO — a pedido ("demora muchísimo... que aparezca un
+  // mensaje de avance... para no ir presionando varias aprobaciones y
+  // encolando en vano"): se bloquea cualquier clic nuevo mientras ya hay
+  // una corrección en curso (ver _solProcesando, declarada junto con
+  // _solBannerProgreso más arriba) — el candado del servidor serializa
+  // las aprobaciones de todas formas, así que dejar que se encolen desde
+  // el navegador solo hace que la última tarde la suma de espera de
+  // todas las anteriores, dando la sensación de que "no avanza".
+  if (_solProcesando) return;
   var comentario = '';
   if (!aprobado) {
     comentario = prompt('Motivo del rechazo (opcional):') || '';
   }
-  if (btn) { btn.disabled = true; btn.textContent = aprobado ? 'Aplicando\u2026' : 'Rechazando\u2026'; }
   var sess = window._dashSession || {};
   if (!sess.token) { alert('Sesión no válida. Recarga la página.'); return; }
+  _solProcesando = true;
+  _solRenderPanel(); // repinta YA — deshabilita todos los botones y muestra el aviso de avance
   var API_URL_SAFE2 = 'https://script.google.com/macros/s/AKfycbwRwsaAq4C-tRntaDf3HH4kAt24QG1GFo5_-V3hvaQiatCeTuKxuPxzWN_f6mn7vxRZ_g/exec';
   fetch(API_URL_SAFE2, {
     method: 'POST',
@@ -1999,6 +2023,7 @@ function _solResponder(id, aprobado) {
       // se redibuja EXACTAMENTE cuando los datos frescos ya llegaron,
       // ni un instante antes.
       _solLoad().then(function() {
+        _solProcesando = false;
         _solRenderPanel();
         if (aprobado && typeof _refreshAllData === 'function') {
           // Refrescar todo el dashboard: coberturas, gráficos, seguimiento
@@ -2006,12 +2031,14 @@ function _solResponder(id, aprobado) {
         }
       });
     } else {
+      _solProcesando = false;
       alert(res.message || 'No se pudo procesar la solicitud.');
-      if (btn) { btn.disabled = false; btn.textContent = aprobado ? '\u2713 Aprobar y aplicar' : '\u2715 Rechazar'; }
+      _solRenderPanel();
     }
   }).catch(function() {
+    _solProcesando = false;
     alert('Error de conexión al procesar la solicitud.');
-    if (btn) { btn.disabled = false; }
+    _solRenderPanel();
   });
 }
 
@@ -2032,19 +2059,26 @@ function _solResponder(id, aprobado) {
       // sondeo, solo aparecía "si tabulabas". Ahora, cada vez que el
       // sondeo trae datos frescos, si el panel está abierto se vuelve a
       // pintar de una vez.
+      var _solFirmaPrev = '';
       var _solPoll = function() {
+        if (document.hidden) return; // pestaña en segundo plano: no gastar llamadas
         _solLoad().then(function() {
-          if (_solPanelOpen) _solRenderPanel();
+          var firma = _solCache.map(function(x){ return x.id + ':' + x.estado; }).join('|');
+          if (_solPanelOpen && firma !== _solFirmaPrev && !_solProcesando) {
+            var b = document.getElementById('sol-panel-body');
+            var st = b ? b.scrollTop : 0;
+            _solRenderPanel();
+            if (b) b.scrollTop = st;
+          }
+          _solFirmaPrev = firma;
         });
       };
       _solPoll();
-      // ⚠️ CORREGIDO — a pedido: "las notificaciones sean más veloces" —
-      // antes se sondeaba cada 30 segundos, así que una solicitud nueva
-      // (una planta pidiendo una corrección) podía tardar hasta medio
-      // minuto en aparecer en el Panel de Control. Bajado a 10 segundos
-      // — sigue siendo un sondeo liviano (una sola llamada GET), no
-      // representa una carga significativa extra para el backend.
-      setInterval(_solPoll, 10000); // cada 10 segundos
+      // Sondeo cada 5s (antes 10s) — es una sola llamada GET liviana. Al
+      // volver a la pestaña/ventana se refresca de inmediato.
+      setInterval(_solPoll, 5000);
+      document.addEventListener('visibilitychange', function(){ if (!document.hidden) _solPoll(); });
+      window.addEventListener('focus', _solPoll);
     } else if (tries > 40) { // ~20s máx esperando sesión
       clearInterval(kick);
     }
