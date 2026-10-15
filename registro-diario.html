@@ -2537,6 +2537,24 @@ function rdConfirmarGuardar() {
   // Limpiar los campos internos antes de enviar — no son parte del payload del backend
   productos.forEach(function(pr) { delete pr._excesoActivo; delete pr._excesoConfirmado; });
 
+  // ⚠️ AGREGADO — a pedido: en domingos y feriados NO hay despacho salvo
+  // atención excepcional de la planta. Si se intenta guardar despacho > 0
+  // en esos días, se pide confirmar explícitamente (evita copiar por
+  // costumbre el despacho del día anterior) y queda marcado en el
+  // comentario del producto.
+  var _fechaGuardar = RD.fechaReporte || rdHoyLima();
+  if (rdEsDomingoOFeriado(_fechaGuardar)) {
+    var _conDesp = productos.filter(function(pr){ return pr.despacho_diario > 0; });
+    if (_conDesp.length) {
+      var _nomDia = rdEsFeriado(_fechaGuardar) || 'domingo';
+      var _ok = window.confirm('⚠️ El ' + _fechaGuardar + ' es ' + _nomDia + ' (día sin atención normal).\n\n'
+        + 'Estás registrando despacho en: ' + _conDesp.map(function(pr){ return pr.producto + ' (' + rdFmt(pr.despacho_diario) + ' MB)'; }).join(', ')
+        + '.\n\n¿La planta tuvo ATENCIÓN EXCEPCIONAL ese día y estos despachos son reales?\nSi no, pulsa Cancelar y corrige el despacho a 0.');
+      if (!_ok) { btn.disabled = false; btn.textContent = 'Confirmar'; return; }
+      _conDesp.forEach(function(pr){ pr.comentario_prod = (pr.comentario_prod ? pr.comentario_prod + ' | ' : '') + '⚠ Atención excepcional en ' + _nomDia + ' (despacho confirmado por la planta)'; });
+    }
+  }
+
   var comentarioGeneral = document.getElementById('comentario').value.trim();
   var payload = {
     token:      RD.token,
