@@ -136,6 +136,24 @@ body{font-family:var(--sans);font-size:13px;background:var(--bg);color:var(--txt
 .repomar-loading-spinner{width:36px;height:36px;border:3px solid var(--bdr);border-top-color:#0071A4;border-radius:50%;animation:repomarSpin 1s linear infinite;margin:0 auto 14px}
 @keyframes repomarSpin{to{transform:rotate(360deg)}}
 .repomar-error{padding:40px;text-align:center;color:#DC271C}
+
+/* ── Popup de ampliación de buque ── */
+.repomar-shipbox{cursor:zoom-in}
+.repomar-shipbox:hover{box-shadow:0 0 0 3px rgba(0,113,164,.35)}
+.rpm-ov{position:fixed;inset:0;background:rgba(8,16,28,.82);z-index:10000;display:none;align-items:center;justify-content:center;padding:2vh 2vw}
+.rpm-ov.abierto{display:flex}
+.rpm-card{background:#fff;border-radius:14px;width:96vw;max-height:96vh;display:flex;flex-direction:column;box-shadow:0 30px 80px rgba(0,0,0,.5);overflow:hidden}
+.rpm-top{display:flex;align-items:center;gap:12px;padding:12px 18px;background:#003a56;color:#fff;flex-wrap:wrap}
+.rpm-titulo{font-size:22px;font-weight:800;flex:0 0 auto}
+.rpm-chips{display:flex;gap:6px;flex-wrap:wrap;flex:1;min-width:200px}
+.rpm-chip{border:1.5px solid rgba(255,255,255,.45);background:transparent;color:#fff;border-radius:16px;padding:5px 12px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit}
+.rpm-chip.activo{background:#fff;color:#003a56;border-color:#fff}
+.rpm-btn{border:none;background:rgba(255,255,255,.15);color:#fff;border-radius:8px;padding:8px 14px;font-size:14px;font-weight:800;cursor:pointer;font-family:inherit}
+.rpm-btn:hover{background:rgba(255,255,255,.3)}
+.rpm-body{overflow:auto;padding:14px;flex:1;background:#f4f7fa}
+.rpm-zoom{transform-origin:top left}
+.rpm-zoom .repomar-grid{min-width:0}
+.rpm-hint{font-size:11px;color:#9fc3d6;width:100%}
 </style>
 </head>
 <body>
@@ -328,38 +346,9 @@ function filaCobertura(cols, plantas, productos, productosPorPlanta, mapa, tipo)
   }).join('');
 }
 
-function render(data) {
-  window._repomarUltimosDatos = data; // guardado para poder redibujar sin volver a pedir al servidor
-  var host = document.getElementById('repomar-content');
-  var subtitle = document.getElementById('repomar-subtitle');
-  var plantas = data.plantas, productos = data.productos;
-  // ⚠️ AGREGADO — a pedido: modo "Cabotaje Proyectado" — usa los
-  // buques programados en el Simulador BT (no cargas_naves real
-  // todavía) y encadena la cobertura sobre la NUEVA COBERTURA del
-  // cabotaje confirmado (ya calculada por el backend en
-  // handleGetRepoMarData) — "si además de lo confirmado, también se
-  // concretan estos otros buques, ¿hasta cuándo llegaría?".
-  var modo = window._repomarModoActivo || 'confirmado';
-  var buques = modo === 'proyectado' ? (data.buquesProyectados || []) : (data.buques || []);
-  var coberturaArriba = modo === 'proyectado' ? data.coberturaNueva : data.coberturaActual;
-  var coberturaAbajo = modo === 'proyectado' ? data.coberturaProyectada : data.coberturaNueva;
-  var tituloArriba = modo === 'proyectado' ? 'COBERTURA CONFIRMADA (base)' : 'FECHA COBERTURA';
-  var tituloAbajo = modo === 'proyectado' ? 'COBERTURA PROYECTADA' : 'NUEVA COBERTURA';
-  var tituloBuques = modo === 'proyectado' ? '📋 CABOTAJE PROYECTADO (Simulador BT — aún no confirmado)' : '🚢 CABOTAJE CONFIRMADO';
-  var cols = '200px repeat(' + plantas.length + ', minmax(100px, 1fr)) 130px';
-  _repomarDetalleInv = data.detalleInventario || {};
-
-  subtitle.textContent = 'Al ' + fmtCorta(data.fechaRef) + ' · generado en vivo desde Cargas de Naves, Posicionamiento de Naves y Cobertura por planta';
-
-  var filaEncabezado = '<div class="repomar-row repomar-headerrow" style="grid-template-columns:' + cols + '">' +
-    '<div class="repomar-cell repomar-labelcell" style="background:transparent;border-color:transparent"></div>' +
-    plantas.map(function(p){ return '<div class="repomar-cell repomar-planthead">' + p + '</div>'; }).join('') +
-    '<div class="repomar-cell" style="background:transparent;border-color:transparent"></div>' +
-    '</div>';
-
-  var filasShips = '';
-  if (buques.length) {
-    filasShips = buques.map(function(b, idx) {
+// Construye la fila completa de UN buque (caja del buque + escalas + retorno).
+// Reutilizada por la grilla principal y por el popup de ampliación.
+function _repomarFilaBuque(b, idx, plantas, cols) {
       var cargaTxt = Object.keys(b.cargaInicial || {}).map(function(prod) {
         return prod + ': ' + b.cargaInicial[prod].toFixed(1) + ' MB';
       }).join('<br>');
@@ -454,7 +443,42 @@ function render(data) {
       }
       var retornoCell = '<div class="repomar-cell" style="background:transparent;border:none;padding:4px">' + retornoTxt + '</div>';
       return '<div class="repomar-row repomar-ship-inner-row" data-ship-row="' + idx + '" style="grid-template-columns:' + cols + '">' + shipBox + legCells + retornoCell + '</div>';
-    }).join('');
+}
+
+function render(data) {
+  window._repomarBuquesActuales = null;
+  window._repomarUltimosDatos = data; // guardado para poder redibujar sin volver a pedir al servidor
+  var host = document.getElementById('repomar-content');
+  var subtitle = document.getElementById('repomar-subtitle');
+  var plantas = data.plantas, productos = data.productos;
+  // ⚠️ AGREGADO — a pedido: modo "Cabotaje Proyectado" — usa los
+  // buques programados en el Simulador BT (no cargas_naves real
+  // todavía) y encadena la cobertura sobre la NUEVA COBERTURA del
+  // cabotaje confirmado (ya calculada por el backend en
+  // handleGetRepoMarData) — "si además de lo confirmado, también se
+  // concretan estos otros buques, ¿hasta cuándo llegaría?".
+  var modo = window._repomarModoActivo || 'confirmado';
+  var buques = modo === 'proyectado' ? (data.buquesProyectados || []) : (data.buques || []);
+  var coberturaArriba = modo === 'proyectado' ? data.coberturaNueva : data.coberturaActual;
+  var coberturaAbajo = modo === 'proyectado' ? data.coberturaProyectada : data.coberturaNueva;
+  var tituloArriba = modo === 'proyectado' ? 'COBERTURA CONFIRMADA (base)' : 'FECHA COBERTURA';
+  var tituloAbajo = modo === 'proyectado' ? 'COBERTURA PROYECTADA' : 'NUEVA COBERTURA';
+  var tituloBuques = modo === 'proyectado' ? '📋 CABOTAJE PROYECTADO (Simulador BT — aún no confirmado)' : '🚢 CABOTAJE CONFIRMADO';
+  var cols = '200px repeat(' + plantas.length + ', minmax(100px, 1fr)) 130px';
+  window._repomarBuquesActuales = buques; window._repomarPlantasActuales = plantas;
+  _repomarDetalleInv = data.detalleInventario || {};
+
+  subtitle.textContent = 'Al ' + fmtCorta(data.fechaRef) + ' · generado en vivo desde Cargas de Naves, Posicionamiento de Naves y Cobertura por planta';
+
+  var filaEncabezado = '<div class="repomar-row repomar-headerrow" style="grid-template-columns:' + cols + '">' +
+    '<div class="repomar-cell repomar-labelcell" style="background:transparent;border-color:transparent"></div>' +
+    plantas.map(function(p){ return '<div class="repomar-cell repomar-planthead">' + p + '</div>'; }).join('') +
+    '<div class="repomar-cell" style="background:transparent;border-color:transparent"></div>' +
+    '</div>';
+
+  var filasShips = '';
+  if (buques.length) {
+    filasShips = buques.map(function(b, idx) { return _repomarFilaBuque(b, idx, plantas, cols); }).join('');
   } else {
     filasShips = '<div class="repomar-empty-msg">No hay cabotaje marítimo vigente en este momento.</div>';
   }
@@ -488,9 +512,10 @@ function render(data) {
   requestAnimationFrame(function() { drawArrows(buques); });
 }
 
-function drawArrows(buques) {
-  var grid = document.getElementById('repomar-grid');
-  var svg = document.getElementById('repomar-svg');
+function drawArrows(buques, gridId, svgId, sfx) {
+  sfx = sfx || '';
+  var grid = document.getElementById(gridId || 'repomar-grid');
+  var svg = document.getElementById(svgId || 'repomar-svg');
   if (!grid || !svg) return;
   var gridRect = grid.getBoundingClientRect();
   svg.setAttribute('width', gridRect.width);
@@ -586,8 +611,8 @@ function drawArrows(buques) {
       }
       pathsHTML += '<path d="' + pathD + '" ' +
         (esRetornoNorte
-          ? 'fill="none" stroke="#ea580c" stroke-width="3.4" stroke-dasharray="4 3" marker-end="url(#repomar-arrow-retorno)"/>'
-          : 'fill="none" stroke="#3b82f6" stroke-width="3.4" stroke-dasharray="4 3" marker-end="url(#repomar-arrow)"/>');
+          ? 'fill="none" stroke="#ea580c" stroke-width="3.4" stroke-dasharray="4 3" marker-end="url(#repomar-arrow-retorno' + sfx + ')"/>'
+          : 'fill="none" stroke="#3b82f6" stroke-width="3.4" stroke-dasharray="4 3" marker-end="url(#repomar-arrow' + sfx + ')"/>');
       prevFueApilada = esApilada;
       prevRect = lRect;
       prevX = x1;
@@ -599,8 +624,8 @@ function drawArrows(buques) {
     // dejar código muerto.
   });
   svg.innerHTML = '<defs>' +
-    '<marker id="repomar-arrow" markerWidth="11" markerHeight="11" refX="8" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="#3b82f6"/></marker>' +
-    '<marker id="repomar-arrow-retorno" markerWidth="11" markerHeight="11" refX="8" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="#ea580c"/></marker>' +
+    '<marker id="repomar-arrow' + sfx + '" markerWidth="' + (sfx ? 6 : 11) + '" markerHeight="' + (sfx ? 6 : 11) + '" refX="8" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="#3b82f6"/></marker>' +
+    '<marker id="repomar-arrow-retorno' + sfx + '" markerWidth="' + (sfx ? 6 : 11) + '" markerHeight="' + (sfx ? 6 : 11) + '" refX="8" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="#ea580c"/></marker>' +
     '</defs>' + pathsHTML;
 }
 
@@ -693,6 +718,100 @@ setInterval(function() { cargarDatos(true); }, REFRESH_MS);
 window.addEventListener('resize', function() {
   clearTimeout(window._repomarResizeTimer);
   window._repomarResizeTimer = setTimeout(function() { drawArrows(_lastBuques); }, 120);
+});
+
+// ── Popup de ampliación de buque (para proyectar en reuniones) ──────────
+var _rpmIdx = -1;
+function _rpmAbrir(idx) {
+  var buques = window._repomarBuquesActuales || [];
+  if (!buques.length || idx < 0 || idx >= buques.length) return;
+  _rpmIdx = idx;
+  var ov = document.getElementById('rpm-ov');
+  if (!ov) {
+    ov = document.createElement('div');
+    ov.id = 'rpm-ov'; ov.className = 'rpm-ov';
+    ov.onclick = function(e){ if (e.target === ov) _rpmCerrar(); };
+    document.body.appendChild(ov);
+  }
+  ov.classList.add('abierto');
+  _rpmRender();
+}
+function _rpmCerrar() {
+  var ov = document.getElementById('rpm-ov');
+  if (ov) ov.classList.remove('abierto');
+  _rpmIdx = -1;
+}
+function _rpmNav(d) {
+  var n = (window._repomarBuquesActuales || []).length;
+  if (!n) return;
+  _rpmIdx = (_rpmIdx + d + n) % n;
+  _rpmRender();
+}
+function _rpmRender() {
+  var ov = document.getElementById('rpm-ov');
+  var buques = window._repomarBuquesActuales || [];
+  var b = buques[_rpmIdx];
+  if (!ov || !b) return;
+  var plantasTodas = window._repomarPlantasActuales || [];
+  // Solo las plantas que este buque visita — así hay menos columnas y todo
+  // se puede ampliar mucho más.
+  var visitadas = {};
+  (b.legs || []).forEach(function(l){ visitadas[l.terminal] = true; });
+  var plantas = plantasTodas.filter(function(p){ return visitadas[p]; });
+  if (!plantas.length) plantas = plantasTodas;
+  var cols = '210px repeat(' + plantas.length + ', minmax(130px, 1fr)) 140px';
+  var head = '<div class="repomar-row repomar-headerrow" style="grid-template-columns:' + cols + '">' +
+    '<div class="repomar-cell" style="background:transparent;border-color:transparent"></div>' +
+    plantas.map(function(p){ return '<div class="repomar-cell repomar-planthead">' + p + '</div>'; }).join('') +
+    '<div class="repomar-cell repomar-planthead" style="background:#ea580c;border-color:#ea580c">↩ Retorno</div></div>';
+  var fila = _repomarFilaBuque(b, 0, plantas, cols);
+  var chips = buques.map(function(x, i){
+    return '<button class="rpm-chip' + (i === _rpmIdx ? ' activo' : '') + '" onclick="_rpmAbrir(' + i + ')">' + x.buque + '</button>';
+  }).join('');
+  ov.innerHTML = '<div class="rpm-card">' +
+    '<div class="rpm-top">' +
+      '<button class="rpm-btn" onclick="_rpmNav(-1)" title="Buque anterior (←)">◀</button>' +
+      '<div class="rpm-titulo">🚢 ' + b.buque + ' <span style="font-size:13px;font-weight:600;opacity:.8">(' + (_rpmIdx + 1) + '/' + buques.length + ')</span></div>' +
+      '<button class="rpm-btn" onclick="_rpmNav(1)" title="Buque siguiente (→)">▶</button>' +
+      '<div class="rpm-chips">' + chips + '</div>' +
+      '<button class="rpm-btn" onclick="_rpmCerrar()" title="Cerrar (Esc)">✕</button>' +
+      '<div class="rpm-hint">Flechas ← → para cambiar de buque · Esc para cerrar</div>' +
+    '</div>' +
+    '<div class="rpm-body" id="rpm-body"><div class="rpm-zoom" id="rpm-zoom">' +
+      '<div class="repomar-grid" id="rpm-grid" style="padding-left:2px"><svg class="repomar-svg" id="rpm-svg"></svg>' +
+      head + fila + '</div></div></div></div>';
+  // Ampliar: se calcula la escala para que la grilla ocupe todo el ancho
+  var body = document.getElementById('rpm-body');
+  var zoom = document.getElementById('rpm-zoom');
+  var grid = document.getElementById('rpm-grid');
+  var disponible = body.clientWidth - 28;
+  var k = Math.max(1, Math.min(2.4, disponible / 1000));
+  zoom.style.width = (disponible / k) + 'px';
+  zoom.style.transform = 'scale(' + k + ')';
+  // Las flechas se miden SIN escala y recién después se ve la escala
+  // aplicada visualmente — por eso se dibujan con el zoom aún en 1.
+  zoom.style.transform = 'none';
+  zoom.style.width = (disponible / k) + 'px';
+  var copia = JSON.parse(JSON.stringify(b));
+  drawArrows([copia], 'rpm-grid', 'rpm-svg', '-rpm');
+  zoom.style.transform = 'scale(' + k + ')';
+  zoom.style.marginBottom = (-(grid.offsetHeight * (1 - k))) + 'px';
+}
+document.addEventListener('keydown', function(e) {
+  var ov = document.getElementById('rpm-ov');
+  if (!ov || !ov.classList.contains('abierto')) return;
+  if (e.key === 'Escape') _rpmCerrar();
+  else if (e.key === 'ArrowRight') _rpmNav(1);
+  else if (e.key === 'ArrowLeft') _rpmNav(-1);
+});
+// Clic en la caja del buque (columna izquierda) → abre el popup
+document.addEventListener('click', function(e) {
+  var box = e.target.closest && e.target.closest('#repomar-content .repomar-shipbox');
+  if (!box) return;
+  var fila = box.closest('.repomar-ship-inner-row');
+  if (!fila) return;
+  var idx = parseInt(fila.getAttribute('data-ship-row'), 10);
+  if (!isNaN(idx)) _rpmAbrir(idx);
 });
 </script>
 </body>
