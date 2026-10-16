@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Suministro Yurimaguas · Cisternas Talara → Yurimaguas</title>
+<style>
+:root{
+  --navy:#0f1e3c;--red:#c8102e;--bg:#f2f4f8;--card:#fff;--card2:#f7f8fa;--bdr:#dfe4ec;--txt:#0f1e3c;--txt2:#475569;--txt3:#7b8798;
+  --diesel:#1d4ed8;--g84:#b45309;--ok:#15803d;--warn:#b45309;--crit:#c8102e;
+  --sans:'Segoe UI',system-ui,-apple-system,Roboto,Arial,sans-serif;--mono:ui-monospace,'Cascadia Mono',Consolas,monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:var(--sans);font-size:13px;background:var(--bg);color:var(--txt);-webkit-font-smoothing:antialiased;min-height:100vh}
+.topbar{height:60px;display:flex;align-items:center;gap:14px;padding:0 22px;background:var(--navy);border-bottom:3px solid var(--red);color:#fff;position:sticky;top:0;z-index:50}
+.topbar h1{font-size:15px;font-weight:800;letter-spacing:.01em}
+.topbar .sub{font-size:10.5px;color:#9db4d4;font-weight:600}
+.topbar .sp{flex:1}
+.topbar .who{font-size:11px;color:#cbd5e1;text-align:right;line-height:1.3}
+.tbtn{border:1px solid rgba(255,255,255,.35);background:transparent;color:#fff;border-radius:7px;padding:7px 12px;font-size:11.5px;font-weight:700;cursor:pointer;font-family:inherit}
+.tbtn:hover{background:rgba(255,255,255,.12)}
+.tbtn.prim{background:var(--red);border-color:var(--red)}
+.wrap{max-width:1500px;margin:0 auto;padding:18px 22px 40px}
+.hdr{display:flex;align-items:flex-end;gap:12px;margin-bottom:14px;flex-wrap:wrap}
+.hdr .t{font-size:18px;font-weight:800}
+.hdr .s{font-size:11.5px;color:var(--txt3);font-weight:600}
+.grid{display:grid;gap:12px}
+.g-prod{grid-template-columns:1fr 1fr}
+.card{min-width:0;background:var(--card);border:1px solid var(--bdr);border-radius:12px;box-shadow:0 1px 3px rgba(15,30,60,.05)}
+.card-h{padding:12px 16px;border-bottom:1px solid var(--bdr);display:flex;align-items:center;gap:8px;font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--txt2)}
+.card-b{padding:14px 16px}
+.dot{width:10px;height:10px;border-radius:50%;display:inline-block}
+.prod-name{font-size:15px;font-weight:800;color:var(--txt);text-transform:none;letter-spacing:0}
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+.kpi{background:var(--card2);border:1px solid var(--bdr);border-radius:9px;padding:10px 12px}
+.kpi .l{font-size:9.5px;font-weight:800;color:var(--txt3);text-transform:uppercase;letter-spacing:.06em}
+.kpi .v{font-size:21px;font-weight:800;font-family:var(--mono);margin-top:3px;font-variant-numeric:tabular-nums}
+.kpi .u{font-size:10.5px;color:var(--txt3);font-weight:600;margin-top:1px}
+.flow{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-top:12px}
+.st{border-radius:9px;padding:9px 11px;border:1px solid var(--bdr);background:#fff}
+.st .l{font-size:9.5px;font-weight:800;text-transform:uppercase;letter-spacing:.05em}
+.st .n{font-size:22px;font-weight:800;font-family:var(--mono);line-height:1.15}
+.st .mb{font-size:11px;color:var(--txt2);font-weight:700;font-family:var(--mono)}
+.st.prog{border-top:3px solid #64748b}.st.prog .l{color:#475569}
+.st.tran{border-top:3px solid #2563eb}.st.tran .l{color:#1d4ed8}
+.st.esp{border-top:3px solid #d97706}.st.esp .l{color:#b45309}
+.st.hoy{border-top:3px solid #7c3aed}.st.hoy .l{color:#6d28d9}
+.st.desc{border-top:3px solid #16a34a}.st.desc .l{color:#15803d}
+.alert{margin-top:10px;padding:9px 12px;border-radius:8px;font-size:11.5px;font-weight:700;line-height:1.45}
+.alert.warn{background:#fef3e0;color:#92400e;border:1px solid #f5d199}
+.alert.crit{background:#fdecec;color:#8a0d22;border:1px solid #f3b4bd}
+.alert.ok{background:#e9f7ee;color:#14532d;border:1px solid #b7e2c4}
+.chart{width:100%;height:auto;display:block}
+.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:10.5px;color:var(--txt2);font-weight:700;margin-top:6px}
+.legend i{display:inline-block;width:14px;height:3px;border-radius:2px;margin-right:5px;vertical-align:middle}
+.mini{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+.tabs{display:flex;gap:4px;margin-left:auto}
+.tab{border:1px solid var(--bdr);background:#fff;border-radius:7px;padding:6px 12px;font-size:11px;font-weight:800;cursor:pointer;color:var(--txt2);font-family:inherit}
+.tab.on{background:var(--navy);color:#fff;border-color:var(--navy)}
+table{width:100%;border-collapse:collapse}
+th{font-size:9.5px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:var(--txt3);text-align:left;padding:8px 10px;border-bottom:1px solid var(--bdr);background:var(--card2);white-space:nowrap}
+td{padding:8px 10px;border-bottom:1px solid #eef1f5;font-size:12px;white-space:nowrap}
+td.num{font-family:var(--mono);text-align:right;font-variant-numeric:tabular-nums}
+tr:hover td{background:#fafbfd}
+.badge{display:inline-block;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:800}
+.b-PROGRAMADA{background:#eef1f5;color:#475569}.b-EN_TRANSITO{background:#e0ebff;color:#1d4ed8}.b-EN_ESPERA{background:#fef3e0;color:#b45309}
+.b-DESCARGADA{background:#e9f7ee;color:#15803d}.b-ANULADA{background:#f1f1f1;color:#999;text-decoration:line-through}
+.late{color:var(--crit);font-weight:800}
+.acts{display:flex;gap:4px}
+.ab{border:1px solid var(--bdr);background:#fff;border-radius:6px;padding:4px 8px;font-size:10.5px;font-weight:700;cursor:pointer;font-family:inherit;color:var(--txt)}
+.ab:hover{background:#f1f5f9}
+.ab.go{border-color:#2563eb;color:#1d4ed8}.ab.es{border-color:#d97706;color:#b45309}.ab.de{border-color:#16a34a;color:#15803d}
+.empty{padding:28px;text-align:center;color:var(--txt3);font-weight:600}
+.ov{position:fixed;inset:0;background:rgba(10,14,25,.6);display:none;align-items:center;justify-content:center;z-index:100;padding:16px}
+.ov.on{display:flex}
+.modal{background:#fff;border-radius:14px;width:min(640px,100%);max-height:92vh;overflow:auto;box-shadow:0 30px 80px rgba(0,0,0,.4)}
+.modal h3{padding:16px 20px;border-bottom:1px solid var(--bdr);font-size:14px;font-weight:800}
+.fgrid{display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:16px 20px}
+.fld label{display:block;font-size:10px;font-weight:800;color:var(--txt3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px}
+.fld input,.fld select,.fld textarea{width:100%;border:1px solid var(--bdr);border-radius:7px;padding:9px 11px;font-size:13px;font-family:inherit;background:var(--card2);color:var(--txt)}
+.fld .hint{font-size:10px;color:var(--txt3);margin-top:3px}
+.full{grid-column:1/-1}
+.mfoot{display:flex;gap:8px;justify-content:flex-end;padding:12px 20px;border-top:1px solid var(--bdr)}
+.btn{border:1px solid var(--bdr);background:#fff;border-radius:7px;padding:9px 16px;font-size:12px;font-weight:800;cursor:pointer;font-family:inherit}
+.btn.prim{background:var(--navy);color:#fff;border-color:var(--navy)}
+.btn:disabled{opacity:.55;cursor:default}
+.login{max-width:380px;margin:9vh auto;background:#fff;border:1px solid var(--bdr);border-radius:14px;padding:26px;box-shadow:0 10px 40px rgba(15,30,60,.1)}
+.login h2{font-size:16px;font-weight:800;margin-bottom:4px}
+.login p{font-size:11.5px;color:var(--txt3);margin-bottom:16px}
+.login .fld{margin-bottom:12px}
+.err{color:var(--crit);font-size:11.5px;font-weight:700;min-height:16px;margin-top:6px}
+.toast{position:fixed;right:20px;bottom:20px;background:var(--navy);color:#fff;padding:11px 16px;border-radius:10px;font-size:12px;font-weight:700;z-index:200;box-shadow:0 10px 30px rgba(0,0,0,.25);display:none}
+.toast.err{background:var(--crit)}
+.upd{font-size:10.5px;color:var(--txt3);font-weight:600}
+.spin{width:16px;height:16px;border:2.5px solid #cbd5e1;border-top-color:var(--navy);border-radius:50%;animation:sp .7s linear infinite;display:inline-block;vertical-align:middle}
+@keyframes sp{to{transform:rotate(360deg)}}
+@media (max-width:1100px){.g-prod{grid-template-columns:1fr}.mini{grid-template-columns:1fr 1fr}}
+@media (max-width:640px){.kpis{grid-template-columns:1fr 1fr}.flow{grid-template-columns:1fr 1fr}.fgrid{grid-template-columns:1fr}.wrap{padding:14px}.topbar{padding:0 12px}.topbar .who{display:none}.topbar .sub{display:none}.topbar h1{font-size:13px}.topbar{gap:6px}.tbtn{padding:6px 8px;font-size:10.5px}}
+</style>
+</head>
+<body>
+<div class="topbar">
+  <div>
+    <h1>Suministro Yurimaguas</h1>
+    <div class="sub">Cisternas Talara → Yurimaguas · Administración de Contrato Nor-Oriente</div>
+  </div>
+  <div class="sp"></div>
+  <div class="who" id="who"></div>
+  <button class="tbtn" id="btnRef" onclick="cargar(true)" style="display:none">↻ Actualizar</button>
+  <button class="tbtn prim" id="btnNueva" onclick="abrirForm()" style="display:none">+ Registrar cisterna</button>
+  <button class="tbtn" id="btnSalir" onclick="salir()" style="display:none">Salir</button>
+</div>
+
+<div id="vLogin" style="display:none">
+  <div class="login">
+    <h2>Iniciar sesión</h2>
+    <p>Usa la misma cuenta corporativa de Registro Diario.</p>
+    <div class="fld"><label>Correo</label><input id="lEmail" type="email" autocomplete="username" placeholder="nombre@petroperu.com.pe"></div>
+    <div class="fld"><label>Contraseña</label><input id="lPass" type="password" autocomplete="current-password" onkeydown="if(event.key==='Enter')login()"></div>
+    <button class="btn prim" style="width:100%" id="btnLogin" onclick="login()">Ingresar</button>
+    <div class="err" id="lErr"></div>
+  </div>
+</div>
+
+<div class="wrap" id="vMain" style="display:none">
+  <div class="hdr">
+    <div>
+      <div class="t">Comportamiento de suministro — Planta Yurimaguas</div>
+      <div class="s" id="subt">—</div>
+    </div>
+    <div class="sp" style="flex:1"></div>
+    <div class="upd" id="upd"></div>
+  </div>
+
+  <div class="grid g-prod" id="prodCards"></div>
+
+  <div class="card" style="margin-top:12px">
+    <div class="card-h">Indicadores de la ruta (últimos 30 días)</div>
+    <div class="card-b"><div class="mini" id="rutaKpis"></div></div>
+  </div>
+
+  <div class="card" style="margin-top:12px">
+    <div class="card-h">
+      <span>Cisternas</span>
+      <div class="tabs">
+        <button class="tab on" data-t="activas" onclick="setTab('activas')">Activas</button>
+        <button class="tab" data-t="hist" onclick="setTab('hist')">Descargadas / anuladas</button>
+      </div>
+    </div>
+    <div style="overflow-x:auto" id="tabla"></div>
+  </div>
+</div>
+
+<div class="ov" id="ov" onclick="if(event.target===this)cerrarForm()">
+  <div class="modal">
+    <h3 id="fTit">Registrar cisterna</h3>
+    <div class="fgrid">
+      <input type="hidden" id="fId">
+      <div class="fld"><label>Placa *</label><input id="fPlaca" placeholder="ABC-123" style="text-transform:uppercase"></div>
+      <div class="fld"><label>Producto *</label><select id="fProd"><option>Diesel</option><option value="G. 84">G. 84</option></select></div>
+      <div class="fld"><label>Volumen (galones) *</label><input id="fGal" type="number" step="1" min="0" placeholder="Ej: 9000" oninput="verMb()"><div class="hint" id="fMb">—</div></div>
+      <div class="fld"><label>Transportista</label><input id="fTransp" placeholder="Empresa de transporte"></div>
+      <div class="fld"><label>Estado *</label><select id="fEst" onchange="ajustarCampos()">
+        <option value="PROGRAMADA">Programada (por cargar en Talara)</option>
+        <option value="EN_TRANSITO">En tránsito</option>
+        <option value="EN_ESPERA">En espera en Yurimaguas</option>
+        <option value="DESCARGADA">Descargada</option>
+      </select></div>
+      <div class="fld"><label>Guía de remisión</label><input id="fGuia"></div>
+      <div class="fld"><label>Fecha/hora de carga (Talara)</label><input id="fCarga" type="datetime-local" onchange="sugerirEta()"></div>
+      <div class="fld"><label>ETA Yurimaguas</label><input id="fEta" type="datetime-local"><div class="hint" id="fEtaHint"></div></div>
+      <div class="fld"><label>Llegada real a Yurimaguas</label><input id="fLleg" type="datetime-local"></div>
+      <div class="fld"><label>Descarga</label><input id="fDesc" type="datetime-local"></div>
+      <div class="fld full"><label>Observaciones</label><textarea id="fObs" rows="2"></textarea></div>
+      <div class="err full" id="fErr"></div>
+    </div>
+    <div class="mfoot">
+      <button class="btn" onclick="cerrarForm()">Cancelar</button>
+      <button class="btn prim" id="fGuardar" onclick="guardar()">Guardar</button>
+    </div>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+var API_URL = 'https://script.google.com/macros/s/AKfycbwRwsaAq4C-tRntaDf3HH4kAt24QG1GFo5_-V3hvaQiatCeTuKxuPxzWN_f6mn7vxRZ_g/exec';
+var PRODS = [{k:'Diesel', c:'#1d4ed8'}, {k:'G. 84', c:'#b45309'}];
+var S = { token: null, data: null, tab: 'activas', cargando: false };
+
+// ── Utilidades ──────────────────────────────────────────────────────────
+function $(id){ return document.getElementById(id); }
+function esc(s){ return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+function f1(n, d){ d = d == null ? 1 : d; return (isFinite(n) ? n : 0).toLocaleString('es-PE', {minimumFractionDigits:d, maximumFractionDigits:d}); }
+function fGal(n){ return Math.round(n || 0).toLocaleString('es-PE'); }
+function lsGet(k){ try { return localStorage.getItem(k); } catch(e){ return null; } }
+function lsSet(k, v){ try { if (v == null) localStorage.removeItem(k); else localStorage.setItem(k, v); } catch(e){} }
+function toDate(s){ if (!s) return null; var d = new Date(s.length <= 10 ? s + 'T00:00' : s); return isNaN(d) ? null : d; }
+function isoLocal(d){ var p = function(n){ return String(n).padStart(2,'0'); }; return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate())+'T'+p(d.getHours())+':'+p(d.getMinutes()); }
+function soloFecha(d){ return isoLocal(d).slice(0,10); }
+function fmtDT(s){ var d = toDate(s); if (!d) return '—'; return d.toLocaleDateString('es-PE',{day:'2-digit',month:'2-digit'}) + (s.length > 10 ? ' ' + d.toLocaleTimeString('es-PE',{hour:'2-digit',minute:'2-digit',hour12:false}) : ''); }
+function fmtD(s){ var d = toDate(s); return d ? d.toLocaleDateString('es-PE',{day:'2-digit',month:'2-digit'}) : '—'; }
+function toast(msg, err){ var t = $('toast'); t.textContent = msg; t.className = 'toast' + (err ? ' err' : ''); t.style.display = 'block'; clearTimeout(t._t); t._t = setTimeout(function(){ t.style.display = 'none'; }, 3800); }
+function dias(n){ return n === 1 ? '1 día' : f1(n, 1) + ' días'; }
+
+function apiGet(params){
+  var q = Object.keys(params).map(function(k){ return k + '=' + encodeURIComponent(params[k]); }).join('&');
+  var ctl = new AbortController(); var t = setTimeout(function(){ ctl.abort(); }, 60000);
+  return fetch(API_URL + '?' + q + '&_t=' + Date.now(), {redirect:'follow', cache:'no-store', signal: ctl.signal})
+    .then(function(r){ clearTimeout(t); return r.json(); });
+}
+function apiPost(action, payload){
+  payload = payload || {}; payload.action = action;
+  var ctl = new AbortController(); var t = setTimeout(function(){ ctl.abort(); }, 60000);
+  return fetch(API_URL, {method:'POST', redirect:'follow', headers:{'Content-Type':'text/plain;charset=utf-8'}, body: JSON.stringify(payload), signal: ctl.signal})
+    .then(function(r){ clearTimeout(t); return r.json(); });
+}
+
+// ── Sesión (comparte la de Registro Diario) ─────────────────────────────
+function login(){
+  var email = $('lEmail').value.trim(), pass = $('lPass').value;
+  if (!email || !pass) { $('lErr').textContent = 'Ingresa correo y contraseña.'; return; }
+  $('btnLogin').disabled = true; $('lErr').textContent = '';
+  apiPost('rdLogin', {email: email, password: pass}).then(function(res){
+    $('btnLogin').disabled = false;
+    if (!res.success) { $('lErr').textContent = res.message || 'No se pudo iniciar sesión.'; return; }
+    S.token = res.token;
+    lsSet('rd_token', res.token); lsSet('rd_nombre', res.nombre); lsSet('rd_planta', res.planta); lsSet('rd_email', res.email); lsSet('rd_rol', res.rol);
+    mostrarMain(); cargar(true);
+  }).catch(function(){ $('btnLogin').disabled = false; $('lErr').textContent = 'Error de conexión. Intenta de nuevo.'; });
+}
+function salir(){ ['rd_token','rd_nombre','rd_planta','rd_email','rd_rol'].forEach(function(k){ lsSet(k, null); }); S.token = null; S.data = null; mostrarLogin(); }
+function mostrarLogin(){ $('vLogin').style.display = ''; $('vMain').style.display = 'none'; ['btnRef','btnNueva','btnSalir'].forEach(function(i){ $(i).style.display = 'none'; }); $('who').textContent = ''; }
+function mostrarMain(){ $('vLogin').style.display = 'none'; $('vMain').style.display = ''; $('btnRef').style.display = ''; $('btnSalir').style.display = ''; }
+
+// ── Carga ───────────────────────────────────────────────────────────────
+function cargar(visible){
+  if (S.cargando || !S.token) return;
+  S.cargando = true;
+  if (visible) $('upd').innerHTML = '<span class="spin"></span> Actualizando…';
+  apiGet({action:'getCisYuri', token:S.token, dias:30}).then(function(res){
+    S.cargando = false;
+    if (!res || !res.success) {
+      var m = (res && res.message) || 'No se pudo cargar.';
+      if (/sesi[oó]n|expir|inv[aá]lid|no encontrado/i.test(m)) { salir(); $('lErr').textContent = m; return; }
+      $('upd').textContent = '⚠ ' + m; return;
+    }
+    S.data = res;
+    $('who').innerHTML = esc(res.usuario.nombre) + '<br><span style="color:#9db4d4">' + (res.puedeEditar ? 'Puede registrar' : 'Solo lectura') + '</span>';
+    $('btnNueva').style.display = res.puedeEditar ? '' : 'none';
+    $('upd').textContent = 'Actualizado ' + new Date().toLocaleTimeString('es-PE',{hour:'2-digit',minute:'2-digit',hour12:false});
+    render();
+  }).catch(function(){ S.cargando = false; $('upd').textContent = '⚠ Sin conexión con el servidor. Reintentando en el próximo ciclo.'; });
+}
+
+// ── Cálculos ────────────────────────────────────────────────────────────
+function calc(){
+  var d = S.data, ahora = new Date(), hoy = soloFecha(ahora);
+  var inicioHoy = toDate(hoy), finHoy = new Date(inicioHoy.getTime() + 864e5), finManana = new Date(inicioHoy.getTime() + 2 * 864e5);
+  var cis = d.cisternas.filter(function(c){ return c.estado !== 'ANULADA'; });
+  var out = { hoy: hoy, prods: {} };
+  PRODS.forEach(function(P){
+    var p = P.k;
+    var inv = d.inventario.filter(function(r){ return r.producto === p; });
+    var ult = inv.length ? inv[inv.length - 1] : null;
+    var ult7 = inv.slice(-7);
+    var desp7 = ult7.length ? ult7.reduce(function(s, r){ return s + (r.desp || 0); }, 0) / ult7.length : 0;
+    var cap = (d.capacidad[p] || {});
+    var mine = cis.filter(function(c){ return c.producto === p; });
+    function grp(f){ var a = mine.filter(f); return { n: a.length, mb: a.reduce(function(s,c){ return s + c.mb; }, 0), list: a }; }
+    var prog = grp(function(c){ return c.estado === 'PROGRAMADA'; });
+    var tran = grp(function(c){ return c.estado === 'EN_TRANSITO'; });
+    var esp  = grp(function(c){ return c.estado === 'EN_ESPERA'; });
+    // En espera AL INICIO DEL DÍA: llegó antes de hoy 00:00 y a esa hora aún no se descargaba
+    var espIni = grp(function(c){ var ll = toDate(c.fecha_llegada), de = toDate(c.fecha_descarga);
+      return ll && ll < inicioHoy && (c.estado === 'EN_ESPERA' || (de && de >= inicioHoy)); });
+    var llegHoy = grp(function(c){ var e = toDate(c.eta); return c.estado === 'EN_TRANSITO' && e && e < finHoy; });
+    var llegMan = grp(function(c){ var e = toDate(c.eta); return c.estado === 'EN_TRANSITO' && e && e >= finHoy && e < finManana; });
+    var atras = grp(function(c){ var e = toDate(c.eta); return c.estado === 'EN_TRANSITO' && e && e < ahora; });
+    var descHoy = grp(function(c){ var de = toDate(c.fecha_descarga); return c.estado === 'DESCARGADA' && de && de >= inicioHoy && de < finHoy; });
+    var invAct = ult ? ult.inv : 0;
+    var vacio = cap.capacidad > 0 ? cap.capacidad - invAct : null;
+    var dispDescarga = esp.mb + llegHoy.mb;
+    // Proyección 7 días: inventario + llegadas esperadas (por ETA) − despacho promedio
+    var proy = [], nivel = invAct + esp.mb, base = ult ? toDate(ult.fecha) : inicioHoy;
+    for (var i = 1; i <= 8; i++) {
+      var dia = new Date(base.getTime() + i * 864e5), sig = new Date(dia.getTime() + 864e5);
+      var lleg = mine.filter(function(c){ var e = toDate(c.eta); return (c.estado === 'EN_TRANSITO' || c.estado === 'PROGRAMADA') && e && e >= (i === 1 ? new Date(0) : dia) && e < sig; })
+                     .reduce(function(s,c){ return s + c.mb; }, 0);
+      nivel = Math.max(0, nivel + lleg - desp7);
+      proy.push({ fecha: soloFecha(dia), inv: nivel, lleg: lleg });
+    }
+    out.prods[p] = { color: P.c, ult: ult, inv: inv, invAct: invAct, desp7: desp7, autonomia: desp7 > 0 ? invAct / desp7 : null,
+      cap: cap, vacio: vacio, prog: prog, tran: tran, esp: esp, espIni: espIni, llegHoy: llegHoy, llegMan: llegMan,
+      atras: atras, descHoy: descHoy, dispDescarga: dispDescarga, proy: proy };
+  });
+  // Indicadores de ruta (30 días, cisternas completadas)
+  var compl = cis.filter(function(c){ return toDate(c.fecha_carga) && toDate(c.fecha_llegada); });
+  var tTran = compl.map(function(c){ return (toDate(c.fecha_llegada) - toDate(c.fecha_carga)) / 36e5; }).filter(function(h){ return h > 0 && h < 400; });
+  var conEta = compl.filter(function(c){ return toDate(c.eta); });
+  var aTiempo = conEta.filter(function(c){ return (toDate(c.fecha_llegada) - toDate(c.eta)) / 36e5 <= 6; });
+  var desc = cis.filter(function(c){ return toDate(c.fecha_llegada) && toDate(c.fecha_descarga); });
+  var tEsp = desc.map(function(c){ return (toDate(c.fecha_descarga) - toDate(c.fecha_llegada)) / 36e5; }).filter(function(h){ return h >= 0 && h < 400; });
+  var descMes = cis.filter(function(c){ return c.estado === 'DESCARGADA'; });
+  out.ruta = {
+    tTran: tTran.length ? tTran.reduce(function(a,b){ return a+b; },0) / tTran.length : null,
+    cumplEta: conEta.length ? aTiempo.length / conEta.length * 100 : null, nEta: conEta.length,
+    tEsp: tEsp.length ? tEsp.reduce(function(a,b){ return a+b; },0) / tEsp.length : null,
+    descN: descMes.length, descMb: descMes.reduce(function(s,c){ return s + c.mb; }, 0)
+  };
+  S.calc = out;
+  return out;
+}
+
+// ── Gráficos (SVG) ──────────────────────────────────────────────────────
+function chartProd(P){
+  var W = 640, H = 210, L = 44, R = 12, T = 12, B = 30;
+  var hist = P.inv.slice(-21), proy = P.proy;
+  var pts = hist.map(function(r){ return {f:r.fecha, inv:r.inv, desp:r.desp, real:true}; })
+    .concat(proy.map(function(r){ return {f:r.fecha, inv:r.inv, lleg:r.lleg, real:false}; }));
+  if (!pts.length) return '<div class="empty">Sin reportes de inventario recientes.</div>';
+  var cap = P.cap.capacidad || 0, fos = P.cap.fondo_osinergmin || 0;
+  var maxV = Math.max(cap, d3max(pts.map(function(p){ return p.inv; })), 1) * 1.08;
+  var maxD = Math.max(d3max(hist.map(function(r){ return r.desp; })), 0.001);
+  var n = pts.length, bw = (W - L - R) / n;
+  var x = function(i){ return L + bw * i + bw / 2; }, y = function(v){ return T + (H - T - B) * (1 - v / maxV); };
+  var yD = function(v){ return T + (H - T - B) * (1 - v / maxD * 0.45); };
+  var s = '<svg class="chart" viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="Inventario y despacho ' + esc(P.nombre) + '">';
+  for (var g = 0; g <= 4; g++) { var gv = maxV * g / 4; s += '<line x1="' + L + '" x2="' + (W-R) + '" y1="' + y(gv) + '" y2="' + y(gv) + '" stroke="#eef1f5"/><text x="' + (L-6) + '" y="' + (y(gv)+3) + '" text-anchor="end" font-size="9" fill="#7b8798">' + f1(gv,1) + '</text>'; }
+  // barras de despacho (histórico) y de llegadas (proyección)
+  pts.forEach(function(p, i){
+    if (p.real && p.desp > 0) s += '<rect x="' + (x(i) - bw*0.3) + '" y="' + yD(p.desp) + '" width="' + (bw*0.6) + '" height="' + (H - B - yD(p.desp)) + '" fill="#cbd5e1" rx="1.5"><title>' + p.f + ' despacho ' + f1(p.desp,3) + ' MB</title></rect>';
+    if (!p.real && p.lleg > 0) s += '<rect x="' + (x(i) - bw*0.3) + '" y="' + y(p.lleg) + '" width="' + (bw*0.6) + '" height="' + (H - B - y(p.lleg)) + '" fill="#c4b5fd" rx="1.5"><title>' + p.f + ' llegadas ' + f1(p.lleg,3) + ' MB</title></rect>';
+  });
+  if (cap > 0) s += '<line x1="' + L + '" x2="' + (W-R) + '" y1="' + y(cap) + '" y2="' + y(cap) + '" stroke="#c8102e" stroke-dasharray="5 4" stroke-width="1.3"/><text x="' + (W-R) + '" y="' + (y(cap)-4) + '" text-anchor="end" font-size="9.5" font-weight="700" fill="#c8102e">Capacidad ' + f1(cap,2) + '</text>';
+  if (fos > 0) s += '<line x1="' + L + '" x2="' + (W-R) + '" y1="' + y(fos) + '" y2="' + y(fos) + '" stroke="#b45309" stroke-dasharray="2 3" stroke-width="1.2"/><text x="' + (L+4) + '" y="' + (y(fos)-4) + '" font-size="9.5" font-weight="700" fill="#b45309">Fondo OSINERGMIN ' + f1(fos,3) + '</text>';
+  var real = pts.map(function(p,i){ return p.real ? [x(i), y(p.inv)] : null; }).filter(Boolean);
+  var iUlt = hist.length - 1;
+  var pro = pts.map(function(p,i){ return (!p.real || i === iUlt) ? [x(i), y(p.inv)] : null; }).filter(Boolean);
+  if (real.length) s += '<polyline points="' + real.map(function(a){ return a.join(','); }).join(' ') + '" fill="none" stroke="' + P.color + '" stroke-width="2.4" stroke-linejoin="round"/>';
+  if (pro.length > 1) s += '<polyline points="' + pro.map(function(a){ return a.join(','); }).join(' ') + '" fill="none" stroke="' + P.color + '" stroke-width="2.2" stroke-dasharray="5 4"/>';
+  pts.forEach(function(p,i){ s += '<circle cx="' + x(i) + '" cy="' + y(p.inv) + '" r="' + (p.real ? 2.6 : 2.2) + '" fill="' + (p.real ? P.color : '#fff') + '" stroke="' + P.color + '" stroke-width="1.4"><title>' + p.f + (p.real ? ' inventario ' : ' proyectado ') + f1(p.inv,3) + ' MB</title></circle>'; });
+  if (hist.length) s += '<line x1="' + (x(iUlt) + bw/2) + '" x2="' + (x(iUlt) + bw/2) + '" y1="' + T + '" y2="' + (H-B) + '" stroke="#94a3b8" stroke-dasharray="2 3"/><text x="' + (x(iUlt) + bw/2 + 4) + '" y="' + (T+9) + '" font-size="9" fill="#64748b" font-weight="700">proyección →</text>';
+  var paso = Math.ceil(n / 10);
+  pts.forEach(function(p,i){ if (i % paso === 0 || i === n-1) s += '<text x="' + x(i) + '" y="' + (H-12) + '" text-anchor="middle" font-size="9" fill="#7b8798">' + fmtD(p.f) + '</text>'; });
+  return s + '</svg>';
+}
+function d3max(a){ return a.length ? Math.max.apply(null, a.map(function(v){ return v || 0; })) : 0; }
+
+// ── Render ──────────────────────────────────────────────────────────────
+function render(){
+  var c = calc();
+  var ultF = PRODS.map(function(P){ return c.prods[P.k].ult && c.prods[P.k].ult.fecha; }).filter(Boolean).sort().pop();
+  $('subt').textContent = 'Hoy ' + fmtD(c.hoy) + ' · último reporte de planta: ' + (ultF ? fmtD(ultF) : 'sin datos') + ' · volúmenes en MB (miles de barriles) · 1 MB = 42,000 gal';
+  $('prodCards').innerHTML = PRODS.map(function(P){
+    var p = c.prods[P.k]; p.nombre = P.k;
+    var auto = p.autonomia, autoCls = auto == null ? '' : auto < 3 ? 'color:var(--crit)' : auto < 5 ? 'color:var(--warn)' : 'color:var(--ok)';
+    var alertas = '';
+    if (p.vacio != null && p.dispDescarga > 0) {
+      alertas += p.dispDescarga > p.vacio
+        ? '<div class="alert crit">⚠️ Volumen por descargar hoy (' + f1(p.dispDescarga,3) + ' MB) supera el vacío disponible (' + f1(Math.max(0,p.vacio),3) + ' MB): exceso ' + f1(p.dispDescarga - Math.max(0,p.vacio),3) + ' MB — habrá cisternas esperando.</div>'
+        : '<div class="alert ok">✓ El volumen por descargar hoy (' + f1(p.dispDescarga,3) + ' MB) cabe en el vacío disponible (' + f1(p.vacio,3) + ' MB).</div>';
+    }
+    if (p.atras.n) alertas += '<div class="alert warn">⏱ ' + p.atras.n + ' cisterna(s) con ETA vencida sin llegada registrada (' + f1(p.atras.mb,3) + ' MB): ' + p.atras.list.map(function(x){ return esc(x.placa); }).join(', ') + '</div>';
+    if (auto != null && auto < 3) alertas += '<div class="alert crit">🔴 Autonomía menor a 3 días.</div>';
+    return '<div class="card"><div class="card-h"><span class="dot" style="background:' + P.c + '"></span><span class="prod-name">' + esc(P.k) + '</span>'
+      + '<span style="margin-left:auto;font-size:10px">' + (p.ult ? 'Reporte ' + fmtD(p.ult.fecha) : 'Sin reporte') + '</span></div><div class="card-b">'
+      + '<div class="kpis">'
+      +   '<div class="kpi"><div class="l">Inventario</div><div class="v">' + f1(p.invAct,3) + '</div><div class="u">MB · ' + fGal(p.invAct*42000) + ' gal</div></div>'
+      +   '<div class="kpi"><div class="l">Despacho prom. 7d</div><div class="v">' + f1(p.desp7,3) + '</div><div class="u">MB/día</div></div>'
+      +   '<div class="kpi"><div class="l">Autonomía</div><div class="v" style="' + autoCls + '">' + (auto == null ? '—' : f1(auto,1)) + '</div><div class="u">días (inv ÷ desp.)</div></div>'
+      +   '<div class="kpi"><div class="l">Vacío disponible</div><div class="v">' + (p.vacio == null ? '—' : f1(p.vacio,3)) + '</div><div class="u">MB · cap. ' + (p.cap.capacidad ? f1(p.cap.capacidad,2) : '—') + '</div></div>'
+      + '</div>'
+      + '<div class="flow">'
+      +   st('prog','Por cargar Talara', p.prog) + st('tran','En tránsito', p.tran) + st('esp','En espera Yurimaguas', p.esp, 'Al inicio del día: ' + p.espIni.n + ' (' + f1(p.espIni.mb,3) + ' MB)')
+      +   st('hoy','Llegan hoy', p.llegHoy, 'Mañana: ' + p.llegMan.n + ' (' + f1(p.llegMan.mb,3) + ' MB)') + st('desc','Descargadas hoy', p.descHoy)
+      + '</div>'
+      + '<div class="alert" style="background:#f5f3ff;color:#4c1d95;border:1px solid #ddd6fe">📦 Disponible para descargar hoy en Yurimaguas: <b style="margin-left:4px">' + (p.esp.n + p.llegHoy.n) + ' cisternas · ' + f1(p.dispDescarga,3) + ' MB</b> &nbsp;(en espera + llegadas con ETA hoy)</div>'
+      + alertas
+      + '<div style="margin-top:12px">' + chartProd(p) + '</div>'
+      + '<div class="legend"><span><i style="background:' + P.c + '"></i>Inventario real</span><span><i style="background:' + P.c + ';opacity:.5"></i>Proyectado (con llegadas por ETA − despacho prom.)</span><span><i style="background:#cbd5e1;height:8px"></i>Despacho diario</span><span><i style="background:#c4b5fd;height:8px"></i>Llegadas previstas</span></div>'
+      + '</div></div>';
+  }).join('');
+  var r = c.ruta;
+  $('rutaKpis').innerHTML =
+      kpi('Tránsito promedio Talara → Yurimaguas', r.tTran == null ? '—' : f1(r.tTran,1), 'horas (carga → llegada)')
+    + kpi('Cumplimiento de ETA', r.cumplEta == null ? '—' : f1(r.cumplEta,0) + '%', 'llegadas ≤ 6 h tras ETA (' + r.nEta + ' viajes)')
+    + kpi('Espera promedio en Yurimaguas', r.tEsp == null ? '—' : f1(r.tEsp,1), 'horas (llegada → descarga)')
+    + kpi('Descargado en el período', f1(r.descMb,3), 'MB · ' + r.descN + ' cisternas');
+  renderTabla();
+}
+function st(cls, l, g, extra){ return '<div class="st ' + cls + '"><div class="l">' + l + '</div><div class="n">' + g.n + '</div><div class="mb">' + f1(g.mb,3) + ' MB</div>' + (extra ? '<div style="font-size:10px;color:var(--txt3);font-weight:700;margin-top:3px">' + extra + '</div>' : '') + '</div>'; }
+function kpi(l, v, u){ return '<div class="kpi"><div class="l">' + l + '</div><div class="v">' + v + '</div><div class="u">' + u + '</div></div>'; }
+
+function setTab(t){ S.tab = t; Array.prototype.forEach.call(document.querySelectorAll('.tab'), function(b){ b.classList.toggle('on', b.getAttribute('data-t') === t); }); renderTabla(); }
+var EST_TXT = {PROGRAMADA:'Por cargar', EN_TRANSITO:'En tránsito', EN_ESPERA:'En espera', DESCARGADA:'Descargada', ANULADA:'Anulada'};
+function renderTabla(){
+  if (!S.data) return;
+  var ahora = new Date(), ed = S.data.puedeEditar;
+  var orden = {EN_ESPERA:0, EN_TRANSITO:1, PROGRAMADA:2, DESCARGADA:3, ANULADA:4};
+  var list = S.data.cisternas.filter(function(c){ var act = ['PROGRAMADA','EN_TRANSITO','EN_ESPERA'].indexOf(c.estado) !== -1; return S.tab === 'activas' ? act : !act; })
+    .sort(function(a,b){
+      if (S.tab !== 'activas') return (b.fecha_descarga || b.actualizado || '') < (a.fecha_descarga || a.actualizado || '') ? -1 : 1;
+      if (orden[a.estado] !== orden[b.estado]) return orden[a.estado] - orden[b.estado];
+      return (a.eta || '9') < (b.eta || '9') ? -1 : 1;
+    });
+  if (!list.length) { $('tabla').innerHTML = '<div class="empty">' + (S.tab === 'activas' ? 'No hay cisternas activas registradas.' + (ed ? ' Usa “+ Registrar cisterna”.' : '') : 'Sin cisternas descargadas en los últimos 30 días.') + '</div>'; return; }
+  $('tabla').innerHTML = '<table><thead><tr><th>Placa</th><th>Producto</th><th style="text-align:right">Galones</th><th style="text-align:right">MB</th><th>Estado</th><th>Carga Talara</th><th>ETA</th><th>Llegada</th><th>Descarga</th><th>Transportista</th><th>Guía</th><th>Obs.</th>' + (ed ? '<th></th>' : '') + '</tr></thead><tbody>'
+    + list.map(function(c){
+      var late = c.estado === 'EN_TRANSITO' && toDate(c.eta) && toDate(c.eta) < ahora;
+      var acts = '';
+      if (ed) {
+        if (c.estado === 'PROGRAMADA') acts += '<button class="ab go" onclick="cambiarEstado(\'' + c.id + '\',\'EN_TRANSITO\')">Salió</button>';
+        if (c.estado === 'EN_TRANSITO') acts += '<button class="ab es" onclick="cambiarEstado(\'' + c.id + '\',\'EN_ESPERA\')">Llegó</button>';
+        if (c.estado === 'EN_TRANSITO' || c.estado === 'EN_ESPERA') acts += '<button class="ab de" onclick="cambiarEstado(\'' + c.id + '\',\'DESCARGADA\')">Descargó</button>';
+        acts += '<button class="ab" onclick="abrirForm(\'' + c.id + '\')">Editar</button>';
+        if (c.estado !== 'ANULADA') acts += '<button class="ab" onclick="anular(\'' + c.id + '\')" title="Anular">✕</button>';
+      }
+      return '<tr><td style="font-weight:800">' + esc(c.placa) + '</td><td><span class="dot" style="background:' + (c.producto === 'Diesel' ? '#1d4ed8' : '#b45309') + ';margin-right:5px"></span>' + esc(c.producto) + '</td>'
+        + '<td class="num">' + fGal(c.gal) + '</td><td class="num">' + f1(c.mb,3) + '</td>'
+        + '<td><span class="badge b-' + c.estado + '">' + (EST_TXT[c.estado] || c.estado) + '</span></td>'
+        + '<td>' + fmtDT(c.fecha_carga) + '</td><td class="' + (late ? 'late' : '') + '">' + fmtDT(c.eta) + (late ? ' ⏱' : '') + '</td>'
+        + '<td>' + fmtDT(c.fecha_llegada) + '</td><td>' + fmtDT(c.fecha_descarga) + '</td>'
+        + '<td>' + esc(c.transportista || '—') + '</td><td>' + esc(c.guia || '—') + '</td><td style="max-width:220px;overflow:hidden;text-overflow:ellipsis" title="' + esc(c.obs) + '">' + esc(c.obs || '') + '</td>'
+        + (ed ? '<td><div class="acts">' + acts + '</div></td>' : '') + '</tr>';
+    }).join('') + '</tbody></table>';
+}
+
+// ── Formulario ──────────────────────────────────────────────────────────
+function buscar(id){ return (S.data.cisternas || []).filter(function(c){ return c.id === id; })[0]; }
+function abrirForm(id){
+  var c = id ? buscar(id) : null;
+  $('fTit').textContent = c ? 'Editar cisterna ' + c.placa : 'Registrar cisterna';
+  $('fId').value = c ? c.id : '';
+  $('fPlaca').value = c ? c.placa : ''; $('fProd').value = c ? c.producto : 'Diesel';
+  $('fGal').value = c ? c.gal : ''; $('fTransp').value = c ? c.transportista : '';
+  $('fEst').value = c ? c.estado : 'PROGRAMADA'; $('fGuia').value = c ? c.guia : '';
+  $('fCarga').value = c ? (c.fecha_carga || '') : ''; $('fEta').value = c ? (c.eta || '') : '';
+  $('fLleg').value = c ? (c.fecha_llegada || '') : ''; $('fDesc').value = c ? (c.fecha_descarga || '') : '';
+  $('fObs').value = c ? c.obs : ''; $('fErr').textContent = '';
+  verMb(); ajustarCampos();
+  var t = S.calc && S.calc.ruta.tTran;
+  $('fEtaHint').textContent = t ? 'Tránsito promedio: ' + f1(t,1) + ' h — se sugiere al ingresar la fecha de carga.' : '';
+  $('ov').classList.add('on'); setTimeout(function(){ $('fPlaca').focus(); }, 50);
+}
+function cerrarForm(){ $('ov').classList.remove('on'); }
+function verMb(){ var g = parseFloat($('fGal').value) || 0; $('fMb').textContent = g > 0 ? '= ' + f1(g / 42000, 3) + ' MB' : '1 MB = 42,000 galones'; }
+function ajustarCampos(){ var e = $('fEst').value; $('fLleg').disabled = (e === 'PROGRAMADA' || e === 'EN_TRANSITO'); $('fDesc').disabled = (e !== 'DESCARGADA'); }
+function sugerirEta(){
+  var t = S.calc && S.calc.ruta.tTran, c = toDate($('fCarga').value);
+  if (t && c && !$('fEta').value) $('fEta').value = isoLocal(new Date(c.getTime() + t * 36e5));
+}
+function guardar(){
+  var reg = { id: $('fId').value, placa: $('fPlaca').value.trim().toUpperCase(), producto: $('fProd').value, gal: parseFloat($('fGal').value) || 0,
+    transportista: $('fTransp').value.trim(), estado: $('fEst').value, guia: $('fGuia').value.trim(),
+    fecha_carga: $('fCarga').value, eta: $('fEta').value, fecha_llegada: $('fLleg').disabled ? '' : $('fLleg').value,
+    fecha_descarga: $('fDesc').disabled ? '' : $('fDesc').value, obs: $('fObs').value.trim() };
+  if (!reg.placa) { $('fErr').textContent = 'Ingresa la placa.'; return; }
+  if (!(reg.gal > 0)) { $('fErr').textContent = 'Ingresa el volumen en galones.'; return; }
+  if (reg.gal > 20000) { $('fErr').textContent = 'El volumen parece muy alto para una cisterna (máx. 20,000 gal). ¿Lo escribiste en otra unidad?'; return; }
+  if (reg.estado === 'EN_TRANSITO' && !reg.eta) { $('fErr').textContent = 'Una cisterna en tránsito necesita ETA.'; return; }
+  $('fGuardar').disabled = true; $('fGuardar').textContent = 'Guardando…';
+  enviar(reg).then(function(ok){ $('fGuardar').disabled = false; $('fGuardar').textContent = 'Guardar'; if (ok) cerrarForm(); });
+}
+function enviar(reg){
+  return apiPost('saveCisYuri', {token: S.token, registro: reg}).then(function(res){
+    if (!res.success) { toast(res.message || 'No se pudo guardar.', true); $('fErr').textContent = res.message || ''; return false; }
+    toast(res.message || 'Guardado.'); cargar(true); return true;
+  }).catch(function(){ toast('Error de conexión al guardar.', true); return false; });
+}
+function cambiarEstado(id, estado){
+  var c = buscar(id); if (!c) return;
+  var reg = Object.assign({}, c, { estado: estado });
+  if (estado === 'EN_TRANSITO' && !reg.eta) { abrirForm(id); $('fEst').value = 'EN_TRANSITO'; ajustarCampos(); $('fErr').textContent = 'Ingresa la ETA para marcarla en tránsito.'; return; }
+  enviar(reg);
+}
+function anular(id){
+  var c = buscar(id); if (!c || !confirm('¿Anular la cisterna ' + c.placa + '? Dejará de contarse en el dashboard.')) return;
+  apiPost('anularCisYuri', {token: S.token, id: id}).then(function(res){ if (!res.success) toast(res.message || 'No se pudo anular.', true); else { toast('Cisterna anulada.'); cargar(true); } })
+    .catch(function(){ toast('Error de conexión.', true); });
+}
+document.addEventListener('keydown', function(e){ if (e.key === 'Escape') cerrarForm(); });
+
+// ── Inicio ──────────────────────────────────────────────────────────────
+S.token = lsGet('rd_token');
+if (S.token) { mostrarMain(); cargar(true); } else mostrarLogin();
+setInterval(function(){ if (!document.hidden) cargar(false); }, 120000);
+document.addEventListener('visibilitychange', function(){ if (!document.hidden && S.data) cargar(false); });
+</script>
+</body>
+</html>
