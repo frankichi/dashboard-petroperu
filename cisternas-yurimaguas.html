@@ -96,6 +96,12 @@ tr:hover td{background:#fafbfd}
 @keyframes sp{to{transform:rotate(360deg)}}
 @media (max-width:1100px){.g-prod{grid-template-columns:1fr}.mini{grid-template-columns:1fr 1fr}}
 @media (max-width:640px){.kpis{grid-template-columns:1fr 1fr}.flow{grid-template-columns:1fr 1fr}.fgrid{grid-template-columns:1fr}.wrap{padding:14px}.topbar{padding:0 12px}.topbar .who{display:none}.topbar .sub{display:none}.topbar h1{font-size:13px}.topbar{gap:6px}.tbtn{padding:6px 8px;font-size:10.5px}}
+.fl-kpis{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:12px}
+.fl-t td,.fl-t th{text-align:right}.fl-t td:first-child,.fl-t th:first-child{text-align:left}
+.fl-t .u{font-family:var(--mono);font-weight:800;font-size:13px}.fl-t .g{font-family:var(--mono);color:var(--txt3);font-size:10.5px;display:block}
+.fl-t tr.tot td{background:#f1f5f9;font-weight:800;border-top:2px solid var(--bdr)}
+.delta{font-size:10px;font-weight:800;margin-left:4px}.delta.up{color:#15803d}.delta.dn{color:#c8102e}
+@media (max-width:900px){.fl-kpis{grid-template-columns:1fr 1fr}}
 </style>
 </head>
 <body>
@@ -132,6 +138,14 @@ tr:hover td{background:#fafbfd}
     <div class="upd" id="upd"></div>
   </div>
 
+  <div class="card" id="flotaCard" style="margin-bottom:12px">
+    <div class="card-h">
+      <span>Movimiento de flota del día — Talara → Yurimaguas</span>
+      <span style="font-weight:600;text-transform:none;letter-spacing:0;color:var(--txt3)">(reporte diario de Administración de Contrato · Carga de Datos → Cisternas)</span>
+      <div class="tabs"><select id="flFecha" onchange="renderFlota()" style="border:1px solid var(--bdr);border-radius:7px;padding:5px 8px;font-family:inherit;font-weight:700;font-size:11.5px"></select></div>
+    </div>
+    <div class="card-b" id="flotaBody"></div>
+  </div>
   <div class="grid g-prod" id="prodCards"></div>
 
   <div class="card" style="margin-top:12px">
@@ -289,7 +303,20 @@ function calc(){
       nivel = Math.max(0, nivel + lleg - desp7);
       proy.push({ fecha: soloFecha(dia), inv: nivel, lleg: lleg });
     }
-    out.prods[p] = { color: P.c, ult: ult, inv: inv, invAct: invAct, desp7: desp7, autonomia: desp7 > 0 ? invAct / desp7 : null,
+    // Pronóstico del mes (MBDC aprobado) vs. lo vendido en el mes
+    var mbdc = (d.pronostico || {})[p] || 0;
+    var mes = (d.mes || hoy.slice(0,7)), anio = +mes.slice(0,4), mm = +mes.slice(5,7);
+    var diasMes = new Date(anio, mm, 0).getDate();
+    var delMes = inv.filter(function(r){ return r.fecha.slice(0,7) === mes; });
+    var vendido = delMes.reduce(function(s, r){ return s + (r.desp || 0); }, 0);
+    var diaCorte = ult && ult.fecha.slice(0,7) === mes ? +ult.fecha.slice(8,10) : 0;
+    var pronMes = mbdc * diasMes, esperado = mbdc * diaCorte;
+    var resto = Math.max(0, pronMes - vendido), diasRest = diasMes - diaCorte;
+    var pron = { mbdc: mbdc, diasMes: diasMes, pronMes: pronMes, vendido: vendido, esperado: esperado, diaCorte: diaCorte,
+      avance: pronMes > 0 ? vendido / pronMes * 100 : null, cumpl: esperado > 0 ? vendido / esperado * 100 : null,
+      resto: resto, ritmo: diasRest > 0 ? resto / diasRest : null, diasRest: diasRest,
+      autoPron: mbdc > 0 ? invAct / mbdc : null };
+    out.prods[p] = { color: P.c, ult: ult, inv: inv, invAct: invAct, desp7: desp7, pron: pron, autonomia: desp7 > 0 ? invAct / desp7 : null,
       cap: cap, vacio: vacio, prog: prog, tran: tran, esp: esp, espIni: espIni, llegHoy: llegHoy, llegMan: llegMan,
       atras: atras, descHoy: descHoy, dispDescarga: dispDescarga, proy: proy };
   });
@@ -370,6 +397,7 @@ function render(){
       +   '<div class="kpi"><div class="l">Autonomía</div><div class="v" style="' + autoCls + '">' + (auto == null ? '—' : f1(auto,1)) + '</div><div class="u">días (inv ÷ desp.)</div></div>'
       +   '<div class="kpi"><div class="l">Vacío disponible</div><div class="v">' + (p.vacio == null ? '—' : f1(p.vacio,3)) + '</div><div class="u">MB · cap. ' + (p.cap.capacidad ? f1(p.cap.capacidad,2) : '—') + '</div></div>'
       + '</div>'
+      + pronBloque(p)
       + '<div class="flow">'
       +   st('prog','Por cargar Talara', p.prog) + st('tran','En tránsito', p.tran) + st('esp','En espera Yurimaguas', p.esp, 'Al inicio del día: ' + p.espIni.n + ' (' + f1(p.espIni.mb,3) + ' MB)')
       +   st('hoy','Llegan hoy', p.llegHoy, 'Mañana: ' + p.llegMan.n + ' (' + f1(p.llegMan.mb,3) + ' MB)') + st('desc','Descargadas hoy', p.descHoy)
@@ -386,7 +414,102 @@ function render(){
     + kpi('Cumplimiento de ETA', r.cumplEta == null ? '—' : f1(r.cumplEta,0) + '%', 'llegadas ≤ 6 h tras ETA (' + r.nEta + ' viajes)')
     + kpi('Espera promedio en Yurimaguas', r.tEsp == null ? '—' : f1(r.tEsp,1), 'horas (llegada → descarga)')
     + kpi('Descargado en el período', f1(r.descMb,3), 'MB · ' + r.descN + ' cisternas');
+  renderFlota();
   renderTabla();
+}
+
+// ── Movimiento de flota (reporte diario de Administración de Contrato) ──
+function flProd(nombre){ var n = String(nombre || '').toUpperCase(); if (n.indexOf('DIESEL') !== -1) return 'Diesel'; if (n.indexOf('84') !== -1) return 'G. 84'; return n || 'Otro'; }
+function renderFlota(){
+  var fl = (S.data && S.data.flota) || [];
+  var sel = $('flFecha');
+  var fechas = Array.from(new Set(fl.map(function(r){ return r.fecha; }))).sort().reverse();
+  if (!fechas.length) { sel.style.display = 'none'; $('flotaBody').innerHTML = '<div class="empty">Aún no hay reporte diario de flota para la ruta Talara → Yurimaguas. Se carga desde el panel: Carga de Datos → Cisternas (Excel de Administración de Contrato).</div>'; return; }
+  sel.style.display = '';
+  var actual = sel.value && fechas.indexOf(sel.value) !== -1 ? sel.value : fechas[0];
+  sel.innerHTML = fechas.map(function(f){ return '<option value="' + f + '"' + (f === actual ? ' selected' : '') + '>' + fmtD(f) + (f === S.data.hoy ? ' (hoy)' : '') + '</option>'; }).join('');
+  var filas = fl.filter(function(r){ return r.fecha === actual; });
+  var idxAnt = fechas.indexOf(actual) + 1, ant = idxAnt < fechas.length ? fl.filter(function(r){ return r.fecha === fechas[idxAnt]; }) : [];
+  function sum(arr, k){ return arr.reduce(function(s, r){ return s + (r[k] || 0); }, 0); }
+  var flotaC = Math.max.apply(null, filas.map(function(r){ return r.flota_contratada || 0; }).concat([0]));
+  var fuera = Math.max.apply(null, filas.map(function(r){ return r.fuera_servicio || 0; }).concat([0]));
+  var adic = Math.max.apply(null, filas.map(function(r){ return r.viaje_adicional || 0; }).concat([0]));
+  var enUso = sum(filas,'prog_und') + sum(filas,'carga_und') + sum(filas,'transito_und') + sum(filas,'descarga_und') + sum(filas,'vacias_und');
+  var revis = filas.some(function(r){ return /^s/i.test(r.rep_revisado); }), repo = filas.some(function(r){ return /^s/i.test(r.id_reportado); });
+  var kp = function(l, v, u, st){ return '<div class="kpi"><div class="l">' + l + '</div><div class="v"' + (st ? ' style="' + st + '"' : '') + '>' + v + '</div><div class="u">' + u + '</div></div>'; };
+  var html = '<div class="fl-kpis">'
+    + kp('Flota contratada', flotaC || '—', 'cisternas en la ruta')
+    + kp('Fuera de servicio', fuera, flotaC ? f1(fuera / flotaC * 100, 0) + '% de la flota' : '', fuera > 0 ? 'color:var(--warn)' : '')
+    + kp('Flota operativa', flotaC ? flotaC - fuera : '—', 'contratada − fuera de servicio')
+    + kp('Unidades en movimiento', enUso, 'prog. + carga + tránsito + descarga + vacías')
+    + kp('Reporte', (repo ? '✓' : '✗') + ' / ' + (revis ? '✓' : '✗'), 'reportado / revisado' + (adic ? ' · viaje adic.: ' + adic : ''), (repo && revis) ? 'color:var(--ok)' : 'color:var(--warn)')
+    + '</div>';
+  // Agrupar por producto (+ origen, para distinguir insumo de Refinería Talara)
+  var grupos = {};
+  filas.forEach(function(r){ var k = flProd(r.producto) + '|' + r.origen; (grupos[k] = grupos[k] || []).push(r); });
+  var cols = [['prog','Programadas','prog_und','prog_gal'],['carga','Cargando / cargadas','carga_und','carga_gal'],['tran','En tránsito','transito_und','transito_gal'],['desc','En descarga','descarga_und','descarga_gal'],['vac','Vacías (retorno)','vacias_und',null]];
+  function celda(arr, c, arrAnt){
+    var u = sum(arr, c[2]), g = c[3] ? sum(arr, c[3]) : 0;
+    var d = '';
+    if (arrAnt && arrAnt.length) { var ua = sum(arrAnt, c[2]); if (u !== ua) d = '<span class="delta ' + (u > ua ? 'up' : 'dn') + '">' + (u > ua ? '▲' : '▼') + Math.round(Math.abs(u - ua)) + '</span>'; }
+    return '<td><span class="u">' + (u || '—') + '</span>' + d + (c[3] && g ? '<span class="g">' + f1(g / 42000, 3) + ' MB · ' + fGal(g) + ' gal</span>' : '') + '</td>';
+  }
+  html += '<div style="overflow-x:auto"><table class="fl-t"><thead><tr><th>Producto · origen</th>' + cols.map(function(c){ return '<th>' + c[1] + '</th>'; }).join('') + '<th>En camino a Yurimaguas</th></tr></thead><tbody>';
+  Object.keys(grupos).sort().forEach(function(k){
+    var arr = grupos[k], pr = k.split('|')[0], og = k.split('|')[1];
+    var arrAnt = ant.filter(function(r){ return flProd(r.producto) + '|' + r.origen === k; });
+    var camU = sum(arr,'carga_und') + sum(arr,'transito_und'), camG = sum(arr,'carga_gal') + sum(arr,'transito_gal');
+    var color = pr === 'Diesel' ? '#1d4ed8' : pr === 'G. 84' ? '#b45309' : '#64748b';
+    html += '<tr><td><span class="dot" style="background:' + color + ';margin-right:6px"></span><b>' + esc(pr === 'Diesel' || pr === 'G. 84' ? pr : arr[0].producto) + '</b> <span style="color:var(--txt3);font-size:11px">· ' + esc(og) + '</span></td>'
+      + cols.map(function(c){ return celda(arr, c, arrAnt); }).join('')
+      + '<td><span class="u" style="color:#6d28d9">' + camU + '</span><span class="g">' + f1(camG / 42000, 3) + ' MB</span></td></tr>';
+  });
+  var camTU = sum(filas,'carga_und') + sum(filas,'transito_und'), camTG = sum(filas,'carga_gal') + sum(filas,'transito_gal');
+  html += '<tr class="tot"><td>Total ruta</td>' + cols.map(function(c){ return celda(filas, c, ant); }).join('') + '<td><span class="u" style="color:#6d28d9">' + camTU + '</span><span class="g">' + f1(camTG / 42000, 3) + ' MB</span></td></tr></tbody></table></div>';
+  html += '<div class="legend" style="margin-top:8px"><span>▲▼ variación de unidades vs. el reporte anterior (' + (idxAnt < fechas.length ? fmtD(fechas[idxAnt]) : '—') + ')</span><span>"En camino" = cargando/cargadas + en tránsito</span></div>';
+  // Tendencia: tránsito y descarga (MB) por día y producto
+  var ult = fechas.slice(0, 10).reverse();
+  if (ult.length > 1) {
+    var W = 900, H = 170, L = 40, B = 26, T = 10, prods = ['Diesel','G. 84'], colr = {'Diesel':'#1d4ed8','G. 84':'#b45309'};
+    var val = function(f, p, k){ return fl.filter(function(r){ return r.fecha === f && flProd(r.producto) === p; }).reduce(function(s, r){ return s + (r[k] || 0); }, 0) / 42000; };
+    var maxV = 0; ult.forEach(function(f){ prods.forEach(function(p){ maxV = Math.max(maxV, val(f,p,'transito_gal'), val(f,p,'descarga_gal')); }); });
+    maxV = maxV * 1.15 || 1;
+    var gw = (W - L - 10) / ult.length, bw = Math.min(16, gw / 5);
+    var y = function(v){ return T + (H - T - B) * (1 - v / maxV); };
+    var svg = '<svg class="chart" style="max-height:200px" viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Tránsito y descarga por día">';
+    for (var gi = 0; gi <= 3; gi++) { var gv = maxV * gi / 3; svg += '<line x1="' + L + '" x2="' + (W-10) + '" y1="' + y(gv) + '" y2="' + y(gv) + '" stroke="#eef1f5"/><text x="' + (L-5) + '" y="' + (y(gv)+3) + '" text-anchor="end" font-size="9" fill="#7b8798">' + f1(gv,2) + '</text>'; }
+    ult.forEach(function(f, i){
+      var x0 = L + gw * i + gw / 2 - bw * 2;
+      prods.forEach(function(p, j){
+        var t = val(f,p,'transito_gal'), d = val(f,p,'descarga_gal');
+        svg += '<rect x="' + (x0 + j*bw*2) + '" y="' + y(t) + '" width="' + (bw-1) + '" height="' + (H-B-y(t)) + '" fill="' + colr[p] + '" rx="1.5"><title>' + fmtD(f) + ' ' + p + ' en tránsito ' + f1(t,3) + ' MB</title></rect>';
+        svg += '<rect x="' + (x0 + j*bw*2 + bw) + '" y="' + y(d) + '" width="' + (bw-1) + '" height="' + (H-B-y(d)) + '" fill="' + colr[p] + '" opacity=".4" rx="1.5"><title>' + fmtD(f) + ' ' + p + ' en descarga ' + f1(d,3) + ' MB</title></rect>';
+      });
+      svg += '<text x="' + (L + gw*i + gw/2) + '" y="' + (H-9) + '" text-anchor="middle" font-size="9.5" fill="' + (f === actual ? '#0f1e3c' : '#7b8798') + '" font-weight="' + (f === actual ? 800 : 400) + '">' + fmtD(f) + '</text>';
+    });
+    html += '<div style="margin-top:14px;font-size:10px;font-weight:800;color:var(--txt3);text-transform:uppercase;letter-spacing:.06em">Volumen en tránsito y en descarga por día (MB)</div>' + svg + '</svg>'
+      + '<div class="legend"><span><i style="background:#1d4ed8;height:8px"></i>Diesel tránsito</span><span><i style="background:#1d4ed8;opacity:.4;height:8px"></i>Diesel descarga</span><span><i style="background:#b45309;height:8px"></i>G. 84 tránsito</span><span><i style="background:#b45309;opacity:.4;height:8px"></i>G. 84 descarga</span></div>';
+  }
+  $('flotaBody').innerHTML = html;
+}
+function pronBloque(p){
+  var r = p.pron;
+  if (!r.mbdc) return '<div class="alert warn">Sin pronóstico aprobado de ' + esc(p.nombre) + ' para este mes en la hoja de pronóstico.</div>';
+  var pct = Math.min(100, r.avance || 0), marca = r.diaCorte / r.diasMes * 100;
+  var cumplCol = r.cumpl == null ? 'var(--txt)' : r.cumpl >= 95 ? 'var(--ok)' : r.cumpl >= 85 ? 'var(--warn)' : 'var(--crit)';
+  return '<div style="margin-top:12px;border:1px solid var(--bdr);border-radius:9px;padding:11px 13px;background:#fbfcfe">'
+    + '<div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;margin-bottom:8px"><span style="font-size:10px;font-weight:800;color:var(--txt3);text-transform:uppercase;letter-spacing:.06em">Pronóstico del mes</span>'
+    + '<span style="font-family:var(--mono);font-weight:800;font-size:15px">' + f1(r.pronMes,3) + ' MB</span>'
+    + '<span style="font-size:11px;color:var(--txt3);font-weight:700">(' + f1(r.mbdc,3) + ' MB/día × ' + r.diasMes + ' días)</span></div>'
+    + '<div style="position:relative;height:12px;background:#eef1f5;border-radius:6px;overflow:hidden"><div style="height:100%;width:' + pct + '%;background:' + p.color + ';border-radius:6px"></div>'
+    + '<div title="Esperado a la fecha" style="position:absolute;top:-2px;bottom:-2px;left:' + marca + '%;width:2px;background:#0f1e3c"></div></div>'
+    + '<div style="display:flex;justify-content:space-between;font-size:10.5px;color:var(--txt3);font-weight:700;margin-top:4px"><span>Vendido ' + f1(r.vendido,3) + ' MB · ' + f1(r.avance || 0,0) + '% del mes</span><span>Esperado al día ' + r.diaCorte + ': ' + f1(r.esperado,3) + ' MB</span></div>'
+    + '<div class="kpis" style="margin-top:10px">'
+    +   '<div class="kpi"><div class="l">Cumplimiento a la fecha</div><div class="v" style="color:' + cumplCol + '">' + (r.cumpl == null ? '—' : f1(r.cumpl,0) + '%') + '</div><div class="u">vendido ÷ esperado</div></div>'
+    +   '<div class="kpi"><div class="l">Por vender en el mes</div><div class="v">' + f1(r.resto,3) + '</div><div class="u">MB · ' + r.diasRest + ' días restantes</div></div>'
+    +   '<div class="kpi"><div class="l">Ritmo requerido</div><div class="v">' + (r.ritmo == null ? '—' : f1(r.ritmo,3)) + '</div><div class="u">MB/día (vs. ' + f1(p.desp7,3) + ' real 7d)</div></div>'
+    +   '<div class="kpi"><div class="l">Autonomía s/ pronóstico</div><div class="v">' + (r.autoPron == null ? '—' : f1(r.autoPron,1)) + '</div><div class="u">días (inv ÷ ' + f1(r.mbdc,3) + ')</div></div>'
+    + '</div></div>';
 }
 function st(cls, l, g, extra){ return '<div class="st ' + cls + '"><div class="l">' + l + '</div><div class="n">' + g.n + '</div><div class="mb">' + f1(g.mb,3) + ' MB</div>' + (extra ? '<div style="font-size:10px;color:var(--txt3);font-weight:700;margin-top:3px">' + extra + '</div>' : '') + '</div>'; }
 function kpi(l, v, u){ return '<div class="kpi"><div class="l">' + l + '</div><div class="v">' + v + '</div><div class="u">' + u + '</div></div>'; }
