@@ -17615,15 +17615,66 @@ function _parseCargasFecha(token, year, refMes) {
   }
   return [null,null];
 }
+function _pdfItemCrudo(it) { return { str: it.str, width: it.w, height: it.h, transform: [1, 0, 0, it.h, it.x, it.y] }; }
+function _pdfDetectarCorteColumnas(arr) {
+  var conTexto = arr.filter(function(it){ return it.str.trim(); });
+  if (conTexto.length < 20) return 0;
+  var minX = Infinity, maxX = -Infinity;
+  conTexto.forEach(function(it){ minX = Math.min(minX, it.x); maxX = Math.max(maxX, it.x + it.w); });
+  var ancho = maxX - minX; if (ancho <= 0) return 0;
+  // Ocupación horizontal (se ignoran títulos muy anchos, ej. el centrado
+  // "CARGAS DE NAVES" del encabezado, que cruzan ambas columnas).
+  var paso = 2, n = Math.ceil(ancho / paso) + 1, ocup = new Array(n).fill(0);
+  conTexto.forEach(function(it) {
+    if (it.w > ancho * 0.12) return;
+    var a = Math.floor((it.x - minX) / paso), b = Math.ceil((it.x + Math.max(it.w, 1) - minX) / paso);
+    for (var k = Math.max(0, a); k <= Math.min(n - 1, b); k++) ocup[k]++;
+  });
+  var mejor = null, ini = -1;
+  for (var k = 0; k <= n; k++) {
+    var vacio = k < n && ocup[k] === 0;
+    if (vacio && ini < 0) ini = k;
+    if (!vacio && ini >= 0) {
+      var cx = minX + ((ini + k) / 2) * paso, w = (k - ini) * paso;
+      if (cx > minX + ancho * 0.3 && cx < minX + ancho * 0.7 && (!mejor || w > mejor.w)) mejor = { x: minX + k * paso - 1, w: w };
+      ini = -1;
+    }
+  }
+  if (!mejor || mejor.w < 12) return 0;
+  // Solo se separa si a la derecha hay contenido propio de la columna
+  // vecina (otro buque, importaciones/exportaciones) — así un PDF de una
+  // sola columna nunca se parte por error entre columnas de una tabla.
+  var hayDerecha = conTexto.some(function(it){ return it.x >= mejor.x && /^B\/T\s|IMPORTACIONES|EXPORTACIONES|LAY\s*CAN/i.test(it.str.trim()); });
+  return hayDerecha ? mejor.x : 0;
+}
 // ⚠️ AGREGADO — agrupa los fragmentos de texto de una página PDF en
 // líneas por CERCANÍA vertical (no por cortes fijos de altura): dos
 // fragmentos van en la misma línea si su altura difiere menos de ~60%
 // del alto de la letra. Evita que una fila de tabla se parta en dos.
-function _pdfItemsALineas(items) {
+// ⚠️ AGREGADO (opción `columnas`) — bug real confirmado con el PDF
+// CARGAS DE NAVES 2026.10.19: la página tiene DOS columnas (izquierda:
+// tablas UCAYALI/MOCHE; derecha: Importaciones/Exportaciones y las
+// tablas de B/T URUBAMBA). Leídas a la misma altura, se mezclaban en un
+// mismo renglón — el "PUERTO DE CARGA" de URUBAMBA (derecha) caía en la
+// fila "GASOLINA REGULAR" de MOCHE V.016 (izquierda) y cortaba esa tabla
+// después de G. Premium: G. Regular y Diesel (Conchán/Mollendo/Ilo) se
+// perdían, y las tablas de URUBAMBA tampoco se leían. Con `columnas`,
+// si se detecta un corredor vertical vacío en el centro de la página
+// con un encabezado de buque/importación a la derecha, se lee primero
+// toda la columna izquierda y después toda la derecha.
+function _pdfItemsALineas(items, columnas) {
   var arr = (items || []).filter(function(it){ return it && typeof it.str === 'string'; }).map(function(it) {
     var h = Math.abs(it.transform[3]) || it.height || 8;
-    return { x: it.transform[4], y: it.transform[5], h: h, str: it.str };
+    return { x: it.transform[4], y: it.transform[5], h: h, w: it.width || 0, str: it.str };
   }).sort(function(a, b) { return b.y - a.y || a.x - b.x; });
+  if (columnas) {
+    var corte = _pdfDetectarCorteColumnas(arr);
+    if (corte) {
+      var izq = arr.filter(function(it){ return it.x < corte; });
+      var der = arr.filter(function(it){ return it.x >= corte; });
+      return _pdfItemsALineas(izq.map(_pdfItemCrudo)).concat(_pdfItemsALineas(der.map(_pdfItemCrudo)));
+    }
+  }
   var grupos = [];
   arr.forEach(function(it) {
     var g = grupos[grupos.length - 1];
@@ -17789,6 +17840,21 @@ function _parseCargasNavesText(text, fechaRpt) {
       // descartaba del arreglo y dependía de que coincidiera "por
       // casualidad" con las columnas inválidas del header).
       var dateTokensRaw = dateTokens.slice(1);
+      // ⚠️ AGREGADO — caso real (B/T URUBAMBA V.022-2026, "PUERTO DE
+      // CARGA  TALARA" con fechas "BAYÓVAR 17-19/OCT  -  19-20/OCT"): a
+      // veces el guion de la columna vacía no sale en el texto del
+      // encabezado, y el destino quedaba leyendo la columna del "-" (0 MB)
+      // — la tabla entera se perdía. Si el encabezado trae MENOS columnas
+      // que la fila de fechas, los destinos se alinean a la derecha
+      // (donde están sus fechas reales), solo si así caen sobre fechas.
+      var _colsDatos = dateTokensRaw.length - 1;
+      var _faltan = _colsDatos - termTokens.length;
+      if (_faltan > 0) {
+        var _alineado = colMap.map(function(c){ return c + _faltan; });
+        var _caeEnFecha = _alineado.every(function(c){ return /\d/.test(dateTokensRaw[c + 1] || ''); });
+        var _hoyEnGuion = colMap.some(function(c){ return !/\d/.test(dateTokensRaw[c + 1] || ''); });
+        if (_caeEnFecha && _hoyEnGuion) colMap = _alineado;
+      }
       // ⚠️ AGREGADO — respaldo si una fila de producto igual llegó partida
       // en dos líneas (nombre solo / números solos, en cualquier orden):
       // se vuelven a unir antes de leerla, en vez de descartarlas.
@@ -17906,7 +17972,7 @@ async function loadCargasNavesPDF(input) {
       // con números sin nombre — y el parser descartaba ambas. Ahora se
       // agrupa por cercanía real (tolerancia según el alto de la letra),
       // no por cortes fijos.
-      _pdfItemsALineas(tc.items).forEach(function(lineStr) { texts.push(lineStr); });
+      _pdfItemsALineas(tc.items, true).forEach(function(lineStr) { texts.push(lineStr); });
     }
     var fullText = texts.join('\n');
     statusEl.textContent = '⏳ Parseando estructura de rutas...';
