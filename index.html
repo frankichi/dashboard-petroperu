@@ -33920,7 +33920,7 @@ window.renderPRepoMar = function() {
     var paths = '';
     if (ship) {
       var pr = ship.getBoundingClientRect();
-      var px = pr.right - gr.left, py = pr.top + pr.height / 2 - gr.top, prevRect = pr;
+      var px = pr.right - gr.left, py = pr.top + pr.height / 2 - gr.top, prevRect = pr, prevIdx = '-1';
       legs.forEach(function(el) {
         var r = el.getBoundingClientRect();
         var x1 = r.left + r.width / 2 - gr.left, y1 = r.top - gr.top;
@@ -33932,15 +33932,56 @@ window.renderPRepoMar = function() {
           var cy = Math.min(py, y1) - 12 - alto;
           d = 'M' + px + ',' + py + ' Q' + ((px + x1) / 2) + ',' + cy + ' ' + x1 + ',' + y1;
         }
-        paths += '<path d="' + d + '" fill="none" stroke="' + (izq ? '#ea580c' : '#3b82f6') + '" stroke-width="2.4" stroke-dasharray="5 3" marker-end="url(#rpm-arr' + (izq ? '-r' : '') + ')"/>';
-        px = x1; py = y1; prevRect = r;
+        var idxAct = el.getAttribute('data-leg-idx');
+        paths += '<path d="' + d + '" data-from="' + prevIdx + '" data-to="' + idxAct + '" fill="none" stroke="' + (izq ? '#ea580c' : '#3b82f6') + '" stroke-width="2.4" stroke-dasharray="5 3" marker-end="url(#rpm-arr' + (izq ? '-r' : '') + ')" style="transition:opacity .15s,stroke-width .15s"/>';
+        px = x1; py = y1; prevRect = r; prevIdx = idxAct;
       });
     }
     svg.innerHTML = '<defs><marker id="rpm-arr" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#3b82f6"/></marker>' +
       '<marker id="rpm-arr-r" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#ea580c"/></marker></defs>' + paths;
     zoom.style.transform = 'scale(' + k + ')';
     zoom.style.marginBottom = (g2.offsetHeight * (k - 1)) + 'px';
+    _rpmResaltarSetup(g2, svg);
   };
+
+// Resalta en el popup las flechas de una escala: de dónde viene y a dónde va.
+// Hover = resaltado temporal; clic = queda fijo (otro clic en la misma caja lo quita).
+function _rpmResaltarSetup(cont, svg) {
+  if (!cont || !svg) return;
+  if (!document.getElementById('rpm-res-css')) {
+    var st = document.createElement('style'); st.id = 'rpm-res-css';
+    st.textContent = '.rpm-on{stroke-width:4.6!important;opacity:1!important;filter:drop-shadow(0 0 4px rgba(29,78,216,.75))}.rpm-off{opacity:.12}'
+      + '.rpm-box-on{box-shadow:0 0 0 3px #f59e0b,0 4px 14px rgba(0,0,0,.18)!important}.rpm-box-sel{box-shadow:0 0 0 3px #1d4ed8,0 4px 14px rgba(0,0,0,.2)!important}'
+      + '#rpm-ov .repomar-legbox,#rpm-ov .repomar-shipbox{cursor:pointer}';
+    document.head.appendChild(st);
+  }
+  var fijo = null;
+  var cajas = function(){ return Array.prototype.slice.call(cont.querySelectorAll('.repomar-legbox[data-leg-idx], .repomar-shipbox')); };
+  var idxDe = function(el){ return el.classList.contains('repomar-shipbox') ? '-1' : el.getAttribute('data-leg-idx'); };
+  function aplicar(idx) {
+    var paths = Array.prototype.slice.call(svg.querySelectorAll('path[data-to]'));
+    var vecinos = {};
+    paths.forEach(function(p) {
+      var f = p.getAttribute('data-from'), t = p.getAttribute('data-to');
+      var on = idx != null && (f === idx || t === idx);
+      p.classList.toggle('rpm-on', on);
+      p.classList.toggle('rpm-off', idx != null && !on);
+      if (on) { vecinos[f] = 1; vecinos[t] = 1; }
+    });
+    cajas().forEach(function(c) {
+      var i = idxDe(c);
+      c.classList.toggle('rpm-box-sel', idx != null && i === idx);
+      c.classList.toggle('rpm-box-on', idx != null && i !== idx && !!vecinos[i]);
+    });
+  }
+  cajas().forEach(function(c) {
+    c.addEventListener('mouseenter', function(){ if (fijo == null) aplicar(idxDe(c)); });
+    c.addEventListener('mouseleave', function(){ if (fijo == null) aplicar(null); });
+    c.addEventListener('click', function(e){ e.stopPropagation(); var i = idxDe(c); fijo = (fijo === i) ? null : i; aplicar(fijo != null ? fijo : i); if (fijo == null) aplicar(null); });
+  });
+  cont.addEventListener('click', function(){ fijo = null; aplicar(null); });
+}
+
   document.addEventListener('keydown', function(e) {
     if (!document.getElementById('rpm-ov')) return;
     if (e.key === 'Escape') window._rpmCerrar();

@@ -609,7 +609,7 @@ function drawArrows(buques, gridId, svgId, sfx) {
         var midXArc = (startX + x1) / 2;
         pathD = 'M' + startX + ',' + startY + ' Q' + midXArc + ',' + controlY + ' ' + x1 + ',' + y1;
       }
-      pathsHTML += '<path d="' + pathD + '" ' +
+      pathsHTML += '<path d="' + pathD + '" data-from="' + (grupoIdx - 1) + '" data-to="' + grupoIdx + '" style="transition:opacity .15s,stroke-width .15s" ' +
         (esRetornoNorte
           ? 'fill="none" stroke="#ea580c" stroke-width="3.4" stroke-dasharray="4 3" marker-end="url(#repomar-arrow-retorno' + sfx + ')"/>'
           : 'fill="none" stroke="#3b82f6" stroke-width="3.4" stroke-dasharray="4 3" marker-end="url(#repomar-arrow' + sfx + ')"/>');
@@ -794,8 +794,47 @@ function _rpmRender() {
   zoom.style.width = (disponible / k) + 'px';
   var copia = JSON.parse(JSON.stringify(b));
   drawArrows([copia], 'rpm-grid', 'rpm-svg', '-rpm');
+  _rpmResaltarSetup(grid, document.getElementById('rpm-svg'));
   zoom.style.transform = 'scale(' + k + ')';
   zoom.style.marginBottom = (-(grid.offsetHeight * (1 - k))) + 'px';
+}
+
+// Resalta en el popup las flechas de una escala: de dónde viene y a dónde va.
+// Hover = resaltado temporal; clic = queda fijo (otro clic en la misma caja lo quita).
+function _rpmResaltarSetup(cont, svg) {
+  if (!cont || !svg) return;
+  if (!document.getElementById('rpm-res-css')) {
+    var st = document.createElement('style'); st.id = 'rpm-res-css';
+    st.textContent = '.rpm-on{stroke-width:4.6!important;opacity:1!important;filter:drop-shadow(0 0 4px rgba(29,78,216,.75))}.rpm-off{opacity:.12}'
+      + '.rpm-box-on{box-shadow:0 0 0 3px #f59e0b,0 4px 14px rgba(0,0,0,.18)!important}.rpm-box-sel{box-shadow:0 0 0 3px #1d4ed8,0 4px 14px rgba(0,0,0,.2)!important}'
+      + '#rpm-ov .repomar-legbox,#rpm-ov .repomar-shipbox{cursor:pointer}';
+    document.head.appendChild(st);
+  }
+  var fijo = null;
+  var cajas = function(){ return Array.prototype.slice.call(cont.querySelectorAll('.repomar-legbox[data-leg-idx], .repomar-shipbox')); };
+  var idxDe = function(el){ return el.classList.contains('repomar-shipbox') ? '-1' : el.getAttribute('data-leg-idx'); };
+  function aplicar(idx) {
+    var paths = Array.prototype.slice.call(svg.querySelectorAll('path[data-to]'));
+    var vecinos = {};
+    paths.forEach(function(p) {
+      var f = p.getAttribute('data-from'), t = p.getAttribute('data-to');
+      var on = idx != null && (f === idx || t === idx);
+      p.classList.toggle('rpm-on', on);
+      p.classList.toggle('rpm-off', idx != null && !on);
+      if (on) { vecinos[f] = 1; vecinos[t] = 1; }
+    });
+    cajas().forEach(function(c) {
+      var i = idxDe(c);
+      c.classList.toggle('rpm-box-sel', idx != null && i === idx);
+      c.classList.toggle('rpm-box-on', idx != null && i !== idx && !!vecinos[i]);
+    });
+  }
+  cajas().forEach(function(c) {
+    c.addEventListener('mouseenter', function(){ if (fijo == null) aplicar(idxDe(c)); });
+    c.addEventListener('mouseleave', function(){ if (fijo == null) aplicar(null); });
+    c.addEventListener('click', function(e){ e.stopPropagation(); var i = idxDe(c); fijo = (fijo === i) ? null : i; aplicar(fijo != null ? fijo : i); if (fijo == null) aplicar(null); });
+  });
+  cont.addEventListener('click', function(){ fijo = null; aplicar(null); });
 }
 document.addEventListener('keydown', function(e) {
   var ov = document.getElementById('rpm-ov');
