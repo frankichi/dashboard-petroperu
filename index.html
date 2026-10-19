@@ -18078,6 +18078,25 @@ async function sendCargasNavesToGS() {
     // fuente). fetchData(true) manda nocache= al backend, forzando a
     // que ignore ese caché y lea cargas_naves fresco.
     setTimeout(function() { fetchData(true); }, 2500);
+    // ⚠️ CORREGIDO — bug real confirmado (19-oct, MOCHE V.016: ya
+    // guardado con G. Regular/Diesel/Mollendo/Ilo, pero RepoMar seguía
+    // mostrando solo G. Premium): RepoMar arma sus buques desde
+    // window._repomarBTMapCompletoCache, que se pedía UNA sola vez al
+    // abrir el panel — fetchData(true) no lo tocaba, así que tras subir
+    // un reporte nuevo se seguía viendo el mapa viejo hasta recargar la
+    // página. Ahora se vuelve a pedir (saltando la caché del servidor)
+    // apenas termina el guardado, y se redibuja RepoMar si está abierto.
+    window._repomarBTMapCompletoPendiente = true;
+    fetch(CONFIG.API_URL + '?action=getBTMapCompleto&force=1', { method: 'GET', redirect: 'follow' })
+      .then(function(r) { return r.ok ? r.json() : null; })
+      .then(function(naves) {
+        if (Array.isArray(naves)) window._repomarBTMapCompletoCache = naves;
+        window._repomarBTMapCompletoPendiente = false;
+        window._repomarUltimaActualizacion = new Date().toLocaleTimeString('es-PE', {hour:'2-digit', minute:'2-digit'});
+        var pa = document.querySelector('.page.active');
+        if (pa && pa.id === 'pRepoMar' && typeof renderPRepoMar === 'function') renderPRepoMar();
+      })
+      .catch(function(e) { window._repomarBTMapCompletoPendiente = false; console.warn('[RepoMar] refresco tras subir Cargas de Naves:', e.message); });
   } catch (err) {
     if (st) { st.textContent = '❌ ' + err.message; st.className = 'upload-status error'; }
     if (btn) btn.disabled = false;
