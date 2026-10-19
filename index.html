@@ -17615,6 +17615,29 @@ function _parseCargasFecha(token, year, refMes) {
   }
   return [null,null];
 }
+// ⚠️ AGREGADO — agrupa los fragmentos de texto de una página PDF en
+// líneas por CERCANÍA vertical (no por cortes fijos de altura): dos
+// fragmentos van en la misma línea si su altura difiere menos de ~60%
+// del alto de la letra. Evita que una fila de tabla se parta en dos.
+function _pdfItemsALineas(items) {
+  var arr = (items || []).filter(function(it){ return it && typeof it.str === 'string'; }).map(function(it) {
+    var h = Math.abs(it.transform[3]) || it.height || 8;
+    return { x: it.transform[4], y: it.transform[5], h: h, str: it.str };
+  }).sort(function(a, b) { return b.y - a.y || a.x - b.x; });
+  var grupos = [];
+  arr.forEach(function(it) {
+    var g = grupos[grupos.length - 1];
+    var tol = Math.max(2, Math.min(6, (g ? Math.min(g.h, it.h) : it.h) * 0.6));
+    if (g && Math.abs(g.y - it.y) <= tol) { g.items.push(it); g.h = Math.max(g.h, it.h); }
+    else grupos.push({ y: it.y, h: it.h, items: [it] });
+  });
+  var out = [];
+  grupos.forEach(function(g) {
+    var lineStr = g.items.sort(function(a, b){ return a.x - b.x; }).map(function(it){ return it.str; }).join('  ');
+    if (lineStr.trim()) out.push(lineStr);
+  });
+  return out;
+}
 function _parseCargasNavesText(text, fechaRpt) {
   var records = [];
   var year    = fechaRpt.slice(0,4);
@@ -17766,10 +17789,36 @@ function _parseCargasNavesText(text, fechaRpt) {
       // descartaba del arreglo y dependía de que coincidiera "por
       // casualidad" con las columnas inválidas del header).
       var dateTokensRaw = dateTokens.slice(1);
+      // ⚠️ AGREGADO — respaldo si una fila de producto igual llegó partida
+      // en dos líneas (nombre solo / números solos, en cualquier orden):
+      // se vuelven a unir antes de leerla, en vez de descartarlas.
+      var _esSoloNums = function(x) { var p = splitLine(x); return p.length > 0 && p.every(isVolToken) && p.some(function(t){ return /^\d+[,.]\d+$/.test(t); }); };
+      var _esSoloNombre = function(x) { return /[A-ZÁÉÍÓÚÑ]{3,}/i.test(x) && !/\d+[,.]\d+/.test(x) && !/^TOTAL\b|PUERTO DE CARGA|^PREPARADO|^REVISADO|^CANTIDADES|^B\/T\s/i.test(x); };
+      var _sumaCol = {}; // colIdx -> suma leída (para validar contra TOTAL)
+      var _nombrePendiente = '', _numsPendiente = '';
       for (var li = pcIdx+2+lineOffset; li < blockLines.length; li++) {
         var l = blockLines[li];
-        if (/^TOTAL\b/i.test(l) || /^PREPARADO/i.test(l) || /^REVISADO/i.test(l)) break;
+        if (/^TOTAL\b/i.test(l)) {
+          var totParts = splitLine(l).slice(1);
+          for (var tvi = 0; tvi < terminals.length; tvi++) {
+            var totCol = parseVol(totParts[colMap[tvi] + 1]);
+            var leido = Math.round((_sumaCol[colMap[tvi]] || 0) * 10) / 10;
+            if (totCol > 0 && Math.abs(totCol - leido) > 0.05) {
+              records._avisos = records._avisos || [];
+              records._avisos.push(buque + ' ' + viaje + ' → ' + terminals[tvi] + ': TOTAL del PDF ' + totCol + ' MB, leído ' + leido + ' MB');
+            }
+          }
+          break;
+        }
+        if (/^PREPARADO/i.test(l) || /^REVISADO/i.test(l)) break;
         if (/PUERTO DE CARGA/i.test(l)) break;
+        if (_esSoloNums(l)) {
+          if (_nombrePendiente) { l = _nombrePendiente + '  ' + l; _nombrePendiente = ''; }
+          else { _numsPendiente = l; continue; }
+        } else if (_esSoloNombre(l)) {
+          if (_numsPendiente) { l = l + '  ' + _numsPendiente; _numsPendiente = ''; }
+          else { _nombrePendiente = l; continue; }
+        } else { _nombrePendiente = ''; _numsPendiente = ''; }
         var parts = splitLine(l);
         if (parts.length < 2) continue;
         var numStart = -1;
@@ -17786,6 +17835,7 @@ function _parseCargasNavesText(text, fechaRpt) {
           var rawVol = vols[colMap[vi] + 1];
           var vol = parseVol(rawVol);
           if (vol <= 0) continue;
+          _sumaCol[colMap[vi]] = (_sumaCol[colMap[vi]] || 0) + vol;
           var dt = _parseCargasFecha(dateTokensRaw[colMap[vi] + 1] || '', year, refMes);
           var desde = dt[0], hasta = dt[1];
           var estado = 'PROGRAMADO';
@@ -17846,22 +17896,17 @@ async function loadCargasNavesPDF(input) {
     for (var p = 1; p <= pdf.numPages; p++) {
       var page  = await pdf.getPage(p);
       var tc    = await page.getTextContent();
-      var items = tc.items.sort(function(a,b){
-        var dy = Math.round((b.transform[5] - a.transform[5]) / 3);
-        return dy !== 0 ? dy : a.transform[4] - b.transform[4];
-      });
-      var lineMap = {};
-      items.forEach(function(it) {
-        var y = Math.round(it.transform[5] / 4) * 4;
-        if (!lineMap[y]) lineMap[y] = [];
-        lineMap[y].push({x: it.transform[4], str: it.str});
-      });
-      var sortedY = Object.keys(lineMap).map(Number).sort(function(a,b){return b-a;});
-      sortedY.forEach(function(y) {
-        var sortedX = lineMap[y].sort(function(a,b){return a.x-b.x;});
-        var lineStr = sortedX.map(function(it){return it.str;}).join('  ');
-        if (lineStr.trim()) texts.push(lineStr);
-      });
+      // ⚠️ CORREGIDO — bug real confirmado (B/T MOCHE V.016-2026: en
+      // RepoMar solo aparecía G. Premium; G. Regular y Diesel B5 S50 de
+      // Talara→Conchán/Mollendo/Ilo desaparecían): antes las líneas se
+      // armaban redondeando la altura (y) a múltiplos fijos de 4 — si el
+      // nombre del producto y sus números quedaban a pocas décimas de
+      // distancia pero a ambos lados de un "corte" (ej. 301.9 y 302.1),
+      // se partían en DOS líneas: una con el nombre sin números y otra
+      // con números sin nombre — y el parser descartaba ambas. Ahora se
+      // agrupa por cercanía real (tolerancia según el alto de la letra),
+      // no por cortes fijos.
+      _pdfItemsALineas(tc.items).forEach(function(lineStr) { texts.push(lineStr); });
     }
     var fullText = texts.join('\n');
     statusEl.textContent = '⏳ Parseando estructura de rutas...';
@@ -17879,6 +17924,12 @@ async function loadCargasNavesPDF(input) {
     var buques = new Set(records.map(function(r){return r.buque;}));
     statusEl.textContent = '✅ ' + records.length + ' registros · ' + buques.size + ' buques: ' + [...buques].join(', ');
     statusEl.style.color = 'var(--grn)';
+    // ⚠️ AGREGADO — si lo leído no cuadra con la fila TOTAL del PDF, se
+    // avisa ANTES de guardar (antes se perdían productos en silencio).
+    if (records._avisos && records._avisos.length) {
+      statusEl.textContent += ' · ⚠️ Revisar: ' + records._avisos.join(' | ');
+      statusEl.style.color = 'var(--yel)';
+    }
     previewEl.innerHTML  = buildCargasNavesPreview(records, fechaRpt);
     actEl.style.display  = 'flex';
   } catch (err) {
