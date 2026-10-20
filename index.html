@@ -1032,6 +1032,46 @@ body.light .restr-row{background:#f8fafc}
 .restr-side-bt{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .restr-side-bt strong{color:var(--txt)}
 .restr-side-empty{color:var(--txt3);font-size:10.5px}
+
+/* ── Topbar rediseñada: una sola altura, botones uniformes, bandas consistentes ── */
+.topbar{gap:14px;padding:0 18px}
+.topbar-logo img{height:32px}
+.topbar-title .t1{font-size:14px;font-weight:800;letter-spacing:-.015em}
+.topbar-title .t2{font-size:9.5px;letter-spacing:.04em;text-transform:uppercase;font-weight:600}
+.topbar-right{gap:10px}
+.tb-group{display:flex;align-items:center;gap:4px;padding:3px;border-radius:10px;background:var(--bg3);border:1px solid var(--bdr)}
+.tb-btn{display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 11px;border-radius:7px;border:1px solid transparent;background:transparent;color:var(--txt2);font-family:var(--sans);font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;transition:background .15s,color .15s,border-color .15s}
+.tb-btn:hover{background:var(--card);color:var(--txt);border-color:var(--bdr)}
+.tb-btn.tb-primary{background:var(--acc);color:#fff;border-color:var(--acc)}
+.tb-btn.tb-primary:hover{filter:brightness(1.1)}
+.tb-ico{font-size:12px;line-height:1}
+.tb-user{display:inline-flex;align-items:center;gap:7px;height:34px;padding:0 10px 0 8px;border-radius:9px;border:1px solid var(--bdr);background:var(--bg3);color:var(--txt);font-family:var(--sans);font-size:11.5px;font-weight:700;cursor:pointer;white-space:nowrap}
+.tb-user:hover{border-color:var(--acc)}
+.gs-badge{height:30px;padding:0 12px;border-radius:999px;font-size:10.5px;font-weight:700;color:var(--txt2)}
+.gs-badge.connected{color:var(--txt)}
+.author-badge{background:transparent;border:none;padding:0 6px;font-size:10px;color:var(--txt3);display:flex;flex-direction:column;line-height:1.15;gap:1px;letter-spacing:0}
+.author-badge .ab-k{font-size:8.5px;text-transform:uppercase;letter-spacing:.06em;font-weight:700;color:var(--txt3)}
+.author-badge strong{color:var(--txt2);font-weight:800;font-size:10.5px}
+body.light .author-badge{color:#5a6e88}body.light .author-badge strong{color:#1f3a5f}
+@media(max-width:1180px){.author-badge{display:none}}
+@media(max-width:980px){.tb-lbl{display:none}.tb-btn{padding:0 9px}}
+/* Bandas de alertas (ticker) y de operación (buques/plantas): mismo fondo, chips uniformes */
+#event-ticker{height:30px;background:linear-gradient(90deg,#0d1b2e,#14243d);border-bottom:1px solid #1e3a5c}
+body.light #event-ticker{background:linear-gradient(90deg,#0f1a30,#16233d)}
+body.has-ticker #ship-ops-bar{top:calc(var(--topH) + 30px)}
+#ship-ops-bar{height:40px;box-shadow:inset 0 1px 0 rgba(255,255,255,.03)}
+.tk-item{padding:3px 10px;margin:0 4px;border-right:none;border-radius:999px;font-size:10.5px;font-weight:700;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08)}
+.tk-item b{font-weight:800}
+.tk-crit{background:rgba(239,68,68,.12);border-color:rgba(239,68,68,.35)}
+.tk-warn{background:rgba(251,191,36,.12);border-color:rgba(251,191,36,.35)}
+.tk-info{background:rgba(96,165,250,.12);border-color:rgba(96,165,250,.35)}
+#ship-ops-summary{gap:14px;font-size:9px;padding-right:16px}
+.sop-sum-metric b{font-size:13px}
+.sop-vessel{display:inline-flex;align-items:center;gap:6px;height:26px;padding:0 10px;border-radius:8px;border:1px solid rgba(148,163,184,.2);background:rgba(255,255,255,.035);font-size:11px;white-space:nowrap;flex-shrink:0}
+.sop-chip{height:28px;padding:0 10px 0 9px;gap:9px}
+.sop-chip-main{flex-direction:row;align-items:center;gap:8px}
+.sop-name{font-size:11px}
+.sop-sub{font-size:9.5px}
 </style>
   <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
   <link rel="dns-prefetch" href="https://script.google.com">
@@ -1473,33 +1513,28 @@ textarea.pd-inp{resize:vertical;min-height:44px;font-family:var(--sans)}
     <span class="t2">Inventarios &amp; Coberturas</span>
   </div>
   <div class="topbar-right" id="topbar-right-content">
-    <div class="gs-badge connecting" id="gs-status-badge">
+    <div class="gs-badge connecting" id="gs-status-badge" title="Estado de la conexión y fecha de los datos">
       <span class="gs-icon"><span class="gs-dot"></span></span>
       <span class="gs-text">Conectando&hellip;</span>
     </div>
-    <!-- Vista Ejecutiva (compartir link de solo lectura) -->
-    <button onclick="if(typeof openExecutiveView==='function') openExecutiveView(event)" title="Compartir Vista Ejecutiva (solo lectura, sin login)"
-      style="padding:5px 12px;border-radius:7px;border:1.5px solid #7c3aed;background:#7c3aed;color:#fff;font-size:11px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:6px">
-      🔗 Vista Ejecutiva
-    </button>
-    <!-- Actualizar datos -->
-    <button onclick="_refreshAllData()" title="Refrescar datos del dashboard"
-      id="btn-refresh-global"
-      style="padding:5px 12px;border-radius:7px;border:1.5px solid var(--acc);background:var(--acc);color:#fff;font-size:11px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:6px">
-      ↻ Actualizar
-    </button>
-    <!-- Solicitudes de corrección -->
-    <button onclick="_solOpenPanel()" title="Solicitudes de corrección de plantas"
-      style="position:relative;padding:5px 12px;border-radius:7px;border:1.5px solid var(--bdr);background:var(--bg3);color:var(--txt2);font-size:11px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:6px">
-      📝 Correcciones
-      <span id="sol-badge" style="display:none;background:#e8a000;color:#fff;font-size:9px;font-weight:800;padding:1px 6px;border-radius:10px;min-width:16px;text-align:center"></span>
-      <style>
-        @keyframes solPulse { 0%,100%{transform:scale(1);box-shadow:0 0 0 0 #e8a00060} 50%{transform:scale(1.15);box-shadow:0 0 0 5px #e8a00000} }
-        @keyframes solToastIn { from{opacity:0;transform:translateX(20px)} to{opacity:1;transform:translateX(0)} }
-      </style>
-    </button>
-    <div class="author-badge">
-      Desarrollado por <strong>Franco&nbsp;Urcia&nbsp;Castillo</strong>
+    <div class="tb-group">
+      <button class="tb-btn tb-primary" onclick="_refreshAllData()" title="Refrescar datos del dashboard" id="btn-refresh-global">
+        <span class="tb-ico">&#8635;</span><span class="tb-lbl">Actualizar</span>
+      </button>
+      <button class="tb-btn" onclick="if(typeof openExecutiveView==='function') openExecutiveView(event)" title="Compartir Vista Ejecutiva (solo lectura, sin login)">
+        <span class="tb-ico">&#128279;</span><span class="tb-lbl">Vista Ejecutiva</span>
+      </button>
+      <button class="tb-btn" onclick="_solOpenPanel()" title="Solicitudes de corrección de plantas" style="position:relative">
+        <span class="tb-ico">&#128221;</span><span class="tb-lbl">Correcciones</span>
+        <span id="sol-badge" style="display:none;background:#e8a000;color:#fff;font-size:9px;font-weight:800;padding:1px 6px;border-radius:10px;min-width:16px;text-align:center"></span>
+        <style>
+          @keyframes solPulse { 0%,100%{transform:scale(1);box-shadow:0 0 0 0 #e8a00060} 50%{transform:scale(1.15);box-shadow:0 0 0 5px #e8a00000} }
+          @keyframes solToastIn { from{opacity:0;transform:translateX(20px)} to{opacity:1;transform:translateX(0)} }
+        </style>
+      </button>
+    </div>
+    <div class="author-badge" title="Desarrollado por Franco Urcia Castillo · Planificación de Suministro">
+      <span class="ab-k">Desarrollado por</span><strong>Franco&nbsp;Urcia&nbsp;Castillo</strong>
     </div>
     <!-- usuario inyectado por _authRenderTopbarUser() -->
   </div>
@@ -3226,7 +3261,7 @@ window._planDistShare = function() {
     +'</div></div>'
     +'<button onclick="document.getElementById(\'pd-share-modal\').remove()" style="background:rgba(255,255,255,.15);border:none;color:#fff;width:26px;height:26px;border-radius:4px;cursor:pointer;font-size:16px">\u00d7</button>'
     +'</div><div style="padding:18px">'
-    +'<div style="font-size:11px;color:var(--txt2);margin-bottom:12px;line-height:1.6">Comparte este link con <b>Flota/Distribuci\u00f3n</b> para que registren fechas reales y vol\u00famenes descargados. Los datos se guardan directamente en <b>BD_INVENTARIOS</b> (Google Sheets).</div>'
+    +'<div style="font-size:11px;color:var(--txt2);margin-bottom:12px;line-height:1.6">Comparte este link con <b>Flota/Distribuci\u00f3n</b> para que registren fechas reales y vol\u00famenes descargados. Los datos se guardan directamente en <b>BD_INVENTARIOS</b>.</div>'
     +'<div style="font-size:9px;font-weight:700;color:var(--txt3);text-transform:uppercase;margin-bottom:5px">URL del formulario:</div>'
     +'<div style="display:flex;gap:8px;margin-bottom:12px">'
     +'<input type="text" id="pds-url" readonly value="'+url+'" style="flex:1;padding:8px 10px;background:var(--bg3);border:1.5px solid var(--bdr);border-radius:5px;color:var(--txt);font-family:monospace;font-size:10.5px">'
@@ -4124,15 +4159,16 @@ function _authRenderTopbarUser() {
 
   var isAdmin  = (_dashSession.rol === 'admin');
   var nombre   = _dashSession.nombre || _dashSession.email.split('@')[0];
-  var rolColor = isAdmin ? '#93c5fd' : '#86efac';
-  var rolBg    = isAdmin ? 'rgba(29,111,214,.25)' : 'rgba(26,158,80,.2)';
+  var _light   = document.body.classList.contains('light');
+  var rolColor = isAdmin ? (_light ? '#1d4ed8' : '#93c5fd') : (_light ? '#15803d' : '#86efac');
+  var rolBg    = isAdmin ? (_light ? 'rgba(29,111,214,.14)' : 'rgba(29,111,214,.25)') : (_light ? 'rgba(26,158,80,.14)' : 'rgba(26,158,80,.2)');
   var rolTxt   = isAdmin ? 'ADMIN' : 'OPERADOR';
 
   var wrap = document.createElement('div');
   wrap.id = '_auth_user_btn';
   wrap.style.cssText = 'position:relative;display:flex;align-items:center';
   wrap.innerHTML =
-    '<button id="_auth_user_trigger" style="display:flex;align-items:center;gap:6px;padding:5px 11px;border-radius:6px;border:1px solid rgba(29,111,214,.3);background:rgba(29,111,214,.1);color:var(--acc2);font-size:11px;font-weight:700;cursor:pointer;font-family:var(--sans)">' +
+    '<button id="_auth_user_trigger" class="tb-user"">' +
       '<span style="font-size:13px">👤</span>' +
       '<span>' + nombre + '</span>' +
       '<span style="padding:1px 7px;border-radius:10px;font-size:9px;font-weight:800;background:' + rolBg + ';color:' + rolColor + '">' + rolTxt + '</span>' +
@@ -4149,7 +4185,7 @@ function _authRenderTopbarUser() {
       '</button>' +
     '</div>';
 
-  topbarRight.insertBefore(wrap, topbarRight.firstChild);
+  topbarRight.appendChild(wrap);
 
   var trigger   = wrap.querySelector('#_auth_user_trigger');
   var menu      = wrap.querySelector('#_auth_user_menu');
@@ -5108,16 +5144,16 @@ async function fetchData(forceRefresh, _esReintento404) {
     window._dashYaVisible = true;
     document.getElementById('loadingOverlay').style.display = 'none';
     if (!data.length || !currentDate) {
-      setGsStatus('connected', 'Google Sheets · Sin datos');
+      setGsStatus('connected', 'Sistema · Sin datos');
       var emptyEl = document.getElementById('pResumen-content');
       if (emptyEl) emptyEl.innerHTML = '<div style="padding:60px;text-align:center">'
         + '<div style="font-size:48px;margin-bottom:16px">\uD83D\uDCCA</div>'
-        + '<div style="font-size:18px;font-weight:700;color:var(--txt);margin-bottom:8px">Sin datos en Google Sheets</div>'
+        + '<div style="font-size:18px;font-weight:700;color:var(--txt);margin-bottom:8px">Sin datos en el sistema</div>'
         + '<div style="font-size:13px;color:var(--txt2);max-width:400px;margin:0 auto">Ve a <b>Carga Datos</b> y sube el <b>E&D</b> y la <b>Cobertura-An\u00e1lisis</b></div></div>';
       return;
     }
     const lastLabel = _fechaCurrenteSegura().toLocaleDateString('es-PE', {day:'2-digit', month:'short', year:'numeric'});
-    setGsStatus('connected', `Google Sheets · ${lastLabel}`);
+    setGsStatus('connected', `Datos al ${lastLabel}`);
     if (typeof _authRenderTopbarUser === 'function') _authRenderTopbarUser();
     setTimeout(updateEventTicker, 300);
     setTimeout(function(){
@@ -5404,7 +5440,7 @@ async function fetchData(forceRefresh, _esReintento404) {
           + '• Copia la nueva URL al CONFIG del index.html'
           : ((error.message && error.message.indexOf('fetch') >= 0)
               ? 'No se pudo conectar a internet después de varios intentos. Revisa tu conexión (wifi/datos móviles) y vuelve a intentar.'
-              : (error.message || 'Sin conexión con Google Sheets')))
+              : (error.message || 'Sin conexión con el sistema')))
         + '</div>'
         + '<button class="btn-retry" onclick="location.reload()" style="margin-top:12px">↻ Reintentar</button>'
         + '</div>';
@@ -16478,7 +16514,7 @@ function simDelShip(id) {
   // (ver "[SIM] Auto-cargando última simulación GS" en la consola), el
   // buque "eliminado" volvía a aparecer, porque nunca se había borrado
   // de verdad en la hoja de cálculo. Requería un paso manual aparte
-  // ("💾 Guardar en GS") que era fácil pasar por alto — ahora el
+  // ("💾 Guardar") que era fácil pasar por alto — ahora el
   // borrado se guarda de inmediato, sin depender de ese segundo paso.
   if (typeof simSaveToGS === 'function') simSaveToGS();
 }
@@ -16622,7 +16658,7 @@ function simExportCSV() {
 // Proyectado, accesible desde la propia vista de Reposiciones
 // Marítimas (no solo desde el Simulador BT) — para generar una
 // proyección nueva sin arrastrar restos de la anterior. Borrar buques
-// uno por uno en el Simulador y olvidar el paso de "Guardar en GS" es
+// uno por uno en el Simulador y olvidar el paso de "Guardar" es
 // justamente la causa real confirmada de que una proyección vieja
 // siga reapareciendo tras recargar: en memoria ya estaba vacía, pero
 // nunca se persistió ese vacío en Sheets, así que la próxima carga
@@ -16647,10 +16683,10 @@ async function simSaveToGS() {
         headers:{'Content-Type':'text/plain;charset=utf-8'},
         body: JSON.stringify({action:'clearSimData', fecha_prog: fechaProg})});
       if (btn) { btn.textContent='✅ Simulación vaciada'; btn.disabled=false; }
-      setTimeout(()=>{ if(btn) btn.textContent='💾 Guardar en GS'; },3000);
+      setTimeout(()=>{ if(btn) btn.textContent='💾 Guardar'; },3000);
     } catch(err) {
       if (btn) { btn.textContent='❌ Error'; btn.disabled=false; }
-      setTimeout(()=>{ if(btn) btn.textContent='💾 Guardar en GS'; },3000);
+      setTimeout(()=>{ if(btn) btn.textContent='💾 Guardar'; },3000);
     }
     return;
   }
@@ -16680,11 +16716,11 @@ async function simSaveToGS() {
       body:JSON.stringify({action:'saveMovNaves',fecha_prog:fechaProg,rows})});
     const j = await res.json();
     if (btn) { btn.textContent='✅ Guardado'; btn.disabled=false; }
-    setTimeout(()=>{ if(btn) btn.textContent='💾 Guardar en GS'; },3000);
+    setTimeout(()=>{ if(btn) btn.textContent='💾 Guardar'; },3000);
   } catch(err) {
     console.error('[SIM] Error al guardar:',err);
     if (btn) { btn.textContent='❌ Error'; btn.disabled=false; }
-    setTimeout(()=>{ if(btn) btn.textContent='💾 Guardar en GS'; },3000);
+    setTimeout(()=>{ if(btn) btn.textContent='💾 Guardar'; },3000);
   }
 }
 async function simLoadFromGS() {
@@ -16719,17 +16755,17 @@ async function simLoadFromGS() {
     // "nunca se guardó nada" (sí muestra la alerta) vs "se guardó
     // vacío a propósito" (se respeta el vacío y SÍ se redibuja).
     if (!found) {
-      alert('No hay simulaciones guardadas en Google Sheets.');
-      if (btn) { btn.textContent='↺ Recargar GS'; btn.disabled=false; }
+      alert('No hay simulaciones guardadas en el sistema.');
+      if (btn) { btn.textContent='↺ Recargar guardado'; btn.disabled=false; }
       return;
     }
     if (!rows.length) {
       console.log('[SIM] Simulación guardada vacía a propósito — se respeta');
-      if (btn) { btn.textContent='↺ Recargar GS'; btn.disabled=false; }
+      if (btn) { btn.textContent='↺ Recargar guardado'; btn.disabled=false; }
       renderPE();
       return;
     }
-    console.log('[SIM] Cargando ' + rows.length + ' filas de GS');
+    console.log('[SIM] Cargando ' + rows.length + ' filas guardadas');
     var shipMap = {};
     rows.forEach(function(r) {
       if (r.tipo === 'BUQUE') {
@@ -16797,20 +16833,20 @@ async function simLoadFromGS() {
     });
     if (simShips.length) simActiveId = simShips[0].id;
     simInited = true;
-    console.log('[SIM] Cargados ' + simShips.length + ' buques desde GS');
+    console.log('[SIM] Cargados ' + simShips.length + ' buques guardados');
     renderPE();
     if (btn) { btn.textContent='✅ Cargado'; btn.disabled=false; }
-    setTimeout(function() { if(btn) btn.textContent='↺ Recargar GS'; }, 2000);
+    setTimeout(function() { if(btn) btn.textContent='↺ Recargar guardado'; }, 2000);
   } catch(err) {
     console.error('[SIM] Error al cargar:', err);
     if (btn) { btn.textContent='❌ Error'; btn.disabled=false; }
-    setTimeout(function() { if(btn) btn.textContent='↺ Recargar GS'; }, 3000);
+    setTimeout(function() { if(btn) btn.textContent='↺ Recargar guardado'; }, 3000);
     simInited = false; simShips = []; simNextId = 1; simActiveId = null;
     renderPE();
   }
 }
 function simResetToLive() {
-  if (!confirm('¿Descartarás la simulación guardada y cargarás los datos actuales del inventario? Esta acción no borra Google Sheets.')) return;
+  if (!confirm('¿Descartarás la simulación guardada y cargarás los datos actuales del inventario? Esta acción no borra lo guardado en el sistema.')) return;
   simShips = []; simNextId = 1; simActiveId = null; simInited = false;
   simLoad();        // rebuild from live BT data in RAW
   renderPE();
@@ -17267,8 +17303,8 @@ function renderPE() {
     + '<button class="sim-btn sim-btn-primary" onclick="simAddShip()">+ Nuevo Buque</button>'
     + '<button class="sim-btn" style="background:#16a34a;color:#fff;border-color:#16a34a" onclick="_repomarConfirmarProyectado()" title="Vuelve real el itinerario de este buque — reemplaza sus escalas pendientes en Cabotaje Confirmado">✅ Confirmar buque</button>'
     + '<button class="sim-btn sim-btn-ghost" onclick="simExportCSV()">⬇ CSV</button>'
-    + '<button id="sim-save-btn" class="sim-btn" style="background:var(--grn);color:#fff;border-color:var(--grn);font-size:11px" onclick="simSaveToGS()">💾 Guardar en GS</button>'
-    + '<button id="sim-reload-btn" class="sim-btn sim-btn-ghost" onclick="simLoadFromGS()" style="font-size:10px" title="Cargar última simulación guardada">↺ Recargar GS</button>'
+    + '<button id="sim-save-btn" class="sim-btn" style="background:var(--grn);color:#fff;border-color:var(--grn);font-size:11px" onclick="simSaveToGS()">💾 Guardar</button>'
+    + '<button id="sim-reload-btn" class="sim-btn sim-btn-ghost" onclick="simLoadFromGS()" style="font-size:10px" title="Cargar la última simulación guardada">↺ Recargar guardado</button>'
     + '<button class="sim-btn sim-btn-ghost" onclick="simResetToLive()" style="font-size:10px;color:var(--txt3)" title="Descartar simulación guardada y cargar datos del inventario en vivo">🔄 Nueva desde datos en vivo</button>'
     + '<div style="font-size:9px;color:var(--txt3)">Dist: Petroperú 1996 · ' + dateStr + '</div>'
     + '</div>'
@@ -17810,7 +17846,7 @@ function renderPUpload() {
         + '<input type="file" id="file-cisternas" accept=".xlsx,.xls,.xlsm"></div>'
         + '<div id="cisternas-preview">'+uploadCisternasPreviewHTML+'</div>'
         + '<div class="upload-actions" id="cisternas-actions" style="display:'+(uploadCisternasData?'flex':'none')+'">'
-        + '<button class="upload-btn upload-btn-primary" id="cisternas-send-btn" onclick="sendCisternasToGS()">📤 Enviar a Google Sheets</button>'
+        + '<button class="upload-btn upload-btn-primary" id="cisternas-send-btn" onclick="sendCisternasToGS()">💾 Guardar en el sistema</button>'
         + '<button class="upload-btn upload-btn-secondary" onclick="clearCisternas()">✕ Limpiar</button>'
         + '<span class="upload-status" id="cisternas-status"></span></div>'
     )
@@ -17829,7 +17865,7 @@ function renderPUpload() {
         + '<input type="file" id="file-fluvial" accept=".pdf"></div>'
         + '<div id="fluvial-preview">'+uploadFluvialPreviewHTML+'</div>'
         + '<div class="upload-actions" id="fluvial-actions" style="display:'+(uploadFluvialData?'flex':'none')+'">'
-        + '<button class="upload-btn upload-btn-primary" id="fluvial-send-btn" onclick="sendFluvialToGS()">📤 Enviar a Google Sheets</button>'
+        + '<button class="upload-btn upload-btn-primary" id="fluvial-send-btn" onclick="sendFluvialToGS()">💾 Guardar en el sistema</button>'
         + '<button class="upload-btn upload-btn-secondary" onclick="clearFluvial()">✕ Limpiar</button>'
         + '<span class="upload-status" id="fluvial-status"></span></div>'
     )
@@ -17854,7 +17890,7 @@ function renderPUpload() {
         + '<div class="upload-dropzone-hint">Reporte_Naves_*.txt</div></div>'
         + '<div id="naves-preview" style="margin-top:8px">'+uploadNavesPreviewHTML+'</div>'
         + '<div class="upload-actions" id="naves-actions" style="display:'+navesActionsVis+'">'
-        + '<button class="upload-btn upload-btn-primary" id="naves-send-btn" onclick="sendNavesToGS()">📤 Enviar a Google Sheets</button>'
+        + '<button class="upload-btn upload-btn-primary" id="naves-send-btn" onclick="sendNavesToGS()">💾 Guardar en el sistema</button>'
         + '<button class="upload-btn upload-btn-secondary" onclick="clearNaves()">✕ Limpiar</button>'
         + '<span class="upload-status" id="naves-status"></span></div>'
     , navFecha)
@@ -17874,7 +17910,7 @@ function renderPUpload() {
         + '<div id="cargas-naves-status" style="font-size:10.5px;color:var(--txt3);margin-top:4px"></div>'
         + '<div id="cargas-naves-preview"></div>'
         + '<div id="cargas-naves-actions" class="upload-actions" style="display:none">'
-        + '<button class="upload-btn upload-btn-primary" id="cargas-naves-send-btn" onclick="sendCargasNavesToGS()">📤 Guardar en Google Sheets</button>'
+        + '<button class="upload-btn upload-btn-primary" id="cargas-naves-send-btn" onclick="sendCargasNavesToGS()">💾 Guardar en el sistema</button>'
         + '<button class="upload-btn upload-btn-secondary" onclick="clearCargasNaves()">✕ Limpiar</button>'
         + '<span class="upload-status" id="cargas-naves-send-status"></span></div>'
     , cargFecha)
@@ -17986,7 +18022,7 @@ function renderPUpload() {
         + '<input type="file" id="file-cognos" accept=".xlsx,.xls,.xlsm"></div>'
         + '<div id="ventas-upload-preview"></div>'
         + '<div class="upload-actions" id="ventas-upload-actions" style="display:none">'
-        + '<button class="upload-btn upload-btn-primary" id="ventas-send-btn" onclick="sendVentasToGS()">📤 Enviar a Google Sheets</button>'
+        + '<button class="upload-btn upload-btn-primary" id="ventas-send-btn" onclick="sendVentasToGS()">💾 Guardar en el sistema</button>'
         + '<button class="upload-btn upload-btn-secondary" onclick="clearVentas()">✕ Limpiar</button>'
         + '<span class="upload-status" id="ventas-upload-status"></span></div>'
     , cogFecha)
@@ -18022,7 +18058,7 @@ function renderPUpload() {
         + '<input type="file" id="file-ed" accept=".xlsx,.xls"></div>'
         + '<div id="ed-preview">'+uploadEDPreviewHTML+'</div>'
         + '<div class="upload-actions" id="ed-actions" style="display:'+edActionsVis+'">'
-        + '<button class="upload-btn upload-btn-primary" id="ed-send-btn" onclick="sendEDToGS()">📤 Enviar a Google Sheets</button>'
+        + '<button class="upload-btn upload-btn-primary" id="ed-send-btn" onclick="sendEDToGS()">💾 Guardar en el sistema</button>'
         + '<button class="upload-btn upload-btn-secondary" onclick="clearED()">✕ Limpiar</button>'
         + '<span class="upload-status" id="ed-status"></span></div>'
     , edFecha)
@@ -18040,7 +18076,7 @@ function renderPUpload() {
         + '<input type="file" id="file-pron" accept=".xlsx,.xls"></div>'
         + '<div id="pron-upload-preview"></div>'
         + '<div class="upload-actions" id="pron-upload-actions" style="display:none">'
-        + '<button class="upload-btn upload-btn-primary" id="pron-send-btn" onclick="sendPronToGS()">📤 Enviar a Google Sheets</button>'
+        + '<button class="upload-btn upload-btn-primary" id="pron-send-btn" onclick="sendPronToGS()">💾 Guardar en el sistema</button>'
         + '<button class="upload-btn upload-btn-secondary" onclick="clearPron()">✕ Limpiar</button>'
         + '<span class="upload-status" id="pron-upload-status"></span></div>'
     )
@@ -18913,7 +18949,7 @@ async function sendFluvialToGS() {
   var statusEl = document.getElementById('fluvial-status');
   var btn      = document.getElementById('fluvial-send-btn');
   if (btn) btn.disabled = true;
-  if (statusEl) { statusEl.textContent = '⏳ Enviando a Google Sheets...'; statusEl.style.color = 'var(--txt3)'; }
+  if (statusEl) { statusEl.textContent = '⏳ Guardando en el sistema…'; statusEl.style.color = 'var(--txt3)'; }
   try {
     // ⚠️ CORREGIDO — bug real confirmado y grave: esto mandaba los
     // datos a una acción ('uploadFluvial') que NUNCA existió en el
@@ -18981,7 +19017,7 @@ async function sendFluvialToGS() {
       if (statusEl) { statusEl.textContent = '✅ ' + okCount + ' convoy(es) guardados en iqui_viajes_fluviales'; statusEl.style.color = 'var(--grn)'; }
     }
     if (btn) btn.disabled = false;
-    addUploadLog(okCount > 0, 'Fluvial → GS: ' + okCount + ' convoy(es) guardados' + (errCount ? (', ' + errCount + ' con error') : ''));
+    addUploadLog(okCount > 0, 'Fluvial → sistema: ' + okCount + ' convoy(es) guardados' + (errCount ? (', ' + errCount + ' con error') : ''));
     _uplSetBadge('acc-fluvial', uploadFluvialData ? uploadFluvialData.fecha : currentDate);
     setTimeout(function() {
       if (typeof fetchData === 'function') fetchData(true);
@@ -19206,7 +19242,7 @@ async function sendCisternasToGS() {
   var statusEl = document.getElementById('cisternas-status');
   var btn      = document.getElementById('cisternas-send-btn');
   if (btn) btn.disabled = true;
-  if (statusEl) { statusEl.textContent = '⏳ Enviando a Google Sheets...'; statusEl.style.color = 'var(--txt3)'; }
+  if (statusEl) { statusEl.textContent = '⏳ Guardando en el sistema…'; statusEl.style.color = 'var(--txt3)'; }
   try {
     await fetch(CONFIG.API_URL, {
       method: 'POST', mode: 'no-cors',
@@ -19217,9 +19253,9 @@ async function sendCisternasToGS() {
         records: uploadCisternasData.records
       })
     });
-    if (statusEl) { statusEl.textContent = '✅ ' + uploadCisternasData.records.length + ' rutas enviadas a Google Sheets'; statusEl.style.color = 'var(--grn)'; }
+    if (statusEl) { statusEl.textContent = '✅ ' + uploadCisternasData.records.length + ' rutas guardadas en el sistema'; statusEl.style.color = 'var(--grn)'; }
     if (btn) btn.disabled = false;
-    addUploadLog(true, 'Cisternas → GS: ' + uploadCisternasData.records.length + ' rutas');
+    addUploadLog(true, 'Cisternas → sistema: ' + uploadCisternasData.records.length + ' rutas');
     _uplSetBadge('acc-cisternas', uploadCisternasData ? uploadCisternasData.fecha : currentDate);
     setTimeout(function() {
       if (typeof loadCisternasData === 'function') loadCisternasData();
@@ -19867,7 +19903,7 @@ async function sendCargasNavesToGS() {
         records: cargasNavesData.records
       })
     });
-    if (st) { st.textContent = '✅ ' + cargasNavesData.records.length + ' registros guardados en Google Sheets'; st.className = 'upload-status success'; }
+    if (st) { st.textContent = '✅ ' + cargasNavesData.records.length + ' registros guardados en el sistema'; st.className = 'upload-status success'; }
     if (btn) btn.disabled = false;
     _cargasNavesCache = null;
     addUploadLog(true, 'Cargas Naves ' + cargasNavesData.fecha_reporte + ': ' + cargasNavesData.records.length + ' registros');
@@ -21089,7 +21125,7 @@ async function sendEDToGS() {
     // despacho ahora viene exclusivamente de Registro Diario (Cognos
     // sigue siendo su propia carga independiente, sin cambios).
     if (status) { status.className = 'upload-status success'; status.textContent = '\u2705 Enviado correctamente (' + apiRecords.length + ' registros)'; }
-    addUploadLog(true, 'E&D enviado: ' + apiRecords.length + ' registros a Google Sheets (capacidades actualizadas · inventario/despacho de plantas no modificado)');
+    addUploadLog(true, 'E&D enviado: ' + apiRecords.length + ' registros guardados en el sistema (capacidades actualizadas · inventario/despacho de plantas no modificado)');
     _uplSetBadge('acc-ed', uploadEDData ? uploadEDData.fecha : currentDate);
     if (!window.capMap) window.capMap = {};
     apiRecords.forEach(function(r) {
@@ -22078,7 +22114,7 @@ async function sendVentasToGS() {
       status.className = 'upload-status success';
       status.textContent = '✅ Enviado (' + totalRecs + ' registros · ' + uploadVentasData.mes + ')';
     }
-    addUploadLog(true, '✅ Ventas ' + uploadVentasData.mes + ': ' + totalRecs + ' registros enviados a Google Sheets');
+    addUploadLog(true, '✅ Ventas ' + uploadVentasData.mes + ': ' + totalRecs + ' registros guardados en el sistema');
     _uplSetBadge('acc-cognos', currentDate);
     uploadVentasData        = null;
     uploadVentasPreviewHTML = '';
@@ -22202,7 +22238,7 @@ function openWhatIf(planta, producto) {
       : '')
     + (vfactVal > 0 && vfactVal !== pronVal
       ? '<button onclick="setWhatIfValue(\'' + planta.replace(/'/g, "\\'") + '\',\'' + producto.replace(/'/g, "\\'") + '\',' + vfactVal.toFixed(DEC) + ')" '
-        + 'title="Restaurar el valor original guardado en GS" '
+        + 'title="Restaurar el valor original guardado en el sistema" '
         + 'style="flex:1;min-width:110px;padding:6px 10px;background:rgba(100,116,139,.12);border:1px solid rgba(100,116,139,.4);color:#64748b;border-radius:5px;cursor:pointer;font-size:10.5px;font-weight:700;font-family:var(--sans);display:inline-flex;align-items:center;justify-content:center;gap:4px">'
         + '⟲ Valor original (' + vfactVal.toFixed(DEC) + ')</button>'
       : '')
@@ -22216,7 +22252,7 @@ function openWhatIf(planta, producto) {
     + '<div style="display:flex;gap:10px">'
     + '<button onclick="applyWhatIf(\'' + planta.replace(/'/g, "\\'") + '\',\'' + producto.replace(/'/g, "\\'") + '\')" '
     + 'style="flex:1;padding:10px;background:#2563eb;color:#fff;border:none;border-radius:8px;font-weight:700;cursor:pointer;font-size:12px">'
-    + '\u2705 Aplicar y guardar en GS</button>'
+    + '\u2705 Aplicar y guardar</button>'
     + '<button onclick="closeWhatIf()" style="padding:10px 20px;background:var(--bg3);color:var(--txt);border:1px solid var(--bdr);border-radius:8px;font-weight:700;cursor:pointer;font-size:12px">Cancelar</button>'
     + '</div></div>';
   renderWhatIfChart(planta, producto);
@@ -23809,7 +23845,7 @@ function mmRenderTimeline(ciclosOrden, ciclos) {
       ${Object.entries(PHASE_COLORS).map(([k,c]) =>
         `<span style="display:flex;align-items:center;gap:4px"><span style="display:inline-block;width:12px;height:12px;background:${c.bg};border:1.5px solid ${c.border};border-radius:2px"></span>${c.label}</span>`
       ).join('')}
-      <span style="margin-left:auto;color:var(--txt3)">Fuente: Google Sheets — Datos en tiempo real</span>
+      <span style="margin-left:auto;color:var(--txt3)">Fuente: sistema de Planificación de Suministro — Datos en tiempo real</span>
     </div>
   </div>`;
   root.innerHTML = html;
@@ -25440,7 +25476,7 @@ function _iquiBuildHTML(plan, viajesTerr, viajesFluv) {
     + '        <div style="font-size:12px;color:var(--txt3);margin-top:2px">Control Tower logística multimodal · Costa → Pucallpa / Yurimaguas → Iquitos</div>'
     + '      </div>'
     + '    </div>'
-    + '    <button onclick="window._iquiRefresh()" title="Recargar datos desde Google Sheets" style="padding:6px 13px;border-radius:7px;font-size:11px;font-weight:700;cursor:pointer;border:1px solid var(--bdr);background:transparent;color:var(--txt2);display:flex;align-items:center;gap:5px">🔄 Actualizar</button>'
+    + '    <button onclick="window._iquiRefresh()" title="Recargar datos del sistema" style="padding:6px 13px;border-radius:7px;font-size:11px;font-weight:700;cursor:pointer;border:1px solid var(--bdr);background:transparent;color:var(--txt2);display:flex;align-items:center;gap:5px">🔄 Actualizar</button>'
     + '  </div>'
     + '  <div style="display:flex;gap:8px;flex-wrap:wrap;margin:16px 0 20px;padding-bottom:14px;border-bottom:1px solid var(--bdr)">'+tabBar+'</div>'
     + '  <div id="iqui-body">'+body+'</div>'
@@ -27631,7 +27667,7 @@ function openExecutiveView(evt) {
     +   '</div>'
     +   '<div style="padding:20px;font-family:Inter,system-ui,sans-serif">'
     +     '<div style="font-size:12.5px;line-height:1.6;color:var(--txt2);margin-bottom:14px">'
-    +       'Esta vista es una versión <strong>de solo lectura</strong> conectada en vivo al mismo Google Sheets que el dashboard operacional. '
+    +       'Esta vista es una versión <strong>de solo lectura</strong> conectada en vivo a los mismos datos que el dashboard operacional. '
     +       'Cualquier cambio que tú o tu equipo guarden aquí se refleja en la vista ejecutiva en menos de 5 minutos.'
     +     '</div>'
     +     '<div style="font-size:10.5px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">URL para compartir:</div>'
@@ -32552,7 +32588,7 @@ function _asegurarCapRefCache(fnRerender) {
     _pInvDate = today;
     const prods = getProds(_pInvDate);
     if (!prods.length) {
-      el.innerHTML = '<div class="pinv-empty">Sin datos. Verifica la conexión con Google Sheets.</div>';
+      el.innerHTML = '<div class="pinv-empty">Sin datos. Verifica la conexión con el sistema.</div>';
       return;
     }
     if (!prods.includes(_pInvProd)) _pInvProd = prods[0];
@@ -33494,7 +33530,7 @@ el.innerHTML = `
     try {
       await simSaveToGS();
       _pInvProjectedDirty = false;
-      if (btn) { btn.textContent = '✅ Guardado en GS'; }
+      if (btn) { btn.textContent = '✅ Guardado en el sistema'; }
       setTimeout(function() {
         if (btn) { btn.textContent = '💾 Guardar cambios'; btn.disabled = false; btn.style.display = 'none'; }
         renderPInv();
@@ -35767,11 +35803,11 @@ window.renderPRepoMar = function() {
       '<div class="repomar-rotar-aviso"><span class="repomar-rotar-aviso-icono">📱</span><span>Gira el celular a horizontal para ver mejor el diagrama de reposiciones — tiene varias columnas de plantas.</span></div>' +
       // ⚠️ AGREGADO — a pedido: aviso cuando hay ediciones de Venta
       // Factible en Coberturas TODAVÍA sin guardar (cobOverrides vive
-      // solo en memoria del navegador hasta presionar "Guardar en GS")
+      // solo en memoria del navegador hasta presionar "Guardar")
       // — así queda claro por qué un cambio recién hecho ahí todavía
       // no se ve reflejado acá, en vez de parecer un bug silencioso.
       (typeof cobOverrides !== 'undefined' && Object.keys(cobOverrides).length > 0 && !(typeof REPOMAR_SHARE_MODE !== 'undefined' && REPOMAR_SHARE_MODE)
-        ? '<div class="restr-execsummary" style="margin:14px 22px 0;border-left-color:#d97706;background:#d977061a">⚠️ Tienes <strong>' + Object.keys(cobOverrides).length + ' cambio' + (Object.keys(cobOverrides).length!==1?'s':'') + ' de Venta Factible sin guardar</strong> en Coberturas — esta vista no los va a reflejar hasta que los guardes ahí (botón "Guardar en GS"). <span style="text-decoration:underline;cursor:pointer;color:var(--acc2)" onclick="showPageById(\'p2\')">Ir a Coberturas →</span></div>'
+        ? '<div class="restr-execsummary" style="margin:14px 22px 0;border-left-color:#d97706;background:#d977061a">⚠️ Tienes <strong>' + Object.keys(cobOverrides).length + ' cambio' + (Object.keys(cobOverrides).length!==1?'s':'') + ' de Venta Factible sin guardar</strong> en Coberturas — esta vista no los va a reflejar hasta que los guardes ahí (botón "Guardar"). <span style="text-decoration:underline;cursor:pointer;color:var(--acc2)" onclick="showPageById(\'p2\')">Ir a Coberturas →</span></div>'
         : '') +
       '<div class="repomar-headerbar">' +
         '<div>' +
