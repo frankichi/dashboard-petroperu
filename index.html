@@ -6137,7 +6137,7 @@ function renderPResumen() {
 
   // 6. Accesos rápidos (compactos)
   h += '<div class="rn-acc">'
-    + [ {pid:'pC', ico:'📋', lbl:'Coberturas'}, {pid:'pTend', ico:'📈', lbl:'Tendencia'}, {pid:'pInv', ico:'📊', lbl:'Inv. Nacional'}, {pid:'pR', ico:'✂️', lbl:'Restricciones'},
+    + [ {pid:'pInv', ico:'📊', lbl:'Inv. Nacional'}, {pid:'pTend', ico:'📈', lbl:'Tendencia'}, {pid:'pRepoMar', ico:'🚢', lbl:'Reposiciones'}, {pid:'pR', ico:'✂️', lbl:'Restricciones'},
         {pid:'pB', ico:'📅', lbl:'Timeline BT'}, {pid:'pSegD', ico:'📡', lbl:'Seg. Diario'}, {pid:'pDec', ico:'🎯', lbl:'Decisiones'} ]
       .map(function(m){ return '<button class="rn-chip" data-rn="ir" data-pid="' + m.pid + '">' + m.ico + ' ' + m.lbl + '</button>'; }).join('')
     + '</div>';
@@ -6148,25 +6148,49 @@ function renderPResumen() {
   if (!el._rnBound) {
     el._rnBound = true;
     el.addEventListener('click', function(ev) {
-      if (ev.target.id === 'rn-modal') { _rnCerrarModal(); return; } // clic en el fondo oscuro
       var t = ev.target.closest('[data-rn]');
-      if (!t) return;
-      var tipo = t.getAttribute('data-rn');
-      var irA = function(pid, cb) {
-        showPage(pid, document.querySelector('.sb-item[data-pid=' + pid + ']'));
-        if (cb) setTimeout(cb, 200);
-      };
-      if (tipo === 'refrescar') { renderPResumen(); return; }
-      if (tipo === 'ir') { irA(t.getAttribute('data-pid')); return; }
-      if (tipo === 'planta') { _rnAbrirPlanta(t.getAttribute('data-planta')); return; }
-      if (tipo === 'planta-cob') { _rnCerrarModal(); var pl3 = t.getAttribute('data-planta'); irA('pC', function(){ window._filtroProd = null; window._filtroPlanta = pl3; rerenderActivePage(); }); return; }
-      if (tipo === 'planta-prod') { _rnAbrirProducto(t.getAttribute('data-prod')); return; }
-      if (tipo === 'prod') { _rnAbrirProducto(t.getAttribute('data-prod')); return; }
-      if (tipo === 'prod-cob') { _rnCerrarModal(); var pr2 = t.getAttribute('data-prod'); irA('pC', function(){ window._filtroPlanta = null; window._filtroProd = pr2; rerenderActivePage(); }); return; }
-      if (tipo === 'prod-planta') { _rnCerrarModal(); var pl2 = t.getAttribute('data-planta'); irA('pC', function(){ window._filtroProd = null; window._filtroPlanta = pl2; rerenderActivePage(); }); return; }
-      if (tipo === 'cerrar-modal') { _rnCerrarModal(); return; }
+      if (t) _rnAccion(t.getAttribute('data-rn'), t);
     });
   }
+}
+// Acciones del Resumen Nacional (desde la página o desde sus modales).
+// ⚠️ CORREGIDO — a pedido: los botones "Ver en Coberturas" llevaban a
+// la página pC (el heatmap viejo, que ya ni está en el menú) y los
+// filtros _filtroPlanta/_filtroProd no los leía nadie. Ahora el detalle
+// se abre en "Inventario Nacional" (pInv), que sí tiene selector de
+// producto y la ficha por planta.
+function _rnAccion(tipo, t) {
+  var irA = function(pid, cb) {
+    showPage(pid, document.querySelector('.sb-item[data-pid="' + pid + '"]'));
+    if (cb) setTimeout(cb, 150);
+  };
+  if (tipo === 'refrescar') { renderPResumen(); return; }
+  if (tipo === 'ir') { irA(t.getAttribute('data-pid')); return; }
+  if (tipo === 'cerrar-modal') { _rnCerrarModal(); return; }
+  if (tipo === 'planta') { _rnAbrirPlanta(t.getAttribute('data-planta')); return; }
+  if (tipo === 'prod') { _rnAbrirProducto(t.getAttribute('data-prod')); return; }
+  if (tipo === 'planta-prod') { _rnAbrirProducto(t.getAttribute('data-prod')); return; }
+  if (tipo === 'prod-planta') { _rnAbrirPlanta(t.getAttribute('data-planta')); return; }
+  if (tipo === 'ver-inv') {
+    var pr = t.getAttribute('data-prod');
+    _rnCerrarModal();
+    irA('pInv', function(){ if (pr && typeof window._pInvSetProd === 'function') window._pInvSetProd(pr); });
+    return;
+  }
+}
+// Monta el modal en <body> (fuera de la página, que usa contain:layout y
+// atrapaba el fondo fijo dentro de su propio recuadro) y engancha sus
+// propios eventos, sin depender del contenedor del Resumen.
+function _rnMontarModal(html) {
+  _rnCerrarModal();
+  document.body.insertAdjacentHTML('beforeend', html);
+  var m = document.getElementById('rn-modal');
+  m.addEventListener('click', function(ev) {
+    if (ev.target === m) { _rnCerrarModal(); return; }
+    var t = ev.target.closest('[data-rn]');
+    if (t) _rnAccion(t.getAttribute('data-rn'), t);
+  });
+  document.addEventListener('keydown', _rnEscModal);
 }
 // ⚠️ AGREGADO — a pedido: al tocar una caja de "Cobertura nacional por
 // producto" se abre un modal que EXPLICA la cifra (cómo se calcula, con
@@ -6195,7 +6219,7 @@ function _rnAbrirProducto(pr) {
   var nombresNivel = { quiebre: 'Sin stock', crit: 'Crítico', alerta: 'Alerta', ok: 'Normal' };
   var filasHtml = filas.map(function(f) {
     var ancho = Math.min(100, Math.round((f.cob >= 999 ? maxCob : f.cob) / maxCob * 100));
-    return '<div class="rn-m-fila" data-rn="prod-planta" data-planta="' + esc(f.planta) + '" title="Abrir ' + esc(f.planta) + ' en Coberturas">'
+    return '<div class="rn-m-fila" data-rn="prod-planta" data-planta="' + esc(f.planta) + '" title="Ver la ficha de ' + esc(f.planta) + '">'
       + '<div class="rn-m-pl"><span class="rn-hm-dot" style="background:' + NC[f.nivel] + '"></span>' + esc(f.planta) + (f.minima ? ' <span class="rn-hm-min">EM</span>' : '') + '</div>'
       + '<div class="rn-m-bar"><span style="width:' + ancho + '%;background:' + NC[f.nivel] + '"></span></div>'
       + '<div class="rn-m-cob" style="color:' + NC[f.nivel] + '">' + (f.nivel === 'quiebre' ? '⛔' : (f.cob >= 999 ? '99+' : f.cob) + 'd') + '</div>'
@@ -6226,16 +6250,13 @@ function _rnAbrirProducto(pr) {
     +     '<div class="rn-m-formula"><span><b>' + o.inv.toFixed(DEC) + ' MB</b><small>inventario en ' + o.n + ' plantas</small></span><em>÷</em><span><b>' + o.vf.toFixed(DEC) + ' MB/día</b><small>venta diaria (factible o pronóstico)</small></span><em>=</em><span><b style="color:var(--c)">' + (o.vf > 0 ? cobP : '—') + ' días</b><small>de cobertura</small></span></div>'
     +     '<div class="rn-m-nota">Suma del inventario de las plantas de venta que manejan ' + esc(D.corto[pr]) + ', dividido entre lo que venden por día en conjunto. Es una vista agregada: una planta puede estar sin stock aunque el país tenga cobertura.</div>'
     +   '</div>'
-    +   '<div class="rn-m-sec"><div class="rn-sec-t">Situación por planta <span>' + filas.length + ' plantas · ' + (nQ ? nQ + ' sin stock · ' : '') + nC + ' críticas · peor primero · clic abre el detalle</span></div>'
+    +   '<div class="rn-m-sec"><div class="rn-sec-t">Situación por planta <span>' + filas.length + ' plantas · ' + (nQ ? nQ + ' sin stock · ' : '') + nC + ' críticas · peor primero · clic abre la ficha de la planta</span></div>'
     +     '<div class="rn-m-filas"><div class="rn-m-fila rn-m-fila-h"><div>Planta</div><div>Cobertura</div><div></div><div>Inventario</div><div>Venta/día</div></div>' + filasHtml + '</div></div>'
     +   '<div class="rn-m-sec"><div class="rn-sec-t">Reposición en camino <span>' + (lleg.length ? lleg.length + ' descargas · ' + mbLleg.toFixed(1) + ' MB' : '') + '</span></div>' + llegHtml + '</div>'
     + '</div>'
-    + '<div class="rn-m-foot"><button class="rn-btn" data-rn="cerrar-modal">Cerrar</button><button class="rn-btn rn-btn-acc" data-rn="prod-cob" data-prod="' + esc(pr) + '">Ver en Coberturas →</button></div>'
+    + '<div class="rn-m-foot"><button class="rn-btn" data-rn="cerrar-modal">Cerrar</button><button class="rn-btn rn-btn-acc" data-rn="ver-inv" data-prod="' + esc(pr) + '">Ver en Inventario Nacional →</button></div>'
     + '</div></div>';
-  _rnCerrarModal();
-  var cont = document.getElementById('pResumen-content') || document.body;
-  cont.insertAdjacentHTML('beforeend', html);
-  document.addEventListener('keydown', _rnEscModal);
+  _rnMontarModal(html);
 }
 // ⚠️ AGREGADO — a pedido: al tocar una planta en el mapa de calor se
 // abre su ficha (estado, productos, reposición en camino, acciones
@@ -6289,12 +6310,9 @@ function _rnAbrirPlanta(pl) {
     +   '<div class="rn-m-sec"><div class="rn-sec-t">Reposición en camino <span>' + (lleg.length ? lleg.length + ' descarga' + (lleg.length > 1 ? 's' : '') : '') + '</span></div>' + llegHtml + '</div>'
     +   '<div class="rn-m-sec"><div class="rn-sec-t">Acciones recomendadas <span>Centro de Decisiones</span></div>' + recsHtml + '</div>'
     + '</div>'
-    + '<div class="rn-m-foot"><button class="rn-btn" data-rn="cerrar-modal">Cerrar</button><button class="rn-btn rn-btn-acc" data-rn="planta-cob" data-planta="' + esc(pl) + '">Ver en Coberturas →</button></div>'
+    + '<div class="rn-m-foot"><button class="rn-btn" data-rn="cerrar-modal">Cerrar</button><button class="rn-btn rn-btn-acc" data-rn="ver-inv" data-prod="' + esc(peorProd ? peorProd.prod : '') + '">Ver en Inventario Nacional →</button></div>'
     + '</div></div>';
-  _rnCerrarModal();
-  var cont = document.getElementById('pResumen-content') || document.body;
-  cont.insertAdjacentHTML('beforeend', html);
-  document.addEventListener('keydown', _rnEscModal);
+  _rnMontarModal(html);
 }
 // Estilos del Resumen Nacional (inyectados una sola vez; usan las
 // variables del tema, así que funcionan en modo oscuro y claro)
