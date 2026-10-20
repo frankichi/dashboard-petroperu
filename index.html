@@ -2405,6 +2405,41 @@ function _pdEstBadge(estado) {
   var d = MAPA[e] || { txt: estado || 'Pendiente', bg: '#f1f5f9', col: '#64748b' };
   return '<span style="display:inline-block;padding:2px 9px;border-radius:10px;background:' + d.bg + ';color:' + d.col + ';font-weight:800;font-size:9.5px;white-space:nowrap">' + d.txt + '</span>';
 }
+function _pdResumenEjecutivoHTML(plan, d) {
+  var totalYu  = plan.barcazas_yu.reduce(function(a,b){return a+b.productos.reduce(function(x,y){return x+y.vol_plan;},0);},0);
+  var totalLpo = plan.barcazas_lpo.reduce(function(a,b){return a+b.productos.reduce(function(x,y){return x+y.vol_plan;},0);},0);
+  var totalCis = plan.cisternas.reduce(function(a,b){return a+b.vol_plan;},0);
+  var total    = totalYu+totalLpo+totalCis;
+  var realBD   = 0; Object.values(d.barcazas||{}).forEach(function(v){realBD+=parseFloat(v.vol_real||0)||0;});
+  var realCis  = 0; Object.values(d.cisternas||{}).forEach(function(v){realCis+=parseFloat(v.vol_real||0)||0;});
+  var realTot  = realBD+realCis;
+  var avPct    = total>0?Math.round(realTot/total*100):0;
+    if (typeof _curvaEstilos === 'function') _curvaEstilos();
+  var esc = function(t) { return String(t == null ? '' : t).replace(/[&<>"]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); };
+  var mk = String(plan.mes || '').match(/^(\d{4})-(\d{2})/);
+  var hoy = (typeof currentDate === 'string' && currentDate) ? currentDate : new Date().toISOString().slice(0,10);
+  var pctCal = null, diasRest = null;
+  if (mk) { var dm = new Date(+mk[1], +mk[2], 0).getDate(); var hk = hoy.slice(0,7); var dia = hk === plan.mes.slice(0,7) ? +hoy.slice(8,10) : (hk > plan.mes.slice(0,7) ? dm : 0); pctCal = Math.round(dia / dm * 100); diasRest = Math.max(0, dm - dia); }
+  var realYu = 0, realLpo = 0; plan.barcazas_yu.forEach(function(b){ realYu += parseFloat((d.barcazas[b.id]||{}).vol_real||0)||0; }); plan.barcazas_lpo.forEach(function(b){ realLpo += parseFloat((d.barcazas[b.id]||{}).vol_real||0)||0; });
+  var pct = function(r, t){ return t > 0 ? Math.round(r / t * 100) : null; };
+  var pendB = plan.barcazas_yu.concat(plan.barcazas_lpo).filter(function(b){ return !(parseFloat((d.barcazas[b.id]||{}).vol_real||0) > 0); });
+  var pendC = plan.cisternas.filter(function(c){ return !(parseFloat((d.cisternas[c.id]||{}).vol_real||0) > 0); });
+  var estado = pctCal == null ? ['—', 'var(--txt3)'] : avPct >= pctCal - 5 ? (avPct >= pctCal + 5 ? ['ADELANTADO', 'var(--grn)'] : ['AL RITMO', 'var(--acc)']) : avPct >= pctCal - 20 ? ['ATRASADO', 'var(--yel)'] : ['MUY ATRASADO', 'var(--red)'];
+  var ritmo = (diasRest && diasRest > 0) ? (total - realTot) / diasRest : null;
+  var lectura = 'El plan de <b>' + esc(plan.mes) + '</b> va al <b style="color:' + estado[1] + '">' + avPct + '%</b> (' + realTot.toFixed(1) + ' de ' + total.toFixed(1) + ' MB)' + (pctCal != null ? ', con el ' + pctCal + '% del mes transcurrido: <b style="color:' + estado[1] + '">' + estado[0] + '</b>' : '') + '. ';
+  lectura += 'Por ruta: Yurimaguas ' + (pct(realYu, totalYu) == null ? '—' : pct(realYu, totalYu) + '%') + ', Pucallpa-LPO ' + (pct(realLpo, totalLpo) == null ? '—' : pct(realLpo, totalLpo) + '%') + ', cisternas ' + (pct(realCis, totalCis) == null ? '—' : pct(realCis, totalCis) + '%') + '. ';
+  if (pendB.length) lectura += '<b>' + pendB.length + ' barcaza' + (pendB.length === 1 ? '' : 's') + '</b> sin movimiento registrado (' + pendB.slice(0, 4).map(function(b){ return esc(String(b.empujador||'').replace('EF / ','')); }).join(', ') + (pendB.length > 4 ? '…' : '') + ')' + (pendC.length ? ' y <b>' + pendC.length + ' viaje' + (pendC.length === 1 ? '' : 's') + ' de cisternas</b>' : '') + '. ';
+  else if (pendC.length) lectura += '<b>' + pendC.length + ' viaje' + (pendC.length === 1 ? '' : 's') + ' de cisternas</b> sin movimiento registrado. ';
+  if (ritmo != null && total - realTot > 0) lectura += 'Para cerrar el mes hacen falta <b>' + (total - realTot).toFixed(1) + ' MB</b> en ' + diasRest + ' días (' + ritmo.toFixed(1) + ' MB/día).';
+  else if (total - realTot <= 0 && total > 0) lectura += 'Plan completado.';
+  var k = function(lbl, v, s2, col) { return '<div class="cv-kpi" style="cursor:default;min-height:0;padding:9px 12px"><div class="cv-k">' + lbl + '</div><div class="cv-n" style="font-size:22px;color:' + col + '">' + v + '</div><div class="cv-s">' + s2 + '</div></div>'; };
+  return '<div class="cv-strip" style="padding:0;grid-template-columns:repeat(4,minmax(120px,1fr));margin-bottom:8px">'
+    + k('Estado del plan', estado[0], pctCal != null ? pctCal + '% del mes transcurrido' : 'sin fecha de mes', estado[1])
+    + k('Yurimaguas', (pct(realYu, totalYu) == null ? '—' : pct(realYu, totalYu) + '<small>%</small>'), realYu.toFixed(1) + ' de ' + totalYu.toFixed(1) + ' MB', 'var(--txt)')
+    + k('Pucallpa-LPO', (pct(realLpo, totalLpo) == null ? '—' : pct(realLpo, totalLpo) + '<small>%</small>'), realLpo.toFixed(1) + ' de ' + totalLpo.toFixed(1) + ' MB', 'var(--txt)')
+    + k('Pendientes', pendB.length + ' / ' + pendC.length, 'barcazas / cisternas sin registro', (pendB.length + pendC.length) ? 'var(--yel)' : 'var(--grn)')
+    + '</div><div class="cv-lectura" style="margin:0 0 14px;font-size:12px">' + lectura + '</div>';
+}
 function _pdRenderResumen(plan) {
   // ⚠️ CORREGIDO — bug real confirmado: window._planDistData (los
   // valores REALES registrados, distinto del plan) solo se inicializa
@@ -2425,34 +2460,7 @@ function _pdRenderResumen(plan) {
 
   // ── Lectura ejecutiva: avance vs. avance esperado por calendario, por ruta,
   //    y qué barcazas/cisternas siguen sin registrar movimiento.
-  var lectura = '';
-  (function(){
-    if (typeof _curvaEstilos === 'function') _curvaEstilos();
-    var esc = function(t) { return String(t == null ? '' : t).replace(/[&<>"]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); };
-    var mk = String(plan.mes || '').match(/^(\d{4})-(\d{2})/);
-    var hoy = (typeof currentDate === 'string' && currentDate) ? currentDate : new Date().toISOString().slice(0,10);
-    var pctCal = null, diasRest = null;
-    if (mk) { var dm = new Date(+mk[1], +mk[2], 0).getDate(); var hk = hoy.slice(0,7); var dia = hk === plan.mes.slice(0,7) ? +hoy.slice(8,10) : (hk > plan.mes.slice(0,7) ? dm : 0); pctCal = Math.round(dia / dm * 100); diasRest = Math.max(0, dm - dia); }
-    var realYu = 0, realLpo = 0; plan.barcazas_yu.forEach(function(b){ realYu += parseFloat((d.barcazas[b.id]||{}).vol_real||0)||0; }); plan.barcazas_lpo.forEach(function(b){ realLpo += parseFloat((d.barcazas[b.id]||{}).vol_real||0)||0; });
-    var pct = function(r, t){ return t > 0 ? Math.round(r / t * 100) : null; };
-    var pendB = plan.barcazas_yu.concat(plan.barcazas_lpo).filter(function(b){ return !(parseFloat((d.barcazas[b.id]||{}).vol_real||0) > 0); });
-    var pendC = plan.cisternas.filter(function(c){ return !(parseFloat((d.cisternas[c.id]||{}).vol_real||0) > 0); });
-    var estado = pctCal == null ? ['—', 'var(--txt3)'] : avPct >= pctCal - 5 ? (avPct >= pctCal + 5 ? ['ADELANTADO', 'var(--grn)'] : ['AL RITMO', 'var(--acc)']) : avPct >= pctCal - 20 ? ['ATRASADO', 'var(--yel)'] : ['MUY ATRASADO', 'var(--red)'];
-    var ritmo = (diasRest && diasRest > 0) ? (total - realTot) / diasRest : null;
-    lectura = 'El plan de <b>' + esc(plan.mes) + '</b> va al <b style="color:' + estado[1] + '">' + avPct + '%</b> (' + realTot.toFixed(1) + ' de ' + total.toFixed(1) + ' MB)' + (pctCal != null ? ', con el ' + pctCal + '% del mes transcurrido: <b style="color:' + estado[1] + '">' + estado[0] + '</b>' : '') + '. ';
-    lectura += 'Por ruta: Yurimaguas ' + (pct(realYu, totalYu) == null ? '—' : pct(realYu, totalYu) + '%') + ', Pucallpa-LPO ' + (pct(realLpo, totalLpo) == null ? '—' : pct(realLpo, totalLpo) + '%') + ', cisternas ' + (pct(realCis, totalCis) == null ? '—' : pct(realCis, totalCis) + '%') + '. ';
-    if (pendB.length) lectura += '<b>' + pendB.length + ' barcaza' + (pendB.length === 1 ? '' : 's') + '</b> sin movimiento registrado (' + pendB.slice(0, 4).map(function(b){ return esc(String(b.empujador||'').replace('EF / ','')); }).join(', ') + (pendB.length > 4 ? '…' : '') + ')' + (pendC.length ? ' y <b>' + pendC.length + ' viaje' + (pendC.length === 1 ? '' : 's') + ' de cisternas</b>' : '') + '. ';
-    else if (pendC.length) lectura += '<b>' + pendC.length + ' viaje' + (pendC.length === 1 ? '' : 's') + ' de cisternas</b> sin movimiento registrado. ';
-    if (ritmo != null && total - realTot > 0) lectura += 'Para cerrar el mes hacen falta <b>' + (total - realTot).toFixed(1) + ' MB</b> en ' + diasRest + ' días (' + ritmo.toFixed(1) + ' MB/día).';
-    else if (total - realTot <= 0 && total > 0) lectura += 'Plan completado.';
-    var k = function(lbl, v, s2, col) { return '<div class="cv-kpi" style="cursor:default;min-height:0;padding:9px 12px"><div class="cv-k">' + lbl + '</div><div class="cv-n" style="font-size:22px;color:' + col + '">' + v + '</div><div class="cv-s">' + s2 + '</div></div>'; };
-    lectura = '<div class="cv-strip" style="padding:0;grid-template-columns:repeat(4,minmax(120px,1fr));margin-bottom:8px">'
-      + k('Estado del plan', estado[0], pctCal != null ? pctCal + '% del mes transcurrido' : 'sin fecha de mes', estado[1])
-      + k('Yurimaguas', (pct(realYu, totalYu) == null ? '—' : pct(realYu, totalYu) + '<small>%</small>'), realYu.toFixed(1) + ' de ' + totalYu.toFixed(1) + ' MB', 'var(--txt)')
-      + k('Pucallpa-LPO', (pct(realLpo, totalLpo) == null ? '—' : pct(realLpo, totalLpo) + '<small>%</small>'), realLpo.toFixed(1) + ' de ' + totalLpo.toFixed(1) + ' MB', 'var(--txt)')
-      + k('Pendientes', pendB.length + ' / ' + pendC.length, 'barcazas / cisternas sin registro', (pendB.length + pendC.length) ? 'var(--yel)' : 'var(--grn)')
-      + '</div><div class="cv-lectura" style="margin:0 0 14px;font-size:12px">' + lectura + '</div>';
-  })();
+  var lectura = _pdResumenEjecutivoHTML(plan, d);
   var html = lectura + '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px">'
     + '<div style="background:var(--bg3);border:1px solid var(--bdr);border-radius:9px;padding:12px;text-align:center"><div style="font-size:8px;font-weight:700;color:var(--txt3);text-transform:uppercase">Plan total mes</div><div style="font-size:22px;font-weight:800;font-family:monospace;color:#818cf8;margin-top:3px">'+total.toFixed(DEC)+'</div><div style="font-size:9px;color:var(--txt3)">MB</div></div>'
     + '<div style="background:var(--bg3);border:1px solid var(--bdr);border-radius:9px;padding:12px;text-align:center"><div style="font-size:8px;font-weight:700;color:var(--txt3);text-transform:uppercase">Real registrado</div><div style="font-size:22px;font-weight:800;font-family:monospace;color:#4ade80;margin-top:3px">'+realTot.toFixed(DEC)+'</div><div style="font-size:9px;color:var(--txt3)">MB</div></div>'
@@ -18105,7 +18113,7 @@ function _uplOrganizar(el) {
     var nOk = 0, nPend = 0;
     accs.forEach(function(a){ var e = estadoDe(a); if (cat.id !== 'util') { resumen[e]++; resumen.fuentes.push({ id: a.id, t: titleDe(a), e: e }); } if (e === 'ok') nOk++; if (e === 'pend') nPend++; });
     var sec = document.createElement('div'); sec.className = 'upl-cat'; sec.id = 'upl-cat-' + cat.id;
-    var cerrada = !!window._uplCatCerradas[cat.id];
+    var cerrada = (window._uplCatCerradas[cat.id] === undefined) ? true : !!window._uplCatCerradas[cat.id];
     var pills = cat.id === 'util' ? '' : (nOk ? '<span class="upl-pill upl-pill-ok">' + nOk + ' al día</span>' : '') + (nPend ? '<span class="upl-pill upl-pill-pend">' + nPend + ' pendiente' + (nPend === 1 ? '' : 's') + '</span>' : '') + ((accs.length - nOk - nPend) ? '<span class="upl-pill upl-pill-nd">' + (accs.length - nOk - nPend) + ' sin fecha</span>' : '');
     sec.innerHTML = '<div class="upl-cat-h' + (cerrada ? ' closed' : '') + '" data-upl-cat="' + cat.id + '"><span class="upl-cat-ico">' + cat.ico + '</span><div><div class="upl-cat-t">' + cat.t + '</div><div class="upl-cat-s">' + cat.s + ' · ' + accs.length + ' fuente' + (accs.length === 1 ? '' : 's') + '</div></div><div class="upl-cat-n">' + pills + '<span class="upl-cat-arrow">▼</span></div></div><div class="upl-cat-g' + (cerrada ? ' hidden' : '') + '"></div>';
     var g = sec.querySelector('.upl-cat-g'); accs.forEach(function(a){ g.appendChild(a); });
@@ -25178,15 +25186,22 @@ function renderPIqui() {
       setTimeout(_iquiRenderCharts, 60);
     });
   } else if (_iquiTab === 'plan-dist') {
-    // Render inmediato con lo que haya en caché…
-    el.innerHTML = _iquiBuildHTML(_iquiPlanCache, null, null);
-    _iquiAttachHandlers();
-    // …y cargar del Sheets los movimientos reales (mes activo) para reflejarlos
+    // Sin plan en caché: se muestra un estado de carga (no el diseño vacío) y
+    // se pinta UNA sola vez cuando llegan los datos. Con caché: se pinta ya y
+    // solo se vuelve a pintar si los datos del servidor cambiaron.
+    var firma = function(){ try { return JSON.stringify([window._PLAN_DIST_ACTIVE, window._planDistData]); } catch (e) { return ''; } };
+    var f0 = firma();
+    if (window._PLAN_DIST_ACTIVE) { el.innerHTML = _iquiBuildHTML(_iquiPlanCache, null, null); _iquiAttachHandlers(); }
+    else {
+      window._iquiPlanDistCargando = true;
+      el.innerHTML = _iquiBuildHTML(_iquiPlanCache, null, null); _iquiAttachHandlers();
+    }
     if (typeof _pdLoadData === 'function') {
       _pdLoadData(function() {
+        window._iquiPlanDistCargando = false;
         if (_iquiTab !== 'plan-dist') return;
         var el2 = document.getElementById('pIqui-content');
-        if (el2) { el2.innerHTML = _iquiBuildHTML(_iquiPlanCache, null, null); _iquiAttachHandlers(); }
+        if (el2 && (firma() !== f0 || !document.getElementById('pd-inline-root'))) { el2.innerHTML = _iquiBuildHTML(_iquiPlanCache, null, null); _iquiAttachHandlers(); }
       });
     }
   } else if (_iquiTab === 'resumen') {
@@ -25210,7 +25225,7 @@ function _iquiTabPlanDist() {
   var plan = window._PLAN_DIST_ACTIVE;
   var mes  = plan ? plan.mes : '';
 
-  var html = '<div style="padding:0">';
+  var html = '<div style="padding:0" id="pd-inline-root">';
 
   // ── Header con acciones ──
   html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;gap:10px;flex-wrap:wrap">'
@@ -25221,6 +25236,14 @@ function _iquiTabPlanDist() {
     + '  <button onclick="window._planDistShare()" style="padding:6px 12px;background:#0a3a5c;color:#fff;border:none;border-radius:7px;font-size:10.5px;font-weight:700;cursor:pointer">&#128279; Compartir link</button>'
     + '</div></div>';
 
+  if (!plan && window._iquiPlanDistCargando) {
+    html += '<div id="pd-inline-loading" style="padding:40px;text-align:center;background:var(--bg3);border:1px solid var(--bdr);border-radius:12px">'
+      + '<div style="width:32px;height:32px;border:3px solid var(--bdr);border-top-color:var(--acc);border-radius:50%;animation:spin 1s linear infinite;margin:0 auto 12px"></div>'
+      + '<div style="font-size:12px;font-weight:700;color:var(--txt)">Cargando el Plan de Distribución…</div>'
+      + '<div style="font-size:10.5px;color:var(--txt3);margin-top:4px">Leyendo barcazas, cisternas y movimientos reales desde Sheets</div>'
+      + '</div></div>';
+    return html;
+  }
   if (!plan) {
     html += '<div style="padding:40px;text-align:center;background:var(--bg3);border:1.5px dashed var(--bdr);border-radius:12px">'
       + '<div style="font-size:32px;margin-bottom:12px">&#128203;</div>'
@@ -25232,31 +25255,9 @@ function _iquiTabPlanDist() {
     return html;
   }
 
-  // ── KPIs ──
-  var totalYu  = plan.barcazas_yu.reduce(function(a,b){return a+b.productos.reduce(function(x,y){return x+y.vol_plan;},0);},0);
-  var totalLpo = plan.barcazas_lpo.reduce(function(a,b){return a+b.productos.reduce(function(x,y){return x+y.vol_plan;},0);},0);
-  var totalCis = plan.cisternas.reduce(function(a,b){return a+b.vol_plan;},0);
-  var total    = totalYu+totalLpo+totalCis;
+  // ── Resumen ejecutivo (misma franja que el modal de Plan de Distribución) ──
   var d = window._planDistData||{barcazas:{},cisternas:{}};
-  var realBD=0; Object.values(d.barcazas||{}).forEach(function(v){realBD+=parseFloat(v.vol_real||0)||0;});
-  var realCis=0; Object.values(d.cisternas||{}).forEach(function(v){realCis+=parseFloat(v.vol_real||0)||0;});
-  var realTot=realBD+realCis;
-  var avPct=total>0?Math.round(realTot/total*100):0;
-
-  html += '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:14px">';
-  [['Total plan','#818cf8',total.toFixed(DEC),'MB total'],
-   ['Ejecutado','#4ade80',realTot.toFixed(DEC),'MB real'],
-   ['% Avance',(avPct>=90?'#4ade80':avPct>=70?'#fbbf24':'#f87171'),avPct+'%','del plan'],
-   ['Viajes','#38bdf8',(plan.barcazas_yu.length+plan.barcazas_lpo.length+plan.cisternas.length)+'','barcazas+cist.']
-  ].forEach(function(k){
-    html+='<div style="background:var(--bg3);border:1px solid var(--bdr);border-radius:9px;padding:10px;text-align:center">'
-      +'<div style="font-size:8px;font-weight:700;color:var(--txt3);text-transform:uppercase">'+k[0]+'</div>'
-      +'<div style="font-size:20px;font-weight:800;font-family:monospace;color:'+k[1]+';margin-top:2px">'+k[2]+'</div>'
-      +'<div style="font-size:8.5px;color:var(--txt3)">'+k[3]+'</div></div>';
-  });
-  html += '</div>';
-  html += '<div style="height:6px;background:var(--bdr);border-radius:4px;margin-bottom:14px;overflow:hidden"><div style="height:100%;width:'+Math.min(100,avPct)+'%;background:linear-gradient(90deg,#4f46e5,#4ade80);border-radius:4px;transition:width .5s"></div></div>';
-
+  html += _pdResumenEjecutivoHTML(plan, d);
   // ── Formulario inline barcazas YU ──
   html += _pdInlineTable(plan.barcazas_yu, 'yu',
     '&#128693; Barcazas &mdash; Yurimaguas (Diesel B5 S-50)',
