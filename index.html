@@ -1608,7 +1608,7 @@ textarea.pd-inp{resize:vertical;min-height:44px;font-family:var(--sans)}
     <span class="sb-icon"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" width="16" height="16"><path d="M2 16 C4 16 4 4 10 4 C16 4 16 12 18 12" stroke-linecap="round"/><line x1="2" y1="18" x2="18" y2="18" stroke-linecap="round"/><line x1="2" y1="2" x2="2" y2="18" stroke-linecap="round"/></svg></span>
     <span class="sb-label">Curva Inv.</span>
   </button>
-  <button class="sb-item sb-exec-hidden" data-pid="pInv" onclick="showPage('pInv',this)" title="Inventario Detalle">
+  <button class="sb-item sb-exec-hidden" data-pid="pInv" onclick="showPage('pInv',this);if(window._pInvToggleTable)setTimeout(function(){window._pInvToggleTable(true);},80)" title="Inventario Detalle (tabla completa planta × producto)">
     <span class="sb-icon"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" width="16" height="16"><path d="M4 6h12M4 10h8M4 14h10"/><rect x="2" y="3" width="16" height="14" rx="1.5"/></svg></span>
     <span class="sb-label">Detalle Inv.</span>
   </button>
@@ -16860,6 +16860,73 @@ async function _simAutoLoadFromGS() {
   }
   renderPE();
 }
+// ═══ Impacto de la simulación: ¿qué resuelve y qué deja pendiente? ═══
+// Para cada escala·producto del itinerario proyectado: cobertura actual,
+// días hasta la llegada, cobertura resultante y si llega a tiempo / cabe.
+function _simImpacto() {
+  var liveData = byLatest();
+  var EXCLUIR = ['ULSD EXPO','Regular HS'];
+  var live = liveData.filter(function(r){ return !EXCLUIR.some(function(x){ return r.producto && r.producto.toUpperCase().includes(x.toUpperCase()); }) && !SKIP_COMBOS.has((r.planta||'')+'|'+(r.producto||'')); });
+  var capMap = {}; if (typeof _capRefCache !== 'undefined' && Array.isArray(_capRefCache)) _capRefCache.forEach(function(c){ capMap[c.planta + '|' + c.producto] = c.capacidad || 0; });
+  var hoyMs = new Date((currentDate || new Date().toISOString().slice(0,10)) + 'T12:00:00').getTime();
+  var items = [];
+  simShips.forEach(function(s, i) {
+    (s.stops || []).forEach(function(st, idx) {
+      (st.prods && st.prods.length ? st.prods : [{ producto: st.producto, vol: st.vol }]).forEach(function(pr) {
+        if (!(pr.vol > 0)) return;
+        var pn = (typeof normProd === 'function') ? normProd(pr.producto) : pr.producto;
+        var rec = live.find(function(r){ return r.planta === st.planta && (r.producto === pn || (typeof prodEq === 'function' && prodEq(r.producto, pr.producto))); });
+        var inv = rec ? (rec.inv || 0) : 0, vf = rec ? (rec.vfact || 0) : 0, pron = rec ? pronDiarioAprobado(rec) : 0;
+        var dem = vf > 0 ? vf : pron;
+        var cob = (dem > 0 && inv > 0) ? inv / dem : (inv > 0 ? 999 : 0);
+        var eta = st.etaDate || s.zarpeDate || '';
+        var dH = eta ? Math.round((new Date(eta + 'T12:00:00').getTime() - hoyMs) / 864e5) : null;
+        var invLlegada = dem > 0 ? Math.max(0, inv - dem * Math.max(0, dH || 0)) : inv;
+        var cobDesp = dem > 0 ? (invLlegada + pr.vol) / dem : 999;
+        var cap = capMap[st.planta + '|' + pn] || 0;
+        var vacio = cap > 0 ? Math.max(0, cap - invLlegada) : null;
+        items.push({ buque: s.name, col: SHIP_COLORS[i % SHIP_COLORS.length], planta: st.planta, prod: pn, vol: pr.vol, eta: eta, dH: dH, cob: cob, cobDesp: cobDesp, dem: dem, sinDato: !rec,
+          tarde: (rec && dH != null && dem > 0 && cob < 999 && dH > cob), noCabe: (vacio != null && pr.vol > vacio + 0.05), exceso: vacio != null ? Math.max(0, pr.vol - vacio) : 0,
+          critDesp: dem > 0 && cobDesp < (CONFIG.COB_RED || 8) });
+      });
+    });
+  });
+  // Plantas·producto críticas hoy que NO reciben nada en la simulación
+  var cubiertos = {}; items.forEach(function(x){ cubiertos[x.planta + '|' + x.prod] = true; });
+  var sinAtender = live.filter(function(r){ var dem = (r.vfact||0) > 0 ? r.vfact : pronDiarioAprobado(r); var c = (dem > 0 && r.inv > 0) ? r.inv / dem : (r.inv > 0 ? 999 : 0); return c < (CONFIG.COB_RED || 8) && !cubiertos[r.planta + '|' + r.producto] && (typeof PRODUCTOS_POR_PLANTA_EXEC === 'undefined' || !PRODUCTOS_POR_PLANTA_EXEC[r.planta] || PRODUCTOS_POR_PLANTA_EXEC[r.planta].indexOf(r.producto) >= 0); })
+    .map(function(r){ var dem = (r.vfact||0) > 0 ? r.vfact : pronDiarioAprobado(r); return { planta: r.planta, prod: r.producto, cob: (dem > 0 && r.inv > 0) ? r.inv / dem : 0 }; }).sort(function(a, b){ return a.cob - b.cob; });
+  return { items: items, sinAtender: sinAtender };
+}
+function _simImpactoHTML() {
+  if (typeof _curvaEstilos === 'function') _curvaEstilos();
+  var esc = function(t) { return String(t == null ? '' : t).replace(/[&<>"]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); };
+  var I = _simImpacto(), it = I.items;
+  if (!simShips.length) return '';
+  var tarde = it.filter(function(x){ return x.tarde; }), noCabe = it.filter(function(x){ return x.noCabe; }), crit = it.filter(function(x){ return x.critDesp && !x.sinDato; }), sinEta = it.filter(function(x){ return !x.eta; });
+  var resueltos = it.filter(function(x){ return !x.sinDato && x.cob < (CONFIG.COB_RED || 8) && !x.critDesp && !x.tarde; });
+  var mb = it.reduce(function(a, x){ return a + x.vol; }, 0);
+  var lect = 'La programación proyectada entrega <b>' + mb.toFixed(1) + ' MB</b> en ' + it.length + ' escala·producto con ' + simShips.length + ' buque' + (simShips.length === 1 ? '' : 's') + '. ';
+  if (resueltos.length) lect += 'Saca de nivel crítico a <b style="color:var(--grn)">' + resueltos.length + '</b> (' + resueltos.slice(0, 4).map(function(x){ return esc(x.planta) + ' ' + esc(x.prod); }).join(', ') + (resueltos.length > 4 ? '…' : '') + '). ';
+  if (tarde.length) lect += '<span style="color:var(--red);font-weight:800">⚠️ Llega tarde</span> a ' + tarde.slice(0, 4).map(function(x){ return esc(x.planta) + ' ' + esc(x.prod) + ' (cob. ' + x.cob.toFixed(1) + ' d, ' + esc(x.buque) + ' en ' + x.dH + ' d)'; }).join('; ') + (tarde.length > 4 ? ' y ' + (tarde.length - 4) + ' más' : '') + '. ';
+  if (crit.length) lect += '<b style="color:var(--yel)">' + crit.length + '</b> siguen bajo ' + (CONFIG.COB_RED || 8) + ' d aun con la descarga (volumen insuficiente). ';
+  if (noCabe.length) lect += '<span style="color:var(--red);font-weight:800">No cabe</span> en ' + noCabe.map(function(x){ return esc(x.planta) + ' ' + esc(x.prod) + ' (+' + x.exceso.toFixed(1) + ' MB)'; }).join(', ') + '. ';
+  if (I.sinAtender.length) lect += '<b style="color:var(--red)">Sin atender:</b> ' + I.sinAtender.slice(0, 5).map(function(x){ return esc(x.planta) + ' ' + esc(x.prod) + ' (' + (x.cob > 0 ? x.cob.toFixed(1) + ' d' : 'sin stock') + ')'; }).join(', ') + (I.sinAtender.length > 5 ? ' y ' + (I.sinAtender.length - 5) + ' más' : '') + ' están críticos y no reciben nada en esta simulación.';
+  if (sinEta.length) lect += ' ' + sinEta.length + ' escala(s) sin fecha de llegada.';
+  var k = function(lbl, v, s2, col) { return '<div class="cv-kpi" style="cursor:default;min-height:0;padding:9px 12px"><div class="cv-k">' + lbl + '</div><div class="cv-n" style="font-size:22px;color:' + col + '">' + v + '</div><div class="cv-s">' + s2 + '</div></div>'; };
+  var rank = it.slice().sort(function(a, b){ return (b.tarde - a.tarde) || (b.critDesp - a.critDesp) || (a.cob - b.cob); }).slice(0, 12);
+  return '<div class="sim-impacto" style="padding:10px 16px 6px;border-bottom:1px solid var(--bdr);background:var(--bg2)">'
+    + '<div class="cv-strip" style="padding:0;grid-template-columns:repeat(5,minmax(120px,1fr));margin-bottom:8px">'
+    + k('Entrega proyectada', mb.toFixed(1) + '<small>MB</small>', it.length + ' escala·producto', 'var(--txt)')
+    + k('Críticos resueltos', resueltos.length, 'pasan a ≥ ' + (CONFIG.COB_RED || 8) + ' d', resueltos.length ? 'var(--grn)' : 'var(--txt3)')
+    + k('Llegan tarde', tarde.length, tarde.length ? 'la planta quiebra antes del arribo' : 'todas llegan antes del quiebre', tarde.length ? 'var(--red)' : 'var(--grn)')
+    + k('No cabe en tanque', noCabe.length, noCabe.length ? 'volumen supera el vacío a la llegada' : (Object.keys(it).length ? 'según capacidades cargadas' : '—'), noCabe.length ? 'var(--red)' : 'var(--grn)')
+    + k('Críticos sin atender', I.sinAtender.length, 'bajo ' + (CONFIG.COB_RED || 8) + ' d sin escala asignada', I.sinAtender.length ? 'var(--red)' : 'var(--grn)')
+    + '</div><div class="cv-lectura" style="margin:0 0 8px;font-size:12px">' + lect + '</div>'
+    + (rank.length ? '<details class="sim-imp-det"><summary style="font-size:10.5px;font-weight:700;color:var(--txt2);cursor:pointer">Ver detalle por escala (' + it.length + ')</summary><div class="cv-rank" style="margin:6px 0 0">'
+      + rank.map(function(x){ var col = x.tarde ? 'var(--red)' : x.critDesp ? 'var(--yel)' : 'var(--grn)'; return '<div class="cv-row" style="grid-template-columns:200px 1fr 230px;cursor:default"><div class="cv-row-pl"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:' + x.col + ';margin-right:5px"></span>' + esc(x.planta) + ' · ' + esc(x.prod) + '</div><div style="font-size:11px;color:var(--txt2)">' + esc(x.buque) + ' · ' + x.vol.toFixed(1) + ' MB · ' + (x.eta ? 'llega ' + esc(x.eta.slice(5)) + ' (' + x.dH + ' d)' : 'sin ETA') + '</div><div class="cv-row-r"><b style="color:' + col + '">' + (x.sinDato ? 's/d' : (x.cob >= 999 ? '∞' : x.cob.toFixed(1) + ' d') + ' → ' + (x.cobDesp >= 999 ? '∞' : x.cobDesp.toFixed(1) + ' d')) + '</b><br>' + (x.tarde ? '⛔ llega tarde' : x.noCabe ? '⚠️ no cabe (+' + x.exceso.toFixed(1) + ')' : x.critDesp ? 'sigue crítico' : x.sinDato ? 'sin inventario' : '✅ a tiempo') + '</div></div>'; }).join('')
+      + '</div></details>' : '')
+    + '</div>';
+}
 function renderPE() {
   if (!simInited) {
     simInited = true;  // prevent double-fire
@@ -17176,6 +17243,7 @@ function renderPE() {
     + '<span id="sim-scen-close" style="display:none;margin-left:auto;font-size:10px;color:var(--txt3);cursor:pointer" onclick="document.getElementById(\'sim-scen-panel\').style.display=\'none\';this.style.display=\'none\'">✕ cerrar panel</span>'
     + '</div>'
     + '<div id="sim-scen-panel" style="display:none;padding:12px 16px;border-bottom:1px solid var(--bdr);background:var(--bg3);max-height:300px;overflow-y:auto"></div>'
+    + _simImpactoHTML()
     + '<div class="sim-body">'
     + '<div class="sim-fleet"><div class="sim-fleet-hdr">Flota (' + simShips.length + ')</div>' + fleetHTML + '</div>'
     + '<div class="sim-editor">' + editorHTML + '</div>'
@@ -22664,20 +22732,52 @@ function progFiltered() {
 function progRenderKPIs() {
   const el = document.getElementById('prog-kpis');
   if (!el) return;
+  if (typeof _curvaEstilos === 'function') _curvaEstilos();
+  el.style.display = 'block';
+  const esc = t => String(t == null ? '' : t).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
   const all = PROG_STATE.tareas.filter(t => (t.tipo_emb||'MARITIMA').toUpperCase() === PROG_STATE.tab);
-  const prog  = all.filter(t => (t.estado||'').toUpperCase()==='PROGRAMADO').length;
-  const act   = all.filter(t => (t.estado||'').toUpperCase()==='ACTUAL').length;
-  const comp  = all.filter(t => (t.estado||'').toUpperCase()==='COMPLETADO').length;
-  const vol   = all.reduce((s,t) => s + (parseFloat(t.volumen_mb)||0), 0);
+  const est = t => (t.estado||'PROGRAMADO').toUpperCase();
+  const hoy = (typeof currentDate === 'string' && currentDate) ? currentDate : new Date().toISOString().slice(0,10);
+  const hoyMs = new Date(hoy + 'T12:00:00').getTime();
+  const fISO = v => { if (!v) return ''; const m = String(v).match(/(\d{4})-(\d{2})-(\d{2})/); if (m) return m[0]; const d = String(v).match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/); return d ? d[3] + '-' + d[2].padStart(2,'0') + '-' + d[1].padStart(2,'0') : ''; };
+  const isFluvial = PROG_STATE.tab === 'FLUVIAL';
+  const etaDe = t => fISO(isFluvial ? (t.fecha_eta_rfiq || t.fecha_desde) : t.fecha_desde);
+  const zarpeDe = t => fISO(t.fecha_zarpe || t.fecha_hasta);
+  const dias = f => f ? Math.round((new Date(f + 'T12:00:00').getTime() - hoyMs) / 864e5) : null;
+  const activas = all.filter(t => est(t) === 'PROGRAMADO' || est(t) === 'ACTUAL');
+  const prog  = all.filter(t => est(t) === 'PROGRAMADO'), act = all.filter(t => est(t) === 'ACTUAL'), comp = all.filter(t => est(t) === 'COMPLETADO');
+  const vol   = activas.reduce((s2,t) => s2 + (parseFloat(t.volumen_mb)||0), 0);
   const pend  = all.filter(t => (t.sync_status||'LOCAL') !== 'SYNCED').length;
-  el.innerHTML = `
-    <div class="prog-kpi"><div class="lbl">Total</div><div class="val">${all.length}</div></div>
-    <div class="prog-kpi"><div class="lbl">Programadas</div><div class="val" style="color:#0369a1">${prog}</div></div>
-    <div class="prog-kpi"><div class="lbl">En curso</div><div class="val" style="color:#92400e">${act}</div></div>
-    <div class="prog-kpi"><div class="lbl">Completadas</div><div class="val" style="color:#065f46">${comp}</div></div>
-    <div class="prog-kpi"><div class="lbl">Volumen total (MB)</div><div class="val">${vol.toFixed(DEC)}</div></div>
-    <div class="prog-kpi"><div class="lbl">Pend. de sync</div><div class="val" style="color:${pend?'#d97706':'#16a34a'}">${pend}</div></div>
-  `;
+  const en7   = activas.filter(t => { const d = dias(etaDe(t)); return d != null && d >= 0 && d <= 7; }).sort((x, y) => etaDe(x).localeCompare(etaDe(y)));
+  const vencidas = activas.filter(t => { const d = dias(etaDe(t)); return d != null && d < 0; });
+  const sinFecha = activas.filter(t => !etaDe(t));
+  const zarpanHoy = activas.filter(t => dias(zarpeDe(t)) === 0);
+  // cobertura del terminal de destino (mismo cálculo del Resumen Nacional) → ¿llega tarde?
+  let RN = null; try { if (typeof _rnCalcularDetalle === 'function') _rnCalcularDetalle(); RN = window._rnDetalleProd || null; } catch (e) { RN = null; }
+  const normT = t => String(t||'').toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
+  const plantaDe = t => { const n = normT(t); return (typeof PLANTAS_18_OFICIALES !== 'undefined' ? PLANTAS_18_OFICIALES : []).find(pl => normT(pl) === n || n.indexOf(normT(pl)) >= 0) || null; };
+  const tarde = [];
+  activas.forEach(t => { const pl = plantaDe(t.terminal), d = dias(etaDe(t)); if (!pl || !RN || d == null || d <= 0) return; const pn = (typeof normProd === 'function') ? normProd(t.producto) : t.producto; const c = RN.celda && (RN.celda[pl + '|' + pn] || RN.celda[pl + '|' + t.producto]); if (c && c.cob != null && isFinite(c.cob) && c.cob < d) tarde.push({ t, pl, d, cob: c.cob }); });
+  const lblTipo = PROG_STATE.tab === 'FLUVIAL' ? 'convoyes fluviales' : 'naves marítimas';
+  let lect = `<b>${activas.length}</b> ${lblTipo} activas (${prog.length} programadas · ${act.length} en curso) con <b>${vol.toFixed(1)} MB</b> comprometidos. `;
+  if (en7.length) lect += `En los próximos 7 días llegan <b>${en7.length}</b>: ${en7.slice(0, 5).map(t => esc(t.terminal || '—') + ' ' + esc(etaDe(t).slice(5)) + ' (' + esc(t.buque || '') + ')').join(', ')}${en7.length > 5 ? ' y ' + (en7.length - 5) + ' más' : ''}. `;
+  else lect += 'No hay llegadas programadas en los próximos 7 días. ';
+  if (zarpanHoy.length) lect += `Zarpan hoy: <b>${zarpanHoy.map(t => esc(t.buque || '')).join(', ')}</b>. `;
+  if (tarde.length) lect += `<span style="color:var(--red);font-weight:800">⚠️ Llega tarde:</span> ${tarde.slice(0, 4).map(x => esc(x.t.terminal) + ' ' + esc(x.t.producto) + ' (cob. ' + x.cob.toFixed(1) + ' d, ' + esc(x.t.buque) + ' en ' + x.d + ' d)').join('; ')}. `;
+  if (vencidas.length) lect += `<span style="color:var(--yel);font-weight:800">${vencidas.length} con ETA vencida</span> sin cerrar (${vencidas.slice(0, 3).map(t => esc(t.buque || '')).join(', ')}): actualizar estado. `;
+  if (sinFecha.length) lect += `${sinFecha.length} sin fecha de llegada. `;
+  if (pend) lect += `${pend} pendiente${pend === 1 ? '' : 's'} de sincronizar con ClickUp.`;
+  const k = (lbl, v, s2, col) => `<div class="cv-kpi" style="cursor:default;min-height:0;padding:10px 12px"><div class="cv-k">${lbl}</div><div class="cv-n" style="font-size:24px;color:${col}">${v}</div><div class="cv-s">${s2}</div></div>`;
+  const prox = en7.slice(0, 8).map(t => { const d = dias(etaDe(t)); const late = tarde.find(x => x.t === t); return `<span class="dec-chip" style="--c:${late ? 'var(--red)' : 'var(--acc)'};cursor:pointer" onclick="progOpenEditor('${esc(t.id_local)}')" title="${esc(t.buque)} · ${esc(t.producto)} · ${(parseFloat(t.volumen_mb)||0).toFixed(1)} MB${late ? ' · llega tarde' : ''}">${d === 0 ? 'Hoy' : d === 1 ? 'Mañana' : '+' + d + ' d'} · <b>${esc(t.terminal || '—')}</b> ${esc(t.buque || '')}${late ? ' ⚠️' : ''}</span>`; }).join('');
+  el.innerHTML = `<div class="cv-strip" style="padding:0;grid-template-columns:repeat(5,minmax(130px,1fr));margin-bottom:8px">
+    ${k('Activas', activas.length, `${prog.length} programadas · ${act.length} en curso · ${comp.length} completadas`, 'var(--txt)')}
+    ${k('Volumen comprometido', vol.toFixed(1) + '<small>MB</small>', 'en tareas activas', 'var(--acc)')}
+    ${k('Llegan en 7 días', en7.length, en7.length ? en7.reduce((s2, t) => s2 + (parseFloat(t.volumen_mb)||0), 0).toFixed(1) + ' MB' : 'sin llegadas próximas', en7.length ? 'var(--acc)' : 'var(--txt3)')}
+    ${k('Llegan tarde / vencidas', tarde.length + ' / ' + vencidas.length, tarde.length ? 'cobertura se agota antes del arribo' : vencidas.length ? 'ETA pasada sin cerrar' : 'sin alertas', (tarde.length || vencidas.length) ? 'var(--red)' : 'var(--grn)')}
+    ${k('Pend. de sync', pend, pend ? 'no están en ClickUp' : 'todo sincronizado', pend ? 'var(--yel)' : 'var(--grn)')}
+  </div>
+  <div class="cv-lectura" style="margin:0 0 8px">${lect}</div>
+  ${prox ? `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;align-items:center"><span style="font-size:10px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px">Próximas llegadas:</span>${prox}</div>` : ''}`;
 }
 function progRenderTable() {
   const rows = progFiltered();
