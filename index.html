@@ -2423,7 +2423,37 @@ function _pdRenderResumen(plan) {
   var realTot  = realBD+realCis;
   var avPct    = total>0?Math.round(realTot/total*100):0;
 
-  var html = '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px">'
+  // ── Lectura ejecutiva: avance vs. avance esperado por calendario, por ruta,
+  //    y qué barcazas/cisternas siguen sin registrar movimiento.
+  var lectura = '';
+  (function(){
+    if (typeof _curvaEstilos === 'function') _curvaEstilos();
+    var esc = function(t) { return String(t == null ? '' : t).replace(/[&<>"]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); };
+    var mk = String(plan.mes || '').match(/^(\d{4})-(\d{2})/);
+    var hoy = (typeof currentDate === 'string' && currentDate) ? currentDate : new Date().toISOString().slice(0,10);
+    var pctCal = null, diasRest = null;
+    if (mk) { var dm = new Date(+mk[1], +mk[2], 0).getDate(); var hk = hoy.slice(0,7); var dia = hk === plan.mes.slice(0,7) ? +hoy.slice(8,10) : (hk > plan.mes.slice(0,7) ? dm : 0); pctCal = Math.round(dia / dm * 100); diasRest = Math.max(0, dm - dia); }
+    var realYu = 0, realLpo = 0; plan.barcazas_yu.forEach(function(b){ realYu += parseFloat((d.barcazas[b.id]||{}).vol_real||0)||0; }); plan.barcazas_lpo.forEach(function(b){ realLpo += parseFloat((d.barcazas[b.id]||{}).vol_real||0)||0; });
+    var pct = function(r, t){ return t > 0 ? Math.round(r / t * 100) : null; };
+    var pendB = plan.barcazas_yu.concat(plan.barcazas_lpo).filter(function(b){ return !(parseFloat((d.barcazas[b.id]||{}).vol_real||0) > 0); });
+    var pendC = plan.cisternas.filter(function(c){ return !(parseFloat((d.cisternas[c.id]||{}).vol_real||0) > 0); });
+    var estado = pctCal == null ? ['—', 'var(--txt3)'] : avPct >= pctCal - 5 ? (avPct >= pctCal + 5 ? ['ADELANTADO', 'var(--grn)'] : ['AL RITMO', 'var(--acc)']) : avPct >= pctCal - 20 ? ['ATRASADO', 'var(--yel)'] : ['MUY ATRASADO', 'var(--red)'];
+    var ritmo = (diasRest && diasRest > 0) ? (total - realTot) / diasRest : null;
+    lectura = 'El plan de <b>' + esc(plan.mes) + '</b> va al <b style="color:' + estado[1] + '">' + avPct + '%</b> (' + realTot.toFixed(1) + ' de ' + total.toFixed(1) + ' MB)' + (pctCal != null ? ', con el ' + pctCal + '% del mes transcurrido: <b style="color:' + estado[1] + '">' + estado[0] + '</b>' : '') + '. ';
+    lectura += 'Por ruta: Yurimaguas ' + (pct(realYu, totalYu) == null ? '—' : pct(realYu, totalYu) + '%') + ', Pucallpa-LPO ' + (pct(realLpo, totalLpo) == null ? '—' : pct(realLpo, totalLpo) + '%') + ', cisternas ' + (pct(realCis, totalCis) == null ? '—' : pct(realCis, totalCis) + '%') + '. ';
+    if (pendB.length) lectura += '<b>' + pendB.length + ' barcaza' + (pendB.length === 1 ? '' : 's') + '</b> sin movimiento registrado (' + pendB.slice(0, 4).map(function(b){ return esc(String(b.empujador||'').replace('EF / ','')); }).join(', ') + (pendB.length > 4 ? '…' : '') + ')' + (pendC.length ? ' y <b>' + pendC.length + ' viaje' + (pendC.length === 1 ? '' : 's') + ' de cisternas</b>' : '') + '. ';
+    else if (pendC.length) lectura += '<b>' + pendC.length + ' viaje' + (pendC.length === 1 ? '' : 's') + ' de cisternas</b> sin movimiento registrado. ';
+    if (ritmo != null && total - realTot > 0) lectura += 'Para cerrar el mes hacen falta <b>' + (total - realTot).toFixed(1) + ' MB</b> en ' + diasRest + ' días (' + ritmo.toFixed(1) + ' MB/día).';
+    else if (total - realTot <= 0 && total > 0) lectura += 'Plan completado.';
+    var k = function(lbl, v, s2, col) { return '<div class="cv-kpi" style="cursor:default;min-height:0;padding:9px 12px"><div class="cv-k">' + lbl + '</div><div class="cv-n" style="font-size:22px;color:' + col + '">' + v + '</div><div class="cv-s">' + s2 + '</div></div>'; };
+    lectura = '<div class="cv-strip" style="padding:0;grid-template-columns:repeat(4,minmax(120px,1fr));margin-bottom:8px">'
+      + k('Estado del plan', estado[0], pctCal != null ? pctCal + '% del mes transcurrido' : 'sin fecha de mes', estado[1])
+      + k('Yurimaguas', (pct(realYu, totalYu) == null ? '—' : pct(realYu, totalYu) + '<small>%</small>'), realYu.toFixed(1) + ' de ' + totalYu.toFixed(1) + ' MB', 'var(--txt)')
+      + k('Pucallpa-LPO', (pct(realLpo, totalLpo) == null ? '—' : pct(realLpo, totalLpo) + '<small>%</small>'), realLpo.toFixed(1) + ' de ' + totalLpo.toFixed(1) + ' MB', 'var(--txt)')
+      + k('Pendientes', pendB.length + ' / ' + pendC.length, 'barcazas / cisternas sin registro', (pendB.length + pendC.length) ? 'var(--yel)' : 'var(--grn)')
+      + '</div><div class="cv-lectura" style="margin:0 0 14px;font-size:12px">' + lectura + '</div>';
+  })();
+  var html = lectura + '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px">'
     + '<div style="background:var(--bg3);border:1px solid var(--bdr);border-radius:9px;padding:12px;text-align:center"><div style="font-size:8px;font-weight:700;color:var(--txt3);text-transform:uppercase">Plan total mes</div><div style="font-size:22px;font-weight:800;font-family:monospace;color:#818cf8;margin-top:3px">'+total.toFixed(DEC)+'</div><div style="font-size:9px;color:var(--txt3)">MB</div></div>'
     + '<div style="background:var(--bg3);border:1px solid var(--bdr);border-radius:9px;padding:12px;text-align:center"><div style="font-size:8px;font-weight:700;color:var(--txt3);text-transform:uppercase">Real registrado</div><div style="font-size:22px;font-weight:800;font-family:monospace;color:#4ade80;margin-top:3px">'+realTot.toFixed(DEC)+'</div><div style="font-size:9px;color:var(--txt3)">MB</div></div>'
     + '<div style="background:var(--bg3);border:1px solid var(--bdr);border-radius:9px;padding:12px;text-align:center"><div style="font-size:8px;font-weight:700;color:var(--txt3);text-transform:uppercase">% Avance</div><div style="font-size:22px;font-weight:800;font-family:monospace;color:'+(avPct>=90?'#4ade80':avPct>=70?'#fbbf24':'#f87171')+';margin-top:3px">'+avPct+'%</div><div style="font-size:9px;color:var(--txt3)">del plan</div></div>'
@@ -18024,6 +18054,7 @@ function renderPUpload() {
     )
         + '</div>' // end grid 2-col
     + '</div>'; // end padding wrapper
+  _uplOrganizar(el);
   _bindUploadEvents();
   // Restaurar el estado abierto/cerrado de cada acordeón (ver nota arriba,
   // junto a "_uplPrevOpen") — solo si difiere de su estado recién pintado.
@@ -18040,6 +18071,61 @@ function renderPUpload() {
     if (hdr)   hdr.classList.toggle('open', wasOpen);
     if (arrow) arrow.classList.toggle('open', wasOpen);
   });
+}
+// ── Carga de Datos: agrupa las cajas por categoría y arma la franja de
+//    estado del día (qué fuentes ya tienen la fecha de hoy y cuáles faltan).
+var UPL_CATEGORIAS = [
+  { id: 'inv',  ico: '📊', t: 'Inventarios y ventas',       s: 'Reporte diario de plantas, ventas y pronóstico', ids: ['acc-ed','acc-cognos','acc-ppv','acc-pron'] },
+  { id: 'ref',  ico: '🏭', t: 'Refinerías (PDF diario)',     s: 'Inventarios de Talara, Conchán e Iquitos',        ids: ['acc-ref-talara-inv','acc-ref-conchan-inv','acc-ref-iquitos-inv'] },
+  { id: 'mar',  ico: '🚢', t: 'Transporte marítimo',         s: 'Posición de naves y cargas programadas',          ids: ['acc-naves','acc-cargas-naves'] },
+  { id: 'tf',   ico: '🚛', t: 'Transporte terrestre y fluvial', s: 'Cisternas y reporte fluvial selva',           ids: ['acc-cisternas','acc-fluvial'] },
+  { id: 'util', ico: '🛠️', t: 'Herramientas y registro',     s: 'Utilidades y actividad de la sesión',             ids: ['acc-tools','acc-log'] }
+];
+function _uplOrganizar(el) {
+  var grid = el.querySelector('.page-header + div > div'); if (!grid) return;
+  if (!document.getElementById('upl-cat-css')) {
+    var st = document.createElement('style'); st.id = 'upl-cat-css';
+    st.textContent = '.upl-cat{grid-column:1/-1;margin-top:10px}.upl-cat:first-of-type{margin-top:4px}.upl-cat-h{display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:10px;background:color-mix(in srgb,var(--acc) 10%,var(--card));border:1px solid color-mix(in srgb,var(--acc) 25%,var(--bdr));margin-bottom:8px;cursor:pointer;user-select:none}.upl-cat-h:hover{border-color:var(--acc)}.upl-cat-ico{font-size:18px}.upl-cat-t{font-size:13px;font-weight:800;color:var(--txt)}.upl-cat-s{font-size:10.5px;color:var(--txt3)}.upl-cat-n{margin-left:auto;display:flex;gap:6px;align-items:center}.upl-pill{font-size:9.5px;font-weight:800;padding:2px 8px;border-radius:999px;white-space:nowrap}.upl-pill-ok{background:color-mix(in srgb,var(--grn) 16%,transparent);color:var(--grn)}.upl-pill-pend{background:color-mix(in srgb,var(--yel) 18%,transparent);color:var(--yel)}.upl-pill-nd{background:var(--bg3);color:var(--txt3)}.upl-cat-arrow{font-size:10px;color:var(--txt3);transition:transform .15s}.upl-cat-h.closed .upl-cat-arrow{transform:rotate(-90deg)}.upl-cat-g{display:grid;grid-template-columns:1fr 1fr;gap:8px 14px}.upl-cat-g.hidden{display:none}@media(max-width:900px){.upl-cat-g{grid-template-columns:1fr}}.upl-estado{grid-column:1/-1;display:grid;grid-template-columns:minmax(220px,1.2fr) 1fr;gap:10px;margin-bottom:6px}.upl-estado-hero{background:linear-gradient(135deg,color-mix(in srgb,var(--acc) 14%,var(--card)),var(--card));border:1px solid color-mix(in srgb,var(--acc) 35%,var(--bdr));border-radius:12px;padding:12px 14px}.upl-estado-k{font-size:9.5px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--txt3)}.upl-estado-n{font-family:var(--mono);font-size:28px;font-weight:900;color:var(--txt);margin-top:4px;line-height:1}.upl-estado-n small{font-size:11px;font-weight:700;color:var(--txt2);font-family:var(--sans);margin-left:6px}.upl-estado-list{background:var(--card);border:1px solid var(--bdr);border-radius:12px;padding:10px 14px;display:flex;flex-wrap:wrap;gap:6px;align-content:flex-start}.upl-src{display:inline-flex;align-items:center;gap:5px;font-size:10.5px;font-weight:700;padding:3px 9px;border-radius:999px;border:1px solid var(--bdr);background:var(--bg3);color:var(--txt2);cursor:pointer}.upl-src:hover{border-color:var(--acc)}.upl-src.ok{border-color:color-mix(in srgb,var(--grn) 50%,transparent);color:var(--grn);background:color-mix(in srgb,var(--grn) 10%,transparent)}.upl-src.pend{border-color:color-mix(in srgb,var(--yel) 50%,transparent);color:var(--yel);background:color-mix(in srgb,var(--yel) 10%,transparent)}@media(max-width:800px){.upl-estado{grid-template-columns:1fr}}';
+    document.head.appendChild(st);
+  }
+  window._uplCatCerradas = window._uplCatCerradas || {};
+  var hoy = (typeof currentDate !== 'undefined' && currentDate) ? currentDate : new Date().toISOString().slice(0,10);
+  var estadoDe = function(acc) {
+    var hdr = acc.querySelector('.upl-accordion-hdr'); var tag = hdr && hdr.querySelector('span[style*="📅"], span');
+    var tags = hdr ? Array.prototype.filter.call(hdr.querySelectorAll('span'), function(x){ return /📅/.test(x.textContent); }) : [];
+    if (!tags.length) return 'nd';
+    return /#16a34a/.test(tags[0].getAttribute('style') || '') ? 'ok' : 'pend';
+  };
+  var titleDe = function(acc) { var t = acc.querySelector('.upl-accordion-title'); return t ? t.textContent.replace(/\s*[\[(].*$/, '').replace(/ — .*$/, '').trim() : ''; };
+  var frag = document.createDocumentFragment();
+  var resumen = { ok: 0, pend: 0, nd: 0, fuentes: [] };
+  UPL_CATEGORIAS.forEach(function(cat) {
+    var accs = cat.ids.map(function(id){ return document.getElementById(id + '-wrap'); }).filter(Boolean);
+    if (!accs.length) return;
+    var nOk = 0, nPend = 0;
+    accs.forEach(function(a){ var e = estadoDe(a); if (cat.id !== 'util') { resumen[e]++; resumen.fuentes.push({ id: a.id, t: titleDe(a), e: e }); } if (e === 'ok') nOk++; if (e === 'pend') nPend++; });
+    var sec = document.createElement('div'); sec.className = 'upl-cat'; sec.id = 'upl-cat-' + cat.id;
+    var cerrada = !!window._uplCatCerradas[cat.id];
+    var pills = cat.id === 'util' ? '' : (nOk ? '<span class="upl-pill upl-pill-ok">' + nOk + ' al día</span>' : '') + (nPend ? '<span class="upl-pill upl-pill-pend">' + nPend + ' pendiente' + (nPend === 1 ? '' : 's') + '</span>' : '') + ((accs.length - nOk - nPend) ? '<span class="upl-pill upl-pill-nd">' + (accs.length - nOk - nPend) + ' sin fecha</span>' : '');
+    sec.innerHTML = '<div class="upl-cat-h' + (cerrada ? ' closed' : '') + '" data-upl-cat="' + cat.id + '"><span class="upl-cat-ico">' + cat.ico + '</span><div><div class="upl-cat-t">' + cat.t + '</div><div class="upl-cat-s">' + cat.s + ' · ' + accs.length + ' fuente' + (accs.length === 1 ? '' : 's') + '</div></div><div class="upl-cat-n">' + pills + '<span class="upl-cat-arrow">▼</span></div></div><div class="upl-cat-g' + (cerrada ? ' hidden' : '') + '"></div>';
+    var g = sec.querySelector('.upl-cat-g'); accs.forEach(function(a){ g.appendChild(a); });
+    frag.appendChild(sec);
+  });
+  // Franja de estado del día
+  var est = document.createElement('div'); est.className = 'upl-estado';
+  var tot = resumen.ok + resumen.pend + resumen.nd;
+  est.innerHTML = '<div class="upl-estado-hero"><div class="upl-estado-k">Cargas del día · ' + hoy.split('-').reverse().join('/') + '</div><div class="upl-estado-n">' + resumen.ok + '<small>de ' + tot + ' fuentes al día</small></div><div style="font-size:10.5px;color:var(--txt2);margin-top:6px">' + (resumen.pend ? '<b style="color:var(--yel)">' + resumen.pend + ' con fecha anterior</b> · ' : '') + (resumen.nd ? resumen.nd + ' sin fecha registrada · ' : '') + 'clic en una fuente abre su caja</div></div>'
+    + '<div class="upl-estado-list">' + resumen.fuentes.map(function(f){ return '<span class="upl-src ' + f.e + '" data-upl-ir="' + f.id + '">' + (f.e === 'ok' ? '✅' : f.e === 'pend' ? '⏳' : '○') + ' ' + f.t + '</span>'; }).join('') + '</div>';
+  grid.innerHTML = ''; grid.appendChild(est); grid.appendChild(frag);
+  if (!grid._uplCatBound) {
+    grid._uplCatBound = true;
+    grid.addEventListener('click', function(ev) {
+      var h = ev.target.closest('[data-upl-cat]');
+      if (h) { var id = h.getAttribute('data-upl-cat'); var g2 = h.nextElementSibling; var c = !h.classList.contains('closed'); h.classList.toggle('closed', c); if (g2) g2.classList.toggle('hidden', c); window._uplCatCerradas[id] = c; return; }
+      var s2 = ev.target.closest('[data-upl-ir]');
+      if (s2) { var w = document.getElementById(s2.getAttribute('data-upl-ir')); if (!w) return; var cat = w.closest('.upl-cat'); if (cat) { var hh = cat.querySelector('.upl-cat-h'); if (hh.classList.contains('closed')) hh.click(); } var accId = w.id.replace(/-wrap$/, ''); var body = document.getElementById(accId + '-body'); if (body && body.style.display === 'none' && typeof _uplToggle === 'function') _uplToggle(accId); w.scrollIntoView({ behavior: 'smooth', block: 'start' }); w.style.outline = '2px solid var(--acc)'; setTimeout(function(){ w.style.outline = ''; }, 1500); }
+    });
+  }
 }
 function _uplAccordion(id, icon, title, desc, badge, openDefault, bodyHTML, lastDate) {
   var open = openDefault ? 'open' : '';
@@ -26641,6 +26727,7 @@ window._openPuertosModal = function() {
     + '      <button onclick="document.getElementById(\'puertos-modal-overlay\').remove()" style="background:transparent;border:none;cursor:pointer;font-size:22px;color:var(--txt3);padding:2px 6px;line-height:1">&#10005;</button>'
     + '    </div>'
     + '  </div>'
+    + '  <div id="pw-resumen" style="padding:10px 16px 0"></div>'
     + '  <div class="pm-legend">'
     + '    <span style="color:#1a9e50">&#9679; Abierto (olas &lt;1.5m)</span>'
     + '    <span style="color:#d96b1a">&#9679; Condici\u00f3n moderada (1.5&ndash;2.5m)</span>'
@@ -26867,6 +26954,45 @@ function _puertosDirViento(deg) {
   return dirs[Math.round(deg/45)%8] || '—';
 }
 
+// Resumen ejecutivo del estado de puertos: cuántos abiertos / en riesgo /
+// cerrados, cuándo se prevé el primer cierre y qué descargas de BT caen en
+// un puerto con riesgo (viaje vigente de cada buque, misma fuente que RepoMar).
+function _puertosResumenActualizar() {
+  var host = document.getElementById('pw-resumen'); if (!host) return;
+  if (typeof _curvaEstilos === 'function') _curvaEstilos();
+  var E = window._puertosEstado || {}; var nombres = Object.keys(E);
+  var esc = function(t) { return String(t == null ? '' : t).replace(/[&<>"]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); };
+  var por = function(n){ return nombres.filter(function(k){ return E[k].nivel === n; }); };
+  var ok = por('ok'), mod = por('mod'), riesgo = por('riesgo'), cerr = por('cerrado'), nd = por('nd');
+  var conRiesgo7 = nombres.filter(function(k){ return E[k].riesgo; }).sort(function(a, b){ return E[a].riesgo.dia.localeCompare(E[b].riesgo.dia); });
+  // Descargas pendientes en puertos con problema
+  var afect = [];
+  try {
+    var norm = function(t){ return String(t||'').toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g,''); };
+    (typeof _buildRepoMarBuques === 'function' ? _buildRepoMarBuques() : []).forEach(function(b) {
+      (b.legs || []).forEach(function(l) {
+        if (l.estado === 'COMPLETADO' || l._sintetica || !(l.vol > 0)) return;
+        var pn = nombres.find(function(k){ return norm(k) === norm(l.terminal) || norm(l.terminal).indexOf(norm(k)) >= 0; }); if (!pn) return;
+        var e = E[pn]; var f = (l.fecha_hasta || '').slice(0, 10);
+        var problema = e.nivel === 'cerrado' || e.nivel === 'riesgo' || (e.riesgo && f && f >= e.riesgo.dia);
+        if (problema && !afect.some(function(x){ return x.b === b.buque && x.p === pn; })) afect.push({ b: b.buque, p: pn, f: f, nivel: e.nivel, riesgo: e.riesgo });
+      });
+    });
+  } catch (e) {}
+  var lect = nombres.length < 11 ? 'Consultando condiciones de mar (' + nombres.length + '/11)… ' : '';
+  lect += '<b style="color:#1a9e50">' + ok.length + ' abiertos</b>' + (mod.length ? ', <b style="color:#d96b1a">' + mod.length + ' en condición moderada</b> (' + mod.map(esc).join(', ') + ')' : '') + (riesgo.length ? ', <b style="color:#e03434">' + riesgo.length + ' con posible cierre</b> (' + riesgo.map(function(k){ return esc(k) + ' ' + (E[k].ola != null ? E[k].ola.toFixed(1) + ' m' : ''); }).join(', ') + ')' : '') + (cerr.length ? ', <b style="color:#7c1d1d">' + cerr.length + ' cerrados según reporte</b> (' + cerr.map(esc).join(', ') + ')' : '') + '. ';
+  if (conRiesgo7.length) lect += 'Pronóstico 7 días: olas sobre el umbral en ' + conRiesgo7.slice(0, 5).map(function(k){ return '<b>' + esc(k) + '</b> desde el ' + esc(E[k].riesgo.dia.slice(5).split('-').reverse().join('/')) + ' (' + E[k].riesgo.ola.toFixed(1) + ' m)'; }).join(', ') + '. ';
+  else if (nombres.length >= 11) lect += 'Sin cierres previstos por oleaje en los próximos 7 días. ';
+  if (afect.length) lect += '<span style="color:#e03434;font-weight:800">⚠️ Descargas expuestas:</span> ' + afect.slice(0, 5).map(function(x){ return esc(x.b) + ' en ' + esc(x.p) + (x.f ? ' (' + esc(x.f.slice(5).split('-').reverse().join('/')) + ')' : ''); }).join(', ') + (afect.length > 5 ? ' y ' + (afect.length - 5) + ' más' : '') + '.';
+  var k = function(lbl, v, s2, col) { return '<div class="cv-kpi" style="cursor:default;min-height:0;padding:9px 12px"><div class="cv-k">' + lbl + '</div><div class="cv-n" style="font-size:22px;color:' + col + '">' + v + '</div><div class="cv-s">' + s2 + '</div></div>'; };
+  host.innerHTML = '<div class="cv-strip" style="padding:0;grid-template-columns:repeat(4,minmax(120px,1fr));margin-bottom:8px">'
+    + k('Abiertos', ok.length, 'de ' + nombres.length + ' consultados', '#1a9e50')
+    + k('Moderado / posible cierre', mod.length + ' / ' + riesgo.length, (mod.concat(riesgo).slice(0, 3).map(esc).join(', ') || 'sin alertas ahora'), (riesgo.length ? '#e03434' : mod.length ? '#d96b1a' : '#1a9e50'))
+    + k('Cerrados (reporte)', cerr.length, cerr.length ? cerr.map(esc).join(', ') : 'ninguno reportado', cerr.length ? '#7c1d1d' : '#1a9e50')
+    + k('Descargas expuestas', afect.length, afect.length ? 'BT con escala en puerto con riesgo' : 'ninguna escala en riesgo', afect.length ? '#e03434' : '#1a9e50')
+    + '</div><div class="cv-lectura" style="margin:0;font-size:12px">' + lect + '</div>';
+}
+window._puertosResumenActualizar = _puertosResumenActualizar;
 window._puertosRefresh = function() {
   var PUERTOS = [
     { nombre:'Talara',    lat:-4.577,  lng:-81.272, umbral:2.0 },
@@ -26942,6 +27068,15 @@ window._puertosRefresh = function() {
           estEl.style.background = sem.bgE;
           estEl.style.borderColor = sem.colorE+'44';
         }
+        // Resumen ejecutivo: estado por puerto + primer día del pronóstico con riesgo de cierre
+        (function(){
+          var hoyISO = new Date().toISOString().slice(0,10), riesgo = null;
+          if (d.time && d.wave_height_max) { for (var q = 0; q < d.time.length; q++) { if (d.time[q] >= hoyISO && d.wave_height_max[q] != null && d.wave_height_max[q] >= umbral) { riesgo = { dia: d.time[q], ola: d.wave_height_max[q] }; break; } } }
+          var nivel = _cerradoRpt ? 'cerrado' : waveNow === null ? 'nd' : waveNow < umbral * 0.8 ? 'ok' : waveNow < umbral ? 'mod' : 'riesgo';
+          window._puertosEstado = window._puertosEstado || {};
+          window._puertosEstado[p.nombre] = { nivel: nivel, ola: waveNow, umbral: umbral, riesgo: riesgo, txt: sem.estado };
+          if (typeof _puertosResumenActualizar === 'function') _puertosResumenActualizar();
+        })();
 
         // KPI de olas actualizado ahora; viento se actualiza tras second fetch
         var dataEl = document.getElementById('pw-data-'+key);
@@ -27167,6 +27302,7 @@ window._openRiosModal = function() {
     + '      <button onclick="document.getElementById(\'rios-modal-overlay\').remove()" style="background:transparent;border:none;cursor:pointer;font-size:22px;color:var(--txt3);padding:2px 6px;line-height:1">\u2715</button>'
     + '    </div>'
     + '  </div>'
+    + '  <div id="rw-resumen" style="padding:10px 18px 0"></div>'
     + '  <div class="rm-legend-strip">'
     + '    <span style="color:#16a34a">\u25cf Nivel alto</span>'
     + '    <span style="color:#0891b2">\u25cf Nivel medio</span>'
@@ -27182,6 +27318,35 @@ window._openRiosModal = function() {
   window._riosRefresh();
 };
 
+// Resumen ejecutivo de ríos: estado por ruta, tendencia a 7 días y barcazas
+// cargadas que navegan por un río en vaciante.
+function _riosResumenActualizar() {
+  var host = document.getElementById('rw-resumen'); if (!host) return;
+  if (typeof _curvaEstilos === 'function') _curvaEstilos();
+  var E = window._riosEstado || {}; var ks = Object.keys(E);
+  var esc = function(t) { return String(t == null ? '' : t).replace(/[&<>"]/g, function(c){ return {'&':'&amp;','<':'&lt;','"':'&quot;','>':'&gt;'}[c]; }); };
+  var crit = ks.filter(function(k){ return E[k].nivel === 'critica'; }), bajo = ks.filter(function(k){ return E[k].nivel === 'bajo'; }), ok = ks.filter(function(k){ return E[k].nivel === 'alto' || E[k].nivel === 'medio'; });
+  var bajando = ks.filter(function(k){ return E[k].futTrend < -3; }), subiendo = ks.filter(function(k){ return E[k].futTrend > 3; });
+  // Barcazas cargadas que usan un río en vaciante (ruta Pucallpa→Ucayali, Yurimaguas→Huallaga/Marañón, llegada por Amazonas)
+  var rioDeRuta = function(ruta) { var r = String(ruta||'').toUpperCase(); var out = []; if (r.indexOf('PUCALLPA') >= 0) out.push('Río Ucayali'); if (r.indexOf('YURIMAGUAS') >= 0) out.push('Río Huallaga', 'Río Marañón'); if (r.indexOf('IQUITOS') >= 0) out.push('Río Amazonas'); return out; };
+  var expuestas = [];
+  (window._fluvialBarges || []).forEach(function(b){ if (!b.cargado || /COMPLET|DESCARGAD/i.test(b.estado||'')) return; var rios = rioDeRuta(b.ruta).filter(function(rn){ return E[rn] && (E[rn].nivel === 'critica' || E[rn].nivel === 'bajo'); }); if (rios.length) expuestas.push({ b: b.af || b.empujador || b.id, ruta: b.ruta, rios: rios, mb: b.volMB || 0 }); });
+  var lect = ks.length < _RIOS_DEF.length ? 'Consultando caudales (' + ks.length + '/' + _RIOS_DEF.length + ')… ' : '';
+  if (crit.length) lect += '<b style="color:#dc2626">Vaciante crítica</b> en ' + crit.map(function(k){ return esc(k) + ' (' + esc(E[k].punto) + ')'; }).join(', ') + '. ';
+  if (bajo.length) lect += '<b style="color:#d97706">Nivel bajo</b> en ' + bajo.map(function(k){ return esc(k) + ' (' + esc(E[k].punto) + ')'; }).join(', ') + '. ';
+  if (ok.length) lect += (ok.length === ks.length ? 'Todos los ríos' : ok.map(esc).join(', ')) + ' en nivel medio o alto. ';
+  if (bajando.length) lect += 'Tendencia a 7 días: <b style="color:#d97706">sigue bajando</b> en ' + bajando.map(function(k){ return esc(k) + ' (' + E[k].futTrend.toFixed(0) + '%)'; }).join(', ') + '. ';
+  if (subiendo.length) lect += 'Recupera caudal en ' + subiendo.map(esc).join(', ') + '. ';
+  if (expuestas.length) lect += '<span style="color:#dc2626;font-weight:800">⚠️ Barcazas cargadas en ríos con vaciante:</span> ' + expuestas.slice(0, 5).map(function(x){ return esc(x.b) + ' (' + esc(x.ruta) + ', ' + x.mb.toFixed(1) + ' MB)'; }).join(', ') + (expuestas.length > 5 ? ' y ' + (expuestas.length - 5) + ' más' : '') + ': revisar calado y carga máxima.';
+  var k = function(lbl, v, s2, col) { return '<div class="cv-kpi" style="cursor:default;min-height:0;padding:9px 12px"><div class="cv-k">' + lbl + '</div><div class="cv-n" style="font-size:22px;color:' + col + '">' + v + '</div><div class="cv-s">' + s2 + '</div></div>'; };
+  host.innerHTML = '<div class="cv-strip" style="padding:0;grid-template-columns:repeat(4,minmax(120px,1fr));margin-bottom:8px">'
+    + k('Ríos en vaciante', crit.length + bajo.length, (crit.concat(bajo).map(function(x){ return esc(x.replace('Río ', '')); }).join(', ') || 'ninguno'), (crit.length ? '#dc2626' : bajo.length ? '#d97706' : '#16a34a'))
+    + k('Vaciante crítica', crit.length, crit.length ? 'nivel bajo y cayendo' : 'sin ríos críticos', crit.length ? '#dc2626' : '#16a34a')
+    + k('Bajando (7 días)', bajando.length, bajando.length ? bajando.map(function(x){ return esc(x.replace('Río ', '')); }).join(', ') : 'caudales estables o en alza', bajando.length ? '#d97706' : '#16a34a')
+    + k('Barcazas expuestas', expuestas.length, expuestas.length ? expuestas.reduce(function(a, x){ return a + x.mb; }, 0).toFixed(1) + ' MB cargados en ríos bajos' : 'ninguna carga en río con vaciante', expuestas.length ? '#dc2626' : '#16a34a')
+    + '</div><div class="cv-lectura" style="margin:0;font-size:12px">' + lect + '</div>';
+}
+window._riosResumenActualizar = _riosResumenActualizar;
 window._riosRefresh = function() {
   var DIAS = ['dom','lun','mar','mi\u00e9','jue','vie','s\u00e1b'];
   var updEl = document.getElementById('rw-updated');
@@ -27222,6 +27387,15 @@ window._riosRefresh = function() {
         else                  est = { txt:'\u26a0 Vaciante (bajo)',  c:'#d97706' };
 
         if (estEl){ estEl.textContent=est.txt; estEl.style.background=est.c+'22'; estEl.style.color=est.c; estEl.style.borderColor=est.c+'55'; }
+        (function(){
+          var nivel = pos >= 0.66 ? 'alto' : pos >= 0.33 ? 'medio' : falling ? 'critica' : 'bajo';
+          // tendencia próximos 7 días: ¿sigue bajando?
+          var fut = disc.slice(idxHoy, idxHoy + 7).filter(function(v){ return v != null; });
+          var futTrend = (fut.length > 1 && cur > 0) ? (fut[fut.length - 1] - cur) / cur * 100 : 0;
+          window._riosEstado = window._riosEstado || {};
+          window._riosEstado[r.nombre] = { nivel: nivel, pos: pos, cur: cur, trendPct: trendPct, futTrend: futTrend, punto: r.punto, ruta: r.ruta, txt: est.txt, c: est.c };
+          if (typeof _riosResumenActualizar === 'function') _riosResumenActualizar();
+        })();
 
         // KPIs
         var nivelTxt = pos>=0.66?'Alto':(pos>=0.33?'Medio':'Bajo');
@@ -36467,6 +36641,31 @@ window.__LOGO_B64 = 'iVBORw0KGgoAAAANSUhEUgAAAVoAAAE5CAIAAABeU3/VAAAAAXNSR0IArs4
       + kpi('Vencidas sin pago', venc.length, venc.length ? solK(venc.reduce(function (s, f) { return s + (f.total || 0); }, 0)) + ' · hasta ' + Math.max.apply(null, venc.map(function (f) { return dias(f.vencimiento, c.hoy); })) + ' días' : 'ninguna', venc.length ? '#c8102e' : '#15803d')
       + kpi('Quincenas sin gestionar', faltN, 'contrato × quincena sin factura registrada', faltN ? '#c8102e' : '#15803d')
       + '</div>';
+    // ── Lectura ejecutiva + acciones del día
+    (function () {
+      if (typeof _curvaEstilos === 'function') _curvaEstilos();
+      var gVenc = c.G.filter(function (g) { return g.vencida > 0; }).sort(function (a, b) { return b.vencida - a.vencida; });
+      var gFalt = c.G.filter(function (g) { return g.activo && (g.falt.length + g.porGest.length) > 0; }).sort(function (a, b) { return (b.falt.length + b.porGest.length) - (a.falt.length + a.porGest.length); });
+      var gSinMov = c.G.filter(function (g) { return g.activo && g.ultFact && dias(g.ultFact, c.hoy) > 45; });
+      var obs = c.lista.filter(function (f) { return f.estado === 'OBSERVADA'; });
+      var ppMonto = pp.reduce(function (s2, f) { return s2 + (f.total || 0); }, 0);
+      var estado = venc.length ? ['CON VENCIDAS', '#c8102e'] : faltN ? ['CON PENDIENTES', '#b45309'] : ['AL DÍA', '#15803d'];
+      var lect = pp.length + ' factura' + (pp.length === 1 ? '' : 's') + ' por pagar (' + solK(ppMonto) + ' con IGV)';
+      if (venc.length) lect += ', de las cuales <b style="color:#c8102e">' + venc.length + ' vencida' + (venc.length === 1 ? '' : 's') + '</b>' + (gVenc.length ? ' — la más antigua en ' + esc(gVenc[0].grupo) + ' (' + gVenc[0].vencida + ' días)' : '');
+      lect += '. ';
+      if (faltN) lect += '<b style="color:#b45309">' + faltN + ' quincena' + (faltN === 1 ? '' : 's') + ' sin gestionar</b> en ' + gFalt.slice(0, 3).map(function (g) { return esc(g.grupo) + ' (' + (g.falt.length + g.porGest.length) + ')'; }).join(', ') + (gFalt.length > 3 ? ' y ' + (gFalt.length - 3) + ' contratos más' : '') + '. ';
+      if (obs.length) lect += obs.length + ' factura' + (obs.length === 1 ? '' : 's') + ' observada' + (obs.length === 1 ? '' : 's') + ' por corregir. ';
+      if (gSinMov.length) lect += 'Sin factura hace más de 45 días: ' + gSinMov.map(function (g) { return esc(g.grupo); }).join(', ') + '. ';
+      if (!venc.length && !faltN && !obs.length) lect += 'No hay vencidas, observadas ni quincenas pendientes.';
+      var acciones = [];
+      venc.slice().sort(function (a, b) { return (a.vencimiento || '').localeCompare(b.vencimiento || ''); }).slice(0, 4).forEach(function (f) { acciones.push({ ico: '⛔', col: '#c8102e', t: 'Gestionar pago vencido · ' + esc(f.factura || 'sin N°') + ' · ' + esc(f.grupo || f.empresa || '') + ' · ' + solK(f.total || 0) + ' · venció hace ' + dias(f.vencimiento, c.hoy) + ' d', id: f.id }); });
+      gFalt.slice(0, 4).forEach(function (g) { var q = g.falt[0]; acciones.push({ ico: '📝', col: '#b45309', t: 'Registrar factura · ' + esc(g.grupo) + (q ? ' · quincena del ' + fD(q.de) : '') + ' (' + (g.falt.length + g.porGest.length) + ' pendientes)', grupo: g.grupo, de: q ? q.de : '', a: q ? q.a : '' }); });
+      obs.slice(0, 3).forEach(function (f) { acciones.push({ ico: '✏️', col: '#7c3aed', t: 'Corregir observación · ' + esc(f.factura || 'sin N°') + ' · ' + esc(f.grupo || ''), id: f.id }); });
+      h += '<div class="cv-lectura" style="margin:0 0 10px;font-size:12px"><b style="color:' + estado[1] + '">● ' + estado[0] + '</b> · Zona Sur tiene ' + lect + '</div>'
+        + (acciones.length ? '<div class="fs-card"><div class="fs-ch">Acciones de hoy <span class="fs-s" style="margin-left:auto;text-transform:none;letter-spacing:0">clic abre el registro</span></div><div style="padding:6px 14px 10px">'
+          + acciones.map(function (a) { var oc = a.id ? "window._fsEditar('" + a.id + "')" : "window._fsEditar(null,'" + esc(a.grupo) + "','" + a.de + "','" + a.a + "')"; return '<div onclick="' + oc + '" style="display:flex;gap:8px;align-items:center;padding:6px 0;border-top:1px dashed var(--bdr);cursor:pointer;font-size:11.5px"><span>' + a.ico + '</span><span style="color:var(--txt)">' + a.t + '</span><span style="margin-left:auto;color:' + a.col + ';font-weight:800;font-size:10px">→</span></div>'; }).join('')
+          + '</div></div>' : '');
+    })();
 
     // Atraso por contrato
     h += '<div class="fs-card"><div class="fs-ch">Situación por contrato</div><div style="overflow-x:auto"><table class="fs-tb"><thead><tr><th>Contrato / servicio</th><th>Empresa</th><th>N° contrato</th><th>Última quincena con factura</th><th class="r">Quincenas sin gestionar</th><th class="r">Por pagar</th><th class="r">Más vencida</th></tr></thead><tbody>'
