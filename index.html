@@ -10945,9 +10945,72 @@ function renderPCapRef() {
     return (a.producto||'').localeCompare(b.producto||'');
   });
 
-  var rowsHTML = filas.map(function(f) {
-    var invActual = invPorPlantaProd[f.planta+'|'+f.producto] || 0;
-    var pct = f.capacidad > 0 ? Math.round((invActual/f.capacidad)*100) : null;
+  // ⚠️ REDISEÑADO — a pedido (20-oct): de tabla plana a "tanques" por
+  // planta: nivel de llenado con las marcas de fondos y de mínimo
+  // OSINERGMIN, vacío útil, y el aviso que importa para planificar:
+  // si la reposición programada (misma fuente que RepoMar) NO CABE en
+  // el vacío disponible. Filtros por producto y por situación, y resumen
+  // nacional arriba. La tabla original queda disponible con un botón.
+  if (typeof _rnEstilos === 'function') _rnEstilos();
+  if (!document.getElementById('cap-css')) { var stC = document.createElement('style'); stC.id = 'cap-css'; stC.textContent = '.cap-strip{display:flex;flex-wrap:wrap;gap:8px 18px;align-items:center;margin:12px 18px 0;padding:10px 14px;background:var(--card);border:1px solid var(--bdr);border-left:5px solid var(--acc);border-radius:10px}.cap-k{display:flex;flex-direction:column;min-width:60px}.cap-k b{font:800 18px var(--mono);color:var(--txt);line-height:1.1}.cap-k span{font-size:8.5px;color:var(--txt3);text-transform:uppercase;letter-spacing:.4px;margin-top:3px}.cap-filtros{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:10px 18px 0}.cap-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(330px,1fr));gap:10px;margin:10px 18px 20px}.cap-pl{background:var(--card);border:1px solid var(--bdr);border-radius:10px;overflow:hidden}.cap-pl-h{display:flex;align-items:center;gap:8px;padding:9px 12px;background:var(--card2);border-bottom:1px solid var(--bdr);cursor:pointer}.cap-pl-h b{font-size:12.5px;color:var(--txt)}.cap-pl-h:hover b{text-decoration:underline}.cap-pl-s{margin-left:auto;font:700 10px var(--mono);color:var(--txt2)}.cap-t{padding:8px 12px;border-bottom:1px solid color-mix(in srgb,var(--bdr) 45%,transparent)}.cap-t:last-child{border-bottom:none}.cap-t-h{display:flex;align-items:baseline;gap:8px;font-size:11px}.cap-t-h b{color:var(--txt);font-weight:800}.cap-t-pct{margin-left:auto;font:800 12px var(--mono);color:var(--c)}.cap-gauge{position:relative;height:14px;background:var(--bg3);border-radius:4px;margin-top:5px;overflow:visible}.cap-fill{position:absolute;left:0;top:0;height:100%;background:var(--c);border-radius:4px 0 0 4px}.cap-mark{position:absolute;top:-3px;bottom:-3px;width:2px;background:var(--txt3)}.cap-mark.osi{background:#a855f7}.cap-mark::after{content:attr(data-l);position:absolute;top:100%;margin-top:2px;left:-4px;font:700 7.5px var(--sans);color:var(--txt3);white-space:nowrap}.cap-mark.osi::after{color:#a855f7}.cap-t-f{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:9.5px;color:var(--txt3);margin-top:16px}.cap-t-f b{color:var(--txt2);font-family:var(--mono)}.cap-av{margin-top:5px;font-size:10px;font-weight:700;padding:4px 8px;border-radius:6px}.cap-av.no{color:var(--red);background:color-mix(in srgb,var(--red) 12%,transparent);border:1px solid color-mix(in srgb,var(--red) 35%,transparent)}.cap-av.ok{color:var(--grn);background:color-mix(in srgb,var(--grn) 10%,transparent)}.cap-av.bajo{color:#a855f7;background:color-mix(in srgb,#a855f7 12%,transparent)}.cap-tbl{margin:0 18px 18px;background:var(--card);border:1px solid var(--bdr);border-radius:var(--r);overflow:auto}'; document.head.appendChild(stC); }
+  window._capEstado = window._capEstado || { prod: 'todos', sit: 'todas', tabla: false };
+  var FC = window._capEstado;
+  var escC = function(t){ return String(t==null?'':t).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); };
+  var RNc = null; try { RNc = (typeof _rnCalcularDetalle === 'function') ? _rnCalcularDetalle() : null; } catch (eRNc) {}
+  // Reposición pendiente por terminal+producto (abreviatura) — misma fuente que RepoMar
+  var repPend = {};
+  if (RNc && RNc.listaLlegadas) RNc.listaLlegadas.forEach(function(l){ Object.keys(l.prods).forEach(function(ab){ var k = l.terminal.toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g,'') + '|' + ab; repPend[k] = (repPend[k] || 0) + l.prods[ab]; }); });
+  var repDe = function(planta, producto) { var ab = (typeof _repomarAbrevProd === 'function') ? _repomarAbrevProd(producto) : producto; var k = String(planta).toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g,'') + '|' + String(ab).toUpperCase(); var k2 = String(planta).toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g,'') + '|' + ab; return repPend[k] || repPend[k2] || 0; };
+  filas.forEach(function(f) {
+    f._inv = invPorPlantaProd[f.planta+'|'+f.producto] || 0;
+    f._pct = f.capacidad > 0 ? Math.round(f._inv / f.capacidad * 100) : null;
+    f._vacio = f.capacidad > 0 ? Math.max(0, f.capacidad - f._inv) : null;
+    f._rep = repDe(f.planta, f.producto);
+    f._noCabe = f._vacio !== null && f._rep > 0 && f._rep > f._vacio + 0.05;
+    f._bajoOsi = f.fondo_osinergmin > 0 && f._inv > 0 && f._inv < f.fondo_osinergmin;
+    f._sit = f._noCabe ? 'nocabe' : (f._pct !== null && f._pct > 90) ? 'lleno' : f._bajoOsi ? 'bajoosi' : (f._pct !== null && f._pct < 25) ? 'bajo' : 'normal';
+  });
+  var totCap = filas.reduce(function(a2,f){ return a2 + (f.capacidad||0); }, 0), totInv = filas.reduce(function(a2,f){ return a2 + f._inv; }, 0);
+  var totVacio = filas.reduce(function(a2,f){ return a2 + (f._vacio||0); }, 0);
+  var nNoCabe = filas.filter(function(f){ return f._noCabe; }).length, nLleno = filas.filter(function(f){ return f._sit === 'lleno'; }).length, nBajoOsi = filas.filter(function(f){ return f._bajoOsi; }).length, nBajo = filas.filter(function(f){ return f._sit === 'bajo'; }).length;
+  var prodsC = [...new Set(filas.map(function(f){ return f.producto; }))].sort();
+  var vis = filas.filter(function(f){ return (FC.prod === 'todos' || f.producto === FC.prod) && (FC.sit === 'todas' || f._sit === FC.sit || (FC.sit === 'bajoosi' && f._bajoOsi)); });
+  var chipC = function(tipo, val, lbl, n, col){ var on = FC[tipo] === val; return '<button class="dec-chip' + (on ? ' on' : '') + '" data-cap="filtro" data-f="' + tipo + '" data-v="' + val + '" style="--c:' + (col || 'var(--acc)') + '">' + lbl + (n != null ? ' <b>' + n + '</b>' : '') + '</button>'; };
+  if (!document.getElementById('dec-css') && typeof _decEstilos === 'function') _decEstilos();
+  var stripC = '<div class="cap-strip">'
+    + '<div class="cap-k"><b>' + totCap.toFixed(0) + '</b><span>MB capacidad total</span></div>'
+    + '<div class="cap-k"><b>' + totInv.toFixed(0) + '</b><span>MB inventario</span></div>'
+    + '<div class="cap-k"><b style="color:' + (totCap > 0 && totInv / totCap > .9 ? 'var(--red)' : 'var(--txt)') + '">' + (totCap > 0 ? Math.round(totInv / totCap * 100) : '—') + '%</b><span>llenado nacional</span></div>'
+    + '<div class="cap-k"><b>' + totVacio.toFixed(0) + '</b><span>MB de vacío disponible</span></div>'
+    + '<div class="cap-k"><b style="color:' + (nNoCabe ? 'var(--red)' : 'var(--grn)') + '">' + nNoCabe + '</b><span>reposiciones que no caben</span></div>'
+    + '<div class="cap-k"><b style="color:' + (nLleno ? 'var(--yel)' : 'var(--txt)') + '">' + nLleno + '</b><span>tanques &gt; 90%</span></div>'
+    + '<div class="cap-k"><b style="color:' + (nBajoOsi ? '#a855f7' : 'var(--txt)') + '">' + nBajoOsi + '</b><span>bajo fondo OSINERGMIN</span></div>'
+    + '<div class="cap-k" style="margin-left:auto"><button class="rn-btn" data-cap="tabla">' + (FC.tabla ? 'Ver tanques' : 'Ver tabla') + '</button></div>'
+    + '</div>';
+  var filtrosC = '<div class="cap-filtros"><span style="font-size:9px;font-weight:800;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px">Producto</span>' + chipC('prod','todos','Todos',filas.length) + prodsC.map(function(pr){ return chipC('prod', pr, pr, filas.filter(function(f){ return f.producto === pr; }).length); }).join('')
+    + '<span style="font-size:9px;font-weight:800;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px;margin-left:10px">Situación</span>' + chipC('sit','todas','Todas') + chipC('sit','nocabe','No cabe la reposición', nNoCabe, 'var(--red)') + chipC('sit','lleno','> 90% lleno', nLleno, 'var(--yel)') + chipC('sit','bajoosi','Bajo OSINERGMIN', nBajoOsi, '#a855f7') + chipC('sit','bajo','< 25% (ventana para reponer)', nBajo, 'var(--grn)') + '</div>';
+  var porPlanta = {}; vis.forEach(function(f){ (porPlanta[f.planta] = porPlanta[f.planta] || []).push(f); });
+  var plantasOrd = Object.keys(porPlanta).sort(function(a2,b2){ var ia = PLANTAS_18_OFICIALES.indexOf(a2), ib = PLANTAS_18_OFICIALES.indexOf(b2); if (ia===-1) ia=999; if (ib===-1) ib=999; return ia-ib || a2.localeCompare(b2); });
+  var colSit = function(f){ return f._noCabe ? 'var(--red)' : f._sit === 'lleno' ? 'var(--yel)' : f._bajoOsi ? '#a855f7' : f._sit === 'bajo' ? 'var(--acc2)' : 'var(--grn)'; };
+  var tanquesHTML = plantasOrd.length ? '<div class="cap-grid">' + plantasOrd.map(function(pl) {
+    var lista = porPlanta[pl].slice().sort(function(a2,b2){ return (typeof prodSortKey === 'function' ? prodSortKey(a2.producto) - prodSortKey(b2.producto) : 0) || a2.producto.localeCompare(b2.producto); });
+    var capPl = lista.reduce(function(a2,f){ return a2 + (f.capacidad||0); }, 0), invPl = lista.reduce(function(a2,f){ return a2 + f._inv; }, 0);
+    return '<div class="cap-pl"><div class="cap-pl-h" data-rn="planta" data-planta="' + escC(pl) + '" title="Ficha de ' + escC(pl) + '"><b>' + escC(pl) + '</b><span class="cap-pl-s">' + invPl.toFixed(0) + ' / ' + capPl.toFixed(0) + ' MB · ' + (capPl > 0 ? Math.round(invPl / capPl * 100) : '—') + '%</span></div>'
+      + lista.map(function(f) {
+        var pctF = f._pct === null ? 0 : Math.min(100, f._pct);
+        var mFon = f.capacidad > 0 && f.fondos > 0 ? Math.min(100, f.fondos / f.capacidad * 100) : null;
+        var mOsi = f.capacidad > 0 && f.fondo_osinergmin > 0 ? Math.min(100, f.fondo_osinergmin / f.capacidad * 100) : null;
+        var aviso = f._noCabe ? '<div class="cap-av no">⚠ No cabe la reposición programada: llegan ' + f._rep.toFixed(1) + ' MB y el vacío es ' + f._vacio.toFixed(1) + ' MB (sobran ' + (f._rep - f._vacio).toFixed(1) + ' MB)</div>'
+          : f._rep > 0 ? '<div class="cap-av ok">✓ La reposición programada (' + f._rep.toFixed(1) + ' MB) cabe · quedarían ' + (f._vacio - f._rep).toFixed(1) + ' MB libres</div>'
+          : f._bajoOsi ? '<div class="cap-av bajo">Inventario por debajo del fondo OSINERGMIN (' + f.fondo_osinergmin.toFixed(1) + ' MB)</div>' : '';
+        return '<div class="cap-t" style="--c:' + colSit(f) + '"><div class="cap-t-h"><b>' + escC(f.producto) + '</b><span style="font:600 10px var(--mono);color:var(--txt2)">' + f._inv.toFixed(1) + ' / ' + (f.capacidad > 0 ? f.capacidad.toFixed(1) : '—') + ' MB</span><span class="cap-t-pct">' + (f._pct !== null ? f._pct + '%' : '—') + '</span></div>'
+          + '<div class="cap-gauge"><div class="cap-fill" style="width:' + pctF + '%"></div>' + (mFon !== null ? '<div class="cap-mark" data-l="fondos" style="left:' + mFon + '%"></div>' : '') + (mOsi !== null ? '<div class="cap-mark osi" data-l="OSINERGMIN" style="left:' + mOsi + '%"></div>' : '') + '</div>'
+          + '<div class="cap-t-f"><span>Vacío <b>' + (f._vacio !== null ? f._vacio.toFixed(1) : '—') + ' MB</b></span>' + (f.fondos > 0 ? '<span>Fondos <b>' + f.fondos.toFixed(1) + '</b></span>' : '') + (f.fondo_osinergmin > 0 ? '<span>F. OSINERGMIN <b>' + f.fondo_osinergmin.toFixed(1) + '</b></span>' : '') + (f._rep > 0 ? '<span>Reposición en camino <b>' + f._rep.toFixed(1) + ' MB</b></span>' : '') + '</div>'
+          + aviso + '</div>';
+      }).join('') + '</div>';
+  }).join('') + '</div>' : '<div class="rn-vacio" style="margin:12px 18px">Sin tanques con este filtro</div>';
+  var rowsHTML = vis.map(function(f) {
+    var invActual = f._inv, pct = f._pct;
     var pctColor = pct===null ? 'var(--txt3)' : pct>90 ? 'var(--red)' : pct>75 ? 'var(--yel)' : 'var(--grn)';
     return '<tr>'
       + '<td style="padding:8px 12px;font-weight:700;color:var(--txt)">' + f.planta + '</td>'
@@ -10956,6 +11019,8 @@ function renderPCapRef() {
       + '<td style="padding:8px 12px;text-align:right;font-family:var(--mono);color:var(--txt3)">' + (f.fondos>0?f.fondos.toLocaleString('es-PE',{maximumFractionDigits:1}):'—') + '</td>'
       + '<td style="padding:8px 12px;text-align:right;font-family:var(--mono);color:var(--txt3)">' + (f.fondo_osinergmin>0?f.fondo_osinergmin.toLocaleString('es-PE',{maximumFractionDigits:1}):'—') + '</td>'
       + '<td style="padding:8px 12px;text-align:right;font-family:var(--mono);color:var(--txt)">' + (invActual>0?invActual.toLocaleString('es-PE',{maximumFractionDigits:1}):'—') + '</td>'
+      + '<td style="padding:8px 12px;text-align:right;font-family:var(--mono);color:var(--txt)">' + (f._vacio!==null?f._vacio.toLocaleString('es-PE',{maximumFractionDigits:1}):'—') + '</td>'
+      + '<td style="padding:8px 12px;text-align:right;font-family:var(--mono);color:' + (f._noCabe?'var(--red)':'var(--txt2)') + '">' + (f._rep>0?f._rep.toFixed(1):'—') + (f._noCabe?' ⚠':'') + '</td>'
       + '<td style="padding:8px 12px;text-align:right;font-family:var(--mono);font-weight:800;color:' + pctColor + '">' + (pct!==null?pct+'%':'—') + '</td>'
       + '</tr>';
   }).join('');
@@ -10963,11 +11028,12 @@ function renderPCapRef() {
   el.innerHTML =
     '<div class="page-header">' +
       '<div class="page-header-title">🛢️ Capacidades por Planta/Producto</div>' +
-      '<div class="page-header-subtitle">Referencia de tanque — viene de la carga E&D (columna Capacidad). No cambia a diario: se conserva el último valor cargado hasta que llegue uno nuevo.</div>' +
+      '<div class="page-header-subtitle">Capacidad de tanque (carga E&D) frente al inventario de hoy y la reposición en camino · marcas: fondos y mínimo OSINERGMIN</div>' +
     '</div>' +
     (filas.length === 0
       ? '<div style="padding:60px;text-align:center;color:var(--txt3)">Sin datos de capacidad todavía — se cargan automáticamente la próxima vez que subas un archivo E&D.</div>'
-      : '<div style="margin:0 18px 18px;background:var(--card);border:1px solid var(--bdr);border-radius:var(--r);overflow:auto">' +
+      : stripC + filtrosC + (FC.tabla
+        ? '<div class="cap-tbl">' +
         '<table style="width:100%;border-collapse:collapse;font-size:12px">' +
           '<thead><tr style="background:var(--bg3)">' +
             '<th style="padding:8px 12px;text-align:left;font-size:9px;text-transform:uppercase;color:var(--txt3);font-weight:700">Planta</th>' +
@@ -10976,8 +11042,19 @@ function renderPCapRef() {
             '<th style="padding:8px 12px;text-align:right;font-size:9px;text-transform:uppercase;color:var(--txt3);font-weight:700">Fondos (MB)</th>' +
             '<th style="padding:8px 12px;text-align:right;font-size:9px;text-transform:uppercase;color:var(--txt3);font-weight:700">F. OSINERGMIN (MB)</th>' +
             '<th style="padding:8px 12px;text-align:right;font-size:9px;text-transform:uppercase;color:var(--txt3);font-weight:700">Inv. Actual (MB)</th>' +
+            '<th style="padding:8px 12px;text-align:right;font-size:9px;text-transform:uppercase;color:var(--txt3);font-weight:700">Vacío (MB)</th>' +
+            '<th style="padding:8px 12px;text-align:right;font-size:9px;text-transform:uppercase;color:var(--txt3);font-weight:700">Repos. en camino</th>' +
             '<th style="padding:8px 12px;text-align:right;font-size:9px;text-transform:uppercase;color:var(--txt3);font-weight:700">% Lleno</th>' +
-          '</tr></thead><tbody>' + rowsHTML + '</tbody></table></div>');
+          '</tr></thead><tbody>' + rowsHTML + '</tbody></table></div>'
+        : tanquesHTML));
+  if (!el._capBound) {
+    el._capBound = true;
+    el.addEventListener('click', function(ev) {
+      var t = ev.target.closest('[data-cap]');
+      if (t) { var k = t.getAttribute('data-cap'); if (k === 'filtro') window._capEstado[t.getAttribute('data-f')] = t.getAttribute('data-v'); else if (k === 'tabla') window._capEstado.tabla = !window._capEstado.tabla; renderPCapRef(); return; }
+      var r = ev.target.closest('[data-rn]'); if (r && typeof _rnAccion === 'function') _rnAccion(r.getAttribute('data-rn'), r);
+    });
+  }
 }
 
 // Red de seguridad: si algo inesperado revienta dentro de Coberturas
@@ -13653,32 +13730,186 @@ async function loadCisternasData() {
   }
 }
 window.loadCisternasData = loadCisternasData;
-function _renderCisKPIs(records) {
-  var totProg = 0, totCarga = 0, totTrans = 0, totDesc = 0, totVac = 0, totGalTrans = 0;
-  var rutasActivas = new Set(), destSet = new Set(), flotaActiva = 0, fueraServ = 0;
-  records.forEach(function(r) {
-    totProg+=r.prog_und; totCarga+=r.carga_und; totTrans+=r.transito_und;
-    totDesc+=r.descarga_und; totVac+=r.vacias_und; totGalTrans+=r.transito_gal;
-    rutasActivas.add(r.id_ruta); destSet.add(r.destino);
-    flotaActiva = Math.max(flotaActiva, r.flota_contratada);
-    fueraServ = Math.max(fueraServ, r.fuera_servicio);
-  });
-  var enMov = totCarga + totTrans + totDesc;
-  var html =
-    _cisKpiCard('Programadas', totProg, '#3b82f6', 'cisternas', 'PROG')
-  + _cisKpiCard('En tránsito', totTrans, '#0891b2', 'cisternas', 'TRANS')
-  + _cisKpiCard('En carga', totCarga, '#d97706', 'cargando', 'CARGA')
-  + _cisKpiCard('En descarga', totDesc, '#16a34a', 'descargando', 'DESC')
-  + _cisKpiCard('Vol. tránsito', (totGalTrans/42000).toFixed(DEC), '#7c2d12', 'MB total', 'VOL')
-  + _cisKpiCard('Rutas activas', rutasActivas.size, '#7c3aed', destSet.size + ' destinos', 'RUTAS');
-  document.getElementById('cis-kpis').innerHTML = html;
+// ─────────────────────────────────────────────────────────────────────
+// CISTERNAS · Resumen ejecutivo del movimiento terrestre
+//  - Hero: cisternas en movimiento (carga / tránsito / descarga), MB en
+//    tránsito con variación vs. ayer, uso de flota, rutas y destinos.
+//  - Lectura ejecutiva en una frase.
+//  - Destinos receptores: tarjetas con cisternas en camino, MB, productos
+//    y la cobertura actual de la planta (del mismo cálculo del Resumen
+//    Nacional). Clic = filtra mapa + tabla; botones Ficha / Tendencia.
+// ─────────────────────────────────────────────────────────────────────
+window._cisEstado = window._cisEstado || { destino: '' };
+function _cisEstilos() {
+  if (document.getElementById('cis-estilos')) return;
+  var s = document.createElement('style'); s.id = 'cis-estilos';
+  s.textContent = ''
+  + '.cis-strip{display:grid;grid-template-columns:minmax(260px,1.3fr) repeat(3,minmax(150px,1fr));gap:10px;margin-bottom:12px}'
+  + '.cis-hero{background:linear-gradient(135deg,color-mix(in srgb,var(--acc) 14%,var(--card)),var(--card));border:1px solid color-mix(in srgb,var(--acc) 35%,var(--bdr));border-radius:12px;padding:14px 16px;position:relative;overflow:hidden}'
+  + '.cis-hero::after{content:"\\1F69B";position:absolute;right:12px;top:6px;font-size:54px;opacity:.10;pointer-events:none}'
+  + '.cis-hero-k{font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--txt3)}'
+  + '.cis-hero-n{font-family:var(--mono);font-size:38px;font-weight:900;line-height:1;color:var(--txt);margin:4px 0 2px}'
+  + '.cis-hero-n small{font-size:13px;font-weight:700;color:var(--txt2);margin-left:6px;font-family:inherit}'
+  + '.cis-seg{display:flex;height:9px;border-radius:5px;overflow:hidden;margin:10px 0 6px;background:var(--bg3)}'
+  + '.cis-seg span{display:block;height:100%}'
+  + '.cis-leg{display:flex;gap:12px;flex-wrap:wrap;font-size:10.5px;color:var(--txt2)}'
+  + '.cis-leg i{display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:4px;vertical-align:-1px}'
+  + '.cis-leg b{font-family:var(--mono);color:var(--txt)}'
+  + '.cis-kpi{background:var(--card);border:1px solid var(--bdr);border-radius:12px;padding:12px 14px;display:flex;flex-direction:column;justify-content:space-between;min-height:96px}'
+  + '.cis-kpi-k{font-size:9.5px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--txt3)}'
+  + '.cis-kpi-n{font-family:var(--mono);font-size:26px;font-weight:900;line-height:1.05;color:var(--txt);margin-top:6px}'
+  + '.cis-kpi-n small{font-size:12px;font-weight:700;color:var(--txt2);font-family:inherit;margin-left:4px}'
+  + '.cis-kpi-s{font-size:10.5px;color:var(--txt2);margin-top:6px;line-height:1.35}'
+  + '.cis-up{color:var(--grn);font-weight:800}.cis-dn{color:var(--red);font-weight:800}.cis-eq{color:var(--txt3);font-weight:700}'
+  + '.cis-bar{height:6px;border-radius:3px;background:var(--bg3);overflow:hidden;margin-top:8px}.cis-bar span{display:block;height:100%;border-radius:3px;background:var(--acc)}'
+  + '.cis-lectura{background:color-mix(in srgb,var(--acc) 8%,var(--card));border:1px solid color-mix(in srgb,var(--acc) 25%,var(--bdr));border-left:4px solid var(--acc);border-radius:10px;padding:10px 14px;font-size:12.5px;line-height:1.55;color:var(--txt);margin-bottom:12px}'
+  + '.cis-lectura b{color:var(--acc)}'
+  + '.cis-sec{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin:2px 0 8px}'
+  + '.cis-sec-t{font-size:12.5px;font-weight:800;color:var(--txt)}.cis-sec-s{font-size:10.5px;color:var(--txt3)}'
+  + '.cis-dests{display:grid;grid-template-columns:repeat(auto-fill,minmax(205px,1fr));gap:8px;margin-bottom:14px}'
+  + '.cis-dest{background:var(--card);border:1px solid var(--bdr);border-radius:10px;padding:10px 12px;cursor:pointer;transition:transform .12s,box-shadow .12s,border-color .12s;position:relative}'
+  + '.cis-dest:hover{transform:translateY(-1px);box-shadow:0 4px 14px rgba(0,0,0,.12);border-color:color-mix(in srgb,var(--acc) 50%,var(--bdr))}'
+  + '.cis-dest.on{border-color:var(--acc);box-shadow:0 0 0 2px color-mix(in srgb,var(--acc) 35%,transparent)}'
+  + '.cis-dest-h{display:flex;justify-content:space-between;align-items:center;gap:6px}'
+  + '.cis-dest-n{font-size:12.5px;font-weight:800;color:var(--txt);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}'
+  + '.cis-cob{font-family:var(--mono);font-size:10px;font-weight:800;padding:2px 6px;border-radius:999px;border:1px solid transparent;white-space:nowrap}'
+  + '.cis-cob-quiebre{background:color-mix(in srgb,var(--red) 22%,transparent);color:var(--red);border-color:var(--red)}'
+  + '.cis-cob-crit{background:color-mix(in srgb,var(--red) 14%,transparent);color:var(--red)}'
+  + '.cis-cob-alerta{background:color-mix(in srgb,var(--yel) 18%,transparent);color:var(--yel)}'
+  + '.cis-cob-ok{background:color-mix(in srgb,var(--grn) 14%,transparent);color:var(--grn)}'
+  + '.cis-cob-nd{background:var(--bg3);color:var(--txt3)}'
+  + '.cis-dest-m{display:flex;gap:10px;margin-top:6px;align-items:baseline}'
+  + '.cis-dest-m b{font-family:var(--mono);font-size:20px;font-weight:900;color:var(--txt);line-height:1}'
+  + '.cis-dest-m i{font-style:normal;font-size:10px;color:var(--txt3);display:block;margin-top:2px}'
+  + '.cis-dest-m .mb{font-family:var(--mono);font-size:13px;font-weight:800;color:var(--acc)}'
+  + '.cis-chips{display:flex;flex-wrap:wrap;gap:4px;margin-top:7px}'
+  + '.cis-chip{font-size:9.5px;font-weight:700;padding:1px 6px;border-radius:999px;background:var(--bg3);color:var(--txt2);border:1px solid var(--bdr)}'
+  + '.cis-chip b{font-family:var(--mono);color:var(--txt)}'
+  + '.cis-dest-f{display:flex;gap:6px;margin-top:8px;padding-top:7px;border-top:1px dashed var(--bdr)}'
+  + '.cis-mini{font-size:10px;font-weight:700;padding:3px 8px;border-radius:6px;border:1px solid var(--bdr);background:transparent;color:var(--txt2);cursor:pointer}'
+  + '.cis-mini:hover{border-color:var(--acc);color:var(--acc)}'
+  + '.cis-mini.acc{background:var(--acc);border-color:var(--acc);color:#fff}'
+  + '.cis-origs{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px}'
+  + '.cis-orig{display:flex;align-items:center;gap:7px;font-size:11px;background:var(--card);border:1px solid var(--bdr);border-radius:999px;padding:4px 10px 4px 6px;color:var(--txt2)}'
+  + '.cis-orig b{font-family:var(--mono);color:var(--txt)}'
+  + '.cis-orig .pt{width:8px;height:8px;border-radius:50%;background:var(--acc)}'
+  + '.cis-vacio{padding:10px;color:var(--txt3);font-size:11px}'
+  + '@media(max-width:1100px){.cis-strip{grid-template-columns:1fr 1fr}}'
+  + '@media(max-width:640px){.cis-strip{grid-template-columns:1fr}}';
+  document.head.appendChild(s);
 }
-function _cisKpiCard(label, val, color, sub, code) {
-  return '<div style="background:var(--bg2);border:1px solid '+color+'33;border-left:3px solid '+color+';border-radius:6px;padding:10px 12px">'
-    + '<div style="font-size:9px;color:var(--txt3);font-weight:700;text-transform:uppercase;letter-spacing:.05em">' + label + '</div>'
-    + '<div style="font-family:var(--mono);font-size:22px;font-weight:800;color:'+color+';margin-top:3px;line-height:1">' + val + '</div>'
-    + '<div style="font-size:9.5px;color:var(--txt3);margin-top:3px">' + sub + '</div>'
+// Nombre del Excel de cisternas → planta oficial del panel (si aplica)
+function _cisPlantaOficial(nombre) {
+  if (!nombre) return null;
+  var norm = function(t){ return String(t).toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/^(REF\.?|A\.|EE\.SS\.|LPO\/|PLANTA)\s*/,'').replace(/[^A-Z ]/g,'').trim(); };
+  var n = norm(nombre);
+  var lista = (typeof PLANTAS_18_OFICIALES !== 'undefined') ? PLANTAS_18_OFICIALES : [];
+  for (var i = 0; i < lista.length; i++) { if (norm(lista[i]) === n) return lista[i]; }
+  for (var j = 0; j < lista.length; j++) { if (n.indexOf(norm(lista[j])) >= 0) return lista[j]; }
+  return null;
+}
+function _renderCisKPIs(records) {
+  _cisEstilos();
+  var host = document.getElementById('cis-kpis'); if (!host) return;
+  host.removeAttribute('style'); host.style.padding = '0 16px';
+  var esc = function(t) { return String(t == null ? '' : t).replace(/[&<>"]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); };
+  var n = function(v){ return Number(v) || 0; };
+  var fmtMB = function(g){ return (g/42000).toFixed(1); };
+  var hist = (_cisData && _cisData.history) || [];
+  var today = currentDate;
+  var dAyer = new Date(today + 'T12:00:00'); dAyer.setDate(dAyer.getDate() - 1);
+  var ayer = dAyer.toISOString().slice(0,10);
+  var ayerRecs = hist.filter(function(r){ return r.fecha === ayer; });
+
+  var T = { prog:0, carga:0, trans:0, desc:0, vac:0, gal:0 }, flota = 0, fuera = 0;
+  var rutas = {}, dest = {}, orig = {}, prods = {};
+  records.forEach(function(r) {
+    T.prog += n(r.prog_und); T.carga += n(r.carga_und); T.trans += n(r.transito_und); T.desc += n(r.descarga_und); T.vac += n(r.vacias_und); T.gal += n(r.transito_gal);
+    flota = Math.max(flota, n(r.flota_contratada)); fuera = Math.max(fuera, n(r.fuera_servicio));
+    var mov = n(r.carga_und) + n(r.transito_und) + n(r.descarga_und);
+    var rk = r.origen + ' → ' + r.destino; rutas[rk] = (rutas[rk] || 0) + mov;
+    var d = dest[r.destino] || (dest[r.destino] = { nombre: r.destino, camino: 0, desc: 0, gal: 0, prods: {}, origs: {} });
+    d.camino += n(r.carga_und) + n(r.transito_und); d.desc += n(r.descarga_und); d.gal += n(r.transito_gal);
+    d.prods[r.producto] = (d.prods[r.producto] || 0) + mov; d.origs[r.origen] = (d.origs[r.origen] || 0) + mov;
+    orig[r.origen] = (orig[r.origen] || 0) + mov;
+    prods[r.producto] = (prods[r.producto] || 0) + n(r.transito_gal);
+  });
+  var enMov = T.carga + T.trans + T.desc;
+  var ayerMov = 0, ayerGal = 0; ayerRecs.forEach(function(r){ ayerMov += n(r.carga_und)+n(r.transito_und)+n(r.descarga_und); ayerGal += n(r.transito_gal); });
+  var varTxt = function(hoy, prev, unidad) {
+    if (!ayerRecs.length) return '<span class="cis-eq">sin dato de ayer</span>';
+    var d = hoy - prev; if (Math.abs(d) < 0.05) return '<span class="cis-eq">= igual que ayer</span>';
+    return '<span class="' + (d > 0 ? 'cis-up' : 'cis-dn') + '">' + (d > 0 ? '▲ +' : '▼ ') + (unidad === 'MB' ? d.toFixed(1) : d) + ' ' + unidad + '</span> vs. ayer';
+  };
+  var topRuta = Object.entries(rutas).sort(function(a,b){ return b[1]-a[1]; })[0];
+  var nDest = Object.keys(dest).length, nRutas = Object.keys(rutas).length;
+  var usoPct = flota ? Math.min(100, Math.round(enMov / flota * 100)) : null;
+
+  // Cobertura actual de cada destino (mismo cálculo que el Resumen Nacional)
+  var RN = null; try { if (typeof _rnCalcularDetalle === 'function') _rnCalcularDetalle(); RN = window._rnDetalleProd || null; } catch (e) { RN = null; }
+  var cobDe = function(nombre) {
+    var pl = _cisPlantaOficial(nombre); if (!pl || !RN || !RN.porPlanta || !RN.porPlanta[pl]) return { pl: pl, nivel: 'nd', txt: 'sin dato' };
+    var o = RN.porPlanta[pl]; var c = (o.cobMin != null && o.cobMin < 900) ? o.cobMin : null;
+    return { pl: pl, nivel: o.peor || 'nd', txt: (c != null && isFinite(c)) ? c.toFixed(1) + ' d' : (o.peor === 'quiebre' ? 'sin stock' : 'sin dato') };
+  };
+  var pct = function(v){ return enMov ? (v / enMov * 100) : 0; };
+  var html = '<div class="cis-strip">'
+    + '<div class="cis-hero"><div class="cis-hero-k">Cisternas en movimiento hoy</div>'
+    +   '<div class="cis-hero-n">' + enMov + '<small>de ' + T.prog + ' programadas</small></div>'
+    +   '<div class="cis-seg"><span style="width:' + pct(T.carga) + '%;background:#d97706"></span><span style="width:' + pct(T.trans) + '%;background:#0891b2"></span><span style="width:' + pct(T.desc) + '%;background:#16a34a"></span></div>'
+    +   '<div class="cis-leg"><span><i style="background:#d97706"></i>En carga <b>' + T.carga + '</b></span><span><i style="background:#0891b2"></i>En tránsito <b>' + T.trans + '</b></span><span><i style="background:#16a34a"></i>Descargando <b>' + T.desc + '</b></span><span><i style="background:var(--bdr)"></i>Vacías <b>' + T.vac + '</b></span></div>'
+    +   '<div class="cis-kpi-s" style="margin-top:8px">' + varTxt(enMov, ayerMov, 'cisternas') + '</div>'
+    + '</div>'
+    + '<div class="cis-kpi"><div class="cis-kpi-k">Volumen en tránsito</div><div class="cis-kpi-n">' + fmtMB(T.gal) + '<small>MB</small></div><div class="cis-kpi-s">' + Math.round(T.gal).toLocaleString() + ' gal · ' + varTxt(T.gal/42000, ayerGal/42000, 'MB') + '</div></div>'
+    + '<div class="cis-kpi"><div class="cis-kpi-k">Uso de flota contratada</div><div class="cis-kpi-n">' + (usoPct == null ? '—' : usoPct + '<small>%</small>') + '</div><div class="cis-kpi-s">' + (flota ? enMov + ' de ' + flota + ' unidades' : 'flota no reportada') + (fuera ? ' · <span class="cis-dn">' + fuera + ' fuera de servicio</span>' : ' · sin unidades fuera de servicio') + '</div>' + (usoPct != null ? '<div class="cis-bar"><span style="width:' + usoPct + '%;background:' + (usoPct >= 90 ? 'var(--red)' : usoPct >= 75 ? 'var(--yel)' : 'var(--acc)') + '"></span></div>' : '') + '</div>'
+    + '<div class="cis-kpi"><div class="cis-kpi-k">Red activa</div><div class="cis-kpi-n">' + nRutas + '<small>rutas</small></div><div class="cis-kpi-s">' + nDest + ' destinos · ' + Object.keys(orig).length + ' orígenes' + (topRuta ? '<br>Principal: <b>' + esc(topRuta[0]) + '</b> (' + topRuta[1] + ')' : '') + '</div></div>'
     + '</div>';
+
+  // Lectura ejecutiva
+  var prodTop = Object.entries(prods).sort(function(a,b){ return b[1]-a[1]; })[0];
+  var destCrit = Object.values(dest).map(function(d){ var c = cobDe(d.nombre); return { d: d, c: c }; }).filter(function(x){ return x.c.nivel === 'quiebre' || x.c.nivel === 'crit'; });
+  var lectura = 'Hoy se mueven <b>' + enMov + ' cisternas</b> (' + fmtMB(T.gal) + ' MB en tránsito) por <b>' + nRutas + ' rutas</b> hacia ' + nDest + ' destinos' + (prodTop ? ', principalmente <b>' + esc(prodTop[0]) + '</b>' : '') + '. ';
+  if (topRuta) lectura += 'El corredor más cargado es <b>' + esc(topRuta[0]) + '</b> con ' + topRuta[1] + ' unidades. ';
+  if (destCrit.length) { destCrit.sort(function(a,b){ return (a.c.nivel === 'quiebre' ? -1 : 0) - (b.c.nivel === 'quiebre' ? -1 : 0); }); lectura += '<span style="color:var(--red);font-weight:800">Atención:</span> ' + destCrit.length + (destCrit.length === 1 ? ' destino crítico' : ' destinos críticos') + ' reciben cisternas hoy — ' + destCrit.slice(0, 3).map(function(x){ return '<b style="color:var(--red)">' + esc(x.d.nombre) + '</b> (' + (x.d.camino + x.d.desc) + ' und., cob. ' + x.c.txt + ')'; }).join(', ') + (destCrit.length > 3 ? ' y ' + (destCrit.length - 3) + ' más' : '') + '. '; }
+  else if (RN) lectura += 'Ningún destino abastecido por cisternas está hoy en nivel crítico. ';
+  if (usoPct != null && usoPct >= 90) lectura += '<span style="color:var(--yel);font-weight:800">La flota opera al ' + usoPct + '%</span>: poco margen para reforzar rutas.';
+  html += '<div class="cis-lectura">' + lectura + '</div>';
+
+  // Destinos receptores
+  var dlist = Object.values(dest).sort(function(a,b){ return (b.camino + b.desc) - (a.camino + a.desc); });
+  html += '<div class="cis-sec"><div class="cis-sec-t">📍 Destinos receptores</div><div class="cis-sec-s">Clic en una tarjeta filtra el mapa y la tabla · Ficha = situación de inventario de la planta' + (window._cisEstado.destino ? ' · <a href="#" data-cis="limpiar" style="color:var(--acc);font-weight:700">Quitar filtro ✕</a>' : '') + '</div></div>';
+  html += '<div class="cis-dests">' + dlist.map(function(d) {
+    var c = cobDe(d.nombre);
+    var chips = Object.entries(d.prods).sort(function(a,b){ return b[1]-a[1]; }).map(function(e){ return '<span class="cis-chip">' + esc(e[0]) + ' <b>' + e[1] + '</b></span>'; }).join('');
+    var desde = Object.entries(d.origs).sort(function(a,b){ return b[1]-a[1]; }).map(function(e){ return esc(e[0]); }).join(', ');
+    return '<div class="cis-dest' + (window._cisEstado.destino === d.nombre ? ' on' : '') + '" data-cis="destino" data-destino="' + esc(d.nombre) + '" title="Filtrar por ' + esc(d.nombre) + '">'
+      + '<div class="cis-dest-h"><div class="cis-dest-n">' + esc(d.nombre) + '</div><span class="cis-cob cis-cob-' + c.nivel + '" title="Cobertura mínima actual de la planta">' + (c.nivel === 'nd' ? 'cob. s/d' : 'cob. ' + c.txt) + '</span></div>'
+      + '<div class="cis-dest-m"><div><b>' + d.camino + '</b><i>en camino</i></div><div><b style="color:#16a34a">' + d.desc + '</b><i>descargando</i></div><div><span class="mb">' + fmtMB(d.gal) + ' MB</span><i>en tránsito</i></div></div>'
+      + '<div class="cis-chips">' + chips + '</div>'
+      + '<div style="font-size:10px;color:var(--txt3);margin-top:6px">Desde: ' + desde + '</div>'
+      + (c.pl ? '<div class="cis-dest-f"><button class="cis-mini" data-rn="planta" data-planta="' + esc(c.pl) + '">📋 Ficha</button><button class="cis-mini" data-rn="ver-tend" data-planta="' + esc(c.pl) + '">📈 Tendencia</button></div>' : '')
+      + '</div>';
+  }).join('') + '</div>';
+
+  // Orígenes
+  var olist = Object.entries(orig).sort(function(a,b){ return b[1]-a[1]; });
+  html += '<div class="cis-sec"><div class="cis-sec-t">🏭 Orígenes de despacho</div><div class="cis-sec-s">cisternas en movimiento que salieron de cada punto</div></div>'
+    + '<div class="cis-origs">' + olist.map(function(e){ return '<span class="cis-orig" data-cis="origen" data-origen="' + esc(e[0]) + '" style="cursor:pointer" title="Filtrar por origen"><span class="pt"></span>' + esc(e[0]) + ' <b>' + e[1] + '</b></span>'; }).join('') + '</div>';
+
+  host.innerHTML = html;
+  if (!host._cisBound) {
+    host._cisBound = true;
+    host.addEventListener('click', function(ev) {
+      var t = ev.target.closest('[data-rn],[data-cis]'); if (!t || !host.contains(t)) return;
+      if (t.hasAttribute('data-rn')) { ev.stopPropagation(); if (typeof _rnCalcularDetalle === 'function' && !window._rnDetalleProd) { try { _rnCalcularDetalle(); } catch (e) {} } _rnAccion(t.getAttribute('data-rn'), t); return; }
+      ev.preventDefault();
+      var k = t.getAttribute('data-cis');
+      var sO = document.getElementById('cis-f-origen'), sD = document.getElementById('cis-f-destino');
+      if (k === 'limpiar') { window._cisEstado.destino = ''; _cisResetFilters(); return; }
+      if (k === 'destino') { var dn = t.getAttribute('data-destino'); var ya = window._cisEstado.destino === dn; window._cisEstado.destino = ya ? '' : dn; if (sD) sD.value = ya ? '' : dn; _cisApplyFilters(); return; }
+      if (k === 'origen') { if (sO) { sO.value = (sO.value === t.getAttribute('data-origen')) ? '' : t.getAttribute('data-origen'); } _cisApplyFilters(); return; }
+    });
+  }
 }
 function _renderCisMap(records) {
   if (_cisMap) { try { _cisMap.remove(); } catch(e){} _cisMap = null; }
@@ -13917,6 +14148,13 @@ function _cisApplyFilters() {
   });
   _cisRenderTableRows(filtered);
   _renderCisMap(filtered);  // mapa también se filtra
+  // tarjetas de destino: estado activo sincronizado con el filtro
+  window._cisEstado.destino = d || '';
+  document.querySelectorAll('#cis-kpis .cis-dest').forEach(function(c){ c.classList.toggle('on', !!d && c.getAttribute('data-destino') === d); });
+  var lim = document.querySelector('#cis-kpis [data-cis="limpiar"]');
+  var secS = document.querySelector('#cis-kpis .cis-sec-s');
+  if (secS && !lim && (o || d || p)) secS.insertAdjacentHTML('beforeend', ' · <a href="#" data-cis="limpiar" style="color:var(--acc);font-weight:700">Quitar filtro ✕</a>');
+  if (lim && !(o || d || p)) { lim.previousSibling && lim.previousSibling.nodeType === 3 && lim.previousSibling.remove(); lim.remove(); }
 }
 function _cisResetFilters() {
   ['cis-f-origen','cis-f-destino','cis-f-prod'].forEach(function(id) {
