@@ -12755,7 +12755,10 @@ function renderPA() {
         )
         .bindPopup(popupHTML, {className:'ship-popup', maxWidth: 320, autoPan: true});
       if (isFluvial) { polyline.addTo(fluvialLayer); fluvialCount++; }
-      else           { polyline.addTo(maritimeLayer); maritimeCount++; }
+      else {
+        polyline.addTo(maritimeLayer); maritimeCount++;
+        if (typeof openBTModal === 'function') { polyline.off('click'); polyline.on('click', (function(nombreB){ return function(){ openBTModal(nombreB.replace(/\s*\d+$/, '')); }; })(name)); }
+      }
       if (L.polylineDecorator) {
         var arrowSize = isFluvial ? 14 : 16;
         var arrows = L.polylineDecorator(polyline, {
@@ -12864,9 +12867,16 @@ function renderPA() {
                          + 'font-size:9px;font-weight:800;white-space:nowrap;cursor:pointer;'
                          + 'box-shadow:0 2px 8px rgba(0,0,0,.4);border:2px solid #fff;display:inline-block">'
                          + lbl.icon + ' ' + lbl.nameCorto + '</div>';
-          L.marker(lbl.labelPos, {
-            icon: L.divIcon({className:'', html: markerHtml, iconSize:[lbl.anchoEstimado, 22], iconAnchor:[lbl.anchoEstimado/2, 11]})
+          var _mkLbl = L.marker(lbl.labelPos, {
+            icon: L.divIcon({className:'', html: markerHtml, iconSize:[lbl.anchoEstimado, 22], iconAnchor:[lbl.anchoEstimado/2, 11]}),
+            zIndexOffset: 650
           }).bindPopup(lbl.popupHTML, {className:'ship-popup', maxWidth: 320, autoPan: true}).addTo(capa);
+          // Buques marítimos: clic abre la ficha completa del buque (misma
+          // que la barra superior); las barcazas conservan su tarjeta.
+          if (!lbl.isFluvial && typeof openBTModal === 'function') {
+            _mkLbl.off('click');
+            _mkLbl.on('click', (function(nombreB){ return function(){ openBTModal(nombreB.replace(/\s*\d+$/, '')); }; })(lbl.name));
+          }
           return;
         }
         // Grupo con más de 1 — marcador con número.
@@ -12937,11 +12947,16 @@ function renderPA() {
           + '<br><span style="color:#94a3b8">'+(nav.ubicacion||nav.estado||'')+'</span>'
           + (nav.rotacion ? '<br><span style="color:#64748b;font-size:9.5px">Rotaci\u00f3n: '+String(nav.rotacion).slice(0,50)+'</span>' : '')
           + '</div>';
-        L.marker([coords[0]+jit, coords[1]-0.12+jit], {
+        // ⚠️ CORREGIDO — a pedido: este marcador (posición real del buque)
+        // solo tenía tooltip al pasar el mouse; al hacer clic no pasaba
+        // nada. Ahora abre la ficha completa del buque (openBTModal, la
+        // misma que usan los chips de la barra superior).
+        var _mkPos = L.marker([coords[0]+jit, coords[1]-0.12+jit], {
           icon: L.divIcon({className:'', html:html, iconSize:[70,34], iconAnchor:[35,17]}),
           zIndexOffset: 800
-        }).bindTooltip(tip, {className:'ship-route-tip'})
-          .addTo(esPP ? maritimeLayer : maritimeLayer);
+        }).bindTooltip(tip + '<div style="color:#64748b;font-size:9.5px;font-style:italic">Clic para ver la ficha del buque</div>', {className:'ship-route-tip'})
+          .addTo(maritimeLayer);
+        _mkPos.on('click', (function(nombreB){ return function(){ if (typeof openBTModal === 'function') openBTModal(nombreB); }; })(buque));
       });
     })();
     if (typeof window._mapShowMaritime === 'undefined') window._mapShowMaritime = true;
