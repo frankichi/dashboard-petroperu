@@ -6583,6 +6583,7 @@ function renderPSegD() {
       var body = document.getElementById('segd-body');
       if (!res || !res.success) { body.innerHTML = '<div style="color:var(--red)">No se pudo cargar el seguimiento.</div>'; return; }
       var tracking = res.tracking || [];
+      window._segDTrackingHoy = tracking; // compartido con Resumen Nacional / Mapa ("Reporte de hoy")
       var reportadas = tracking.filter(function(t) { return t.estado === 'Reportado' || t.estado === 'Validado'; }).length;
       var total = tracking.length;
       document.getElementById('segd-count').textContent = reportadas + ' / ' + total + ' plantas reportaron';
@@ -7666,15 +7667,73 @@ function renderPDec() {
   var recs = [];
   try { recs = decBuildRecs(); } catch(e) { console.error('[pDec] decBuildRecs error:', e); }
   console.log('[pDec] recs:', recs.length);
-  var sevCfg = { urgente:{col:'#ef4444',bg:'#ef444412',lbl:'URGENTE'}, alta:{col:'#ea580c',bg:'#ea580c12',lbl:'ALTA'}, media:{col:'#d97706',bg:'#d9770612',lbl:'MEDIA'} };
-  var recsHtml = recs.length ? recs.map(function(rc){
-    var s = sevCfg[rc.sev]||sevCfg.media;
-    return '<div style="display:flex;gap:12px;padding:11px 14px;border:1px solid var(--bdr);border-left:4px solid '+s.col+';border-radius:9px;background:var(--card);align-items:flex-start">'
-      +'<span style="font-size:8.5px;font-weight:800;letter-spacing:.5px;color:'+s.col+';background:'+s.bg+';padding:3px 8px;border-radius:8px;white-space:nowrap;margin-top:1px">'+s.lbl+'</span>'
-      +'<div style="flex:1;min-width:0"><div style="font-size:12px;font-weight:800;color:var(--txt)">'+rc.titulo+'</div>'
-      +'<div style="font-size:10.5px;color:var(--txt3);margin-top:2px">'+rc.detalle+'</div>'
-      +'<div style="font-size:11px;color:var(--txt2);margin-top:5px">\ud83d\udca1 <b>'+rc.accion+'</b></div></div></div>';
-  }).join('') : '<div style="padding:18px;text-align:center;color:#16a34a;font-size:12px;font-weight:700">\u2705 Sin alertas accionables</div>';
+  // ⚠️ REDISEÑADO — a pedido (20-oct): versión ejecutiva del Centro de
+  // Decisiones. Misma lógica de reglas (decBuildRecs), pero:
+  //  - cada recomendación se clasifica por TIPO (stock, BT tarde, puerto,
+  //    restricción, fluvial, reposición) y se le extrae planta/producto
+  //    para abrir la ficha de planta o del buque con un clic;
+  //  - filtros por severidad y tipo, y buscador por planta;
+  //  - "Marcar atendida": queda registrado en este navegador para el día,
+  //    para llevar el control de qué ya se gestionó en la reunión.
+  _decEstilos();
+  var sevCfg = { urgente:{col:'var(--red)',lbl:'URGENTE'}, alta:{col:'var(--ora)',lbl:'ALTA'}, media:{col:'var(--yel)',lbl:'MEDIA'} };
+  var TIPOS = { stock:{lbl:'Quiebre / crítico',ico:'⛔'}, bt:{lbl:'BT llega tarde',ico:'⏳'}, puerto:{lbl:'Puerto cerrado',ico:'🌊'}, restriccion:{lbl:'Restricción',ico:'✂️'}, fluvial:{lbl:'Autonomía fluvial',ico:'🏞️'}, reposicion:{lbl:'Reposición sugerida',ico:'⛽'}, otro:{lbl:'Otros',ico:'•'} };
+  var _escD = function(t){ return String(t==null?'':t).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); };
+  var _tipoDe = function(t){ t = t||''; if (/^(⛔|🚨)/.test(t)) return 'stock'; if (t.indexOf('⏳')===0) return 'bt'; if (t.indexOf('🌊')===0) return 'puerto'; if (t.indexOf('✂')===0) return 'restriccion'; if (t.indexOf('🏜')===0) return 'fluvial'; if (t.indexOf('⛽')===0) return 'reposicion'; return 'otro'; };
+  var _plantasConocidas = (typeof PLANTAS_18_OFICIALES !== 'undefined' ? PLANTAS_18_OFICIALES : []).concat(['Refinería Talara','Refinería Conchán','Refinería Iquitos']);
+  recs.forEach(function(rc, i) {
+    rc._id = i; rc._tipo = _tipoDe(rc.titulo);
+    var partes = String(rc.titulo||'').split(' · ');
+    rc._planta = partes.length >= 3 ? partes[partes.length-2].trim() : '';
+    rc._producto = partes.length >= 3 ? partes[partes.length-1].trim() : '';
+    if (!rc._planta) { var mP = _plantasConocidas.filter(function(pl){ return (rc.titulo+' '+rc.detalle).indexOf(pl) !== -1; }); rc._planta = mP[0] || ''; }
+    var mBT = (rc.detalle||'').match(/\b(UCAYALI|MOCHE|URUBAMBA|TROMPETEROS|PARIÑAS|HUMBOLDT)\b/i) || (rc.detalle||'').match(/\(([A-Z][A-Z\s]{3,})\)/);
+    rc._buque = mBT ? mBT[1].trim() : '';
+    rc._clave = (rc.titulo||'').replace(/\s+/g,' ').slice(0,120);
+  });
+  var _ordSev = { urgente:0, alta:1, media:2 };
+  recs.sort(function(a,b){ return (_ordSev[a.sev]!==undefined?_ordSev[a.sev]:9) - (_ordSev[b.sev]!==undefined?_ordSev[b.sev]:9) || String(a._planta).localeCompare(String(b._planta)); });
+  var _atKey = 'dec_atendidas_' + (currentDate||'');
+  var atendidas = {}; try { (JSON.parse(localStorage.getItem(_atKey)||'[]')).forEach(function(k){ atendidas[k]=true; }); } catch(eAt) {}
+  window._decEstado = window._decEstado || { sev:'todas', tipo:'todas', q:'', verAtendidas:false };
+  var F = window._decEstado;
+  var nPorSev = { urgente:0, alta:0, media:0 }, nPorTipo = {}, nAtendidas = 0, plantasAfect = {};
+  recs.forEach(function(rc){ nPorSev[rc.sev] = (nPorSev[rc.sev]||0)+1; nPorTipo[rc._tipo]=(nPorTipo[rc._tipo]||0)+1; if (atendidas[rc._clave]) nAtendidas++; if (rc._planta) plantasAfect[rc._planta]=true; });
+  var visibles = recs.filter(function(rc){
+    if (F.sev !== 'todas' && rc.sev !== F.sev) return false;
+    if (F.tipo !== 'todas' && rc._tipo !== F.tipo) return false;
+    if (F.q && (rc.titulo+' '+rc.detalle+' '+rc.accion).toLowerCase().indexOf(F.q.toLowerCase()) === -1) return false;
+    if (!F.verAtendidas && atendidas[rc._clave]) return false;
+    return true;
+  });
+  var recsHtml = visibles.length ? visibles.map(function(rc){
+    var sc = sevCfg[rc.sev]||sevCfg.media, tp = TIPOS[rc._tipo]||TIPOS.otro, at = !!atendidas[rc._clave];
+    return '<div class="dec-card'+(at?' at':'')+'" style="--c:'+sc.col+'">'
+      +'<div class="dec-card-h"><span class="dec-sev">'+sc.lbl+'</span><span class="dec-tipo" title="'+tp.lbl+'">'+tp.ico+' '+tp.lbl+'</span>'+(at?'<span class="dec-at-lbl">✓ atendida</span>':'')+'</div>'
+      +'<div class="dec-card-t">'+rc.titulo+'</div>'
+      +'<div class="dec-card-d">'+rc.detalle+'</div>'
+      +'<div class="dec-card-a"><span class="dec-a-lbl">Acción</span>'+rc.accion+'</div>'
+      +'<div class="dec-card-b">'
+      +  (rc._planta && _plantasConocidas.indexOf(rc._planta)!==-1 ? '<button class="dec-btn" data-rn="planta" data-planta="'+_escD(rc._planta)+'">🏭 Ficha de '+_escD(rc._planta)+'</button>' : '')
+      +  (rc._buque ? '<button class="dec-btn" data-rn="dec-buque" data-buque="'+_escD(rc._buque)+'">🚢 Buque '+_escD(rc._buque)+'</button>' : '')
+      +  (rc._planta && rc._producto ? '<button class="dec-btn" data-rn="ver-tend" data-planta="'+_escD(rc._planta)+'" data-prod="'+_escD(rc._producto)+'">📈 Tendencia</button>' : '')
+      +  '<button class="dec-btn dec-btn-at" data-rn="dec-atendida" data-clave="'+_escD(rc._clave)+'">'+(at?'↩ Reabrir':'✓ Marcar atendida')+'</button>'
+      +'</div></div>';
+  }).join('') : '<div class="rn-vacio">'+(recs.length ? (nAtendidas===recs.length && !F.verAtendidas ? '✅ Todas las recomendaciones fueron atendidas hoy' : 'Sin recomendaciones con este filtro') : '✅ Sin alertas accionables: ninguna planta requiere acción inmediata')+'</div>';
+  var chip = function(tipo, val, lbl, n, col){ var on = F[tipo]===val; return '<button class="dec-chip'+(on?' on':'')+'" data-rn="dec-filtro" data-f="'+tipo+'" data-v="'+val+'" style="--c:'+(col||'var(--acc)')+'">'+lbl+(n!=null?' <b>'+n+'</b>':'')+'</button>'; };
+  var filtrosHtml = '<div class="dec-filtros">'
+    +'<div class="dec-fgrp">'+chip('sev','todas','Todas',recs.length)+chip('sev','urgente','Urgentes',nPorSev.urgente,'var(--red)')+chip('sev','alta','Altas',nPorSev.alta,'var(--ora)')+chip('sev','media','Medias',nPorSev.media,'var(--yel)')+'</div>'
+    +'<div class="dec-fgrp">'+chip('tipo','todas','Todo tipo')+Object.keys(TIPOS).filter(function(k){ return nPorTipo[k]; }).map(function(k){ return chip('tipo',k,TIPOS[k].ico+' '+TIPOS[k].lbl,nPorTipo[k]); }).join('')+'</div>'
+    +'<div class="dec-fgrp dec-fgrp-r"><input class="dec-q" id="dec-q" type="search" placeholder="Buscar planta, producto o buque…" value="'+_escD(F.q)+'">'
+    +'<label class="dec-ver-at"><input type="checkbox" id="dec-ver-at" '+(F.verAtendidas?'checked':'')+'> ver atendidas ('+nAtendidas+')</label></div>'
+    +'</div>';
+  var resumenHtml = '<div class="dec-resumen" style="--c:'+(nPorSev.urgente?'var(--red)':nPorSev.alta?'var(--ora)':recs.length?'var(--yel)':'var(--grn)')+'">'
+    +'<div class="dec-res-main"><div class="dec-res-n">'+(recs.length-nAtendidas)+'</div><div><div class="dec-res-t">'+(recs.length-nAtendidas===1?'decisión pendiente':'decisiones pendientes')+'</div><div class="dec-res-s">'+(nAtendidas?nAtendidas+' atendida'+(nAtendidas>1?'s':'')+' hoy · ':'')+Object.keys(plantasAfect).length+' planta'+(Object.keys(plantasAfect).length===1?'':'s')+' involucrada'+(Object.keys(plantasAfect).length===1?'':'s')+'</div></div></div>'
+    +'<div class="dec-res-k"><b style="color:var(--red)">'+nPorSev.urgente+'</b><span>urgentes</span></div>'
+    +'<div class="dec-res-k"><b style="color:var(--ora)">'+nPorSev.alta+'</b><span>altas</span></div>'
+    +'<div class="dec-res-k"><b style="color:var(--yel)">'+nPorSev.media+'</b><span>medias</span></div>'
+    +'<div class="dec-res-leyenda"><b>Urgente</b> quiebre o cobertura ≤ 2 d sin reposición a tiempo · <b>Alta</b> BT llega después del quiebre o puerto cerrado con BT en ruta · <b>Media</b> restricción, autonomía fluvial baja o reposición sugerida</div>'
+    +'</div>';
   // Badge
   try {
     var nUrg = recs.filter(function(r){return r.sev==='urgente';}).length;
@@ -7691,7 +7750,7 @@ function renderPDec() {
       var critCol = cl.criticidad==='ALTA'?'#ef4444':'#d97706';
       var cobTxt = cob===null?'\u2014':(cob>=999?'>99d':cob+'d');
       var cobC = cob===null?'var(--txt3)':cobCol(cob>=999?99:cob);
-      return '<div style="background:var(--card);border:1px solid var(--bdr);border-radius:10px;padding:12px 14px">'
+      return '<div data-rn="dec-cliente" data-planta="'+cl.planta+'" title="Abrir ficha de '+cl.planta+'" style="background:var(--card);border:1px solid var(--bdr);border-radius:10px;padding:12px 14px">'
         +'<div style="display:flex;align-items:center;gap:8px"><span style="font-size:11.5px;font-weight:800;color:var(--txt);flex:1">'+cl.cliente+'</span>'
         +'<span style="font-size:8px;font-weight:800;color:'+critCol+';background:'+critCol+'15;border:1px solid '+critCol+'40;padding:2px 7px;border-radius:8px">'+cl.criticidad+'</span></div>'
         +'<div style="font-size:10px;color:var(--txt3);margin-top:3px">'+(cl.notas||'')+'</div>'
@@ -7763,17 +7822,66 @@ function renderPDec() {
       +'</div>';
   } catch(e) { console.error('[pDec] fill rate error:', e); frHtml = '<div style="color:#ef4444;padding:12px">'+e.message+'</div>'; }
   // 8. RENDER FINAL
-  console.log('[pDec] rendering innerHTML...');
   el.innerHTML = ''
-    +'<div class="page-header" style="padding-bottom:8px"><div class="page-title">\ud83c\udfaf Centro de Decisiones</div>'
-    +'<div class="page-sub">Recomendaciones operativas \u00b7 clientes estrat\u00e9gicos \u00b7 indicadores \u00b7 '+(currentDate||'')+'</div></div>'
-    +'<div class="section-head" style="margin-top:4px">Recomendaciones operativas <span style="margin-left:8px;font-size:9px;color:var(--txt3);font-weight:600;text-transform:none">'+recs.length+' accionable'+(recs.length!==1?'s':'')+'</span></div>'
-    +'<div style="display:flex;flex-direction:column;gap:7px;margin:6px 16px">'+recsHtml+'</div>'
-    +'<div class="section-head" style="margin-top:16px">Clientes estrat\u00e9gicos</div>'
-    +'<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:9px;margin:6px 16px">'+cliHtml+'</div>'
-    +'<div class="section-head" style="margin-top:16px">Indicadores</div>'
-    +'<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:10px;margin:6px 16px 28px">'+osiHtml+frHtml+'</div>';
-  console.log('[pDec] render DONE, innerHTML length:', el.innerHTML.length);
+    +'<div class="page-header rn-head"><div><div class="page-header-title">🎯 Centro de Decisiones</div>'
+    +'<div class="page-header-subtitle">Qué hay que decidir hoy, en orden de urgencia · '+(typeof fmtDate==='function'?fmtDate(currentDate||''):(currentDate||''))+'</div></div>'
+    +'<div class="rn-head-acc"><button class="rn-btn" data-rn="dec-refrescar">↻ Actualizar</button></div></div>'
+    +'<div class="dec-wrap">'+resumenHtml+filtrosHtml
+    +'<div class="dec-lista">'+recsHtml+'</div>'
+    +'<div class="rn-grid dec-grid">'
+    +  '<div class="rn-sec"><div class="rn-sec-t">Clientes estratégicos <span>cobertura de la planta que los abastece · clic abre la ficha</span></div><div class="dec-cli">'+cliHtml+'</div></div>'
+    +  '<div class="rn-col"><div class="rn-sec"><div class="rn-sec-t">Indicadores de cumplimiento</div><div class="dec-ind">'+osiHtml+frHtml+'</div></div></div>'
+    +'</div></div>';
+  if (!el._decBound) {
+    el._decBound = true;
+    el.addEventListener('click', function(ev) {
+      var t = ev.target.closest('[data-rn]'); if (!t) return;
+      var tipo = t.getAttribute('data-rn');
+      if (tipo === 'dec-refrescar') { renderPDec(); return; }
+      if (tipo === 'dec-filtro') { window._decEstado[t.getAttribute('data-f')] = t.getAttribute('data-v'); renderPDec(); return; }
+      if (tipo === 'dec-atendida') {
+        var k = t.getAttribute('data-clave'), key = 'dec_atendidas_' + (currentDate||'');
+        var arr = []; try { arr = JSON.parse(localStorage.getItem(key)||'[]'); } catch(e1) {}
+        if (arr.indexOf(k) === -1) arr.push(k); else arr = arr.filter(function(x){ return x !== k; });
+        try { localStorage.setItem(key, JSON.stringify(arr)); } catch(e2) {}
+        renderPDec(); return;
+      }
+      if (tipo === 'dec-buque') { if (typeof openBTModal === 'function') openBTModal(t.getAttribute('data-buque')); return; }
+      if (tipo === 'dec-cliente') { if (typeof _rnAbrirPlanta === 'function') { if (!window._rnDetalleProd) { try { _rnCalcularDetalle(); } catch(e3) {} } _rnAbrirPlanta(t.getAttribute('data-planta')); } return; }
+      if (typeof _rnAccion === 'function') { if ((tipo === 'planta') && !window._rnDetalleProd) { try { _rnCalcularDetalle(); } catch(e4) {} } _rnAccion(tipo, t); }
+    });
+    el.addEventListener('input', function(ev) {
+      if (ev.target && ev.target.id === 'dec-q') { window._decEstado.q = ev.target.value; clearTimeout(el._decQT); el._decQT = setTimeout(function(){ var v = ev.target.value; renderPDec(); var q = document.getElementById('dec-q'); if (q) { q.focus(); q.value = v; try { q.setSelectionRange(v.length, v.length); } catch(e5) {} } }, 250); }
+    });
+    el.addEventListener('change', function(ev) {
+      if (ev.target && ev.target.id === 'dec-ver-at') { window._decEstado.verAtendidas = ev.target.checked; renderPDec(); }
+    });
+  }
+}
+function _decEstilos() {
+  if (document.getElementById('dec-css')) return;
+  if (typeof _rnEstilos === 'function') _rnEstilos();
+  var st = document.createElement('style'); st.id = 'dec-css';
+  st.textContent = [
+    '.dec-wrap{padding:0 0 24px}',
+    '.dec-resumen{margin:12px 18px 0;display:flex;align-items:center;gap:14px;flex-wrap:wrap;background:var(--card);border:1px solid var(--bdr);border-left:5px solid var(--c);border-radius:10px;padding:12px 16px}',
+    '.dec-res-main{display:flex;align-items:center;gap:12px;padding-right:16px;border-right:1px solid var(--bdr)}.dec-res-n{font:800 34px var(--mono);color:var(--c);line-height:1}.dec-res-t{font-size:13px;font-weight:800;color:var(--txt)}.dec-res-s{font-size:10px;color:var(--txt3);margin-top:2px}',
+    '.dec-res-k{display:flex;flex-direction:column;align-items:center;min-width:56px}.dec-res-k b{font:800 18px var(--mono);line-height:1}.dec-res-k span{font-size:8.5px;color:var(--txt3);text-transform:uppercase;letter-spacing:.4px;margin-top:3px}',
+    '.dec-res-leyenda{flex:1;min-width:240px;font-size:9.5px;color:var(--txt3);line-height:1.45;padding-left:10px;border-left:1px solid var(--bdr)}.dec-res-leyenda b{color:var(--txt2)}',
+    '.dec-filtros{margin:10px 18px 0;display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center}.dec-fgrp{display:flex;flex-wrap:wrap;gap:5px}.dec-fgrp-r{margin-left:auto;align-items:center;gap:10px}',
+    '.dec-chip{background:var(--card);border:1px solid var(--bdr);color:var(--txt2);border-radius:20px;padding:4px 11px;font-size:10.5px;font-weight:700;cursor:pointer;font-family:var(--sans)}.dec-chip b{font-family:var(--mono);color:var(--txt)}.dec-chip:hover{border-color:var(--c)}.dec-chip.on{background:color-mix(in srgb,var(--c) 16%,var(--card));border-color:var(--c);color:var(--txt)}',
+    '.dec-q{background:var(--card);border:1px solid var(--bdr);color:var(--txt);border-radius:8px;padding:6px 10px;font-size:11px;font-family:var(--sans);min-width:220px}.dec-ver-at{font-size:10px;color:var(--txt3);display:flex;align-items:center;gap:5px;cursor:pointer}',
+    '.dec-lista{display:grid;grid-template-columns:repeat(auto-fill,minmax(360px,1fr));gap:9px;margin:10px 18px 0}',
+    '.dec-card{background:var(--card);border:1px solid var(--bdr);border-left:4px solid var(--c);border-radius:10px;padding:10px 13px 9px;display:flex;flex-direction:column;gap:4px;transition:box-shadow .15s}.dec-card:hover{box-shadow:0 4px 16px rgba(10,30,70,.12)}.dec-card.at{opacity:.6}.dec-card.at .dec-card-t{text-decoration:line-through}',
+    '.dec-card-h{display:flex;align-items:center;gap:7px}.dec-sev{font-size:8px;font-weight:800;letter-spacing:.5px;color:var(--c);border:1px solid var(--c);padding:2px 7px;border-radius:7px}.dec-tipo{font-size:9.5px;color:var(--txt3);font-weight:600}.dec-at-lbl{margin-left:auto;font-size:9.5px;color:var(--grn);font-weight:800}',
+    '.dec-card-t{font-size:12.5px;font-weight:800;color:var(--txt);line-height:1.3}.dec-card-d{font-size:10.5px;color:var(--txt3);line-height:1.35}',
+    '.dec-card-a{font-size:11px;color:var(--txt);background:var(--card2);border:1px solid var(--bdr);border-radius:7px;padding:6px 9px;line-height:1.4;margin-top:2px}.dec-a-lbl{display:inline-block;font-size:8px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;color:var(--acc2);margin-right:6px}',
+    '.dec-card-b{display:flex;flex-wrap:wrap;gap:5px;margin-top:4px}.dec-btn{background:var(--bg3);border:1px solid var(--bdr);color:var(--txt2);border-radius:6px;padding:4px 9px;font-size:10px;font-weight:700;cursor:pointer;font-family:var(--sans)}.dec-btn:hover{border-color:var(--acc);color:var(--txt)}.dec-btn-at{margin-left:auto;color:var(--grn);border-color:color-mix(in srgb,var(--grn) 40%,transparent)}',
+    '.dec-grid{margin-top:4px}.dec-cli{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:8px}.dec-cli>div{cursor:pointer;transition:border-color .15s}.dec-cli>div:hover{border-color:var(--acc)!important}',
+    '.dec-ind{display:flex;flex-direction:column;gap:10px}',
+    '@media(max-width:700px){.dec-res-main{border:none;padding:0;width:100%}.dec-res-leyenda{border:none;padding:0}.dec-fgrp-r{margin-left:0}.dec-q{min-width:0;flex:1}}'
+  ].join('\n');
+  document.head.appendChild(st);
 }
 function renderP1() {
   const today = byLatest();
@@ -14196,6 +14304,7 @@ function _pronEvRender(el) {
 }
 
 function renderPTend() {
+  (function(){ var elT = document.getElementById('pTend-content'); if (elT && !elT._rnBound) { elT._rnBound = true; if (typeof _rnEstilos === 'function') _rnEstilos(); elT.addEventListener('click', function(ev){ var t = ev.target.closest('[data-rn]'); if (t && typeof _rnAccion === 'function') { if (!window._rnDetalleProd) { try { _rnCalcularDetalle(); } catch(e0) {} } _rnAccion(t.getAttribute('data-rn'), t); } }); } })();
   var el = document.getElementById('pTend-content');
   if (!el) return;
   _pTendEnsureCargas();  // carga lazy de CARGAS DE NAVES para cabotaje en tránsito
@@ -14490,6 +14599,7 @@ function renderPTend() {
             style="background:var(--card2);color:var(--txt);border:1px solid var(--bdr);border-radius:6px;padding:5px 10px;font-size:11px;font-weight:600;cursor:pointer;min-width:110px">
             ${plantasDisp.map(function(pl){return '<option value="'+pl+'"'+(pl===planta?' selected':'')+'>'+pl+'</option>';}).join('')}
           </select>
+          ${planta !== 'Nacional' ? '<button class="rn-btn" data-rn="planta" data-planta="'+planta.replace(/"/g,'&quot;')+'" title="Ficha ejecutiva de '+planta+'" style="padding:5px 9px">🏭 Ficha</button>' : '<button class="rn-btn" data-rn="prod" data-prod="'+prod.replace(/"/g,'&quot;')+'" title="Cobertura nacional de '+prod+'" style="padding:5px 9px">📊 Nacional</button>'}
         </div>
         <div style="display:flex;align-items:center;gap:6px;padding-right:12px;border-right:1px solid var(--bdr);flex-shrink:0">
           <span style="font-size:9.5px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.05em;white-space:nowrap">📅 Periodo</span>
@@ -31445,6 +31555,9 @@ function _asegurarCapRefCache(fnRerender) {
   window.renderPInv = function() {
     const el = document.getElementById('pInv-content');
     if (!el) return;
+    if (!el._rnBound) { el._rnBound = true; el.addEventListener('click', function(ev){ var t = ev.target.closest('[data-rn]'); if (t && typeof _rnAccion === 'function') { if (!window._rnDetalleProd) { try { _rnCalcularDetalle(); } catch(e0) {} } _rnAccion(t.getAttribute('data-rn'), t); } }); }
+    if (typeof _rnEstilos === 'function') _rnEstilos();
+    if (!document.getElementById('pinv-lect-css')) { var stL = document.createElement('style'); stL.id = 'pinv-lect-css'; stL.textContent = '.pinv-lectura{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:8px 0 2px;background:var(--card);border:1px solid var(--bdr);border-left:5px solid var(--c);border-radius:10px;padding:9px 14px}.pinv-lectura-n{font:800 26px var(--mono);color:var(--c);line-height:1;display:flex;align-items:baseline;gap:4px}.pinv-lectura-n small{font-size:9.5px;color:var(--txt3);font-family:var(--sans)}.pinv-lectura-t{font-size:11.5px;color:var(--txt2);line-height:1.4;flex:1;min-width:220px}.pinv-lectura-t b{color:var(--txt)}.pinv-lectura-c{display:flex;flex-wrap:wrap;gap:4px}'; document.head.appendChild(stL); }
     const dates = (typeof DATES !== 'undefined' ? DATES : []);
     const today = (typeof currentDate !== 'undefined' ? currentDate : '') || dates[dates.length-1] || '';
     _pInvDate = today;
@@ -31461,7 +31574,34 @@ function _asegurarCapRefCache(fnRerender) {
     const maxCob   = rows.reduce((s,r)=>Math.max(s,r.cob),0);
     const minCob   = rows.filter(r=>r.cob>0).reduce((s,r)=>Math.min(s,r.cob),99999);
     const nTerms   = rows.length;
-    const nCrit    = rows.filter(r=>r.cob>0&&r.cob<4).length;
+    // ⚠️ ALINEADO — mismo umbral de "crítico" que el resto del panel (CONFIG.COB_RED)
+    const nCrit    = rows.filter(r=>r.cob>0&&r.cob<(CONFIG.COB_RED||8)).length;
+    // ⚠️ AGREGADO — a pedido: lectura ejecutiva del producto (cobertura
+    // nacional = inventario ÷ venta diaria, plantas sin stock y críticas),
+    // con los mismos cálculos del Resumen Nacional, solo para la fecha vigente.
+    var _lecturaHTML = '';
+    try {
+      if (_pInvDate === (typeof currentDate !== 'undefined' ? currentDate : _pInvDate) && typeof _rnCalcularDetalle === 'function') {
+        var RNi = _rnCalcularDetalle();
+        var pnI = (typeof normProd === 'function') ? normProd(_pInvProd) : _pInvProd;
+        var oP = RNi.porProd[pnI];
+        if (oP && oP.n) {
+          var cobNac = oP.vf > 0 ? Math.round(oP.inv / oP.vf) : 0;
+          var nvP = oP.inv <= 0 ? 'quiebre' : cobNac < CONFIG.COB_RED ? 'crit' : cobNac < CONFIG.COB_AMB ? 'alerta' : 'ok';
+          var escI = function(t){ return String(t==null?'':t).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); };
+          var chipsP = oP.quiebre.map(function(pl){ return '<button class="rn-chip" data-rn="planta" data-planta="'+escI(pl)+'" style="border-color:'+RNi.NIVEL_COL.quiebre+';color:'+RNi.NIVEL_COL.quiebre+'">⛔ '+escI(pl)+'</button>'; })
+            .concat(oP.riesgo.map(function(pl){ var c = RNi.celda[pl+'|'+pnI]; return '<button class="rn-chip" data-rn="planta" data-planta="'+escI(pl)+'" style="border-color:var(--red);color:var(--red)">'+escI(pl)+' '+(c?c.cob+'d':'')+'</button>'; })).join('');
+          _lecturaHTML = '<div class="pinv-lectura" style="--c:'+RNi.NIVEL_COL[nvP]+'">'
+            + '<div class="pinv-lectura-n">'+(oP.vf>0?cobNac:'—')+'<small>días</small></div>'
+            + '<div class="pinv-lectura-t"><b>Cobertura nacional de '+escI(_pInvProd)+'</b>: '+oP.inv.toFixed(0)+' MB en '+oP.n+' plantas ÷ '+oP.vf.toFixed(1)+' MB/día de venta. '
+            + (oP.quiebre.length ? '<b style="color:'+RNi.NIVEL_COL.quiebre+'">'+oP.quiebre.length+' sin stock</b>' : '')+(oP.quiebre.length&&oP.riesgo.length?' y ':'')+(oP.riesgo.length ? '<b style="color:var(--red)">'+oP.riesgo.length+' crítica'+(oP.riesgo.length>1?'s':'')+'</b>' : '')+(!oP.quiebre.length&&!oP.riesgo.length?'<b style="color:var(--grn)">Sin plantas críticas.</b>':'.')
+            + '</div>'
+            + (chipsP ? '<div class="pinv-lectura-c">'+chipsP+'</div>' : '')
+            + '<button class="rn-btn" data-rn="prod" data-prod="'+escI(pnI)+'" style="margin-left:auto;white-space:nowrap">Ver explicación →</button>'
+            + '</div>';
+        }
+      }
+    } catch (eLect) { console.warn('[pInv] lectura ejecutiva:', eLect && eLect.message); }
     const avgCob   = rows.filter(r=>r.cob>0).length > 0
       ? rows.filter(r=>r.cob>0).reduce((s,r)=>s+r.cob,0) / rows.filter(r=>r.cob>0).length : 0;
     const minDate = dates.length ? dates[0] : '';
@@ -31566,6 +31706,7 @@ el.innerHTML = `
         </div>
         <div class="pinv-btns prod-filter-wrap" style="margin-bottom:0;overflow-x:auto;-webkit-overflow-scrolling:touch;flex-wrap:nowrap">${btnHTML}</div>
         <div class="pinv-kpis" style="margin-bottom:0;padding-top:8px">${kpiHTML}</div>
+        ${_lecturaHTML}
       </div>
       <div class="pinv-scroll-body">
       <div class="pinv-chart-card">
@@ -34065,6 +34206,7 @@ window.renderPRepoMar = function() {
   _repomarInjectCSS();
   var host = document.getElementById('pRepoMar-content');
   if (!host) return;
+  if (!host._fichaBound) { host._fichaBound = true; host.addEventListener('click', function(ev){ var bt = ev.target.closest('[data-ficha-buque]'); if (bt) { ev.stopPropagation(); if (typeof openBTModal === 'function') openBTModal(bt.getAttribute('data-ficha-buque')); } }, true); }
 
   // ⚠️ AGREGADO — bug real confirmado (mismo patrón que ya se corrigió
   // en Vista Ejecutiva): el popup de "vacío" de esta página usa
@@ -34357,6 +34499,7 @@ window.renderPRepoMar = function() {
         '<button class="repomar-addescala-btn" onclick="_repomarCopiarBuqueAProyectado(' + "'" + b.buque.replace(/'/g,"\\'") + "'" + ')">📋 Copiar a Proyectado</button>';
       var shipBox = '<div class="repomar-cell" style="align-items:flex-start;padding:4px">' +
         '<div class="repomar-shipbox' + (enVivoEnTalara ? ' en-vivo' : '') + '" style="width:100%">' +
+          (modo !== 'proyectado' && !(typeof REPOMAR_SHARE_MODE !== 'undefined' && REPOMAR_SHARE_MODE) ? '<button class="repomar-ficha-btn" data-ficha-buque="' + b.buque.replace(/"/g,'&quot;') + '" title="Ficha del viaje actual de ' + b.buque + '">ⓘ</button>' : '') +
           '<div class="repomar-shipname">🚢 ' + b.buque + '</div>' +
           '<div class="repomar-shipcargo">' + (cargaTxt || 'Sin carga registrada') + '</div>' +
           (enVivoEnTalara ? '<div class="repomar-livepill" style="margin:0 10px 4px">' + '<span class="repomar-livedot"></span>En puerto</div>' : '') +
@@ -34543,6 +34686,34 @@ window.renderPRepoMar = function() {
       : '<div class="repomar-empty-msg">No hay cabotaje marítimo vigente en este momento (todas las entregas ya se completaron, o no hay ninguna reportada en Cargas de Naves).</div>';
   }
 
+  // ⚠️ AGREGADO — a pedido: franja ejecutiva (solo en Confirmado): qué
+  // llega, cuándo y cuánto — en una línea, antes de entrar a la grilla.
+  var _rmStrip = '';
+  if (modo !== 'proyectado') {
+    try {
+      var _hoyR = fechaRef, _esc2 = function(t){ return String(t==null?'':t).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); };
+      var _pend = [];
+      buques.forEach(function(b){ (b.legs||[]).forEach(function(l){ if (l.estado === 'COMPLETADO' || l._sintetica || !(l.vol > 0) || (l.tipo||'descarga') !== 'descarga') return; var f = (l.fecha_hasta||'').slice(0,10); if (!f || f < _hoyR) return; _pend.push({ buque: b.buque, terminal: l.terminal, fecha: f, vol: l.vol }); }); });
+      var _mbR = _pend.reduce(function(a2,x){ return a2 + x.vol; }, 0);
+      var _d7 = function(f){ return Math.round((new Date(f+'T12:00:00') - new Date(_hoyR+'T12:00:00'))/86400000); };
+      var _en7 = _pend.filter(function(x){ return _d7(x.fecha) <= 7; });
+      var _mb7 = _en7.reduce(function(a2,x){ return a2 + x.vol; }, 0);
+      var _porTerm = {}; _en7.forEach(function(x){ _porTerm[x.terminal] = (_porTerm[x.terminal]||0) + x.vol; });
+      var _prox = _pend.slice().sort(function(a2,b2){ return a2.fecha.localeCompare(b2.fecha); })[0];
+      var _enPuerto = buques.filter(function(b){ return (b.legs||[]).some(function(l){ return l.estado !== 'COMPLETADO' && typeof _repomarBuquePresenteEnTerminal === 'function' && _repomarBuquePresenteEnTerminal(b.buque, l.terminalNorm); }); }).map(function(b){ return b.buque; });
+      var _fc = function(f){ var p2 = f.split('-'); return p2[2]+'/'+p2[1]; };
+      _rmStrip = '<div class="rm-strip">'
+        + '<div class="rm-k"><b>' + buques.length + '</b><span>buque' + (buques.length===1?'':'s') + ' en cabotaje</span></div>'
+        + '<div class="rm-k"><b>' + _mbR.toFixed(0) + '</b><span>MB por descargar</span></div>'
+        + '<div class="rm-k"><b>' + _en7.length + '</b><span>descargas en 7 días · ' + _mb7.toFixed(0) + ' MB</span></div>'
+        + '<div class="rm-k rm-k-w"><b>' + (_prox ? _esc2(_prox.terminal) + ' ' + _fc(_prox.fecha) : '—') + '</b><span>' + (_prox ? 'próxima descarga · ' + _esc2(_prox.buque) + ' · ' + (_d7(_prox.fecha)<=0?'hoy':_d7(_prox.fecha)===1?'mañana':'en '+_d7(_prox.fecha)+' días') : 'sin descargas pendientes') + '</span></div>'
+        + (_enPuerto.length ? '<div class="rm-k rm-k-w"><b>' + _esc2(_enPuerto.join(', ')) + '</b><span>en puerto ahora</span></div>' : '')
+        + (Object.keys(_porTerm).length ? '<div class="rm-k rm-k-w"><b>' + Object.keys(_porTerm).sort(function(a2,b2){ return _porTerm[b2]-_porTerm[a2]; }).slice(0,4).map(function(t){ return _esc2(t) + ' ' + _porTerm[t].toFixed(0); }).join(' · ') + '</b><span>MB que reciben esta semana</span></div>' : '')
+        + '<div class="rm-k rm-k-hint">Clic en un buque: viaje ampliado · botón ⓘ: ficha del viaje actual</div>'
+        + '</div>';
+    } catch (eStrip) { console.warn('[RepoMar] franja ejecutiva:', eStrip && eStrip.message); }
+  }
+  if (!document.getElementById('rm-strip-css')) { var stR = document.createElement('style'); stR.id = 'rm-strip-css'; stR.textContent = '.rm-strip{display:flex;flex-wrap:wrap;gap:8px 18px;align-items:center;margin:10px 22px 4px;padding:9px 14px;background:var(--card);border:1px solid var(--bdr);border-left:4px solid var(--acc);border-radius:10px}.rm-k{display:flex;flex-direction:column;min-width:0}.rm-k b{font:800 16px var(--mono);color:var(--txt);line-height:1.1}.rm-k-w b{font-size:12.5px;font-family:var(--sans)}.rm-k span{font-size:9px;color:var(--txt3);text-transform:uppercase;letter-spacing:.4px;margin-top:2px}.rm-k-hint{margin-left:auto;font-size:9.5px;color:var(--txt3)}.repomar-ficha-btn{position:absolute;top:4px;right:4px;width:18px;height:18px;border-radius:50%;border:1px solid #0071A4;background:#fff;color:#0071A4;font-size:11px;line-height:16px;text-align:center;cursor:pointer;padding:0;z-index:6}.repomar-ficha-btn:hover{background:#0071A4;color:#fff}'; document.head.appendChild(stR); }
   host.innerHTML =
     '<div class="repomar-wrap">' +
       // ⚠️ AGREGADO — a pedido: aviso para girar el celular a horizontal
@@ -34604,7 +34775,7 @@ window.renderPRepoMar = function() {
           (typeof REPOMAR_SHARE_MODE !== 'undefined' && REPOMAR_SHARE_MODE ? '' :
           '<button class="repomar-share-btn" onclick="_repomarCompartir()">🔗 Compartir enlace</button>') +
         '</div>' +
-      '</div>' +
+      '</div>' + _rmStrip +
       (window._repomarUltimaActualizacion ? '<div class="repomar-lastupdate" style="padding:0 4px 8px">Última actualización: ' + window._repomarUltimaActualizacion + '</div>' : '') +
       '<div class="repomar-scroll">' +
         '<div class="repomar-grid" id="repomar-grid">' +
