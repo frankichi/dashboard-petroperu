@@ -6177,6 +6177,19 @@ function _rnAccion(tipo, t) {
     irA('pInv', function(){ if (pr && typeof window._pInvSetProd === 'function') window._pInvSetProd(pr); });
     return;
   }
+  // ⚠️ CORREGIDO — a pedido: desde la ficha de una PLANTA, el detalle
+  // debe ser de esa planta. "Tendencia de Inventario" tiene selector de
+  // planta y de producto, así que se abre ya posicionada en ambos.
+  if (tipo === 'ver-tend') {
+    var plT = t.getAttribute('data-planta') || 'Nacional', prT = t.getAttribute('data-prod') || '';
+    _rnCerrarModal();
+    _pTendPlanta = plT;
+    if (prT) _pTendProd = prT;
+    var activa = document.querySelector('.page.active');
+    if (activa && activa.id === 'pTend') { if (typeof window._pTendSetPlanta === 'function') window._pTendSetPlanta(plT); }
+    else irA('pTend');
+    return;
+  }
 }
 // Monta el modal en <body> (fuera de la página, que usa contain:layout y
 // atrapaba el fondo fijo dentro de su propio recuadro) y engancha sus
@@ -6254,7 +6267,7 @@ function _rnAbrirProducto(pr) {
     +     '<div class="rn-m-filas"><div class="rn-m-fila rn-m-fila-h"><div>Planta</div><div>Cobertura</div><div></div><div>Inventario</div><div>Venta/día</div></div>' + filasHtml + '</div></div>'
     +   '<div class="rn-m-sec"><div class="rn-sec-t">Reposición en camino <span>' + (lleg.length ? lleg.length + ' descargas · ' + mbLleg.toFixed(1) + ' MB' : '') + '</span></div>' + llegHtml + '</div>'
     + '</div>'
-    + '<div class="rn-m-foot"><button class="rn-btn" data-rn="cerrar-modal">Cerrar</button><button class="rn-btn rn-btn-acc" data-rn="ver-inv" data-prod="' + esc(pr) + '">Ver en Inventario Nacional →</button></div>'
+    + '<div class="rn-m-foot"><button class="rn-btn" data-rn="cerrar-modal">Cerrar</button><button class="rn-btn" data-rn="ver-tend" data-planta="Nacional" data-prod="' + esc(pr) + '">Tendencia nacional →</button><button class="rn-btn rn-btn-acc" data-rn="ver-inv" data-prod="' + esc(pr) + '">Ver en Inventario Nacional →</button></div>'
     + '</div></div>';
   _rnMontarModal(html);
 }
@@ -6278,7 +6291,7 @@ function _rnAbrirPlanta(pl) {
   var maxCob = 30;
   var filasHtml = prods.map(function(x) {
     var c = x.c, ancho = c.nivel === 'nd' ? 0 : Math.min(100, Math.round((c.cob >= 999 ? maxCob : c.cob) / maxCob * 100));
-    return '<div class="rn-m-fila" data-rn="planta-prod" data-prod="' + esc(x.prod) + '" title="Ver ' + esc(x.prod) + ' a nivel nacional">'
+    return '<div class="rn-m-fila" data-rn="ver-tend" data-planta="' + esc(pl) + '" data-prod="' + esc(x.prod) + '" title="Ver la tendencia de ' + esc(x.prod) + ' en ' + esc(pl) + '">'
       + '<div class="rn-m-pl"><span class="rn-hm-dot" style="background:' + NC[c.nivel] + '"></span>' + esc(x.prod) + (c.minima ? ' <span class="rn-hm-min">EM</span>' : '') + '</div>'
       + '<div class="rn-m-bar"><span style="width:' + ancho + '%;background:' + NC[c.nivel] + '"></span></div>'
       + '<div class="rn-m-cob" style="color:' + NC[c.nivel] + '">' + (c.nivel === 'quiebre' ? '⛔' : c.nivel === 'nd' ? '—' : (c.cob >= 999 ? '99+' : c.cob) + 'd') + '</div>'
@@ -6305,12 +6318,12 @@ function _rnAbrirPlanta(pl) {
     +   '<button class="rn-m-x" data-rn="cerrar-modal" title="Cerrar">✕</button></div>'
     + '<div class="rn-m-body">'
     +   '<div class="rn-m-lectura">' + lectura + '</div>'
-    +   '<div class="rn-m-sec"><div class="rn-sec-t">Productos <span>' + prods.length + ' · peor primero · clic abre el producto a nivel nacional</span></div>'
+    +   '<div class="rn-m-sec"><div class="rn-sec-t">Productos <span>' + prods.length + ' · peor primero · clic abre la tendencia de ese producto en ' + esc(pl) + '</span></div>'
     +     '<div class="rn-m-filas"><div class="rn-m-fila rn-m-fila-h"><div>Producto</div><div>Cobertura</div><div></div><div>Inventario</div><div>Venta/día</div></div>' + filasHtml + '</div></div>'
     +   '<div class="rn-m-sec"><div class="rn-sec-t">Reposición en camino <span>' + (lleg.length ? lleg.length + ' descarga' + (lleg.length > 1 ? 's' : '') : '') + '</span></div>' + llegHtml + '</div>'
     +   '<div class="rn-m-sec"><div class="rn-sec-t">Acciones recomendadas <span>Centro de Decisiones</span></div>' + recsHtml + '</div>'
     + '</div>'
-    + '<div class="rn-m-foot"><button class="rn-btn" data-rn="cerrar-modal">Cerrar</button><button class="rn-btn rn-btn-acc" data-rn="ver-inv" data-prod="' + esc(peorProd ? peorProd.prod : '') + '">Ver en Inventario Nacional →</button></div>'
+    + '<div class="rn-m-foot"><button class="rn-btn" data-rn="cerrar-modal">Cerrar</button><button class="rn-btn rn-btn-acc" data-rn="ver-tend" data-planta="' + esc(pl) + '" data-prod="' + esc(peorProd ? peorProd.prod : '') + '">Ver tendencia de ' + esc(pl) + ' →</button></div>'
     + '</div></div>';
   _rnMontarModal(html);
 }
