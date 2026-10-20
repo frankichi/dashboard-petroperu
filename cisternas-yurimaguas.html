@@ -22,6 +22,17 @@ body{font-family:var(--sans);font-size:13px;background:var(--bg);color:var(--txt
 .tbtn.prim{background:var(--red);border-color:var(--red)}
 .wrap{max-width:1500px;margin:0 auto;padding:18px 22px 40px}
 .hdr{display:flex;align-items:flex-end;gap:12px;margin-bottom:14px;flex-wrap:wrap}
+.ex-strip{display:grid;grid-template-columns:minmax(260px,1.3fr) repeat(3,minmax(170px,1fr));gap:10px;margin-bottom:10px}
+.ex-hero{background:linear-gradient(135deg,#e8eefb,#fff);border:1px solid #c7d4ee;border-radius:12px;padding:12px 14px}
+.ex-kpi{background:var(--card);border:1px solid var(--bdr);border-radius:12px;padding:12px 14px;box-shadow:0 1px 3px rgba(15,30,60,.05)}
+.ex-k{font-size:9.5px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--txt3)}
+.ex-n{font-family:var(--mono);font-size:28px;font-weight:900;line-height:1;color:var(--txt);margin-top:6px}.ex-n small{font-size:11px;font-weight:700;color:var(--txt2);font-family:var(--sans);margin-left:6px}
+.ex-s{font-size:10.5px;color:var(--txt2);margin-top:6px;line-height:1.4}
+.ex-lect{background:#eef3fb;border:1px solid #c7d4ee;border-left:4px solid var(--navy);border-radius:10px;padding:10px 14px;font-size:12.5px;line-height:1.55;color:var(--txt)}.ex-lect b{color:#1d4ed8}
+.ex-prod{display:flex;gap:12px;align-items:center;margin-top:8px;padding-top:8px;border-top:1px dashed var(--bdr)}
+.ex-prod .nm{font-weight:800;font-size:12px;min-width:60px}.ex-prod .bar{flex:1;height:8px;border-radius:4px;background:#e5e9f0;overflow:hidden}.ex-prod .bar i{display:block;height:100%}
+.ex-prod .au{font-family:var(--mono);font-weight:800;font-size:12px;min-width:48px;text-align:right}
+@media(max-width:1000px){.ex-strip{grid-template-columns:1fr 1fr}}@media(max-width:600px){.ex-strip{grid-template-columns:1fr}}
 .hdr .t{font-size:18px;font-weight:800}
 .hdr .s{font-size:11.5px;color:var(--txt3);font-weight:600}
 .grid{display:grid;gap:12px}
@@ -101,7 +112,7 @@ tr:hover td{background:#fafbfd}
 .fl-t .u{font-family:var(--mono);font-weight:800;font-size:13px}.fl-t .g{font-family:var(--mono);color:var(--txt3);font-size:10.5px;display:block}
 .fl-t tr.tot td{background:#f1f5f9;font-weight:800;border-top:2px solid var(--bdr)}
 .delta{font-size:10px;font-weight:800;margin-left:4px}.delta.up{color:#15803d}.delta.dn{color:#c8102e}
-@media (max-width:900px){.fl-kpis{grid-template-columns:1fr 1fr}}
+@media (max-width:900px){.fl-kpis{grid-template-columns:1fr 1fr}.rep-sub{grid-template-columns:1fr!important}}
 </style>
 </head>
 <body>
@@ -113,6 +124,7 @@ tr:hover td{background:#fafbfd}
   <div class="sp"></div>
   <div class="who" id="who"></div>
   <button class="tbtn" id="btnRef" onclick="cargar(true)" style="display:none">↻ Actualizar</button>
+  <button class="tbtn" id="btnRep" onclick="abrirRep()" style="display:none">📋 Cargar reporte del día</button>
   <button class="tbtn prim" id="btnNueva" onclick="abrirForm()" style="display:none">+ Registrar cisterna</button>
   <button class="tbtn" id="btnSalir" onclick="salir()" style="display:none">Salir</button>
 </div>
@@ -138,6 +150,7 @@ tr:hover td{background:#fafbfd}
     <div class="upd" id="upd"></div>
   </div>
 
+  <div id="execStrip" style="margin-bottom:12px"></div>
   <div class="card" id="flotaCard" style="margin-bottom:12px">
     <div class="card-h">
       <span>Movimiento de flota del día — Talara → Yurimaguas</span>
@@ -145,6 +158,10 @@ tr:hover td{background:#fafbfd}
       <div class="tabs"><select id="flFecha" onchange="renderFlota()" style="border:1px solid var(--bdr);border-radius:7px;padding:5px 8px;font-family:inherit;font-weight:700;font-size:11.5px"></select></div>
     </div>
     <div class="card-b" id="flotaBody"></div>
+  </div>
+  <div class="card" id="repCard" style="margin-bottom:12px">
+    <div class="card-h"><span>Llegadas programadas a Yurimaguas (ETA)</span><span id="repInfo" style="font-weight:600;text-transform:none;letter-spacing:0;color:var(--txt3)"></span></div>
+    <div class="card-b" id="repBody"></div>
   </div>
   <div class="grid g-prod" id="prodCards"></div>
 
@@ -191,6 +208,33 @@ tr:hover td{background:#fafbfd}
     <div class="mfoot">
       <button class="btn" onclick="cerrarForm()">Cancelar</button>
       <button class="btn prim" id="fGuardar" onclick="guardar()">Guardar</button>
+    </div>
+  </div>
+</div>
+<div class="ov" id="ovRep" onclick="if(event.target===this)cerrarRep()">
+  <div class="modal" style="width:min(980px,100%)">
+    <h3>Cargar reporte diario de transferencias Talara → Yurimaguas</h3>
+    <div style="padding:14px 20px 0">
+      <div class="tabs" style="margin:0 0 10px">
+        <button class="tab on" data-r="txt" onclick="repTab('txt')">Pegar desde Excel</button>
+        <button class="tab" data-r="img" onclick="repTab('img')">Subir / pegar imagen</button>
+      </div>
+      <div id="repTxt">
+        <div style="font-size:11.5px;color:var(--txt2);margin-bottom:6px">En el Excel selecciona la tabla completa (desde la fecha hasta “Unidades de retorno vacías”, incluida la columna ETA), copia con Ctrl+C y pega aquí con Ctrl+V.</div>
+        <textarea id="repTexto" rows="7" style="width:100%;border:1px solid var(--bdr);border-radius:8px;padding:10px;font-family:var(--mono);font-size:11.5px" placeholder="Pega aquí la tabla copiada del Excel…"></textarea>
+        <div style="margin-top:8px"><button class="btn prim" onclick="repLeerTexto()">Leer texto</button></div>
+      </div>
+      <div id="repImg" style="display:none">
+        <div style="font-size:11.5px;color:var(--txt2);margin-bottom:6px">Elige la imagen del reporte o pégala con Ctrl+V en esta ventana. La lectura automática puede equivocarse: <b>revisa la vista previa</b> antes de guardar.</div>
+        <input type="file" id="repFile" accept="image/*" onchange="repImagenArchivo(this.files[0])">
+        <div id="repImgPrev" style="margin-top:8px"></div>
+        <div id="repOcrEstado" style="font-size:11.5px;font-weight:700;color:var(--txt2);margin-top:6px"></div>
+      </div>
+    </div>
+    <div id="repPrev" style="padding:14px 20px"></div>
+    <div class="mfoot">
+      <button class="btn" onclick="cerrarRep()">Cancelar</button>
+      <button class="btn prim" id="repGuardar" onclick="repGuardar()" disabled>Guardar reporte</button>
     </div>
   </div>
 </div>
@@ -243,7 +287,7 @@ function login(){
   }).catch(function(){ $('btnLogin').disabled = false; $('lErr').textContent = 'Error de conexión. Intenta de nuevo.'; });
 }
 function salir(){ ['rd_token','rd_nombre','rd_planta','rd_email','rd_rol'].forEach(function(k){ lsSet(k, null); }); S.token = null; S.data = null; mostrarLogin(); }
-function mostrarLogin(){ $('vLogin').style.display = ''; $('vMain').style.display = 'none'; ['btnRef','btnNueva','btnSalir'].forEach(function(i){ $(i).style.display = 'none'; }); $('who').textContent = ''; }
+function mostrarLogin(){ $('vLogin').style.display = ''; $('vMain').style.display = 'none'; ['btnRef','btnNueva','btnSalir','btnRep'].forEach(function(i){ $(i).style.display = 'none'; }); $('who').textContent = ''; }
 function mostrarMain(){ $('vLogin').style.display = 'none'; $('vMain').style.display = ''; $('btnRef').style.display = ''; $('btnSalir').style.display = ''; }
 
 // ── Carga ───────────────────────────────────────────────────────────────
@@ -261,6 +305,7 @@ function cargar(visible){
     S.data = res;
     $('who').innerHTML = esc(res.usuario.nombre) + '<br><span style="color:#9db4d4">' + (res.puedeEditar ? 'Puede registrar' : 'Solo lectura') + '</span>';
     $('btnNueva').style.display = res.puedeEditar ? '' : 'none';
+    $('btnRep').style.display = res.puedeEditar ? '' : 'none';
     $('upd').textContent = 'Actualizado ' + new Date().toLocaleTimeString('es-PE',{hour:'2-digit',minute:'2-digit',hour12:false});
     render();
   }).catch(function(){ S.cargando = false; $('upd').textContent = '⚠ Sin conexión con el servidor. Reintentando en el próximo ciclo.'; });
@@ -291,6 +336,24 @@ function calc(){
     var llegMan = grp(function(c){ var e = toDate(c.eta); return c.estado === 'EN_TRANSITO' && e && e >= finHoy && e < finManana; });
     var atras = grp(function(c){ var e = toDate(c.eta); return c.estado === 'EN_TRANSITO' && e && e < ahora; });
     var descHoy = grp(function(c){ var de = toDate(c.fecha_descarga); return c.estado === 'DESCARGADA' && de && de >= inicioHoy && de < finHoy; });
+    // Llegadas a usar en la proyección (registro cisterna por cisterna)
+    var llegadasEta = mine.filter(function(c){ return c.estado === 'EN_TRANSITO' || c.estado === 'PROGRAMADA'; }).map(function(c){ return { eta: c.eta, mb: c.mb, n: 1 }; });
+    // Si hay reporte de transferencias de hoy o ayer y no hay registro cisterna por cisterna activo, se usa el reporte
+    var rep = repUltimo(p), fuente = 'registro';
+    var activasReg = mine.filter(function(c){ return ['PROGRAMADA','EN_TRANSITO','EN_ESPERA'].indexOf(c.estado) !== -1; }).length;
+    if (rep && !activasReg) {
+      fuente = 'reporte';
+      var galCT = rep.ruta_und > 0 ? rep.ruta_gal / rep.ruta_und : 10000;
+      var G = function(n, gal){ return { n: n, mb: gal / 42000, list: [] }; };
+      var etaN = function(f){ var a = (rep.etas || []).filter(f); return G(a.reduce(function(s,e){ return s + e.cant; }, 0), a.reduce(function(s,e){ return s + e.cant; }, 0) * galCT); };
+      prog = G(rep.prog_und + rep.carga_und, rep.prog_gal + rep.carga_gal);
+      tran = G(rep.ruta_und, rep.ruta_gal);
+      esp = G(rep.desc_und, rep.desc_gal); espIni = esp;
+      llegHoy = etaN(function(e){ var t = toDate(e.eta); return t && t < finHoy; });
+      llegMan = etaN(function(e){ var t = toDate(e.eta); return t && t >= finHoy && t < finManana; });
+      atras = G(0, 0); descHoy = G(0, 0);
+      llegadasEta = (rep.etas || []).map(function(e){ return { eta: e.eta, mb: e.cant * galCT / 42000, n: e.cant }; });
+    }
     var invAct = ult ? ult.inv : 0;
     var vacio = cap.capacidad > 0 ? cap.capacidad - invAct : null;
     var dispDescarga = esp.mb + llegHoy.mb;
@@ -298,7 +361,7 @@ function calc(){
     var proy = [], nivel = invAct + esp.mb, base = ult ? toDate(ult.fecha) : inicioHoy;
     for (var i = 1; i <= 8; i++) {
       var dia = new Date(base.getTime() + i * 864e5), sig = new Date(dia.getTime() + 864e5);
-      var lleg = mine.filter(function(c){ var e = toDate(c.eta); return (c.estado === 'EN_TRANSITO' || c.estado === 'PROGRAMADA') && e && e >= (i === 1 ? new Date(0) : dia) && e < sig; })
+      var lleg = llegadasEta.filter(function(c){ var e = toDate(c.eta); return e && e >= (i === 1 ? new Date(0) : dia) && e < sig; })
                      .reduce(function(s,c){ return s + c.mb; }, 0);
       nivel = Math.max(0, nivel + lleg - desp7);
       proy.push({ fecha: soloFecha(dia), inv: nivel, lleg: lleg });
@@ -316,7 +379,7 @@ function calc(){
       avance: pronMes > 0 ? vendido / pronMes * 100 : null, cumpl: esperado > 0 ? vendido / esperado * 100 : null,
       resto: resto, ritmo: diasRest > 0 ? resto / diasRest : null, diasRest: diasRest,
       autoPron: mbdc > 0 ? invAct / mbdc : null };
-    out.prods[p] = { color: P.c, ult: ult, inv: inv, invAct: invAct, desp7: desp7, pron: pron, autonomia: desp7 > 0 ? invAct / desp7 : null,
+    out.prods[p] = { fuente: fuente, rep: rep, color: P.c, ult: ult, inv: inv, invAct: invAct, desp7: desp7, pron: pron, autonomia: desp7 > 0 ? invAct / desp7 : null,
       cap: cap, vacio: vacio, prog: prog, tran: tran, esp: esp, espIni: espIni, llegHoy: llegHoy, llegMan: llegMan,
       atras: atras, descHoy: descHoy, dispDescarga: dispDescarga, proy: proy };
   });
@@ -378,6 +441,34 @@ function render(){
   var c = calc();
   var ultF = PRODS.map(function(P){ return c.prods[P.k].ult && c.prods[P.k].ult.fecha; }).filter(Boolean).sort().pop();
   $('subt').textContent = 'Hoy ' + fmtD(c.hoy) + ' · último reporte de planta: ' + (ultF ? fmtD(ultF) : 'sin datos') + ' · volúmenes en MB (miles de barriles) · 1 MB = 42,000 gal';
+  // ── Resumen ejecutivo (misma data que las tarjetas de producto)
+  (function(){
+    var el = $('execStrip'); if (!el) return;
+    var ps = PRODS.map(function(P){ var p = c.prods[P.k]; p.nombre = P.k; return p; });
+    var enCamino = ps.reduce(function(s,p){ return s + p.prog.n + p.tran.n + p.esp.n; }, 0);
+    var mbCamino = ps.reduce(function(s,p){ return s + p.prog.mb + p.tran.mb + p.esp.mb; }, 0);
+    var llegHoy = ps.reduce(function(s,p){ return s + p.llegHoy.n; }, 0), mbHoy = ps.reduce(function(s,p){ return s + p.llegHoy.mb; }, 0);
+    var atras = ps.reduce(function(s,p){ return s + p.atras.n; }, 0);
+    var peor = ps.filter(function(p){ return p.autonomia != null; }).sort(function(a,b){ return a.autonomia - b.autonomia; })[0];
+    var exceso = ps.filter(function(p){ return p.vacio != null && p.dispDescarga > p.vacio; });
+    var autoCol = function(a){ return a == null ? 'var(--txt3)' : a < 3 ? 'var(--crit)' : a < 5 ? 'var(--warn)' : 'var(--ok)'; };
+    var estado = !peor ? ['SIN DATOS','var(--txt3)'] : peor.autonomia < 3 ? ['CRÍTICO','var(--crit)'] : peor.autonomia < 5 ? ['EN ALERTA','var(--warn)'] : ['NORMAL','var(--ok)'];
+    var lect = 'Yurimaguas está en <b style="color:' + estado[1] + '">' + estado[0] + '</b>';
+    if (peor) lect += ': la menor autonomía es <b>' + esc(peor.nombre) + '</b> con ' + f1(peor.autonomia,1) + ' días (' + f1(peor.invAct,3) + ' MB, despacho ' + f1(peor.desp7,3) + ' MB/d)';
+    lect += '. Hay <b>' + enCamino + ' cisternas</b> comprometidas (' + f1(mbCamino,3) + ' MB) entre carga en Talara, tránsito y espera; ' + (llegHoy ? '<b>' + llegHoy + ' llegan hoy</b> (' + f1(mbHoy,3) + ' MB)' : 'ninguna llega hoy') + '. ';
+    if (atras) lect += '<span style="color:var(--warn);font-weight:800">⏱ ' + atras + ' con ETA vencida sin llegada registrada.</span> ';
+    if (exceso.length) lect += '<span style="color:var(--crit);font-weight:800">⚠️ No cabe lo que llega hoy</span> en ' + exceso.map(function(p){ return esc(p.nombre) + ' (exceso ' + f1(p.dispDescarga - Math.max(0,p.vacio),3) + ' MB)'; }).join(', ') + '. ';
+    ps.forEach(function(p){ if (p.pron && p.pron.cumpl != null && p.pron.cumpl < 85) lect += esc(p.nombre) + ' va al ' + f1(p.pron.cumpl,0) + '% del pronóstico a la fecha. '; });
+    var maxAuto = Math.max.apply(null, ps.map(function(p){ return p.autonomia || 0; }).concat([10]));
+    el.innerHTML = '<div class="ex-strip">'
+      + '<div class="ex-hero"><div class="ex-k">Estado de suministro · Yurimaguas</div><div class="ex-n" style="color:' + estado[1] + '">' + estado[0] + '</div>'
+      + ps.map(function(p){ return '<div class="ex-prod"><span class="nm" style="color:' + p.color + '">' + esc(p.nombre) + '</span><span class="bar"><i style="width:' + Math.min(100, (p.autonomia || 0) / maxAuto * 100) + '%;background:' + autoCol(p.autonomia) + '"></i></span><span class="au" style="color:' + autoCol(p.autonomia) + '">' + (p.autonomia == null ? '—' : f1(p.autonomia,1) + ' d') + '</span></div>'; }).join('')
+      + '<div class="ex-s">barra = autonomía (inventario ÷ despacho promedio 7 d)</div></div>'
+      + '<div class="ex-kpi"><div class="ex-k">Cisternas comprometidas</div><div class="ex-n">' + enCamino + '<small>' + f1(mbCamino,2) + ' MB</small></div><div class="ex-s">' + ps.map(function(p){ return esc(p.nombre) + ': ' + (p.prog.n + p.tran.n + p.esp.n); }).join(' · ') + '<br>por cargar ' + ps.reduce(function(s,p){ return s + p.prog.n; },0) + ' · en tránsito ' + ps.reduce(function(s,p){ return s + p.tran.n; },0) + ' · en espera ' + ps.reduce(function(s,p){ return s + p.esp.n; },0) + '</div></div>'
+      + '<div class="ex-kpi"><div class="ex-k">Llegan hoy</div><div class="ex-n" style="color:' + (llegHoy ? 'var(--navy)' : 'var(--txt3)') + '">' + llegHoy + '<small>' + f1(mbHoy,2) + ' MB</small></div><div class="ex-s">mañana: ' + ps.reduce(function(s,p){ return s + p.llegMan.n; },0) + ' cisternas' + (atras ? ' · <span style="color:var(--warn);font-weight:800">' + atras + ' con ETA vencida</span>' : '') + '</div></div>'
+      + '<div class="ex-kpi"><div class="ex-k">Capacidad para recibir</div><div class="ex-n" style="color:' + (exceso.length ? 'var(--crit)' : 'var(--ok)') + '">' + (exceso.length ? exceso.length + '<small>producto' + (exceso.length === 1 ? '' : 's') + ' sin espacio</small>' : 'OK') + '</div><div class="ex-s">' + ps.map(function(p){ return esc(p.nombre) + ': vacío ' + (p.vacio == null ? '—' : f1(Math.max(0,p.vacio),2)) + ' MB / llega hoy ' + f1(p.dispDescarga,2); }).join('<br>') + '</div></div>'
+      + '</div><div class="ex-lect">' + lect + '</div>';
+  })();
   $('prodCards').innerHTML = PRODS.map(function(P){
     var p = c.prods[P.k]; p.nombre = P.k;
     var auto = p.autonomia, autoCls = auto == null ? '' : auto < 3 ? 'color:var(--crit)' : auto < 5 ? 'color:var(--warn)' : 'color:var(--ok)';
@@ -398,6 +489,7 @@ function render(){
       +   '<div class="kpi"><div class="l">Vacío disponible</div><div class="v">' + (p.vacio == null ? '—' : f1(p.vacio,3)) + '</div><div class="u">MB · cap. ' + (p.cap.capacidad ? f1(p.cap.capacidad,2) : '—') + '</div></div>'
       + '</div>'
       + pronBloque(p)
+      + (p.fuente === 'reporte' ? '<div style="margin-top:10px;font-size:10.5px;font-weight:700;color:#6d28d9">Flujo de cisternas según el reporte de transferencias del ' + fmtD(p.rep.fecha) + (p.rep.hora ? ' ' + esc(p.rep.hora) : '') + ' (volumen por cisterna estimado con el promedio en ruta)</div>' : '')
       + '<div class="flow">'
       +   st('prog','Por cargar Talara', p.prog) + st('tran','En tránsito', p.tran) + st('esp','En espera Yurimaguas', p.esp, 'Al inicio del día: ' + p.espIni.n + ' (' + f1(p.espIni.mb,3) + ' MB)')
       +   st('hoy','Llegan hoy', p.llegHoy, 'Mañana: ' + p.llegMan.n + ' (' + f1(p.llegMan.mb,3) + ' MB)') + st('desc','Descargadas hoy', p.descHoy)
@@ -414,6 +506,7 @@ function render(){
     + kpi('Cumplimiento de ETA', r.cumplEta == null ? '—' : f1(r.cumplEta,0) + '%', 'llegadas ≤ 6 h tras ETA (' + r.nEta + ' viajes)')
     + kpi('Espera promedio en Yurimaguas', r.tEsp == null ? '—' : f1(r.tEsp,1), 'horas (llegada → descarga)')
     + kpi('Descargado en el período', f1(r.descMb,3), 'MB · ' + r.descN + ' cisternas');
+  renderReporte();
   renderFlota();
   renderTabla();
 }
@@ -535,6 +628,373 @@ function pronBloque(p){
     + '<div class="legend"><span><i style="background:' + p.color + ';height:8px"></i>Venta diaria bajo el pronóstico</span><span><i style="background:#16a34a;height:8px"></i>Igual o sobre el pronóstico</span><span><i style="background:#cbd5e1;height:8px"></i>Sin venta</span><span><i style="background:#0f1e3c"></i>Pronóstico diario</span></div>'
     + '</div>';
 }
+// ==== PARSER REPORTE YURIMAGUAS (inicio) ====
+var RP_PRODS = ['Diesel', 'G. 84', 'G. 90 Insumo'];
+function rpProdKey(t) {
+  var u = String(t || '').toUpperCase();
+  if (/DIESEL/.test(u)) return 'Diesel';
+  if (/(GASOLINA|GASOHOL|G\.?)\s*90/.test(u)) return 'G. 90 Insumo';
+  if (/(GASOLINA|GASOHOL|G\.?)\s*84/.test(u)) return 'G. 84';
+  return null;
+}
+function rpNum(t) {
+  var s = String(t == null ? '' : t).replace(/[$|\s]/g, '').replace(/[Oo]/g, '0');
+  if (!s) return null;
+  if (/^\d{1,3}(,\d{3})+(\.\d+)?$/.test(s)) s = s.replace(/,/g, '');
+  else if (/^\d{1,3}(\.\d{3})+$/.test(s)) s = s.replace(/\./g, '');
+  else s = s.replace(/,/g, '.');
+  var n = parseFloat(s);
+  return isFinite(n) ? n : null;
+}
+function rpPad(n) { return String(n).padStart(2, '0'); }
+// Fecha del reporte: "16/10/2026 08:30"
+function rpFechaReporte(texto) {
+  var m = /(\d{1,2})\s*\/\s*(\d{1,2})\s*\/\s*(\d{4})(?:\s+(\d{1,2})\s*:\s*(\d{2}))?/.exec(texto || '');
+  if (!m) return null;
+  return { fecha: m[3] + '-' + rpPad(m[2]) + '-' + rpPad(m[1]), hora: m[4] ? rpPad(m[4]) + ':' + m[5] : '' };
+}
+// Una línea "02 CT(ETA 16.10.2026 10:00 HRS) - ELIO GROUP" → objeto. Corrige
+// mes/año mal digitados respecto a la fecha del reporte (y lo marca).
+var RP_ETA_RE = /([0-9OoIlT|]{1,3})\s*C\s*[TH]\s*[(\[{I]?\s*E\s*T\s*A\s*:?\s*(\d{1,2})\s*[.\/-]\s*(\d{1,2})\s*[.\/-]\s*(\d{2,4})\s*(?:(\d{1,2})\s*[:.hH]\s*(\d{2}))?\s*(?:H\s*[RA]\s*S?|HORAS)?\.?\s*[)\]}]?\s*[-–—]?\s*([A-Za-zÁÉÍÓÚÑáéíóúñ][A-Za-zÁÉÍÓÚÑáéíóúñ0-9 .&'-]*)?/g;
+function rpParseEtas(texto, fechaRep) {
+  var out = [], m, re = new RegExp(RP_ETA_RE.source, 'g');
+  var base = fechaRep ? new Date(fechaRep + 'T00:00') : new Date();
+  while ((m = re.exec(texto || ''))) {
+    var c = m[1].replace(/[Oo]/g, '0').replace(/[IlT|]/g, '1');
+    var cant = parseInt(c, 10);
+    var notas = [];
+    if (cant > 99) cant = parseInt(String(cant).slice(-2), 10); // ruido de borde de tabla ("102 CT")
+    if (cant > 20) { // "07" leído como "97"/"67"/"87": se toma el último dígito y se marca
+      var leido = cant; cant = cant % 10;
+      notas.push('cantidad leída como ' + leido + ', se tomó ' + cant + ' — revisar');
+    }
+    var d = +m[2], mo = +m[3], y = +m[4]; if (y < 100) y += 2000;
+    var hh = m[5] != null ? +m[5] : 12, mi = m[6] != null ? +m[6] : 0;
+    var dt = new Date(y, mo - 1, d, hh, mi);
+    var difDias = (dt - base) / 864e5;
+    if (difDias < -5 || difDias > 20) {
+      // probar con mes/año del reporte (error típico: 16.01 en vez de 16.10, 2025 en vez de 2026)
+      var alt = new Date(base.getFullYear(), base.getMonth(), d, hh, mi);
+      var difAlt = (alt - base) / 864e5;
+      if (difAlt >= -5 && difAlt <= 20) {
+        notas.push('fecha corregida: decía ' + rpPad(d) + '.' + rpPad(mo) + '.' + m[4] + ' → ' + rpPad(d) + '.' + rpPad(alt.getMonth() + 1) + '.' + alt.getFullYear());
+        dt = alt;
+      } else notas.push('fecha fuera de rango, revisar');
+    }
+    var transp = (m[7] || '').replace(/\s+/g, ' ').replace(/\b(HRS?|HORAS)\b/gi, '').trim().replace(/[-.\s]+$/, '');
+    if (!transp) notas.push('transportista no leído');
+    out.push({ cant: cant || 0, eta: dt.getFullYear() + '-' + rpPad(dt.getMonth() + 1) + '-' + rpPad(dt.getDate()) + 'T' + rpPad(dt.getHours()) + ':' + rpPad(dt.getMinutes()),
+      transp: transp.toUpperCase(), corregido: notas.length > 0, nota: notas.join('; '), raw: m[0].trim() });
+  }
+  return out;
+}
+function rpVacio() {
+  return { prog_und: 0, prog_gal: 0, carga_und: 0, carga_gal: 0, ruta_und: 0, ruta_gal: 0, desc_und: 0, desc_gal: 0 };
+}
+var RP_GRUPOS = ['prog', 'carga', 'ruta', 'desc'];
+
+// ── Modo A: texto copiado de Excel (TSV con celdas multilínea entre comillas)
+function rpParseTSV(texto) {
+  var rows = [], row = [], cell = '', q = false, s = String(texto || '').replace(/\r\n?/g, '\n');
+  for (var i = 0; i < s.length; i++) {
+    var ch = s[i];
+    if (q) { if (ch === '"') { if (s[i + 1] === '"') { cell += '"'; i++; } else q = false; } else cell += ch; }
+    else if (ch === '"' && cell === '') q = true;
+    else if (ch === '\t') { row.push(cell); cell = ''; }
+    else if (ch === '\n') { row.push(cell); rows.push(row); row = []; cell = ''; }
+    else cell += ch;
+  }
+  if (cell || row.length) { row.push(cell); rows.push(row); }
+  return rows;
+}
+function rpDesdeExcel(texto) {
+  var rows = rpParseTSV(texto);
+  var fr = rpFechaReporte(texto) || {};
+  var res = { fecha: fr.fecha || '', hora: fr.hora || '', vacias: 0, productos: {}, etas: [], avisos: [] };
+  // columnas UND / GL del encabezado (antes de la primera fila de producto)
+  var und = [], gl = [], primera = rows.findIndex(function(r){ return r.some(function(c){ return rpProdKey(c); }); });
+  rows.slice(0, primera < 0 ? rows.length : primera).forEach(function(r) {
+    r.forEach(function(c, j) {
+      var t = String(c).trim().toUpperCase();
+      if (t === 'UND' && und.indexOf(j) < 0) und.push(j);
+      if (/(^|\W)(GL|GAL)$/.test(t) && gl.indexOf(j) < 0) gl.push(j);
+    });
+  });
+  und.sort(function(a,b){ return a-b; }); gl.sort(function(a,b){ return a-b; });
+  var posicional = und.length >= 4 && gl.length >= 4;
+  if (!posicional) res.avisos.push('No se reconocieron los encabezados UND/GL: los números se tomaron en orden; revísalos.');
+  var actual = null;
+  rows.forEach(function(r) {
+    var joined = r.join(' ');
+    if (/VAC[IÍ]AS/i.test(joined)) { var nums = r.map(rpNum).filter(function(v){ return v != null; }); if (nums.length) res.vacias = nums[nums.length - 1]; return; }
+    if (/^\s*TOTAL/i.test(r.filter(Boolean).join(' '))) return;
+    var pIdx = r.findIndex(function(c){ return rpProdKey(c); });
+    if (pIdx >= 0) {
+      actual = rpProdKey(r[pIdx]);
+      var p = res.productos[actual] || (res.productos[actual] = rpVacio());
+      if (posicional) {
+        RP_GRUPOS.forEach(function(g, k) { p[g + '_und'] = rpNum(r[und[k]]) || 0; p[g + '_gal'] = rpNum(r[gl[k]]) || 0; });
+      } else {
+        var nums2 = r.slice(pIdx + 1).filter(function(c){ return !/ETA/i.test(c); }).map(rpNum).filter(function(v){ return v != null; });
+        RP_GRUPOS.forEach(function(g, k) { p[g + '_und'] = nums2[k*2] || 0; p[g + '_gal'] = nums2[k*2 + 1] || 0; });
+      }
+    }
+    var etas = rpParseEtas(r.filter(function(c){ return /ETA/i.test(c); }).join('\n'), res.fecha);
+    etas.forEach(function(e){ e.producto = actual || null; res.etas.push(e); });
+  });
+  // ETAs que aparecieron antes de cualquier producto → al primero
+  var prim = Object.keys(res.productos)[0];
+  res.etas.forEach(function(e){ if (!e.producto) e.producto = prim; });
+  return res;
+}
+
+// ── Modo B: líneas de OCR con coordenadas (Tesseract)
+function rpDesdeOCR(lines) {
+  var texto = lines.map(function(l){ return l.text; }).join('\n');
+  var fr = rpFechaReporte(texto) || {};
+  var res = { fecha: fr.fecha || '', hora: fr.hora || '', vacias: 0, productos: {}, etas: [], avisos: ['Leído de imagen: revisa cada número y fecha antes de guardar.'] };
+  // Columnas de grupo por las palabras del encabezado
+  var cols = {}, xEta = Infinity;
+  lines.forEach(function(l) {
+    (l.words || []).forEach(function(w) {
+      var t = w.text.toUpperCase(), cx = (w.bbox.x0 + w.bbox.x1) / 2;
+      if (/PROGRAMAD/.test(t)) cols.prog = cx;
+      else if (/PROCESO|ESPERA/.test(t) && cols.carga == null) cols.carga = cx;
+      else if (/^RUTA/.test(t)) cols.ruta = cx;
+      else if (/^DESCARGA/.test(t) && cols.desc == null && l.bbox.y0 < (lines[0].bbox.y0 + 400)) cols.desc = cx;
+    });
+  });
+  lines.forEach(function(l) {
+    if (!rpProdKey(l.text) && new RegExp(RP_ETA_RE.source).test(l.text)) xEta = Math.min(xEta, l.bbox.x0);
+  });
+  var tieneCols = RP_GRUPOS.every(function(g){ return cols[g] != null; });
+  var xMinNum = tieneCols ? cols.prog - (cols.carga - cols.prog) * 0.7 : -Infinity;
+  if (!tieneCols) res.avisos.push('No se ubicaron todas las columnas del encabezado; los números se tomaron en orden.');
+  var prodLines = [], etaItems = [];
+  lines.forEach(function(l) {
+    var t = l.text, key = rpProdKey(t), yc = (l.bbox.y0 + l.bbox.y1) / 2;
+    if (/VAC[IÍ]AS/i.test(t)) { var nv = (t.match(/\d+/g) || []).map(Number); if (nv.length) res.vacias = nv[nv.length - 1]; return; }
+    if (key && !/TOTAL/i.test(t)) {
+      prodLines.push({ key: key, y: yc });
+      var p = res.productos[key] || (res.productos[key] = rpVacio());
+      var nums = (l.words || []).filter(function(w){ return w.bbox.x1 < xEta - 5 && w.bbox.x0 > xMinNum && !/CT|ETA/i.test(w.text); })
+        .map(function(w){ return { v: rpNum(w.text.replace(/[^0-9,.$Oo]/g, '')), x: (w.bbox.x0 + w.bbox.x1) / 2, raw: w.text }; })
+        .filter(function(n){ return n.v != null && /\d/.test(n.raw); });
+      if (tieneCols) {
+        nums.forEach(function(n) {
+          var best = null, bd = Infinity;
+          RP_GRUPOS.forEach(function(g){ var dd = Math.abs(n.x - cols[g]); if (dd < bd) { bd = dd; best = g; } });
+          var esGal = /[,.]\d{3}/.test(n.raw) || n.v >= 1000;
+          p[best + (esGal ? '_gal' : '_und')] = n.v;
+        });
+      } else {
+        RP_GRUPOS.forEach(function(g, k){ p[g + '_und'] = (nums[k*2] || {}).v || 0; p[g + '_gal'] = (nums[k*2+1] || {}).v || 0; });
+      }
+    }
+    rpParseEtas(t, res.fecha).forEach(function(e){ e.y = yc; etaItems.push(e); });
+  });
+  // Agrupar ETAs por bloques verticales (huecos grandes) y asignar en orden a los productos
+  etaItems.sort(function(a,b){ return a.y - b.y; });
+  prodLines.sort(function(a,b){ return a.y - b.y; });
+  var difs = []; for (var i = 1; i < etaItems.length; i++) difs.push(etaItems[i].y - etaItems[i-1].y);
+  var med = difs.slice().sort(function(a,b){ return a-b; })[Math.floor(difs.length / 2)] || 0;
+  var clusters = [], cur = [];
+  etaItems.forEach(function(e, i) { if (i > 0 && e.y - etaItems[i-1].y > med * 1.8) { clusters.push(cur); cur = []; } cur.push(e); });
+  if (cur.length) clusters.push(cur);
+  if (clusters.length === prodLines.length) {
+    clusters.forEach(function(cl, k){ cl.forEach(function(e){ e.producto = prodLines[k].key; }); });
+  } else {
+    res.avisos.push('No se pudo separar con certeza a qué producto pertenece cada ETA: verifica la columna "Producto".');
+    etaItems.forEach(function(e) {
+      var best = null, bd = Infinity;
+      prodLines.forEach(function(p){ var dd = Math.abs(p.y - e.y); if (dd < bd) { bd = dd; best = p.key; } });
+      e.producto = best;
+    });
+  }
+  res.etas = etaItems;
+  return res;
+}
+// Alertas de consistencia sobre un resultado (editable)
+function rpValidar(res) {
+  var av = [];
+  Object.keys(res.productos).forEach(function(k) {
+    var p = res.productos[k];
+    var sumEta = res.etas.filter(function(e){ return e.producto === k; }).reduce(function(s, e){ return s + (+e.cant || 0); }, 0);
+    if (sumEta && sumEta !== p.ruta_und) av.push(k + ': las ETA suman ' + sumEta + ' cisternas pero "En ruta" dice ' + p.ruta_und + (sumEta === p.ruta_und + p.carga_und ? ' (coincide con en ruta + en carga)' : '') + '.');
+    RP_GRUPOS.forEach(function(g) {
+      var u = p[g + '_und'], gl = p[g + '_gal'];
+      if (u > 0 && gl > 0) { var r = gl / u; if (r < 6000 || r > 14000) av.push(k + ' · ' + {prog:'Programados',carga:'En carga',ruta:'En ruta',desc:'En descarga'}[g] + ': ' + gl.toLocaleString('es-PE') + ' gal para ' + u + ' cisternas (' + Math.round(r).toLocaleString('es-PE') + ' gal/CT) — revisa.'); }
+      if ((u > 0) !== (gl > 0) && g !== 'desc') av.push(k + ' · ' + g + ': hay ' + (u > 0 ? 'unidades sin galones' : 'galones sin unidades') + '.');
+    });
+  });
+  res.etas.forEach(function(e){ if (e.nota) av.push('ETA ' + e.cant + ' CT ' + (e.transp || '') + ': ' + e.nota + '.'); });
+  if (!res.fecha) av.push('No se encontró la fecha del reporte: ingrésala.');
+  return av;
+}
+// ==== PARSER REPORTE YURIMAGUAS (fin) ====
+
+// ── Carga del reporte (modal) ───────────────────────────────────────────
+var REP = null; // resultado editable
+function abrirRep(){ REP = null; $('repTexto').value = ''; $('repPrev').innerHTML = ''; $('repImgPrev').innerHTML = ''; $('repOcrEstado').textContent = ''; $('repFile').value = ''; $('repGuardar').disabled = true; repTab('txt'); $('ovRep').classList.add('on'); setTimeout(function(){ $('repTexto').focus(); }, 50); }
+function cerrarRep(){ $('ovRep').classList.remove('on'); }
+function repTab(t){ Array.prototype.forEach.call(document.querySelectorAll('[data-r]'), function(b){ b.classList.toggle('on', b.getAttribute('data-r') === t); }); $('repTxt').style.display = t === 'txt' ? '' : 'none'; $('repImg').style.display = t === 'img' ? '' : 'none'; }
+function repLeerTexto(){
+  var t = $('repTexto').value;
+  if (!t.trim()) { toast('Pega primero la tabla del Excel.', true); return; }
+  var r = rpDesdeExcel(t);
+  if (!Object.keys(r.productos).length) { $('repPrev').innerHTML = '<div class="alert crit">No se reconoció ningún producto (Diesel B5, Gasolina 84, Gasolina 90). ¿Copiaste la tabla completa?</div>'; return; }
+  r.origen = 'excel'; REP = r; repPreview();
+}
+document.addEventListener('paste', function(e){
+  if (!$('ovRep').classList.contains('on')) return;
+  var items = (e.clipboardData && e.clipboardData.items) || [];
+  for (var i = 0; i < items.length; i++) if (items[i].type.indexOf('image') === 0) { e.preventDefault(); repTab('img'); repImagenArchivo(items[i].getAsFile()); return; }
+});
+function repCargarTesseract(){
+  if (window.Tesseract) return Promise.resolve();
+  return new Promise(function(res, rej){ var sc = document.createElement('script'); sc.src = 'https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js'; sc.onload = res; sc.onerror = function(){ rej(new Error('No se pudo cargar el lector de imágenes (revisa la conexión).')); }; document.head.appendChild(sc); });
+}
+function repImagenArchivo(file){
+  if (!file) return;
+  var url = URL.createObjectURL(file);
+  $('repImgPrev').innerHTML = '<img src="' + url + '" style="max-width:100%;max-height:220px;border:1px solid var(--bdr);border-radius:8px">';
+  var est = $('repOcrEstado'); est.innerHTML = '<span class="spin"></span> Preparando lector de imagen…';
+  var img = new Image();
+  img.onload = function(){
+    // Pre-proceso: ampliar ×3, escala de grises y umbral — mejora mucho la lectura
+    var k = 3, cv = document.createElement('canvas'); cv.width = img.width * k; cv.height = img.height * k;
+    var cx = cv.getContext('2d'); cx.imageSmoothingQuality = 'high'; cx.drawImage(img, 0, 0, cv.width, cv.height);
+    var id = cx.getImageData(0, 0, cv.width, cv.height), d = id.data;
+    for (var i = 0; i < d.length; i += 4) { var g = 0.299*d[i] + 0.587*d[i+1] + 0.114*d[i+2]; var v = g > 170 ? 255 : 0; d[i] = d[i+1] = d[i+2] = v; }
+    cx.putImageData(id, 0, 0);
+    repCargarTesseract().then(function(){
+      est.innerHTML = '<span class="spin"></span> Leyendo imagen… (puede tardar unos segundos)';
+      return Tesseract.createWorker('spa', 1, { logger: function(m){ if (m.status === 'recognizing text') est.innerHTML = '<span class="spin"></span> Leyendo imagen… ' + Math.round(m.progress * 100) + '%'; } });
+    }).then(function(w){
+      return w.setParameters({ preserve_interword_spaces: '1' }).then(function(){ return w.recognize(cv, {}, { blocks: true }); }).then(function(r){ w.terminate(); return r; });
+    }).then(function(r){
+      var lines = []; (r.data.blocks || []).forEach(function(b){ (b.paragraphs || []).forEach(function(pp){ (pp.lines || []).forEach(function(l){ lines.push(l); }); }); });
+      var res = rpDesdeOCR(lines);
+      if (!Object.keys(res.productos).length) { est.textContent = '⚠ No se reconoció la tabla en la imagen. Prueba con una imagen más nítida o usa "Pegar desde Excel".'; return; }
+      est.textContent = '✓ Imagen leída. Revisa y corrige la vista previa antes de guardar.';
+      res.origen = 'imagen'; REP = res; repPreview();
+    }).catch(function(e){ est.textContent = '⚠ ' + (e && e.message ? e.message : 'No se pudo leer la imagen.'); });
+  };
+  img.src = url;
+}
+var RP_COLS = [['prog','Programados'],['carga','En carga / espera'],['ruta','En ruta'],['desc','En descarga / por descargar']];
+function repPreview(){
+  var r = REP; if (!r) return;
+  var prods = Object.keys(r.productos);
+  var inp = function(attr, val, w){ return '<input ' + attr + ' value="' + esc(val == null ? '' : val) + '" style="width:' + (w || 70) + 'px;border:1px solid var(--bdr);border-radius:5px;padding:4px 6px;font-family:var(--mono);font-size:11.5px;text-align:right" oninput="repEdit(this)">'; };
+  var h = '<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:10px"><b style="font-size:12px">Vista previa — revisa y corrige</b>'
+    + '<label style="font-size:11px;font-weight:700">Fecha <input type="date" data-k="fecha" value="' + esc(r.fecha) + '" oninput="repEdit(this)"></label>'
+    + '<label style="font-size:11px;font-weight:700">Hora <input type="time" data-k="hora" value="' + esc(r.hora) + '" oninput="repEdit(this)"></label>'
+    + '<label style="font-size:11px;font-weight:700">Vacías retorno ' + inp('data-k="vacias"', r.vacias, 55) + '</label></div>';
+  h += '<div style="overflow-x:auto"><table><thead><tr><th>Producto</th>' + RP_COLS.map(function(c){ return '<th style="text-align:center" colspan="2">' + c[1] + '<br><span style="font-weight:600">und · gal</span></th>'; }).join('') + '</tr></thead><tbody>'
+    + prods.map(function(k){ var pr = r.productos[k]; return '<tr><td style="font-weight:800">' + esc(k) + '</td>' + RP_COLS.map(function(c){ return '<td>' + inp('data-p="' + esc(k) + '" data-f="' + c[0] + '_und"', pr[c[0] + '_und'], 45) + '</td><td>' + inp('data-p="' + esc(k) + '" data-f="' + c[0] + '_gal"', pr[c[0] + '_gal'], 80) + '</td>'; }).join('') + '</tr>'; }).join('')
+    + '</tbody></table></div>';
+  h += '<div style="margin-top:12px;font-size:11px;font-weight:800;color:var(--txt3);text-transform:uppercase;letter-spacing:.05em">Líneas de ETA (' + r.etas.length + ')</div>'
+    + '<div style="overflow-x:auto"><table><thead><tr><th>Producto</th><th>Cant. CT</th><th>ETA</th><th>Transportista</th><th>Nota</th><th></th></tr></thead><tbody>'
+    + r.etas.map(function(e, i){
+        return '<tr' + (e.nota ? ' style="background:#fff7ed"' : '') + '><td><select data-e="' + i + '" data-f="producto" onchange="repEdit(this)">' + prods.map(function(k){ return '<option' + (k === e.producto ? ' selected' : '') + '>' + esc(k) + '</option>'; }).join('') + '</select></td>'
+          + '<td>' + inp('data-e="' + i + '" data-f="cant"', e.cant, 50) + '</td>'
+          + '<td><input type="datetime-local" data-e="' + i + '" data-f="eta" value="' + esc(e.eta) + '" oninput="repEdit(this)"></td>'
+          + '<td><input data-e="' + i + '" data-f="transp" value="' + esc(e.transp) + '" oninput="repEdit(this)" style="width:140px;border:1px solid var(--bdr);border-radius:5px;padding:4px 6px"></td>'
+          + '<td style="font-size:10.5px;color:#9a3412;white-space:normal;max-width:240px">' + esc(e.nota || '') + '</td>'
+          + '<td><button class="ab" onclick="repQuitarEta(' + i + ')">✕</button></td></tr>';
+      }).join('')
+    + '</tbody></table></div><div style="margin-top:6px"><button class="ab" onclick="repAgregarEta()">+ Agregar línea de ETA</button></div>';
+  h += '<div id="repAlertas"></div>';
+  $('repPrev').innerHTML = h;
+  repAlertas();
+}
+function repAlertas(){
+  var av = (REP.avisos || []).concat(rpValidar(REP));
+  $('repAlertas').innerHTML = av.length ? '<div class="alert warn" style="display:block"><b>Revisar:</b><ul style="margin:4px 0 0 18px">' + av.map(function(a){ return '<li>' + esc(a) + '</li>'; }).join('') + '</ul></div>' : '<div class="alert ok">✓ Sin observaciones: las ETA cuadran con las unidades en ruta.</div>';
+  $('repGuardar').disabled = !REP.fecha || !Object.keys(REP.productos).length;
+}
+function repEdit(el){
+  var k = el.getAttribute('data-k'), pr = el.getAttribute('data-p'), e = el.getAttribute('data-e'), f = el.getAttribute('data-f');
+  if (k) REP[k] = k === 'vacias' ? (rpNum(el.value) || 0) : el.value;
+  else if (pr) REP.productos[pr][f] = rpNum(el.value) || 0;
+  else if (e != null) { var it = REP.etas[+e]; it[f] = f === 'cant' ? (parseInt(el.value, 10) || 0) : el.value; if (f !== 'producto') { it.nota = ''; } }
+  repAlertas();
+}
+function repQuitarEta(i){ REP.etas.splice(i, 1); repPreview(); }
+function repAgregarEta(){ REP.etas.push({ producto: Object.keys(REP.productos)[0], cant: 1, eta: (REP.fecha || S.calc.hoy) + 'T12:00', transp: '', nota: '' }); repPreview(); }
+function repGuardar(){
+  var r = REP; if (!r) return;
+  var productos = Object.keys(r.productos).map(function(k){
+    var o = Object.assign({ producto: k }, r.productos[k]);
+    o.etas = r.etas.filter(function(e){ return e.producto === k && e.cant > 0 && e.eta; }).map(function(e){ return { cant: e.cant, eta: e.eta, transp: e.transp, corregido: !!e.corregido }; });
+    return o;
+  });
+  $('repGuardar').disabled = true; $('repGuardar').textContent = 'Guardando…';
+  apiPost('saveRepYuri', { token: S.token, fecha: r.fecha, hora: r.hora, vacias: r.vacias, origen: r.origen, productos: productos }).then(function(res){
+    $('repGuardar').textContent = 'Guardar reporte';
+    if (!res.success) { $('repGuardar').disabled = false; toast(res.message || 'No se pudo guardar.', true); return; }
+    toast(res.message || 'Reporte guardado.'); cerrarRep(); cargar(true);
+  }).catch(function(){ $('repGuardar').disabled = false; $('repGuardar').textContent = 'Guardar reporte'; toast('Error de conexión al guardar.', true); });
+}
+
+// ── Reporte en el dashboard ────────────────────────────────────────────
+function repUltimo(producto){
+  var reps = ((S.data && S.data.reportes) || []).filter(function(r){ return r.producto === producto; });
+  if (!reps.length) return null;
+  reps.sort(function(a, b){ return a.fecha < b.fecha ? 1 : -1; });
+  var r = reps[0], hoy = soloFecha(new Date()), ayer = soloFecha(new Date(Date.now() - 864e5));
+  return (r.fecha === hoy || r.fecha === ayer) ? r : null;
+}
+function renderReporte(){
+  var reps = (S.data && S.data.reportes) || [];
+  if (!reps.length) { $('repInfo').textContent = ''; $('repBody').innerHTML = '<div class="empty">Aún no se ha cargado el reporte diario de transferencias.' + (S.data.puedeEditar ? ' Usa “📋 Cargar reporte del día”.' : '') + '</div>'; return; }
+  var ult = reps.map(function(r){ return r.fecha; }).sort().pop();
+  var filas = reps.filter(function(r){ return r.fecha === ult; });
+  var hora = filas[0].hora;
+  $('repInfo').textContent = '· reporte del ' + fmtD(ult) + (hora ? ' ' + hora : '') + (ult !== soloFecha(new Date()) ? ' (no es de hoy)' : '') + ' · ' + (filas[0].origen === 'imagen' ? 'leído de imagen' : 'pegado de Excel');
+  var hoy = toDate(soloFecha(new Date()));
+  var dias = [0,1,2].map(function(i){ return new Date(hoy.getTime() + i * 864e5); });
+  var nombreDia = function(i){ return i === 0 ? 'Hoy ' + fmtD(soloFecha(dias[0])) : i === 1 ? 'Mañana ' + fmtD(soloFecha(dias[1])) : fmtD(soloFecha(dias[2])); };
+  var orden = ['Diesel','G. 84','G. 90 Insumo'];
+  filas.sort(function(a,b){ return orden.indexOf(a.producto) - orden.indexOf(b.producto); });
+  var transp = {};
+  var html = '<div style="overflow-x:auto"><table class="fl-t"><thead><tr><th>Producto</th><th>En descarga / por descargar</th>'
+    + dias.map(function(d, i){ return '<th>Llegan ' + nombreDia(i) + '</th>'; }).join('') + '<th>Después</th><th>Total ETA</th><th>En ruta (reporte)</th><th>Disponible para descargar hoy</th></tr></thead><tbody>';
+  filas.forEach(function(r){
+    var galCT = r.ruta_und > 0 ? r.ruta_gal / r.ruta_und : 10000;
+    var cuenta = function(desde, hasta){ return r.etas.filter(function(e){ var t = toDate(e.eta); return t && (desde == null || t >= desde) && (hasta == null || t < hasta); }).reduce(function(s,e){ return s + e.cant; }, 0); };
+    var porDia = [cuenta(null, dias[1]), cuenta(dias[1], dias[2]), cuenta(dias[2], new Date(dias[2].getTime() + 864e5))];
+    var despues = cuenta(new Date(dias[2].getTime() + 864e5), null);
+    var tot = r.etas.reduce(function(s,e){ return s + e.cant; }, 0);
+    var celda = function(n){ return '<td><span class="u">' + (n || '—') + '</span>' + (n ? '<span class="g">≈ ' + f1(n * galCT / 42000, 3) + ' MB</span>' : '') + '</td>'; };
+    var disp = r.desc_und + porDia[0], dispMb = r.desc_gal / 42000 + porDia[0] * galCT / 42000;
+    var color = r.producto === 'Diesel' ? '#1d4ed8' : r.producto === 'G. 84' ? '#b45309' : '#64748b';
+    html += '<tr><td><span class="dot" style="background:' + color + ';margin-right:6px"></span><b>' + esc(r.producto) + '</b><span class="g">≈ ' + fGal(galCT) + ' gal/CT</span></td>'
+      + '<td><span class="u">' + (r.desc_und || '—') + '</span>' + (r.desc_gal ? '<span class="g">' + f1(r.desc_gal / 42000, 3) + ' MB</span>' : '') + '</td>'
+      + porDia.map(celda).join('') + celda(despues)
+      + '<td><span class="u">' + tot + '</span></td>'
+      + '<td><span class="u">' + r.ruta_und + '</span>' + (tot !== r.ruta_und ? '<span class="g" style="color:#b45309;font-weight:800">⚠ ETA ' + (tot > r.ruta_und ? '+' : '') + (tot - r.ruta_und) + '</span>' : '<span class="g" style="color:#15803d">✓ cuadra</span>') + '</td>'
+      + '<td style="background:#f5f3ff"><span class="u" style="color:#6d28d9">' + disp + ' CT</span><span class="g">≈ ' + f1(dispMb, 3) + ' MB</span></td></tr>';
+    r.etas.forEach(function(e){
+      var t = toDate(e.eta), k = e.transp || '(sin nombre)';
+      var o = transp[k] || (transp[k] = { hoy: 0, man: 0, desp: 0, tot: 0, prods: {} });
+      if (t < dias[1]) o.hoy += e.cant; else if (t < dias[2]) o.man += e.cant; else o.desp += e.cant;
+      o.tot += e.cant; o.prods[r.producto] = (o.prods[r.producto] || 0) + e.cant;
+    });
+  });
+  html += '</tbody></table></div>';
+  var vac = filas[0].vacias;
+  var tk = Object.keys(transp).sort(function(a,b){ return transp[b].tot - transp[a].tot; });
+  html += '<div style="display:grid;grid-template-columns:2fr 1fr;gap:12px;margin-top:12px" class="rep-sub">'
+    + '<div><div style="font-size:10px;font-weight:800;color:var(--txt3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px">Llegadas por transportista (cisternas)</div><table><thead><tr><th>Transportista</th><th style="text-align:right">Hoy</th><th style="text-align:right">Mañana</th><th style="text-align:right">Después</th><th style="text-align:right">Total</th><th>Productos</th></tr></thead><tbody>'
+    + tk.map(function(k){ var o = transp[k]; return '<tr><td style="font-weight:800">' + esc(k) + '</td><td class="num">' + (o.hoy || '—') + '</td><td class="num">' + (o.man || '—') + '</td><td class="num">' + (o.desp || '—') + '</td><td class="num"><b>' + o.tot + '</b></td><td style="font-size:11px;color:var(--txt2)">' + Object.keys(o.prods).map(function(p){ return esc(p) + ' ' + o.prods[p]; }).join(' · ') + '</td></tr>'; }).join('')
+    + '</tbody></table></div>'
+    + '<div><div class="kpi"><div class="l">Unidades de retorno vacías</div><div class="v">' + (vac || 0) + '</div><div class="u">cisternas regresando a Talara</div></div>'
+    + '<div class="kpi" style="margin-top:8px"><div class="l">Líneas de ETA corregidas</div><div class="v">' + filas.reduce(function(s,r){ return s + r.etas.filter(function(e){ return e.corregido; }).length; }, 0) + '</div><div class="u">mes/año mal digitado o lectura dudosa — revisar con el equipo</div></div></div>'
+    + '</div>';
+  $('repBody').innerHTML = html;
+}
 function st(cls, l, g, extra){ return '<div class="st ' + cls + '"><div class="l">' + l + '</div><div class="n">' + g.n + '</div><div class="mb">' + f1(g.mb,3) + ' MB</div>' + (extra ? '<div style="font-size:10px;color:var(--txt3);font-weight:700;margin-top:3px">' + extra + '</div>' : '') + '</div>'; }
 function kpi(l, v, u){ return '<div class="kpi"><div class="l">' + l + '</div><div class="v">' + v + '</div><div class="u">' + u + '</div></div>'; }
 
@@ -625,7 +1085,7 @@ function anular(id){
   apiPost('anularCisYuri', {token: S.token, id: id}).then(function(res){ if (!res.success) toast(res.message || 'No se pudo anular.', true); else { toast('Cisterna anulada.'); cargar(true); } })
     .catch(function(){ toast('Error de conexión.', true); });
 }
-document.addEventListener('keydown', function(e){ if (e.key === 'Escape') cerrarForm(); });
+document.addEventListener('keydown', function(e){ if (e.key === 'Escape') { cerrarForm(); cerrarRep(); } });
 
 // ── Inicio ──────────────────────────────────────────────────────────────
 S.token = lsGet('rd_token');

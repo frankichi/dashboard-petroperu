@@ -8836,8 +8836,24 @@ function renderPR() {
   const restrFilterLabel = activeFilter
     ? `<span>🔍 ${activeFilter}</span> <span style="font-size:10px;opacity:.7">× limpiar</span>`
     : `<span>Todos los productos</span>`;
+  window._restrEstado = window._restrEstado || { sev: '', prod: '', vista: '' };
+  const RE = window._restrEstado;
+  const _sevDe = r => { const p = pronDiarioAprobado(r), vf = r.vfact || 0; const pct = p > 0 ? Math.round((1 - vf / p) * 100) : 0; return pct > 50 ? 'red' : pct > 30 ? 'orange' : 'yellow'; };
+  const _hoyMs = new Date(currentDate + 'T12:00:00').getTime();
+  // Análisis por fila: ¿la cobertura ganada alcanza hasta la reposición?
+  const _ana = r => {
+    const p = pronDiarioAprobado(r), vf = r.vfact || 0, inv = r.inv || 0;
+    const cobN = (inv > 0 && p > 0) ? Math.round(inv / p) : 0, cobR = (inv > 0 && vf > 0) ? Math.round(inv / vf) : 0;
+    const bt = _restrBuscarReposicionReal(r.planta, r.producto);
+    let btEta = bt ? bt.fecha_hasta : '';
+    if (!btEta) { const x = today.find(y => y.planta === r.planta && y.producto === r.producto && ((y.bt && y.vol_rep > 0) || (y.bt2 && y.vol_rep_bt2 > 0))); btEta = x ? (x.fecha_reposicion || x.fecha_repos_bt2 || '') : ''; }
+    const diasBT = btEta ? Math.round((new Date(btEta + 'T12:00:00').getTime() - _hoyMs) / 864e5) : null;
+    return { pct: p > 0 ? Math.round((1 - vf / p) * 100) : 0, mbd: Math.max(0, p - vf), cobN, cobR, dias: Math.max(0, cobR - cobN), btEta, diasBT,
+      estado: diasBT == null ? 'sinrepo' : (cobR >= diasBT ? (cobN >= diasBT ? 'holgado' : 'salva') : 'noalcanza') };
+  };
+  const _filtrar = list => list.filter(r => (!RE.sev || _sevDe(r) === RE.sev) && (!RE.prod || r.producto === RE.prod) && (!RE.vista || _ana(r).estado === RE.vista));
   function buildRestrTable() {
-    const list = activeFilter ? restrictList.filter(r => r.producto === activeFilter) : restrictList;
+    const list = _filtrar(restrictList);
     if (!list.length) return '<div style="padding:32px;text-align:center;color:var(--txt3)">Sin restricciones activas</div>';
     const byPlanta = {};
     list.forEach(r => {
@@ -9025,38 +9041,81 @@ function renderPR() {
     ? `<strong>${nRestr} restricción${nRestr!==1?'es':''} activa${nRestr!==1?'s':''}</strong> en ${nPlantas} planta${nPlantas!==1?'s':''} están ganando en promedio <strong>${promDias}d</strong> de cobertura antes de que llegue la reposición`
       + (topPlantaEntry ? ` — el mayor impacto en <strong>${topPlantaEntry[0]}</strong> (+${topPlantaEntry[1]}d).` : '.')
     : `No hay restricciones activas — toda la venta factible está al nivel del pronóstico aprobado.`;
+  function _restrResumenHTML() {
+    const esc = t => String(t == null ? '' : t).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+    const A = restrictList.map(r => Object.assign({ r }, _ana(r), { sev: _sevDe(r) }));
+    const n = A.length, plantas = new Set(A.map(x => x.r.planta)).size;
+    const mbdTot = A.reduce((s, x) => s + x.mbd, 0);
+    const crit = A.filter(x => x.sev === 'red'), rec = A.filter(x => x.sev === 'orange'), leve = A.filter(x => x.sev === 'yellow');
+    const noAlc = A.filter(x => x.estado === 'noalcanza'), salva = A.filter(x => x.estado === 'salva'), sinRepo = A.filter(x => x.estado === 'sinrepo'), holg = A.filter(x => x.estado === 'holgado');
+    const topMb = A.slice().sort((a, b) => b.mbd - a.mbd)[0];
+    const kp = (id, k, v, s, col) => `<div class="cv-kpi${RE.vista === id ? ' on' : ''}" data-restr="vista" data-v="${id}" title="Clic para filtrar"><div class="cv-k">${k}</div><div class="cv-n" style="color:${col}">${v}</div><div class="cv-s">${s}</div></div>`;
+    let lect;
+    if (!n) lect = 'No hay restricciones activas: toda la venta factible está al nivel del pronóstico aprobado.';
+    else {
+      lect = `<b>${n} ${n !== 1 ? 'restricciones' : 'restricción'}</b> en ${plantas} planta${plantas !== 1 ? 's' : ''} dejan de vender <b>${mbdTot.toFixed(DEC)} MB/día</b> respecto al pronóstico` + (topMb ? ` (la mayor: <b>${esc(topMb.r.planta)} · ${esc(topMb.r.producto)}</b>, ${topMb.mbd.toFixed(DEC)} MB/d, −${topMb.pct}%)` : '') + '. ';
+      if (noAlc.length) lect += `<span style="color:var(--red);font-weight:800">Aun restringiendo no se llega a la reposición</span> en ${noAlc.slice(0,4).map(x => esc(x.r.planta) + ' ' + esc(x.r.producto) + ' (cob. ' + x.cobR + 'd, BT en ' + x.diasBT + 'd)').join(', ')}${noAlc.length > 4 ? ' y ' + (noAlc.length - 4) + ' más' : ''}. `;
+      if (salva.length) lect += `La restricción <b style="color:var(--grn)">sí cubre hasta el BT</b> en ${salva.slice(0,4).map(x => esc(x.r.planta) + ' ' + esc(x.r.producto)).join(', ')}${salva.length > 4 ? ' y ' + (salva.length - 4) + ' más' : ''}. `;
+      if (sinRepo.length) lect += `<b style="color:var(--yel)">${sinRepo.length}</b> sin reposición asociada todavía. `;
+      if (holg.length) lect += `${holg.length} ya alcanzaba${holg.length === 1 ? '' : 'n'} sin restringir: revisar si la restricción sigue siendo necesaria.`;
+    }
+    const chip = (k, v, lbl, cnt, col) => `<button class="dec-chip${(RE[k] === v) ? ' on' : ''}" style="--c:${col}" data-restr="${k}" data-v="${v}">${lbl} <b>${cnt}</b></button>`;
+    const prods = [...new Set(restrictList.map(r => r.producto))].sort((a, b) => prodSortKey(a) - prodSortKey(b));
+    const rank = A.slice().sort((a, b) => b.mbd - a.mbd).slice(0, 10);
+    const maxMb = rank.length ? rank[0].mbd : 1;
+    const colSev = s => s === 'red' ? '#ef4444' : s === 'orange' ? '#f97316' : '#f59e0b';
+    return `<div class="cv-strip" style="grid-template-columns:minmax(230px,1.3fr) repeat(4,minmax(130px,1fr))">
+        <div class="cv-hero"><div class="cv-k">Restricciones de venta activas</div><div class="cv-n">${n}<small>${plantas} planta${plantas !== 1 ? 's' : ''}</small></div><div class="cv-s"><span style="color:#ef4444;font-weight:800">${crit.length} críticas</span> · <span style="color:#f97316;font-weight:800">${rec.length} recortes</span> · <span style="color:#f59e0b;font-weight:800">${leve.length} leves</span></div></div>
+        <div class="cv-kpi" style="cursor:default"><div class="cv-k">Venta no atendida</div><div class="cv-n">${mbdTot.toFixed(DEC)}<small>MB/d</small></div><div class="cv-s">suma de pronóstico − venta factible</div></div>
+        ${kp('noalcanza', 'No alcanza al BT', noAlc.length, noAlc.length ? 'aun restringiendo, quiebra antes de la reposición' : 'ninguna quiebra antes del BT', noAlc.length ? 'var(--red)' : 'var(--grn)')}
+        ${kp('salva', 'Cubre hasta el BT', salva.length, 'la restricción evita el quiebre', 'var(--grn)')}
+        ${kp('sinrepo', 'Sin reposición asociada', sinRepo.length, sinRepo.length ? 'falta programar o asociar BT' : 'todas con BT asociado', sinRepo.length ? 'var(--yel)' : 'var(--grn)')}
+      </div>
+      <div class="cv-lectura">${lect}</div>
+      ${n ? `<div class="cv-rank"><div class="cv-rank-h"><div class="cv-rank-t">📉 Impacto en venta por planta · producto</div><div class="cv-rank-s">MB/día que dejan de venderse · clic filtra el detalle</div></div>
+        ${rank.map(x => `<div class="cv-row" style="grid-template-columns:190px 1fr 190px" data-restr="ir" data-planta="${esc(x.r.planta)}"><div class="cv-row-pl">${esc(x.r.planta)} <span style="font-weight:600;color:var(--txt2)">· ${esc(x.r.producto)}</span></div><div class="cv-tl" style="--c:${colSev(x.sev)};height:10px"><div class="cv-tl-inv" style="width:${Math.max(2, x.mbd / maxMb * 100)}%"></div></div><div class="cv-row-r"><b>${x.mbd.toFixed(DEC)} MB/d</b> · −${x.pct}%<br>${x.estado === 'noalcanza' ? '<span style="color:var(--red)">⛔ no alcanza al BT</span>' : x.estado === 'salva' ? '<span style="color:var(--grn)">✅ cubre hasta el BT</span>' : x.estado === 'sinrepo' ? '<span style="color:var(--yel)">sin reposición</span>' : 'alcanza aun sin restringir'}</div></div>`).join('')}
+      </div>` : ''}
+      <div class="pcm-chips" style="padding:12px 22px 4px">
+        <span style="font-size:10px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px;align-self:center">Severidad:</span>
+        ${chip('sev', '', 'Todas', n, 'var(--acc)')}${chip('sev', 'red', '🔴 Crítico (>50%)', crit.length, '#ef4444')}${chip('sev', 'orange', '🟠 Recorte (>30%)', rec.length, '#f97316')}${chip('sev', 'yellow', '🟡 Leve', leve.length, '#f59e0b')}
+        <span style="font-size:10px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px;align-self:center;margin-left:10px">Producto:</span>
+        ${chip('prod', '', 'Todos', n, 'var(--acc)')}${prods.map(pr => chip('prod', pr, esc(pr), restrictList.filter(r => r.producto === pr).length, 'var(--acc2)')).join('')}
+      </div>
+      <div class="restr-toolbar" style="padding-top:4px"><div class="restr-explain"><strong>¿Qué es una restricción?</strong> Cuando la Venta Factible cae por debajo del pronóstico aprobado, el inventario dura más de lo previsto: la cobertura se extiende hasta que llegue la reposición. Lo que importa es si esa cobertura ganada <strong>alcanza hasta la fecha del BT</strong>.</div></div>`;
+  }
+  if (typeof _curvaEstilos === 'function') _curvaEstilos();
+  if (typeof _pcEstilos === 'function') _pcEstilos();
   document.getElementById('pR-content').innerHTML = `
     <div class="page-header">
       <div class="page-header-title">✂️ Restricciones de Venta</div>
       <div class="page-header-subtitle">Plantas donde la Venta Factible quedó por debajo del pronóstico · ${fmtDate(currentDate)}</div>
     </div>
-    <div class="restr-execsummary">📊 ${resumenEjecutivo}</div>
     ${(typeof cobOverrides !== 'undefined' && Object.keys(cobOverrides).length > 0)
-      ? `<div class="restr-execsummary" style="border-left-color:#d97706;background:#d977061a">⚠️ Tienes <strong>${Object.keys(cobOverrides).length} cambio${Object.keys(cobOverrides).length!==1?'s':''} de Venta Factible sin guardar</strong> en Coberturas — esta lista sigue mostrando el último valor guardado hasta que los guardes ahí. <span style="text-decoration:underline;cursor:pointer;color:var(--acc2)" onclick="showPageById('p2')">Ir a Coberturas →</span></div>`
+      ? `<div class="restr-execsummary" style="border-left-color:#d97706;background:#d977061a">⚠️ Tienes <strong>${Object.keys(cobOverrides).length} cambio${Object.keys(cobOverrides).length!==1?'s':''} de Venta Factible</strong> sin guardar en el servidor.</div>`
       : ''}
-    <!-- KPI strip -->
-    <div class="restr-kpistrip">
-      ${[['✂️','Restricciones activas',nRestr.toString(),'#ef4444'],
-         ['🏭','Plantas afectadas',nPlantas.toString(),'#f97316'],
-         ['📉','Recorte promedio',redProm.toFixed(DEC)+'%','#a855f7'],
-         ['📅','Días ganados prom.',promDias+'d','#0071A4']]
-        .map(([ic,l,v,c])=>`<div class="restr-kpi" style="--kc:${c}">
-          <div class="restr-kpi-top"><span class="restr-kpi-ic">${ic}</span><span class="restr-kpi-val">${v}</span></div>
-          <div class="restr-kpi-lbl">${l}</div>
-        </div>`).join('')}
-    </div>
-    <!-- Explanation + filter -->
-    <div class="restr-toolbar">
-      <div class="restr-explain">
-        <strong>¿Qué es una restricción?</strong> Cuando la Venta Factible cae por debajo del pronóstico aprobado, el inventario dura más de lo previsto — la cobertura se extiende hasta que llegue la reposición programada.
-      </div>
-      <div class="restr-filter-badge ${activeFilter?'':'all'}" onclick="filterByProd(activeFilter||'__none__')">
-        ${restrFilterLabel}
-      </div>
-    </div>
+    ${_restrResumenHTML()}
     <!-- Tarjetas por planta -->
+    <div style="display:flex;justify-content:space-between;align-items:baseline;padding:0 22px 8px"><div style="font-size:12px;font-weight:800;color:var(--txt)">🏭 Detalle por planta${(RE.sev||RE.prod||RE.vista) ? ' · filtro activo' : ''}</div>${(RE.sev||RE.prod||RE.vista) ? '<button class="cis-mini" data-restr="limpiar">✕ Quitar filtros</button>' : ''}</div>
     <div class="restr-cards-wrap">${buildRestrTable()}</div>
   `;
+  const hostR = document.getElementById('pR-content');
+  if (!hostR._restrBound) {
+    hostR._restrBound = true;
+    hostR.addEventListener('click', function(ev) {
+      const t = ev.target.closest('[data-restr]'); if (!t || !hostR.contains(t)) return;
+      const k = t.getAttribute('data-restr'), v = t.getAttribute('data-v') || '';
+      const S = window._restrEstado;
+      if (k === 'limpiar') { S.sev = ''; S.prod = ''; S.vista = ''; renderPR(); return; }
+      if (k === 'sev' || k === 'prod') { S[k] = v; renderPR(); return; }
+      if (k === 'vista') { S.vista = (S.vista === v) ? '' : v; renderPR(); return; }
+      if (k === 'ir') {
+        const pl = t.getAttribute('data-planta');
+        const card = [...hostR.querySelectorAll('.restr-plantacard-name')].find(e => e.textContent.trim() === pl);
+        const box = card && card.closest('.restr-plantacard');
+        if (box) { box.scrollIntoView({ behavior: 'smooth', block: 'center' }); box.style.outline = '2px solid var(--acc)'; setTimeout(() => { box.style.outline = ''; }, 1600); }
+      }
+    });
+  }
 }
 var _navesCache       = null;
 var _cargasNavesCache = null;
@@ -14282,7 +14341,8 @@ function renderPB() {
   // con zarpe y retorno marcados; el Cabotaje Proyectado (Simulador BT)
   // va en carreras aparte, punteadas. Clic en el buque o en una escala
   // abre la ficha del viaje actual.
-  if (!document.getElementById('gantt2-css')) { const stG = document.createElement('style'); stG.id = 'gantt2-css'; stG.textContent = '.g2-row{display:flex;align-items:center;gap:8px;min-height:46px;border-bottom:1px solid color-mix(in srgb,var(--bdr) 50%,transparent)}.g2-lbl{width:160px;flex-shrink:0;cursor:pointer;display:flex;align-items:center;gap:8px}.g2-lbl:hover .g2-name{text-decoration:underline}.g2-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}.g2-name{font-size:12px;font-weight:800;color:var(--txt)}.g2-sub{font-size:9px;color:var(--txt3);display:block;margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:120px}.g2-track{flex:1;position:relative;height:38px}.g2-blk{position:absolute;top:4px;height:19px;border-radius:6px;display:flex;align-items:center;justify-content:center;font:700 9.5px var(--sans);color:#fff;white-space:nowrap;overflow:hidden;padding:0 5px;cursor:pointer;box-sizing:border-box;min-width:26px;transition:transform .12s}.g2-blk:hover{transform:translateY(-1px);z-index:3}.g2-blk.alt{top:21px}.g2-track{height:44px}.g2-blk.done{opacity:.5}.g2-blk.now{box-shadow:0 0 0 3px color-mix(in srgb,var(--ora) 45%,transparent);animation:g2Pulse 1.6s ease-in-out infinite}.g2-blk.prog{background:transparent!important;border:1.5px dashed var(--c);color:var(--c)}.g2-blk.carga{border-style:solid;border-width:1.5px;background:color-mix(in srgb,var(--c) 18%,transparent)!important;color:var(--txt)}@keyframes g2Pulse{0%,100%{box-shadow:0 0 0 3px color-mix(in srgb,var(--ora) 45%,transparent)}50%{box-shadow:0 0 0 7px color-mix(in srgb,var(--ora) 12%,transparent)}}.g2-mark{position:absolute;top:2px;bottom:2px;width:2px;background:var(--c);opacity:.8}.g2-mark::after{content:attr(data-l);position:absolute;top:-1px;left:4px;font:700 8px var(--sans);color:var(--c);white-space:nowrap}.g2-mark.ret{border-left:2px dashed var(--c);background:none}.g2-grp{font-size:9px;font-weight:800;color:var(--txt3);text-transform:uppercase;letter-spacing:.6px;padding:10px 0 4px}.g2-strip{display:flex;flex-wrap:wrap;gap:8px 18px;margin:0 0 10px;padding:9px 14px;background:var(--card);border:1px solid var(--bdr);border-left:4px solid var(--acc);border-radius:10px}.g2-k{display:flex;flex-direction:column}.g2-k b{font:800 15px var(--mono);color:var(--txt);line-height:1.1}.g2-k span{font-size:8.5px;color:var(--txt3);text-transform:uppercase;letter-spacing:.4px;margin-top:2px}.g2-k-w b{font-size:12px;font-family:var(--sans)}'; document.head.appendChild(stG); }
+  if (typeof _curvaEstilos === 'function') _curvaEstilos(); if (typeof _pcEstilos === 'function') _pcEstilos();
+  if (!document.getElementById('gantt2-css')) { const stG = document.createElement('style'); stG.id = 'gantt2-css'; stG.textContent = '.g2-blk.g2-pl{justify-content:flex-start;text-overflow:ellipsis;display:block;line-height:19px}.g2-tog{display:flex;gap:6px;align-items:center;margin-bottom:8px}.g2-late-n{margin-left:auto;font-size:10.5px;font-weight:800;color:var(--red)}.g2-blk.late{box-shadow:0 0 0 2px var(--red)}.g2-blk.late::after{content:"⚠";margin-left:3px}.g2-cob{font-family:var(--mono);font-size:9px;font-weight:800;padding:0 5px;border-radius:999px;margin-left:4px}.g2-cob-quiebre,.g2-cob-crit{background:color-mix(in srgb,var(--red) 16%,transparent);color:var(--red)}.g2-cob-alerta{background:color-mix(in srgb,var(--yel) 18%,transparent);color:var(--yel)}.g2-cob-ok{background:color-mix(in srgb,var(--grn) 14%,transparent);color:var(--grn)}.g2-cob-nd{background:var(--bg3);color:var(--txt3)}' + '.g2-row{display:flex;align-items:center;gap:8px;min-height:46px;border-bottom:1px solid color-mix(in srgb,var(--bdr) 50%,transparent)}.g2-lbl{width:160px;flex-shrink:0;cursor:pointer;display:flex;align-items:center;gap:8px}.g2-lbl:hover .g2-name{text-decoration:underline}.g2-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}.g2-name{font-size:12px;font-weight:800;color:var(--txt)}.g2-sub{font-size:9px;color:var(--txt3);display:block;margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:120px}.g2-track{flex:1;position:relative;height:38px}.g2-blk{position:absolute;top:4px;height:19px;border-radius:6px;display:flex;align-items:center;justify-content:center;font:700 9.5px var(--sans);color:#fff;white-space:nowrap;overflow:hidden;padding:0 5px;cursor:pointer;box-sizing:border-box;min-width:26px;transition:transform .12s}.g2-blk:hover{transform:translateY(-1px);z-index:3}.g2-blk.alt{top:21px}.g2-track{height:44px}.g2-blk.done{opacity:.5}.g2-blk.now{box-shadow:0 0 0 3px color-mix(in srgb,var(--ora) 45%,transparent);animation:g2Pulse 1.6s ease-in-out infinite}.g2-blk.prog{background:transparent!important;border:1.5px dashed var(--c);color:var(--c)}.g2-blk.carga{border-style:solid;border-width:1.5px;background:color-mix(in srgb,var(--c) 18%,transparent)!important;color:var(--txt)}@keyframes g2Pulse{0%,100%{box-shadow:0 0 0 3px color-mix(in srgb,var(--ora) 45%,transparent)}50%{box-shadow:0 0 0 7px color-mix(in srgb,var(--ora) 12%,transparent)}}.g2-mark{position:absolute;top:2px;bottom:2px;width:2px;background:var(--c);opacity:.8}.g2-mark::after{content:attr(data-l);position:absolute;top:-1px;left:4px;font:700 8px var(--sans);color:var(--c);white-space:nowrap}.g2-mark.ret{border-left:2px dashed var(--c);background:none}.g2-grp{font-size:9px;font-weight:800;color:var(--txt3);text-transform:uppercase;letter-spacing:.6px;padding:10px 0 4px}.g2-strip{display:flex;flex-wrap:wrap;gap:8px 18px;margin:0 0 10px;padding:9px 14px;background:var(--card);border:1px solid var(--bdr);border-left:4px solid var(--acc);border-radius:10px}.g2-k{display:flex;flex-direction:column}.g2-k b{font:800 15px var(--mono);color:var(--txt);line-height:1.1}.g2-k span{font-size:8.5px;color:var(--txt3);text-transform:uppercase;letter-spacing:.4px;margin-top:2px}.g2-k-w b{font-size:12px;font-family:var(--sans)}'; document.head.appendChild(stG); }
   const escG = t => String(t == null ? '' : t).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
   const fmtG = f => { if (!f) return ''; const q = String(f).slice(0,10).split('-'); return q[2] + '/' + q[1]; };
   const startISO = startDate.toISOString().slice(0,10);
@@ -14324,7 +14384,61 @@ function renderPB() {
   if (typeof simShips !== 'undefined' && simShips.length > 0 && typeof _repomarSimShipsABuques === 'function') {
     try { rowsProy = _repomarSimShipsABuques().map(b => laneHTML(b, true)).join(''); } catch (eP) {}
   }
-  const rows = rowsConf + (rowsProy ? `<div class="g2-grp">📋 Cabotaje proyectado (Simulador BT, aún no confirmado)</div>` + rowsProy : '');
+  const rowsBuque = rowsConf + (rowsProy ? `<div class="g2-grp">📋 Cabotaje proyectado (Simulador BT, aún no confirmado)</div>` + rowsProy : '');
+  // ── Vista por PLANTA: qué le llega a cada terminal y si llega a tiempo
+  //    (cobertura actual de la planta, del mismo cálculo del Resumen).
+  window._g2Estado = window._g2Estado || { vista: 'buque' };
+  let RNg = null; try { if (typeof _rnCalcularDetalle === 'function') _rnCalcularDetalle(); RNg = window._rnDetalleProd || null; } catch (eR) { RNg = null; }
+  const ORDEN_T = ['Talara','Bayóvar','Piura','Eten','Salaverry','Chimbote','Supe','Callao','Conchán','Pisco','Mollendo','Ilo'];
+  const normT = t => String(t||'').toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
+  const plantaDeTerminal = t => { const n = normT(t); const of = (typeof PLANTAS_18_OFICIALES !== 'undefined' ? PLANTAS_18_OFICIALES : []).find(pl => normT(pl) === n || n.indexOf(normT(pl)) >= 0); return of || null; };
+  const porPlanta = {};
+  buquesG.forEach(b => {
+    const nm = (b.buque||'').toUpperCase().replace(/\s*\d+$/,'');
+    const col = ganttColors[nm] || '#64748b';
+    (b.legs||[]).forEach(l => {
+      if (l._sintetica || !(l.vol > 0) || (l.tipo||'descarga') !== 'descarga') return;
+      const f = (l.fecha_hasta||'').slice(0,10); if (!(f >= startISO && f <= endISO)) return;
+      const key = l.terminal; (porPlanta[key] = porPlanta[key] || { terminal: l.terminal, items: [] }).items.push({ b: b.buque, nm, col, f, v: l.vol, prod: l.producto, abrev: (typeof _repomarAbrevProd === 'function' ? _repomarAbrevProd(l.producto) : l.producto), estado: l.estado });
+    });
+  });
+  const diasHasta = f => Math.round((new Date(f + 'T12:00:00') - new Date(currentDate + 'T12:00:00')) / DAY_MS);
+  const tarde = [];   // llegadas que llegan después de que se agota la cobertura
+  const lanesPlanta = Object.values(porPlanta).sort((x, y) => { const ix = ORDEN_T.indexOf(x.terminal), iy = ORDEN_T.indexOf(y.terminal); return (ix < 0 ? 99 : ix) - (iy < 0 ? 99 : iy) || x.terminal.localeCompare(y.terminal); }).map(P => {
+    const pl = plantaDeTerminal(P.terminal);
+    const o = pl && RNg && RNg.porPlanta ? RNg.porPlanta[pl] : null;
+    const cobChip = o ? `<span class="g2-cob g2-cob-${o.peor||'nd'}">cob. ${(o.cobMin != null && o.cobMin < 900) ? o.cobMin.toFixed(1) + ' d' : (o.peor === 'quiebre' ? 'sin stock' : 's/d')}</span>` : '';
+    let lastF = '', alt = false, blocks = '';
+    // una escala por buque+fecha (varios productos en el mismo bloque)
+    const esc2 = {}; P.items.forEach(it => { const k = it.b + '|' + it.f; (esc2[k] = esc2[k] || { b: it.b, nm: it.nm, col: it.col, f: it.f, estado: it.estado, prods: [], late: [] }).prods.push(it); });
+    Object.values(esc2).sort((x, y) => x.f.localeCompare(y.f)).forEach(g => {
+      const dd = lastF ? Math.round((new Date(g.f+'T12:00:00') - new Date(lastF+'T12:00:00'))/DAY_MS) : 99; alt = dd <= 1 ? !alt : false; lastF = g.f;
+      const dH = diasHasta(g.f);
+      g.prods.forEach(it => { if (o && dH > 0) { const c = RNg.celda && RNg.celda[pl + '|' + it.prod]; if (c && c.cob != null && isFinite(c.cob) && c.cob < dH) { g.late.push(it); if (it.estado !== 'COMPLETADO') tarde.push({ t: P.terminal, pl, prod: it.prod, b: g.nm, f: g.f, dH, cob: c.cob }); } } });
+      const late = g.late.length > 0;
+      const done = g.prods.every(x => x.estado === 'COMPLETADO');
+      const cls = done ? 'done' : dH <= 0 ? 'now' : 'prog';
+      const vol = g.prods.reduce((s2, x) => s2 + x.v, 0);
+      const left = pct(g.f), w = Math.max(100 / totalDays * (g.prods.length > 1 ? 2.4 : 1.6), 3);
+      const txtP = g.prods.map(x => x.abrev + ' ' + x.v.toFixed(0)).join(' · ');
+      blocks += `<div class="g2-blk g2-pl ${cls}${alt ? ' alt' : ''}${late ? ' late' : ''}" data-g2-buque="${escG(g.b)}" style="--c:${g.col};left:calc(${left}% - ${w/2}%);width:${w}%;background:${g.col}" title="${escG(g.nm + ' → ' + P.terminal + ' · ' + fmtG(g.f) + ' · ' + txtP + ' MB' + (late ? ' · ⚠️ ' + g.late.map(x => x.prod).join(', ') + ': llega después de agotar cobertura' : ''))}">${escG(g.nm.slice(0,3))} · ${escG(txtP)}</div>`;
+    });
+    const tot = P.items.reduce((s2, x) => s2 + x.v, 0);
+    return `<div class="g2-row"><div class="g2-lbl" ${pl ? `data-rn="planta" data-planta="${escG(pl)}" title="Ficha de ${escG(pl)}"` : ''}><span class="g2-dot" style="background:var(--acc)"></span><div><span class="g2-name">${escG(P.terminal)}</span><span class="g2-sub" style="max-width:none">${P.items.length} descarga${P.items.length === 1 ? '' : 's'} · ${tot.toFixed(0)} MB ${cobChip}</span></div></div><div class="g2-track"><div class="gantt-today" style="left:${todayPct}%"></div>${blocks}</div></div>`;
+  }).join('');
+  // Lectura ejecutiva
+  const pendL = []; buquesG.forEach(b => (b.legs||[]).forEach(l => { if (l.estado === 'COMPLETADO' || l._sintetica || !(l.vol > 0) || (l.tipo||'descarga') !== 'descarga') return; const f = (l.fecha_hasta||'').slice(0,10); if (f >= currentDate && f <= endISO) pendL.push({ b: b.buque, t: l.terminal, f, v: l.vol, prod: l.producto }); }));
+  const en7 = pendL.filter(x => diasHasta(x.f) <= 7);
+  const enPuerto = buquesG.filter(b => (b.legs||[]).some(l => l.estado === 'DESCARGANDO') || (b.legs||[]).some(l => typeof _repomarBuquePresenteEnTerminal === 'function' && _repomarBuquePresenteEnTerminal(b.buque, l.terminalNorm) && l.estado !== 'COMPLETADO'));
+  let lecturaG = buquesG.filter(b => !b._sinViaje).length ? `<b>${buquesG.filter(b => !b._sinViaje).length} buques</b> con viaje vigente` : 'Sin viajes vigentes cargados';
+  if (enPuerto.length) lecturaG += `; <b>${enPuerto.map(b => escG(b.buque)).join(', ')}</b> en puerto o descargando`;
+  lecturaG += `. En los próximos 7 días llegan <b>${en7.length} descargas</b> (${en7.reduce((s2, x) => s2 + x.v, 0).toFixed(0)} MB)` + (en7.length ? ': ' + [...new Set(en7.map(x => x.t))].slice(0, 6).map(escG).join(', ') : '') + '. ';
+  const tardeU = tarde.filter((x, i, arr) => arr.findIndex(y => y.t === x.t && y.prod === x.prod) === i).sort((x, y) => x.dH - y.dH);
+  if (tardeU.length) lecturaG += `<span style="color:var(--red);font-weight:800">⚠️ Llega tarde:</span> ${tardeU.slice(0, 4).map(x => escG(x.t) + ' ' + escG(x.prod) + ' (cob. ' + x.cob.toFixed(1) + ' d, ' + escG(x.b) + ' en ' + x.dH + ' d)').join('; ')}${tardeU.length > 4 ? ' y ' + (tardeU.length - 4) + ' más' : ''}.`;
+  else if (RNg) lecturaG += 'Ninguna descarga programada llega después de agotarse la cobertura.';
+  const V = window._g2Estado.vista;
+  const toggleG = `<div class="g2-tog"><button class="dec-chip${V === 'buque' ? ' on' : ''}" style="--c:var(--acc)" data-g2-vista="buque">🚢 Por buque</button><button class="dec-chip${V === 'planta' ? ' on' : ''}" style="--c:var(--acc)" data-g2-vista="planta">🏭 Por planta</button>${tardeU.length ? `<span class="g2-late-n">⚠️ ${tardeU.length} llegada${tardeU.length === 1 ? '' : 's'} tarde</span>` : ''}</div>`;
+  const rows = V === 'planta' ? (lanesPlanta || '<div style="padding:30px;text-align:center;color:var(--txt3)">Sin descargas en la ventana.</div>') : rowsBuque;
   // Franja: qué llega en la ventana
   let stripG = '';
   try {
@@ -14334,7 +14448,7 @@ function renderPB() {
     stripG = `<div class="g2-strip"><div class="g2-k"><b>${buquesG.filter(b => !b._sinViaje).length}</b><span>buques con viaje vigente</span></div><div class="g2-k"><b>${pend.length}</b><span>descargas en la ventana</span></div><div class="g2-k"><b>${mb.toFixed(0)}</b><span>MB por descargar</span></div><div class="g2-k g2-k-w"><b>${prox ? escG(prox.t) + ' ' + fmtG(prox.f) + ' · ' + escG(prox.b) : '—'}</b><span>próxima descarga</span></div>${Object.keys(porT).length ? `<div class="g2-k g2-k-w"><b>${Object.keys(porT).sort((x,y) => porT[y]-porT[x]).slice(0,5).map(t => escG(t) + ' ' + porT[t].toFixed(0)).join(' · ')}</b><span>MB por terminal</span></div>` : ''}<div class="g2-k g2-k-w" style="margin-left:auto"><b style="font-weight:600;color:var(--txt3)">Clic en un buque o escala: ficha del viaje</b><span>&nbsp;</span></div></div>`;
   } catch (eS) {}
   const elPB = document.getElementById('pB-content');
-  if (elPB && !elPB._g2Bound) { elPB._g2Bound = true; elPB.addEventListener('click', ev => { const t = ev.target.closest('[data-g2-buque]'); if (t && typeof openBTModal === 'function') openBTModal(t.getAttribute('data-g2-buque')); }); }
+  if (elPB && !elPB._g2Bound) { elPB._g2Bound = true; elPB.addEventListener('click', ev => { const tv = ev.target.closest('[data-g2-vista]'); if (tv) { window._g2Estado.vista = tv.getAttribute('data-g2-vista'); renderPB(); return; } const tr = ev.target.closest('[data-rn]'); if (tr && typeof _rnAccion === 'function') { ev.stopPropagation(); _rnAccion(tr.getAttribute('data-rn'), tr); return; } const t = ev.target.closest('[data-g2-buque]'); if (t && typeof openBTModal === 'function') openBTModal(t.getAttribute('data-g2-buque')); }); }
   document.getElementById('pB-content').innerHTML = `
     <div class="page-header">
       <div class="page-header-title">📅 Timeline de Reposiciones BT</div>
@@ -14343,8 +14457,10 @@ function renderPB() {
     ${buildDateBar('dateBarPB')}
     <div class="gantt-wrap">
       ${stripG}
+      <div class="cv-lectura" style="margin:8px 0 10px">${lecturaG}</div>
+      ${toggleG}
       <div style="display:flex;align-items:center;margin-bottom:6px;gap:8px;padding:0 0 6px;border-bottom:1px solid var(--bdr)">
-        <span style="width:160px;font-size:9px;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px;font-weight:700">Buque · viaje vigente</span>
+        <span style="width:160px;font-size:9px;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px;font-weight:700">${V === 'planta' ? 'Terminal · cobertura' : 'Buque · viaje vigente'}</span>
         <div class="gantt-header" style="flex:1;margin-left:0">${dayHeaders}</div>
       </div>
       ${rows || '<div style="padding:40px;text-align:center;color:var(--txt3)">Sin datos de Cargas de Naves. Sube el PDF en Carga Datos para ver el timeline.</div>'}
@@ -24543,7 +24659,7 @@ window.openInventarioReport = openInventarioReport;
 // Backend: GAS + Google Sheets (hojas: plan_refinacion, multimodal_iquitos, etc.)
 // ═══════════════════════════════════════════════════════════════════════════
 // Estado del módulo
-var _iquiTab = 'plan';
+var _iquiTab = 'resumen';
 var _iquiPlanCache = null;
 var _iquiViajesTerr = null;
 var _iquiViajesFluv = null;
@@ -24887,6 +25003,14 @@ function renderPIqui() {
         if (el2) { el2.innerHTML = _iquiBuildHTML(_iquiPlanCache, null, null); _iquiAttachHandlers(); }
       });
     }
+  } else if (_iquiTab === 'resumen') {
+    el.innerHTML = _iquiBuildHTML(_iquiPlanCache, null, null);
+    _iquiAttachHandlers();
+    // completar con viajes reales (fluvial/terrestre) y plan de distribución cuando lleguen
+    var _reR = function(){ if (_iquiTab !== 'resumen') return; var e2 = document.getElementById('pIqui-content'); if (e2) { e2.innerHTML = _iquiBuildHTML(_iquiPlanCache, null, null); _iquiAttachHandlers(); } };
+    if (!_iquiViajesFluv) _iquiLoadViajesFluv(_reR);
+    if (!_iquiViajesTerr) _iquiLoadViajesTerr(_reR);
+    if (!window._PLAN_DIST_ACTIVE && typeof _pdLoadData === 'function') { try { _pdLoadData(_reR); } catch (e) {} }
   } else {
     el.innerHTML = _iquiBuildHTML(_iquiPlanCache, null, null);
     _iquiAttachHandlers();
@@ -25099,6 +25223,7 @@ window._planDistGetEstado = function(id) {
 window.renderPIqui = renderPIqui;
 function _iquiBuildHTML(plan, viajesTerr, viajesFluv) {
   var tabs = [
+    ['resumen',    '🎯 Resumen ejecutivo'],
     ['plan',       '📋 Plan de Refinación'],
     ['terrestre',  '🚛 Transporte Terrestre'],
     ['fluvial',    '🚢 Transporte Fluvial'],
@@ -25111,7 +25236,8 @@ function _iquiBuildHTML(plan, viajesTerr, viajesFluv) {
     return '<button onclick="window._iquiSetTab(\''+t[0]+'\')" style="padding:7px 15px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;border:1.5px solid '+(act?'var(--acc)':'var(--bdr)')+';background:'+(act?'var(--acc)':'transparent')+';color:'+(act?'#fff':'var(--txt2)')+';transition:.15s;white-space:nowrap">'+t[1]+'</button>';
   }).join('');
   var body = '';
-  if (_iquiTab === 'plan')       body = _iquiTabPlan(plan);
+  if (_iquiTab === 'resumen')    body = _iquiTabResumen(plan);
+  else if (_iquiTab === 'plan')  body = _iquiTabPlan(plan);
   else if (_iquiTab==='plan-dist')  body = _iquiTabPlanDist();
   else if (_iquiTab==='terrestre')  body = _iquiTabTerrestre(plan, viajesTerr || []);
   else if (_iquiTab==='fluvial')    body = _iquiTabFluvial(plan, viajesFluv || []);
@@ -25132,6 +25258,81 @@ function _iquiBuildHTML(plan, viajesTerr, viajesFluv) {
     + '  <div style="display:flex;gap:8px;flex-wrap:wrap;margin:16px 0 20px;padding-bottom:14px;border-bottom:1px solid var(--bdr)">'+tabBar+'</div>'
     + '  <div id="iqui-body">'+body+'</div>'
     + '</div>';
+}
+// ── TAB 0: Resumen ejecutivo — ¿cómo está Iquitos hoy y qué viene en camino? ──
+function _iquiTabResumen(plan) {
+  if (typeof _curvaEstilos === 'function') _curvaEstilos();
+  if (typeof _pcEstilos === 'function') _pcEstilos();
+  if (typeof _cisEstilos === 'function') _cisEstilos();
+  var esc = function(t) { return String(t == null ? '' : t).replace(/[&<>"]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); };
+  var n1 = function(v){ return (Number(v)||0).toFixed(1); };
+  // 1) Inventario y cobertura actual de Refinería Iquitos (mismo cálculo del Resumen Nacional)
+  var RN = null; try { if (typeof _rnCalcularDetalle === 'function') _rnCalcularDetalle(); RN = window._rnDetalleProd || null; } catch (e) { RN = null; }
+  var PL = 'Iquitos';
+  var o = RN && RN.porPlanta ? RN.porPlanta[PL] : null;
+  var prods = (RN && RN.prods ? RN.prods : []).map(function(pr){ var c = RN.celda[PL + '|' + pr]; return c ? { prod: pr, c: c } : null; }).filter(Boolean)
+    .sort(function(a, b){ var ra = { quiebre: 0, crit: 1, alerta: 2, ok: 3, nd: 4 }; return (ra[a.c.nivel] - ra[b.c.nivel]) || (a.c.cob - b.c.cob); });
+  var nombresNivel = { quiebre: 'SIN STOCK', crit: 'CRÍTICO', alerta: 'EN ALERTA', ok: 'NORMAL', nd: 'SIN DATO' };
+  var colNivel = { quiebre: 'var(--red)', crit: 'var(--red)', alerta: 'var(--yel)', ok: 'var(--grn)', nd: 'var(--txt3)' };
+  var peor = o ? (o.peor || 'nd') : 'nd';
+  // 2) Barcazas cargadas hacia Iquitos (reporte fluvial)
+  var barges = (window._fluvialBarges || []).filter(function(b){ return b.cargado && b.destino === 'Iquitos' && !/COMPLET|DESCARGAD/i.test(b.estado || ''); });
+  var mbBarges = barges.reduce(function(s, b){ return s + (b.volMB || 0); }, 0);
+  var porProdB = {}; barges.forEach(function(b){ var k = b.producto || 'Sin producto'; porProdB[k] = (porProdB[k] || 0) + (b.volMB || 0); });
+  var proxB = barges.filter(function(b){ return b.eta_arribo; }).sort(function(a, b){ return String(a.eta_arribo).localeCompare(String(b.eta_arribo)); })[0];
+  // 3) Viajes registrados (módulo Iquitos) — si ya cargaron
+  var vF = _iquiViajesFluv || [], vT = _iquiViajesTerr || [];
+  var vFact = vF.filter(function(v){ return !/COMPLET|ARRIB|DESCARG/i.test(v.estado || ''); });
+  var vTact = vT.filter(function(v){ return !/COMPLET|ARRIB|DESCARG/i.test(v.estado || ''); });
+  // 4) Plan mensual (programa de abastecimiento) y ejecución (Plan de Distribución)
+  var hoyK = (typeof currentDate === 'string' ? currentDate : new Date().toISOString().slice(0,10)).slice(0, 7);
+  var mesPlan = IQUI_MESES.find(function(m){ return m.k === hoyK; }) || null;
+  var mbPlan = function(r){ var v = r.vals || {}; return mesPlan ? (+v[mesPlan.k] || 0) : IQUI_MESES.reduce(function(a, m){ return a + (+v[m.k] || 0); }, 0); };
+  var planTot = plan.reduce(function(a, r){ return a + mbPlan(r); }, 0);
+  var planLPO = plan.filter(function(r){ return /LPO|PUCALLPA/i.test(r.puerto); }).reduce(function(a, r){ return a + mbPlan(r); }, 0);
+  var planYUR = plan.filter(function(r){ return /YURIMAGUAS/i.test(r.puerto); }).reduce(function(a, r){ return a + mbPlan(r); }, 0);
+  var PD = window._PLAN_DIST_ACTIVE || null, pdd = window._planDistData || null;
+  var pdPlan = 0, pdReal = 0;
+  if (PD) { pdPlan = (PD.barcazas_yu||[]).concat(PD.barcazas_lpo||[]).reduce(function(a, b){ return a + (b.productos||[]).reduce(function(x, y){ return x + (+y.vol_plan || 0); }, 0); }, 0) + (PD.cisternas||[]).reduce(function(a, b){ return a + (+b.vol_plan || 0); }, 0); }
+  if (pdd) { Object.values(pdd.barcazas||{}).concat(Object.values(pdd.cisternas||{})).forEach(function(v){ pdReal += parseFloat(v.vol_real||0)||0; }); }
+  var avance = pdPlan > 0 ? Math.round(pdReal / pdPlan * 100) : null;
+  // ── Lectura ejecutiva
+  var lect = 'Refinería Iquitos está en <b style="color:' + colNivel[peor] + '">' + nombresNivel[peor] + '</b>';
+  if (prods.length) { var pp = prods[0]; lect += ': el producto más ajustado es <b>' + esc(pp.prod) + '</b> (' + (pp.c.nivel === 'quiebre' ? 'sin stock' : n1(pp.c.cob) + ' días de cobertura') + (pp.c.inv != null ? ', ' + n1(pp.c.inv) + ' MB' : '') + ')'; }
+  lect += '. ';
+  if (barges.length) lect += 'Vienen <b>' + barges.length + ' barcazas cargadas</b> con ' + n1(mbBarges) + ' MB (' + Object.keys(porProdB).map(function(k){ return esc(k) + ' ' + n1(porProdB[k]); }).join(', ') + ')' + (proxB ? '; la primera, <b>' + esc(proxB.af || proxB.empujador) + '</b>, llega ' + esc(String(proxB.eta_arribo).slice(0, 10)) : '') + '. ';
+  else lect += 'No hay barcazas cargadas en camino a Iquitos según el último reporte fluvial. ';
+  if (mesPlan) lect += 'El programa de ' + esc(mesPlan.label) + ' prevé <b>' + planTot + ' MB</b> (Pucallpa ' + planLPO + ' · Yurimaguas ' + planYUR + ')';
+  else if (planTot) lect += 'El programa vigente (' + IQUI_MESES[0].short + '–' + IQUI_MESES[IQUI_MESES.length - 1].short + ') suma <b>' + planTot + ' MB</b>';
+  if (avance != null) lect += '; el Plan de Distribución' + (PD && PD.mes ? ' de ' + esc(PD.mes) : '') + ' va al <b style="color:' + (avance >= 90 ? 'var(--grn)' : avance >= 60 ? 'var(--yel)' : 'var(--red)') + '">' + avance + '%</b> (' + Math.round(pdReal) + ' de ' + Math.round(pdPlan) + ' MB)';
+  lect += '.';
+  var tile = function(k, v, s, col) { return '<div class="cv-kpi" style="cursor:default"><div class="cv-k">' + k + '</div><div class="cv-n" style="color:' + (col || 'var(--txt)') + '">' + v + '</div><div class="cv-s">' + s + '</div></div>'; };
+  var html = '<div class="cv-strip" style="padding:0;grid-template-columns:minmax(240px,1.3fr) repeat(4,minmax(140px,1fr))">'
+    + '<div class="cv-hero"><div class="cv-k">Estado de Refinería Iquitos</div><div class="cv-n" style="color:' + colNivel[peor] + '">' + nombresNivel[peor] + '</div><div class="cv-s">' + (o ? (prods.filter(function(x){ return x.c.nivel === 'quiebre' || x.c.nivel === 'crit'; }).length + ' producto(s) crítico(s) · cobertura mínima ' + (o.cobMin < 900 ? n1(o.cobMin) + ' d' : 's/d')) : 'sin datos de inventario') + '</div></div>'
+    + tile('Barcazas cargadas en camino', barges.length, n1(mbBarges) + ' MB hacia Iquitos' + (proxB ? ' · próx. ' + esc(String(proxB.eta_arribo).slice(5, 10)) : ''), barges.length ? 'var(--acc)' : 'var(--txt3)')
+    + tile('Programa ' + (mesPlan ? esc(mesPlan.short) : 'vigente'), planTot + '<small>MB</small>', 'Pucallpa ' + planLPO + ' · Yurimaguas ' + planYUR)
+    + tile('Avance Plan de Distribución', avance == null ? '—' : avance + '<small>%</small>', avance == null ? 'sin movimientos registrados' : Math.round(pdReal) + ' de ' + Math.round(pdPlan) + ' MB', avance == null ? 'var(--txt3)' : avance >= 90 ? 'var(--grn)' : avance >= 60 ? 'var(--yel)' : 'var(--red)')
+    + tile('Viajes activos registrados', (vFact.length + vTact.length), vFact.length + ' fluviales · ' + vTact.length + ' terrestres' + ((!_iquiViajesFluv || !_iquiViajesTerr) ? ' · cargando…' : ''))
+    + '</div>'
+    + '<div class="cv-lectura" style="margin:10px 0 12px">' + lect + '</div>';
+  // Productos en Iquitos: cobertura + lo que viene
+  html += '<div class="cis-sec"><div class="cis-sec-t">🛢️ Inventario por producto en Iquitos</div><div class="cis-sec-s">cobertura actual · volumen que viene en barcazas · clic abre la tendencia</div></div>';
+  html += '<div class="cis-dests">' + (prods.length ? prods.map(function(x) {
+    var c = x.c; var viene = 0; Object.keys(porProdB).forEach(function(k){ if (k.toUpperCase().indexOf(String(x.prod).toUpperCase().replace(/^G\. /, '')) >= 0 || String(x.prod).toUpperCase().indexOf(k.toUpperCase()) >= 0) viene += porProdB[k]; });
+    return '<div class="cis-dest" data-rn="ver-tend" data-planta="Iquitos" data-prod="' + esc(x.prod) + '" title="Ver tendencia de ' + esc(x.prod) + ' en Iquitos">'
+      + '<div class="cis-dest-h"><div class="cis-dest-n">' + esc(x.prod) + '</div><span class="cis-cob cis-cob-' + c.nivel + '">' + (c.nivel === 'quiebre' ? 'sin stock' : c.nivel === 'nd' ? 's/d' : n1(c.cob) + ' d') + '</span></div>'
+      + '<div class="cis-dest-m"><div><b>' + (c.inv != null ? n1(c.inv) : '—') + '</b><i>MB en tanque</i></div><div><b style="color:' + (viene ? 'var(--acc)' : 'var(--txt3)') + '">' + (viene ? '+' + n1(viene) : '—') + '</b><i>MB en barcazas</i></div>' + (c.vf != null || c.pron != null ? '<div><b>' + n1(c.vf || c.pron) + '</b><i>MB/d demanda</i></div>' : '') + '</div>'
+      + '</div>';
+  }).join('') : '<div class="cis-vacio">Sin inventario reportado para Iquitos en la fecha.</div>') + '</div>';
+  // Barcazas en camino
+  if (barges.length) {
+    html += '<div class="cis-sec"><div class="cis-sec-t">🚢 Barcazas cargadas hacia Iquitos</div><div class="cis-sec-s">según el reporte de Transporte Fluvial Selva · clic abre el Mapa de Operaciones</div></div>'
+      + '<div class="cv-rank" style="margin:0 0 12px">' + barges.slice().sort(function(a, b){ return String(a.eta_arribo||'9').localeCompare(String(b.eta_arribo||'9')); }).map(function(b) {
+        return '<div class="cv-row" style="grid-template-columns:170px 1fr 220px" data-rn="ir" data-pid="pA"><div class="cv-row-pl">' + esc(b.af || b.empujador || b.id) + '</div><div style="font-size:11px;color:var(--txt2)">' + esc(b.ruta) + ' · ' + esc(b.producto || '') + (b.obs ? ' · <span style="color:var(--txt3)">' + esc(String(b.obs).slice(0, 70)) + '</span>' : '') + '</div><div class="cv-row-r"><b>' + n1(b.volMB) + ' MB</b> · ' + esc(b.estado || '') + '<br>' + (b.eta_arribo ? 'ETA ' + esc(String(b.eta_arribo).slice(0, 10)) : 'sin ETA') + '</div></div>';
+      }).join('') + '</div>';
+  }
+  html += '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px"><button class="cis-mini acc" data-rn="planta" data-planta="Iquitos">📋 Ficha de Iquitos</button><button class="cis-mini" onclick="window._iquiSetTab(\'plan-dist\')">📋 Plan de Distribución</button><button class="cis-mini" onclick="window._iquiSetTab(\'fluvial\')">🚢 Transporte Fluvial</button><button class="cis-mini" onclick="window._iquiSetTab(\'terrestre\')">🚛 Transporte Terrestre</button></div>';
+  return html;
 }
 // ── TAB 1: Plan de Refinación (editable en admin, solo lectura en informe) ──
 function _iquiTabPlan(plan) {
@@ -25564,11 +25765,15 @@ function _iquiTabCalendario(plan) {
 }
 // ── TAB 5: Tablero Ejecutivo (KPIs + gráficos) ─────────────────────────────
 function _iquiTabKPIs(plan) {
-  var totProg = plan.reduce(function(a,r){return a+(+r.jun||0)+(+r.jul||0)+(+r.ago||0);},0);
-  var totEjec = Math.round(totProg * 0.62); // placeholder hasta conectar ejecución real
-  var cumpl = totProg>0 ? Math.round(totEjec/totProg*100) : 0;
+  var _mbRow = function(r){ var v = r.vals || r; return IQUI_MESES.reduce(function(a,m){ return a + (+v[m.k]||0); }, 0) || ((+r.jun||0)+(+r.jul||0)+(+r.ago||0)); };
+  var totProg = plan.reduce(function(a,r){return a+_mbRow(r);},0);
+  // Ejecución real: movimientos registrados en el Plan de Distribución (si hay); nunca un porcentaje inventado
+  var _pdd = window._planDistData || null, totEjec = 0, hayEjec = false;
+  if (_pdd) { Object.values(_pdd.barcazas||{}).forEach(function(v){ totEjec += parseFloat(v.vol_real||0)||0; }); Object.values(_pdd.cisternas||{}).forEach(function(v){ totEjec += parseFloat(v.vol_real||0)||0; }); hayEjec = totEjec > 0; }
+  totEjec = Math.round(totEjec);
+  var cumpl = (totProg>0 && hayEjec) ? Math.round(totEjec/totProg*100) : 0;
   var costoTerr = plan.reduce(function(a,r){
-    var mb=(+r.jun||0)+(+r.jul||0)+(+r.ago||0);
+    var mb=_mbRow(r);
     return a + Math.ceil(mb/IQUI_PARAMS.capCisterna)*IQUI_PARAMS.costoTerrViaje;
   },0);
   var costoFluv = totProg * IQUI_PARAMS.costoFluvMB;
@@ -25576,8 +25781,8 @@ function _iquiTabKPIs(plan) {
   var costoPorMB = totProg>0 ? Math.round(costoTotal/totProg) : 0;
   return ''
     + _iquiKpiRow([
-        ['Cumplimiento', cumpl+'%', totEjec+' / '+totProg+' MB', cumpl>=90?'#1a9e50':(cumpl>=70?'#d96b1a':'#e03434')],
-        ['MB en tránsito', Math.round(totProg*0.18), 'multimodal activo', '#0891b2'],
+        ['Cumplimiento', hayEjec ? cumpl+'%' : '—', hayEjec ? totEjec+' / '+totProg+' MB' : 'sin ejecución registrada en Plan de Distribución', !hayEjec ? '#64748b' : cumpl>=90?'#1a9e50':(cumpl>=70?'#d96b1a':'#e03434')],
+        ['MB en tránsito fluvial', (function(){ var t = 0; (window._fluvialBarges||[]).forEach(function(b){ if (b.cargado && b.destino === 'Iquitos' && !/COMPLET|ARRIB|DESCARG/i.test(b.estado||'')) t += b.volMB||0; }); return Math.round(t); })(), 'barcazas cargadas hacia Iquitos', '#0891b2'],
         ['Costo logístico', 'S/ '+(costoTotal/1000).toFixed(0)+'K', 'total programa', '#7c3aed'],
         ['Costo por MB', 'S/ '+costoPorMB, 'promedio', '#d96b1a']
       ])
@@ -25638,13 +25843,14 @@ function _iquiRenderCharts() {
   var pe = document.getElementById('iqui-planEjec');
   if (pe) {
     if (pe._chart) pe._chart.destroy();
-    var conData = plan.filter(function(r){return (+r.jun||0)+(+r.jul||0)+(+r.ago||0)>0;});
+    var _mbR = function(r){ var v = r.vals || r; return IQUI_MESES.reduce(function(a,m){ return a + (+v[m.k]||0); }, 0) || ((+r.jun||0)+(+r.jul||0)+(+r.ago||0)); };
+    var conData = plan.filter(function(r){return _mbR(r)>0;});
     pe._chart = new Chart(pe.getContext('2d'), {
       type:'bar',
       data:{ labels:conData.map(function(r){return r.producto;}),
         datasets:[
-          {label:'Programado', data:conData.map(function(r){return (+r.jun||0)+(+r.jul||0)+(+r.ago||0);}), backgroundColor:'#1d6fd6'},
-          {label:'Ejecutado', data:conData.map(function(r){return Math.round(((+r.jun||0)+(+r.jul||0)+(+r.ago||0))*0.62);}), backgroundColor:'#1a9e50'}
+          {label:'Programado', data:conData.map(function(r){return _mbR(r);}), backgroundColor:'#1d6fd6'},
+          {label:'Ejecutado (Plan de Distribución)', data:conData.map(function(r){ var t = 0, pdd = window._planDistData || {}; var nm = String(r.producto||'').toUpperCase(); Object.values(pdd.barcazas||{}).concat(Object.values(pdd.cisternas||{})).forEach(function(v){ if (String(v.producto||'').toUpperCase().indexOf(nm) >= 0 || nm.indexOf(String(v.producto||'').toUpperCase()) >= 0) t += parseFloat(v.vol_real||0)||0; }); return Math.round(t); }), backgroundColor:'#1a9e50'}
         ]},
       options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom'}},scales:{y:{title:{display:true,text:'MB'}}}}
     });
@@ -27127,7 +27333,10 @@ window._iquiSavePlan = function(){
     console.error('[Iquitos] Error guardando plan:', err);
   });
 };
-function _iquiAttachHandlers(){ /* handlers ya son inline */ }
+function _iquiAttachHandlers(){
+  var el = document.getElementById('pIqui-content'); if (!el || el._iqBound) return; el._iqBound = true;
+  el.addEventListener('click', function(ev) { var t = ev.target.closest('[data-rn]'); if (!t || !el.contains(t)) return; ev.stopPropagation(); if (typeof _rnAccion === 'function') _rnAccion(t.getAttribute('data-rn'), t); });
+}
 function openExecutiveView(evt) {
   if (evt) evt.preventDefault();
   var execUrl = window.location.origin + window.location.pathname + '?view=executive';
