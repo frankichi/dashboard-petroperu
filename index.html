@@ -14525,6 +14525,32 @@ function renderPTend() {
   // de todas las plantas con inventario del producto (mismo universo que las barras).
   // Demanda del sistema (igual que Coberturas): vfact vigente > 0 ? vfact : pronSheet.
   // Se toma del registro más reciente de cada planta para el producto.
+  // ⚠️ AGREGADO — a pedido (20-oct): lectura ejecutiva de la tendencia,
+  // en una frase, calculada sobre la misma serie del gráfico: cómo cambió
+  // el inventario en la ventana, el ritmo diario, el punto más bajo y a
+  // cuántos días se agotaría si sigue ese ritmo (vs. la cobertura por venta).
+  var _tendLectura = '';
+  try {
+    if (invRawByDate.length >= 2) {
+      var _ini = invRawByDate[0], _fin = invRawByDate[invRawByDate.length-1];
+      var _n = invRawByDate.length, _dIni = dateLabels[0], _dFin = dateLabels[_n-1];
+      var _diasVent = Math.max(1, Math.round((new Date(_dFin+'T12:00:00') - new Date(_dIni+'T12:00:00')) / 86400000));
+      var _delta = _fin - _ini, _pct = _ini > 0 ? _delta / _ini * 100 : null, _ritmo = _delta / _diasVent;
+      var _minV = Math.min.apply(null, invRawByDate), _minI = invRawByDate.indexOf(_minV), _maxV = Math.max.apply(null, invRawByDate);
+      var _fc = function(f){ var q = String(f).slice(0,10).split('-'); return q[2] + '/' + q[1]; };
+      var _tend = Math.abs(_pct === null ? 0 : _pct) < 3 ? 'estable' : _delta > 0 ? 'subiendo' : 'bajando';
+      var _col = _tend === 'estable' ? 'var(--txt2)' : _delta > 0 ? 'var(--grn)' : 'var(--red)';
+      var _frase = (planta === 'Nacional' ? 'El inventario nacional de ' : 'El inventario de ') + prod + (planta === 'Nacional' ? '' : ' en ' + planta) + ' pasó de <b>' + _ini.toFixed(1) + '</b> a <b>' + _fin.toFixed(1) + ' MB</b> entre el ' + _fc(_dIni) + ' y el ' + _fc(_dFin)
+        + ' (<b style="color:' + _col + '">' + (_delta >= 0 ? '+' : '') + _delta.toFixed(1) + ' MB' + (_pct === null ? '' : ', ' + (_pct >= 0 ? '+' : '') + _pct.toFixed(0) + '%') + '</b>): tendencia <b style="color:' + _col + '">' + _tend + '</b>'
+        + (_tend !== 'estable' ? ', a un ritmo de ' + Math.abs(_ritmo).toFixed(2) + ' MB/día' : '') + '. ';
+      var _agote = (_ritmo < -0.01 && _fin > 0) ? Math.round(_fin / -_ritmo) : null;
+      if (_agote !== null) _frase += 'Si sigue así, el stock se agota en <b style="color:' + (_agote < (CONFIG.COB_RED||8) ? 'var(--red)' : _agote < (CONFIG.COB_AMB||15) ? 'var(--yel)' : 'var(--txt)') + '">' + _agote + ' días</b>. ';
+      _frase += 'Mínimo de la ventana: ' + _minV.toFixed(1) + ' MB el ' + _fc(dateLabels[_minI]) + '; máximo ' + _maxV.toFixed(1) + ' MB.';
+      _tendLectura = '<div class="pinv-lectura" style="--c:' + _col + ';margin:0 0 12px"><div class="pinv-lectura-n" style="font-size:22px">' + (_pct === null ? '—' : (_pct >= 0 ? '+' : '') + _pct.toFixed(0) + '<small>%</small>') + '</div><div class="pinv-lectura-t">' + _frase + '</div>'
+        + (planta !== 'Nacional' ? '<button class="rn-btn" data-rn="planta" data-planta="' + planta.replace(/"/g,'&quot;') + '" style="white-space:nowrap">🏭 Ficha de ' + planta + '</button>' : '<button class="rn-btn" data-rn="prod" data-prod="' + prod.replace(/"/g,'&quot;') + '" style="white-space:nowrap">📊 Explicación nacional</button>') + '</div>';
+      if (!document.getElementById('pinv-lect-css')) { var stL2 = document.createElement('style'); stL2.id = 'pinv-lect-css'; stL2.textContent = '.pinv-lectura{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:8px 0 2px;background:var(--card);border:1px solid var(--bdr);border-left:5px solid var(--c);border-radius:10px;padding:9px 14px}.pinv-lectura-n{font:800 26px var(--mono);color:var(--c);line-height:1;display:flex;align-items:baseline;gap:4px}.pinv-lectura-n small{font-size:9.5px;color:var(--txt3);font-family:var(--sans)}.pinv-lectura-t{font-size:11.5px;color:var(--txt2);line-height:1.4;flex:1;min-width:220px}.pinv-lectura-t b{color:var(--txt)}.pinv-lectura-c{display:flex;flex-wrap:wrap;gap:4px}'; document.head.appendChild(stL2); }
+    }
+  } catch (eTL) { console.warn('[Tendencia] lectura:', eTL && eTL.message); }
   var _pronCob = 0;
   var _lastRows = byLatest().filter(function(r){ return r.producto === prod; });
   // Se excluyen sub-plantas de VENTAS_AGG_RULES para evitar doble conteo en ventas
@@ -14759,6 +14785,7 @@ function renderPTend() {
         <div class="pinv-kcard-sub">MB en cisternas</div>
       </div>
     </div>
+    ${_tendLectura}
     <!-- Gráfico stacked -->
     <div class="pinv-chart-card" style="margin-bottom:14px">
       <div class="pinv-chart-hdr">
@@ -31673,7 +31700,7 @@ function _asegurarCapRefCache(fnRerender) {
   window.renderPInv = function() {
     const el = document.getElementById('pInv-content');
     if (!el) return;
-    if (!el._rnBound) { el._rnBound = true; el.addEventListener('click', function(ev){ var t = ev.target.closest('[data-rn]'); if (t && typeof _rnAccion === 'function') { if (!window._rnDetalleProd) { try { _rnCalcularDetalle(); } catch(e0) {} } _rnAccion(t.getAttribute('data-rn'), t); } }); }
+    if (!el._rnBound) { el._rnBound = true; el.addEventListener('click', function(ev){ var h = ev.target.closest('[data-pinv-hist]'); if (h) { ev.stopPropagation(); var rowH = (window._pInvRowsActuales||[])[parseInt(h.getAttribute('data-pinv-hist'),10)]; if (rowH && typeof window._pInvOpenModal === 'function') window._pInvOpenModal(rowH, (PROD_CFG[_pInvProd]||{color:'#1B3A6B'}).color); return; } var t = ev.target.closest('[data-rn]'); if (t && typeof _rnAccion === 'function') { if (!window._rnDetalleProd) { try { _rnCalcularDetalle(); } catch(e0) {} } _rnAccion(t.getAttribute('data-rn'), t); } }); }
     if (typeof _rnEstilos === 'function') _rnEstilos();
     if (!document.getElementById('pinv-lect-css')) { var stL = document.createElement('style'); stL.id = 'pinv-lect-css'; stL.textContent = '.pinv-lectura{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:8px 0 2px;background:var(--card);border:1px solid var(--bdr);border-left:5px solid var(--c);border-radius:10px;padding:9px 14px}.pinv-lectura-n{font:800 26px var(--mono);color:var(--c);line-height:1;display:flex;align-items:baseline;gap:4px}.pinv-lectura-n small{font-size:9.5px;color:var(--txt3);font-family:var(--sans)}.pinv-lectura-t{font-size:11.5px;color:var(--txt2);line-height:1.4;flex:1;min-width:220px}.pinv-lectura-t b{color:var(--txt)}.pinv-lectura-c{display:flex;flex-wrap:wrap;gap:4px}'; document.head.appendChild(stL); }
     const dates = (typeof DATES !== 'undefined' ? DATES : []);
@@ -31782,6 +31809,33 @@ function _asegurarCapRefCache(fnRerender) {
       </tr>`;
     }).join('');
     window._pInvRowsActuales = rows;
+    // ⚠️ REDISEÑADO — a pedido (20-oct): el cuadro "Inventario por
+    // terminal" quedó vacío cuando se retiró el gráfico viejo (solo
+    // mostraba algo con la casilla "Tabla"). Ahora dibuja una barra por
+    // terminal: inventario coloreado por nivel de cobertura, reposición
+    // confirmada (naranja) y proyectada (punteada) a continuación, con
+    // días de cobertura y el buque/ETA. Clic en la fila abre la ficha
+    // ejecutiva de la planta; el botón 📈 abre el detalle histórico.
+    var _barrasHTML = '';
+    try {
+      if (!document.getElementById('pinv-bars-css')) { var stB = document.createElement('style'); stB.id = 'pinv-bars-css'; stB.textContent = '.pib{display:flex;flex-direction:column;gap:3px;padding:6px 4px 10px}.pib-r{display:grid;grid-template-columns:118px 1fr 64px 150px 30px;gap:10px;align-items:center;padding:4px 8px;border-radius:7px;cursor:pointer}.pib-r:hover{background:var(--bg3)}.pib-n{font-size:11.5px;font-weight:800;color:var(--txt);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:flex;align-items:center;gap:6px}.pib-trk{position:relative;height:16px;background:var(--bg3);border-radius:4px;overflow:hidden}.pib-inv{position:absolute;left:0;top:0;height:100%;border-radius:4px 0 0 4px;background:var(--c)}.pib-rep{position:absolute;top:2px;height:12px;background:#f97316;border-radius:0 3px 3px 0;opacity:.9}.pib-rep.proj{background:repeating-linear-gradient(45deg,#f9731655 0 3px,transparent 3px 6px);border:1px dashed #f97316;box-sizing:border-box}.pib-v{position:absolute;right:6px;top:0;line-height:16px;font:700 9.5px var(--mono);color:var(--txt2)}.pib-cob{font:800 12px var(--mono);text-align:right;color:var(--c)}.pib-cob small{font:600 9px var(--sans);color:var(--txt3)}.pib-rp{font-size:9.5px;color:var(--txt2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.pib-rp b{color:var(--txt);font-family:var(--mono)}.pib-h{background:none;border:1px solid var(--bdr);border-radius:6px;color:var(--txt3);cursor:pointer;font-size:11px;width:26px;height:22px;padding:0}.pib-h:hover{border-color:var(--acc);color:var(--txt)}@media(max-width:700px){.pib-r{grid-template-columns:90px 1fr 48px 30px}.pib-rp{display:none}}'; document.head.appendChild(stB); }
+      var maxTot = Math.max.apply(null, rows.map(function(r){ return (r.inv||0) + (r.rep||0); }).concat([1]));
+      var escB = function(t){ return String(t==null?'':t).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); };
+      var nivelCol = function(c){ return c <= 0 ? '#b91c1c' : c < (CONFIG.COB_RED||8) ? 'var(--red)' : c < (CONFIG.COB_AMB||15) ? 'var(--yel)' : 'var(--grn)'; };
+      _barrasHTML = '<div class="pib">' + rows.map(function(r, idx) {
+        var wInv = (r.inv||0) / maxTot * 100, wConf = (r.repConf||0) / maxTot * 100, wProj = (r.repProj||0) / maxTot * 100;
+        if (!(r.repConf > 0) && !(r.repProj > 0) && r.rep > 0) wConf = r.rep / maxTot * 100;
+        var repTxt = r.rep > 0 ? '<b>+' + fmt(r.rep) + '</b> MB' + (r.bt ? ' · ' + escB(r.bt) : '') + (r.repDate ? ' · ' + fmtD(r.repDate) : '') : '<span style="color:var(--txt3)">sin reposición</span>';
+        var cobTxt = r.cob > 0 ? (r.cob >= 999 ? '99+' : r.cob.toFixed(DEC)) + '<small>d</small>' : (r.inv > 0 ? '—' : '⛔');
+        return '<div class="pib-r" data-rn="planta" data-planta="' + escB(r.planta) + '" style="--c:' + nivelCol(r.cob) + '" title="Ficha de ' + escB(r.planta) + '">'
+          + '<div class="pib-n"><span class="rn-hm-dot" style="background:' + nivelCol(r.cob) + '"></span>' + escB(r.planta) + '</div>'
+          + '<div class="pib-trk"><div class="pib-inv" style="width:' + wInv + '%"></div>' + (wConf > 0 ? '<div class="pib-rep" style="left:' + wInv + '%;width:' + wConf + '%"></div>' : '') + (wProj > 0 ? '<div class="pib-rep proj" style="left:' + (wInv + wConf) + '%;width:' + wProj + '%"></div>' : '') + '<div class="pib-v">' + fmt(r.inv) + ' MB</div></div>'
+          + '<div class="pib-cob">' + cobTxt + '</div>'
+          + '<div class="pib-rp">' + repTxt + '</div>'
+          + '<button class="pib-h" data-pinv-hist="' + idx + '" title="Detalle histórico y gráfico">📈</button>'
+          + '</div>';
+      }).join('') + '</div>';
+    } catch (eBar) { console.warn('[pInv] barras:', eBar && eBar.message); }
     
     // ⚠️ AGREGADO — a pedido: la sección "Cobertura por planta" del
     // panel gerencial (con reposiciones marítimas, cabotajes, y las 3
@@ -31833,7 +31887,9 @@ el.innerHTML = `
             <span class="pinv-chart-dot" style="background:${cfg.color}"></span>
             ${_pInvProd} — Inventario por terminal
           </div>
+          <div class="pinv-chart-legend" style="font-size:9.5px;color:var(--txt3);display:flex;gap:10px;flex-wrap:wrap"><span><i style="display:inline-block;width:10px;height:8px;background:var(--red);border-radius:2px"></i> crítico</span><span><i style="display:inline-block;width:10px;height:8px;background:var(--yel);border-radius:2px"></i> alerta</span><span><i style="display:inline-block;width:10px;height:8px;background:var(--grn);border-radius:2px"></i> normal</span><span><i style="display:inline-block;width:10px;height:8px;background:#f97316;border-radius:2px"></i> reposición confirmada</span><span><i style="display:inline-block;width:10px;height:8px;border:1px dashed #f97316;border-radius:2px"></i> proyectada</span></div>
         </div>
+        ${_barrasHTML}
         ${_pInvShowTable ? `
         <div class="pinv-tbl-wrap">
           <table class="pinv-tbl">
@@ -34324,7 +34380,11 @@ window.renderPRepoMar = function() {
   _repomarInjectCSS();
   var host = document.getElementById('pRepoMar-content');
   if (!host) return;
-  if (!host._fichaBound) { host._fichaBound = true; host.addEventListener('click', function(ev){ var bt = ev.target.closest('[data-ficha-buque]'); if (bt) { ev.stopPropagation(); if (typeof openBTModal === 'function') openBTModal(bt.getAttribute('data-ficha-buque')); } }, true); }
+  if (!host._fichaBound) { host._fichaBound = true; host.addEventListener('click', function(ev){
+    var bt = ev.target.closest('[data-ficha-buque]'); if (bt) { ev.stopPropagation(); if (typeof openBTModal === 'function') openBTModal(bt.getAttribute('data-ficha-buque')); return; }
+    var tv = ev.target.closest('[data-rm-vista]'); if (tv) { ev.stopPropagation(); window._rmVistaPlanta = !window._rmVistaPlanta; renderPRepoMar(); return; }
+    var tp = ev.target.closest('[data-rn="planta"]'); if (tp && typeof _rnAbrirPlanta === 'function') { ev.stopPropagation(); if (!window._rnDetalleProd) { try { _rnCalcularDetalle(); } catch(e0) {} } _rnAbrirPlanta(tp.getAttribute('data-planta')); }
+  }, true); }
 
   // ⚠️ AGREGADO — bug real confirmado (mismo patrón que ya se corrigió
   // en Vista Ejecutiva): el popup de "vacío" de esta página usa
@@ -34804,6 +34864,7 @@ window.renderPRepoMar = function() {
       : '<div class="repomar-empty-msg">No hay cabotaje marítimo vigente en este momento (todas las entregas ya se completaron, o no hay ninguna reportada en Cargas de Naves).</div>';
   }
 
+  if (!window._rnDetalleProd && typeof _rnCalcularDetalle === 'function') { try { _rnCalcularDetalle(); } catch (eRNr) {} }
   // ⚠️ AGREGADO — a pedido: franja ejecutiva (solo en Confirmado): qué
   // llega, cuándo y cuánto — en una línea, antes de entrar a la grilla.
   var _rmStrip = '';
@@ -34811,7 +34872,7 @@ window.renderPRepoMar = function() {
     try {
       var _hoyR = fechaRef, _esc2 = function(t){ return String(t==null?'':t).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); };
       var _pend = [];
-      buques.forEach(function(b){ (b.legs||[]).forEach(function(l){ if (l.estado === 'COMPLETADO' || l._sintetica || !(l.vol > 0) || (l.tipo||'descarga') !== 'descarga') return; var f = (l.fecha_hasta||'').slice(0,10); if (!f || f < _hoyR) return; _pend.push({ buque: b.buque, terminal: l.terminal, fecha: f, vol: l.vol }); }); });
+      buques.forEach(function(b){ (b.legs||[]).forEach(function(l){ if (l.estado === 'COMPLETADO' || l._sintetica || !(l.vol > 0) || (l.tipo||'descarga') !== 'descarga') return; var f = (l.fecha_hasta||'').slice(0,10); if (!f || f < _hoyR) return; _pend.push({ buque: b.buque, terminal: l.terminal, fecha: f, vol: l.vol, prod: l.producto }); }); });
       var _mbR = _pend.reduce(function(a2,x){ return a2 + x.vol; }, 0);
       var _d7 = function(f){ return Math.round((new Date(f+'T12:00:00') - new Date(_hoyR+'T12:00:00'))/86400000); };
       var _en7 = _pend.filter(function(x){ return _d7(x.fecha) <= 7; });
@@ -34827,11 +34888,31 @@ window.renderPRepoMar = function() {
         + '<div class="rm-k rm-k-w"><b>' + (_prox ? _esc2(_prox.terminal) + ' ' + _fc(_prox.fecha) : '—') + '</b><span>' + (_prox ? 'próxima descarga · ' + _esc2(_prox.buque) + ' · ' + (_d7(_prox.fecha)<=0?'hoy':_d7(_prox.fecha)===1?'mañana':'en '+_d7(_prox.fecha)+' días') : 'sin descargas pendientes') + '</span></div>'
         + (_enPuerto.length ? '<div class="rm-k rm-k-w"><b>' + _esc2(_enPuerto.join(', ')) + '</b><span>en puerto ahora</span></div>' : '')
         + (Object.keys(_porTerm).length ? '<div class="rm-k rm-k-w"><b>' + Object.keys(_porTerm).sort(function(a2,b2){ return _porTerm[b2]-_porTerm[a2]; }).slice(0,4).map(function(t){ return _esc2(t) + ' ' + _porTerm[t].toFixed(0); }).join(' · ') + '</b><span>MB que reciben esta semana</span></div>' : '')
-        + '<div class="rm-k rm-k-hint">Clic en un buque: viaje ampliado · botón ⓘ: ficha del viaje actual</div>'
-        + '</div>';
+        + '<div class="rm-k rm-k-hint"><button class="rn-btn" data-rm-vista="planta" style="padding:4px 10px">' + (window._rmVistaPlanta ? '▴ Ocultar vista por planta' : '▾ Ver qué recibe cada planta') + '</button></div>'
+        + '</div>'
+        + (window._rmVistaPlanta ? (function(){
+            // Vista por planta: para cada terminal, sus descargas pendientes ordenadas por fecha
+            var porPl = {};
+            _pend.forEach(function(x){ (porPl[x.terminal] = porPl[x.terminal] || []).push(x); });
+            var RNp = window._rnDetalleProd || null;
+            var plantasOrd = Object.keys(porPl).sort(function(a2,b2){ var fa = porPl[a2].map(function(x){ return x.fecha; }).sort()[0], fb = porPl[b2].map(function(x){ return x.fecha; }).sort()[0]; return fa.localeCompare(fb); });
+            if (!plantasOrd.length) return '<div class="rm-pl-wrap"><div class="rn-vacio">Sin descargas pendientes por planta</div></div>';
+            return '<div class="rm-pl-wrap">' + plantasOrd.map(function(pl) {
+              var lista = porPl[pl].slice().sort(function(a2,b2){ return a2.fecha.localeCompare(b2.fecha); });
+              var tot = lista.reduce(function(a2,x){ return a2 + x.vol; }, 0);
+              var o = RNp && RNp.porPlanta ? RNp.porPlanta[pl] : null;
+              var nivelC = o ? (RNp.nivelCol[o.peor] || 'var(--txt3)') : 'var(--txt3)';
+              var estadoTxt = o ? (o.peor === 'quiebre' ? 'sin stock' : o.peor === 'crit' ? 'crítica · mín ' + o.cobMin + 'd' : o.peor === 'alerta' ? 'alerta · mín ' + o.cobMin + 'd' : 'normal · mín ' + o.cobMin + 'd') : '';
+              var porBuqueFecha = {};
+              lista.forEach(function(x){ var k = x.buque + '|' + x.fecha; (porBuqueFecha[k] = porBuqueFecha[k] || { buque: x.buque, fecha: x.fecha, items: [] }).items.push(x); });
+              var filas = Object.keys(porBuqueFecha).sort(function(a2,b2){ return porBuqueFecha[a2].fecha.localeCompare(porBuqueFecha[b2].fecha); }).map(function(k){ var g = porBuqueFecha[k]; var d = _d7(g.fecha);
+                return '<div class="rm-pl-r"><b class="rm-pl-f">' + _fc(g.fecha) + '</b><span class="rm-pl-c">' + (d<=0?'hoy':d===1?'mañana':'en '+d+' d') + '</span><span class="rm-pl-b" data-ficha-buque="' + _esc2(g.buque) + '" title="Ficha del buque">🚢 ' + _esc2(g.buque) + '</span><span class="rm-pl-p">' + g.items.map(function(x){ return _esc2(_repomarAbrevProd(x.prod)) + ' ' + x.vol.toFixed(1); }).join(' · ') + ' MB</span></div>'; }).join('');
+              return '<div class="rm-pl" style="--c:' + nivelC + '"><div class="rm-pl-h" data-rn="planta" data-planta="' + _esc2(pl) + '" title="Ficha de ' + _esc2(pl) + '"><span class="rn-hm-dot" style="background:' + nivelC + '"></span><b>' + _esc2(pl) + '</b><span class="rm-pl-e">' + estadoTxt + '</span><span class="rm-pl-t">' + tot.toFixed(1) + ' MB en ' + lista.length + ' descarga' + (lista.length>1?'s':'') + '</span></div>' + filas + '</div>';
+            }).join('') + '</div>';
+          })() : '');
     } catch (eStrip) { console.warn('[RepoMar] franja ejecutiva:', eStrip && eStrip.message); }
   }
-  if (!document.getElementById('rm-strip-css')) { var stR = document.createElement('style'); stR.id = 'rm-strip-css'; stR.textContent = '.rm-strip{display:flex;flex-wrap:wrap;gap:8px 18px;align-items:center;margin:10px 22px 4px;padding:9px 14px;background:var(--card);border:1px solid var(--bdr);border-left:4px solid var(--acc);border-radius:10px}.rm-k{display:flex;flex-direction:column;min-width:0}.rm-k b{font:800 16px var(--mono);color:var(--txt);line-height:1.1}.rm-k-w b{font-size:12.5px;font-family:var(--sans)}.rm-k span{font-size:9px;color:var(--txt3);text-transform:uppercase;letter-spacing:.4px;margin-top:2px}.rm-k-hint{margin-left:auto;font-size:9.5px;color:var(--txt3)}.repomar-ficha-btn{position:absolute;top:4px;right:4px;width:18px;height:18px;border-radius:50%;border:1px solid #0071A4;background:#fff;color:#0071A4;font-size:11px;line-height:16px;text-align:center;cursor:pointer;padding:0;z-index:6}.repomar-ficha-btn:hover{background:#0071A4;color:#fff}'; document.head.appendChild(stR); }
+  if (!document.getElementById('rm-strip-css')) { var stR = document.createElement('style'); stR.id = 'rm-strip-css'; stR.textContent = '.rm-strip{display:flex;flex-wrap:wrap;gap:8px 18px;align-items:center;margin:10px 22px 4px;padding:9px 14px;background:var(--card);border:1px solid var(--bdr);border-left:4px solid var(--acc);border-radius:10px}.rm-k{display:flex;flex-direction:column;min-width:0}.rm-k b{font:800 16px var(--mono);color:var(--txt);line-height:1.1}.rm-k-w b{font-size:12.5px;font-family:var(--sans)}.rm-k span{font-size:9px;color:var(--txt3);text-transform:uppercase;letter-spacing:.4px;margin-top:2px}.rm-k-hint{margin-left:auto;font-size:9.5px;color:var(--txt3)}.repomar-ficha-btn{position:absolute;top:4px;right:4px;width:18px;height:18px;border-radius:50%;border:1px solid #0071A4;background:#fff;color:#0071A4;font-size:11px;line-height:16px;text-align:center;cursor:pointer;padding:0;z-index:6}.repomar-ficha-btn:hover{background:#0071A4;color:#fff}.rm-pl-wrap{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:9px;margin:4px 22px 10px}.rm-pl{background:var(--card);border:1px solid var(--bdr);border-left:4px solid var(--c);border-radius:10px;padding:8px 11px}.rm-pl-h{display:flex;align-items:center;gap:7px;cursor:pointer;padding-bottom:6px;border-bottom:1px solid var(--bdr);margin-bottom:5px}.rm-pl-h b{font-size:12px;color:var(--txt)}.rm-pl-h:hover b{text-decoration:underline}.rm-pl-e{font-size:9.5px;color:var(--c);font-weight:700}.rm-pl-t{margin-left:auto;font:700 10px var(--mono);color:var(--txt2)}.rm-pl-r{display:flex;align-items:center;gap:8px;font-size:10.5px;padding:3px 0;color:var(--txt2)}.rm-pl-f{font:800 11px var(--mono);color:var(--txt);min-width:38px}.rm-pl-c{font-size:9px;color:var(--txt3);min-width:46px}.rm-pl-b{color:var(--acc2);font-weight:700;cursor:pointer}.rm-pl-b:hover{text-decoration:underline}.rm-pl-p{margin-left:auto;font:600 9.5px var(--mono);color:var(--txt2);text-align:right}'; document.head.appendChild(stR); }
   host.innerHTML =
     '<div class="repomar-wrap">' +
       // ⚠️ AGREGADO — a pedido: aviso para girar el celular a horizontal
