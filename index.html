@@ -6012,7 +6012,7 @@ function renderPResumen() {
   var trkPend = trk ? trk.filter(function(t){ return !(t.estado === 'Reportado' || t.estado === 'Validado'); }).map(function(t){ return _segDLabel(t.planta || ''); }) : [];
 
   // Detalle por producto para el modal explicativo (ver _rnAbrirProducto)
-  window._rnDetalleProd = { celda: celda, porProd: porProd, llegadas: Object.keys(llegadas).map(function(k){ return llegadas[k]; }), nivelCol: NIVEL_COL, corto: PROD_CORTO, hoy: hoyISO, btCache: !!btCache };
+  window._rnDetalleProd = { celda: celda, porProd: porProd, porPlanta: porPlantaRN, llegadas: Object.keys(llegadas).map(function(k){ return llegadas[k]; }), nivelCol: NIVEL_COL, corto: PROD_CORTO, hoy: hoyISO, btCache: !!btCache, recs: recsRN, tracking: trk, prods: PRODS_RN };
   var spk14 = sparkline(fechas.slice(-14), RAW);
   function pct(n) { return totalPos ? Math.round(n / totalPos * 100) : 0; }
   function esc(t) { return String(t == null ? '' : t).replace(/[&<>"]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
@@ -6148,6 +6148,7 @@ function renderPResumen() {
   if (!el._rnBound) {
     el._rnBound = true;
     el.addEventListener('click', function(ev) {
+      if (ev.target.id === 'rn-modal') { _rnCerrarModal(); return; } // clic en el fondo oscuro
       var t = ev.target.closest('[data-rn]');
       if (!t) return;
       var tipo = t.getAttribute('data-rn');
@@ -6157,7 +6158,9 @@ function renderPResumen() {
       };
       if (tipo === 'refrescar') { renderPResumen(); return; }
       if (tipo === 'ir') { irA(t.getAttribute('data-pid')); return; }
-      if (tipo === 'planta') { var pl = t.getAttribute('data-planta'); irA('pC', function(){ window._filtroProd = null; window._filtroPlanta = pl; rerenderActivePage(); }); return; }
+      if (tipo === 'planta') { _rnAbrirPlanta(t.getAttribute('data-planta')); return; }
+      if (tipo === 'planta-cob') { _rnCerrarModal(); var pl3 = t.getAttribute('data-planta'); irA('pC', function(){ window._filtroProd = null; window._filtroPlanta = pl3; rerenderActivePage(); }); return; }
+      if (tipo === 'planta-prod') { _rnAbrirProducto(t.getAttribute('data-prod')); return; }
       if (tipo === 'prod') { _rnAbrirProducto(t.getAttribute('data-prod')); return; }
       if (tipo === 'prod-cob') { _rnCerrarModal(); var pr2 = t.getAttribute('data-prod'); irA('pC', function(){ window._filtroPlanta = null; window._filtroProd = pr2; rerenderActivePage(); }); return; }
       if (tipo === 'prod-planta') { _rnCerrarModal(); var pl2 = t.getAttribute('data-planta'); irA('pC', function(){ window._filtroProd = null; window._filtroPlanta = pl2; rerenderActivePage(); }); return; }
@@ -6209,7 +6212,11 @@ function _rnAbrirProducto(pr) {
     ? lleg.map(function(l){ return '<div class="rn-m-lleg"><b>' + fechaCorta(l.fecha) + '</b> 🚢 ' + esc(l.buque) + ' → ' + esc(l.terminal) + ' <span>' + l.prods[abrevPr].toFixed(1) + ' MB</span></div>'; }).join('')
     : '<div class="rn-m-nota">' + (D.btCache ? 'Sin descargas de ' + D.corto[pr] + ' programadas por mar.' : 'Cargando reposiciones…') + '</div>';
   var nQ = o.quiebre.length, nC = o.riesgo.length;
-  var html = '<div id="rn-modal" class="rn-modal" data-rn="cerrar-modal"><div class="rn-m" style="--c:' + NC[nivelP] + '" onclick="event.stopPropagation()">'
+  // ⚠️ CORREGIDO — los botones del modal no respondían: el contenedor
+  // interno cortaba la propagación del clic (stopPropagation) y el
+  // manejador delegado del Resumen nunca recibía el evento. Ahora el
+  // fondo solo cierra si el clic cae directamente sobre él.
+  var html = '<div id="rn-modal" class="rn-modal"><div class="rn-m" style="--c:' + NC[nivelP] + '">'
     + '<div class="rn-m-head"><div><div class="rn-m-sup">Cobertura nacional</div><div class="rn-m-t">' + esc(pr) + '</div></div>'
     +   '<div class="rn-m-big">' + (o.vf > 0 ? cobP : '—') + '<small>días</small></div>'
     +   '<button class="rn-m-x" data-rn="cerrar-modal" title="Cerrar">✕</button></div>'
@@ -6224,6 +6231,65 @@ function _rnAbrirProducto(pr) {
     +   '<div class="rn-m-sec"><div class="rn-sec-t">Reposición en camino <span>' + (lleg.length ? lleg.length + ' descargas · ' + mbLleg.toFixed(1) + ' MB' : '') + '</span></div>' + llegHtml + '</div>'
     + '</div>'
     + '<div class="rn-m-foot"><button class="rn-btn" data-rn="cerrar-modal">Cerrar</button><button class="rn-btn rn-btn-acc" data-rn="prod-cob" data-prod="' + esc(pr) + '">Ver en Coberturas →</button></div>'
+    + '</div></div>';
+  _rnCerrarModal();
+  var cont = document.getElementById('pResumen-content') || document.body;
+  cont.insertAdjacentHTML('beforeend', html);
+  document.addEventListener('keydown', _rnEscModal);
+}
+// ⚠️ AGREGADO — a pedido: al tocar una planta en el mapa de calor se
+// abre su ficha (estado, productos, reposición en camino, acciones
+// recomendadas y reporte del día) en vez de saltar a otra pantalla.
+function _rnAbrirPlanta(pl) {
+  var D = window._rnDetalleProd; if (!D) return;
+  var NC = D.nivelCol, o = D.porPlanta[pl];
+  var esc = function(t) { return String(t == null ? '' : t).replace(/[&<>"]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); };
+  var peor = o ? o.peor : 'nd';
+  var nombresNivel = { quiebre: 'SIN STOCK', crit: 'CRÍTICO', alerta: 'EN ALERTA', ok: 'NORMAL', nd: 'SIN DATO' };
+  var prods = D.prods.map(function(pr){ var c = D.celda[pl + '|' + pr]; return c ? { prod: pr, c: c } : null; }).filter(Boolean)
+    .sort(function(a, b){ var ra = { quiebre: 0, crit: 1, alerta: 2, ok: 3, nd: 4 }; return (ra[a.c.nivel] - ra[b.c.nivel]) || (a.c.cob - b.c.cob); });
+  var peorProd = prods[0];
+  var lectura = !prods.length ? 'Sin datos reportados para esta planta.'
+    : peor === 'quiebre' ? esc(pl) + ' está sin stock de ' + prods.filter(function(x){ return x.c.nivel === 'quiebre'; }).map(function(x){ return D.corto[x.prod]; }).join(' y ') + '. Requiere reposición inmediata.'
+    : peor === 'crit' ? 'El producto más ajustado de ' + esc(pl) + ' es ' + D.corto[peorProd.prod] + ', con ' + peorProd.c.cob + ' días de cobertura. Es crítico.'
+    : peor === 'alerta' ? esc(pl) + ' está en alerta: ' + D.corto[peorProd.prod] + ' tiene ' + peorProd.c.cob + ' días de cobertura. Conviene confirmar su reposición.'
+    : esc(pl) + ' tiene cobertura suficiente en todos sus productos (mínima: ' + D.corto[peorProd.prod] + ', ' + (peorProd.c.cob >= 999 ? '99+' : peorProd.c.cob) + ' días).';
+  var maxCob = 30;
+  var filasHtml = prods.map(function(x) {
+    var c = x.c, ancho = c.nivel === 'nd' ? 0 : Math.min(100, Math.round((c.cob >= 999 ? maxCob : c.cob) / maxCob * 100));
+    return '<div class="rn-m-fila" data-rn="planta-prod" data-prod="' + esc(x.prod) + '" title="Ver ' + esc(x.prod) + ' a nivel nacional">'
+      + '<div class="rn-m-pl"><span class="rn-hm-dot" style="background:' + NC[c.nivel] + '"></span>' + esc(x.prod) + (c.minima ? ' <span class="rn-hm-min">EM</span>' : '') + '</div>'
+      + '<div class="rn-m-bar"><span style="width:' + ancho + '%;background:' + NC[c.nivel] + '"></span></div>'
+      + '<div class="rn-m-cob" style="color:' + NC[c.nivel] + '">' + (c.nivel === 'quiebre' ? '⛔' : c.nivel === 'nd' ? '—' : (c.cob >= 999 ? '99+' : c.cob) + 'd') + '</div>'
+      + '<div class="rn-m-inv">' + c.inv.toFixed(DEC) + ' MB</div>'
+      + '<div class="rn-m-vf">' + (c.vf > 0 ? c.vf.toFixed(DEC) + ' MB/d' : '—') + '</div>'
+      + '</div>';
+  }).join('');
+  var fechaCorta = function(f) { var p2 = f.slice(0, 10).split('-'); return p2[2] + '/' + p2[1]; };
+  var plN = pl.toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+  var lleg = D.llegadas.filter(function(l){ return l.terminal.toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g, '') === plN; }).sort(function(a, b){ return a.fecha.localeCompare(b.fecha); });
+  var llegHtml = lleg.length
+    ? lleg.map(function(l){ return '<div class="rn-m-lleg"><b>' + fechaCorta(l.fecha) + '</b> 🚢 ' + esc(l.buque) + (/DESCARG/i.test(l.estado) ? ' · descargando' : '') + ' <span>' + Object.keys(l.prods).map(function(ab){ return esc(ab) + ' ' + l.prods[ab].toFixed(1); }).join(' · ') + ' MB</span></div>'; }).join('')
+    : '<div class="rn-m-nota">' + (D.btCache ? 'Sin descargas por mar programadas para ' + esc(pl) + '.' : 'Cargando reposiciones…') + '</div>';
+  var recs = (D.recs || []).filter(function(r){ return (r.titulo || '').indexOf(pl) !== -1; });
+  var sevCfg = { urgente: { col: 'var(--red)', lbl: 'URGENTE' }, alta: { col: 'var(--ora)', lbl: 'ALTA' }, media: { col: 'var(--yel)', lbl: 'MEDIA' } };
+  var recsHtml = recs.length ? '<div class="rn-recs">' + recs.map(function(rc){ var sc = sevCfg[rc.sev] || sevCfg.media;
+      return '<div class="rn-rec" style="--c:' + sc.col + '"><div class="rn-rec-h"><span class="rn-rec-sev">' + sc.lbl + '</span><span class="rn-rec-t">' + rc.titulo + '</span></div><div class="rn-rec-d">' + rc.detalle + '</div><div class="rn-rec-a">→ ' + rc.accion + '</div></div>'; }).join('') + '</div>'
+    : '<div class="rn-m-nota">✅ Sin acciones recomendadas para esta planta.</div>';
+  var trkFila = (D.tracking || []).filter(function(t){ return _segDLabel(t.planta || '') === pl; })[0];
+  var repHoy = !D.tracking ? '' : trkFila ? (trkFila.estado === 'Reportado' || trkFila.estado === 'Validado' ? '<span style="color:var(--grn);font-weight:700">✓ Reportó hoy</span>' : '<span style="color:var(--yel);font-weight:700">⏳ Aún no reporta hoy</span>') : '';
+  var html = '<div id="rn-modal" class="rn-modal"><div class="rn-m" style="--c:' + NC[peor] + '">'
+    + '<div class="rn-m-head"><div><div class="rn-m-sup">Planta · ' + (repHoy || 'situación actual') + '</div><div class="rn-m-t">' + esc(pl) + '</div></div>'
+    +   '<div class="rn-m-badge" style="--c:' + NC[peor] + '">' + nombresNivel[peor] + '</div>'
+    +   '<button class="rn-m-x" data-rn="cerrar-modal" title="Cerrar">✕</button></div>'
+    + '<div class="rn-m-body">'
+    +   '<div class="rn-m-lectura">' + lectura + '</div>'
+    +   '<div class="rn-m-sec"><div class="rn-sec-t">Productos <span>' + prods.length + ' · peor primero · clic abre el producto a nivel nacional</span></div>'
+    +     '<div class="rn-m-filas"><div class="rn-m-fila rn-m-fila-h"><div>Producto</div><div>Cobertura</div><div></div><div>Inventario</div><div>Venta/día</div></div>' + filasHtml + '</div></div>'
+    +   '<div class="rn-m-sec"><div class="rn-sec-t">Reposición en camino <span>' + (lleg.length ? lleg.length + ' descarga' + (lleg.length > 1 ? 's' : '') : '') + '</span></div>' + llegHtml + '</div>'
+    +   '<div class="rn-m-sec"><div class="rn-sec-t">Acciones recomendadas <span>Centro de Decisiones</span></div>' + recsHtml + '</div>'
+    + '</div>'
+    + '<div class="rn-m-foot"><button class="rn-btn" data-rn="cerrar-modal">Cerrar</button><button class="rn-btn rn-btn-acc" data-rn="planta-cob" data-planta="' + esc(pl) + '">Ver en Coberturas →</button></div>'
     + '</div></div>';
   _rnCerrarModal();
   var cont = document.getElementById('pResumen-content') || document.body;
@@ -6306,6 +6372,7 @@ function _rnEstilos() {
     '.rn-m-head{display:flex;align-items:center;gap:14px;padding:16px 18px;border-bottom:1px solid var(--bdr);border-top:4px solid var(--c)}',
     '.rn-m-sup{font-size:9.5px;font-weight:800;color:var(--txt3);text-transform:uppercase;letter-spacing:.8px}.rn-m-t{font-size:18px;font-weight:800;color:var(--txt)}',
     '.rn-m-big{margin-left:auto;font-size:34px;font-weight:800;font-family:var(--mono);color:var(--c);line-height:1;display:flex;align-items:baseline;gap:5px}.rn-m-big small{font-size:10px;color:var(--txt3);font-family:var(--sans)}',
+    '.rn-m-badge{margin-left:auto;font-size:10px;font-weight:800;letter-spacing:.6px;color:#fff;background:var(--c);padding:5px 11px;border-radius:8px;white-space:nowrap}',
     '.rn-m-x{background:none;border:1px solid var(--bdr);color:var(--txt2);border-radius:7px;width:28px;height:28px;cursor:pointer;font-size:12px}',
     '.rn-m-body{overflow:auto;padding:4px 18px 10px}',
     '.rn-m-lectura{font-size:13px;color:var(--txt);line-height:1.45;padding:12px 0 6px;font-weight:600}',
