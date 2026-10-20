@@ -17683,6 +17683,14 @@ function _mapaBaseResiliente(map, opciones) {
   // Si en las últimas 24 h ningún servidor externo respondió (bloqueo CSP
   // del sitio o firewall), no se vuelve a intentar: el mapa integrado ya
   // es el fondo completo, y así no se llena la consola de errores.
+  // ⚠️ CORREGIDO (19-oct, consola real del panel): la CSP del sitio en
+  // Vercel bloquea SIEMPRE las imágenes de servidores de mapas externos
+  // (img-src/connect-src con lista cerrada) — intentarlo solo genera
+  // decenas de errores en consola (y en sw.js) sin ningún beneficio.
+  // Por defecto ya NO se intenta: el mapa integrado es el fondo. Si algún
+  // día se agregan esos dominios a la CSP de vercel.json, basta poner
+  // window.MAPA_USAR_SERVIDORES = true para reactivarlos.
+  if (!window.MAPA_USAR_SERVIDORES) return;
   var estado = null;
   try { estado = JSON.parse(localStorage.getItem('mapa_proveedor_estado') || 'null'); } catch (eLS) {}
   if (estado && estado.ok === null && (Date.now() - (estado.ts || 0)) < 86400000) return;
