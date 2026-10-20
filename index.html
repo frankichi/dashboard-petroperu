@@ -5873,114 +5873,367 @@ function renderPResumen() {
   var ultFechas = fechas.slice(-7);
   var spk = sparkline(ultFechas, RAW);
 
-  // ── Render ────────────────────────────────────────────────────────────
-  el.innerHTML =
-    // Header
-    '<div class="page-header" style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;min-width:0;overflow:hidden">' +
-      '<div style="min-width:0">' +
-        '<div class="page-header-title">🏠 Resumen Nacional</div>' +
-        '<div class="page-header-subtitle">Petroperú · ' + PLANTAS_18_OFICIALES.length + ' instalaciones · Datos al ' + fechaUso + '</div>' +
-      '</div>' +
-      '<div style="display:flex;align-items:center;gap:8px;flex-shrink:1;flex-wrap:wrap">' +
-        '<div style="display:flex;align-items:center;gap:7px;padding:6px 14px;border-radius:8px;border:1.5px solid '+semColor+';background:'+semColor+'14;font-size:11px;font-weight:800;color:'+semColor+'">' +
-          '<span>'+semIco+'</span><span>'+semTxt+'</span>' +
-        '</div>' +
-        '<button onclick="renderPResumen()" style="padding:6px 12px;border-radius:6px;border:1px solid var(--bdr);background:var(--bg3);color:var(--txt2);font-size:11px;font-weight:700;cursor:pointer;font-family:var(--sans)">↻ Actualizar</button>' +
-      '</div>' +
-    '</div>' +
-    // KPIs
-    '<div class="kpi-row">' +
-      // Inventario total
-      '<div class="kpi blue" style="position:relative">' +
-        '<div class="kpi-label">Inventario Nacional</div>' +
-        '<div class="kpi-value">' + fmtN(invTotal) + '</div>' +
-        '<div class="kpi-sub">' +
-          '<span style="color:' + (deltaInv>=0 ? 'var(--grn)' : 'var(--red)') + ';font-weight:700">' + (deltaInv>=0?'▲':'▼') + ' ' + Math.abs(deltaInv).toFixed(0) + ' MB</span> vs ayer' +
-        '</div>' +
-        spk +
-      '</div>' +
-      // Cobertura promedio
-      '<div class="kpi ' + (cobProm < CONFIG.COB_RED ? 'red' : cobProm < CONFIG.COB_AMB ? 'amber' : 'green') + '">' +
-        '<div class="kpi-label">Cobertura Promedio</div>' +
-        '<div class="kpi-value" style="color:'+cobClass(cobProm)+'">' + fmtN(cobProm) + 'd</div>' +
-        '<div class="kpi-sub">días promedio nacional</div>' +
-      '</div>' +
-      // Críticas
-      '<div class="kpi ' + (criticas.length > 0 ? 'red' : 'green') + '">' +
-        '<div class="kpi-label">Plantas Críticas</div>' +
-        '<div class="kpi-value" style="color:'+(criticas.length>0?'var(--red)':'var(--grn)')+'">' + criticas.length + '</div>' +
-        '<div class="kpi-sub">cobertura &lt; ' + CONFIG.COB_RED + 'd</div>' +
-      '</div>' +
-      // Advertencias
-      '<div class="kpi ' + (alertas.length > 0 ? 'amber' : 'green') + '">' +
-        '<div class="kpi-label">En Advertencia</div>' +
-        '<div class="kpi-value" style="color:'+(alertas.length>0?'var(--yel)':'var(--grn)')+'">' + alertas.length + '</div>' +
-        '<div class="kpi-sub">cobertura ' + CONFIG.COB_RED + '–' + CONFIG.COB_AMB + 'd</div>' +
-      '</div>' +
-      // Operación normal
-      '<div class="kpi green">' +
-        '<div class="kpi-label">Operación Normal</div>' +
-        '<div class="kpi-value" style="color:var(--grn)">' + ok.length + '</div>' +
-        '<div class="kpi-sub">cobertura &gt; ' + CONFIG.COB_AMB + 'd</div>' +
-      '</div>' +
-    '</div>' +
-    // Tabla de riesgos
-    '<div style="padding:14px 18px 0">' +
-      '<div class="section-head">Plantas por nivel de riesgo (cobertura mínima de sus productos)</div>' +
-      (cobOutliers.length ? (
-        '<div style="display:flex;align-items:center;gap:8px;padding:8px 12px;margin-bottom:10px;border-radius:8px;background:var(--red)0d;border:1px solid var(--red)30;font-size:11px;color:var(--red)">' +
-          '<span>⚠</span><span><b>' + cobOutliers.length + ' dato(s) excluido(s) del promedio</b> por cobertura implausible (&gt;' + COB_SANO_MAX + 'd) — probable error de carga en el E&D: ' +
-          cobOutliers.slice(0,4).map(function(o){ return o.planta + '/' + o.producto; }).join(', ') + (cobOutliers.length>4 ? '…' : '') + '. Revisar la fuente.' +
-        '</span></div>'
-      ) : '') +
-      '<div style="background:var(--card);border:1px solid var(--bdr);border-radius:var(--r);overflow:auto">' +
-        '<table style="width:100%;border-collapse:collapse;font-size:11.5px">' +
-          '<thead><tr>' +
-            '<th style="background:var(--bg3);color:var(--txt3);font-size:8.5px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;padding:8px 12px;border-bottom:1px solid var(--bdr);text-align:left">Planta</th>' +
-            '<th style="background:var(--bg3);color:var(--txt3);font-size:8.5px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;padding:8px 12px;border-bottom:1px solid var(--bdr);text-align:right">Cobertura mín.</th>' +
-            '<th style="background:var(--bg3);color:var(--txt3);font-size:8.5px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;padding:8px 12px;border-bottom:1px solid var(--bdr);text-align:right">Inventario total</th>' +
-            '<th style="background:var(--bg3);color:var(--txt3);font-size:8.5px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;padding:8px 12px;border-bottom:1px solid var(--bdr)">Productos críticos</th>' +
-            '<th style="background:var(--bg3);color:var(--txt3);font-size:8.5px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;padding:8px 12px;border-bottom:1px solid var(--bdr)">Estado</th>' +
-          '</tr></thead><tbody>' +
-          riesgosTop.map(function(p) {
-            var d = porPlanta[p];
-            var cobMin = d.cobMin === 999 ? 0 : d.cobMin;
-            var estClass = cobMin < CONFIG.COB_RED ? 's1' : cobMin < CONFIG.COB_AMB ? 's3' : 's4';
-            var estTxt   = cobMin < CONFIG.COB_RED ? '⛔ Crítico' : cobMin < CONFIG.COB_AMB ? '⚠ Alerta' : '✓ Normal';
-            var prodsCrit = d.prods.filter(function(x){ return x.cob > 0 && x.cob < CONFIG.COB_AMB; })
-              .map(function(x){ return '<span style="font-size:9.5px;padding:1px 7px;border-radius:8px;background:'+(x.cob<CONFIG.COB_RED?'var(--red)':'var(--yel)')+'18;color:'+(x.cob<CONFIG.COB_RED?'var(--red)':'var(--yel)')+';border:1px solid '+(x.cob<CONFIG.COB_RED?'var(--red)':'var(--yel)')+'40;white-space:nowrap">'+x.prod+'</span>'; }).join(' ');
-            return '<tr onclick="showPage(\'pC\', document.querySelector(\'.sb-item[data-pid=pC]\')); setTimeout(function(){window._filtroProd=null;window._filtroPlanta=\''+p+'\';rerenderActivePage();},200)" style="cursor:pointer">' +
-              '<td style="padding:8px 12px;border-bottom:1px solid var(--bdr)33;font-weight:700;color:var(--txt)">' + p + '</td>' +
-              '<td style="padding:8px 12px;border-bottom:1px solid var(--bdr)33;text-align:right;font-family:var(--mono);font-weight:800;font-size:13px;color:'+cobClass(cobMin)+'">' + (cobMin > 0 ? cobMin.toFixed(DEC)+'d' : '—') + '</td>' +
-              '<td style="padding:8px 12px;border-bottom:1px solid var(--bdr)33;text-align:right;font-family:var(--mono);font-size:11px;color:var(--txt2)">' + d.inv.toFixed(DEC) + ' MB</td>' +
-              '<td style="padding:8px 12px;border-bottom:1px solid var(--bdr)33"><div style="display:flex;gap:4px;flex-wrap:wrap;align-items:center;min-height:20px">' + (prodsCrit || '<span style="font-size:9.5px;color:var(--grn)">Todos OK</span>') + '</div></td>' +
-              '<td style="padding:8px 12px;border-bottom:1px solid var(--bdr)33"><span class="sem '+estClass+'">' + estTxt + '</span></td>' +
-            '</tr>';
-          }).join('') +
-          '</tbody></table>' +
-      '</div>' +
-    '</div>' +
-    // Accesos rápidos
-    '<div style="padding:14px 18px 20px">' +
-      '<div class="section-head">Acceso rápido a módulos</div>' +
-      '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px">' +
-        [
-          {pid:'pC',    ico:'📋', lbl:'Coberturas',      sub:'Tabla completa por planta'},
-          {pid:'pTend', ico:'📈', lbl:'Tendencia Inv.',  sub:'Gráfico histórico'},
-          {pid:'pInv',  ico:'📊', lbl:'Inv. Nacional',   sub:'Vista por producto'},
-          {pid:'pR',    ico:'✂️',  lbl:'Restricciones',  sub:'Análisis de restricciones'},
-          {pid:'pB',    ico:'📅', lbl:'Timeline BT',     sub:'Buques en ruta'},
-          {pid:'pA',    ico:'🗺️', lbl:'Mapa Plantas',   sub:'Distribución nacional'},
-          {pid:'pSegD', ico:'📡', lbl:'Seg. Diario',     sub:'Quién reportó hoy'},
-          {pid:'pDec',  ico:'🎯', lbl:'Decisiones',      sub:'Centro operacional'},
-        ].map(function(m) {
-          return '<button onclick="showPage(\''+m.pid+'\',document.querySelector(\'.sb-item[data-pid=\\\''+m.pid+'\\\']\'))" style="display:flex;align-items:center;gap:10px;padding:11px 14px;background:var(--card);border:1px solid var(--bdr);border-radius:var(--r);cursor:pointer;text-align:left;transition:border-color .15s;font-family:var(--sans)" onmouseover="this.style.borderColor=\'var(--acc)\'" onmouseout="this.style.borderColor=\'var(--bdr)\'">' +
-            '<span style="font-size:18px;flex-shrink:0">' + m.ico + '</span>' +
-            '<span style="min-width:0"><div style="font-size:12px;font-weight:700;color:var(--txt)">' + m.lbl + '</div><div style="font-size:9.5px;color:var(--txt3);margin-top:1px">' + m.sub + '</div></span>' +
-          '</button>';
-        }).join('') +
-      '</div>' +
-    '</div>';
+  // ═══════════════════════════════════════════════════════════════════
+  // ⚠️ REDISEÑADO — a pedido (20-oct): "Resumen Nacional" pasa de 5
+  // tarjetas + una tabla a un resumen EJECUTIVO de una sola pantalla,
+  // ordenado de lo más urgente a lo más detallado:
+  //   1. Estado nacional + 4 indicadores clave (inventario, cobertura,
+  //      plantas en riesgo, reposición en ruta) + reporte del día.
+  //   2. Cobertura nacional POR PRODUCTO (¿cuántos días de Diesel tiene
+  //      el país?) — antes no existía en ningún resumen.
+  //   3. Mapa de calor Planta × Producto (toda la situación de un vistazo,
+  //      clic en una celda lleva a Coberturas de esa planta).
+  //   4. "Requiere atención hoy": las recomendaciones del Centro de
+  //      Decisiones (misma función decBuildRecs, sin duplicar lógica).
+  //   5. Próximas llegadas de buques (misma fuente que RepoMar) y
+  //      barcazas fluviales en tránsito.
+  // Todo reutiliza cálculos ya validados del panel: cobSystemDays
+  // (fórmula canónica), byLatest(), decBuildRecs(), parseClosedPorts(),
+  // window._repomarBTMapCompletoCache y window._fluvialBarges.
+  // ═══════════════════════════════════════════════════════════════════
+  _rnEstilos();
+  var hoyISO = currentDate || new Date().toISOString().slice(0, 10);
+  var PRODS_RN = ['Diesel', 'G. Regular', 'G. Premium', 'G. 84', 'TA1', 'GLP'];
+  var PROD_CORTO = { 'Diesel': 'Diesel', 'G. Regular': 'Regular', 'G. Premium': 'Premium', 'G. 84': 'G. 84', 'TA1': 'Turbo A1', 'GLP': 'GLP' };
+  var COSTA = ['Talara','Piura','Eten','Salaverry','Chimbote','Supe','Callao','Conchán','Pisco','Mollendo','Ilo'];
+  var INTERIOR = ['Juliaca','Cusco','Iquitos','Pucallpa','Tarapoto','Yurimaguas','El Milagro'];
+
+  // ── Posiciones planta×producto con la cobertura canónica ───────────
+  var hoyFilas = [];
+  try { hoyFilas = byLatest(); } catch (eBL) { hoyFilas = []; }
+  var celda = {}; // 'planta|producto' -> {cob, inv, vf, quiebre, minima, fila}
+  hoyFilas.forEach(function(r) {
+    if (!r || !r.planta || !r.producto) return;
+    var pn = normProd(r.producto);
+    if (PRODS_RN.indexOf(pn) === -1) return;
+    if (PLANTAS_18_OFICIALES.indexOf(r.planta) === -1) return;
+    if (SKIP_COMBOS.has(r.planta + '|' + r.producto)) return;
+    var catalogo = PRODUCTOS_POR_PLANTA_EXEC[r.planta];
+    if (catalogo && catalogo.indexOf(pn) === -1 && catalogo.indexOf(r.producto) === -1) return;
+    var inv = r.inv || 0;
+    var cob = cobSystemDays(r);
+    var vf = (typeof cobGetVfact === 'function') ? cobGetVfact(r) : ((r.vfact || 0) > 0 ? r.vfact : pronDiarioAprobado(r));
+    var k = r.planta + '|' + pn;
+    if (celda[k] && celda[k].fila.fecha > (r.fecha || '')) return;
+    celda[k] = { cob: cob, inv: inv, vf: vf || 0, quiebre: inv <= 0 && !r._synthetic, sinDato: !!r._synthetic, minima: !!r.existencia_minima, fila: r };
+  });
+  function nivel(c, q, sd) {
+    if (sd) return 'nd';
+    if (q || c <= 0) return 'quiebre';
+    if (c < CONFIG.COB_RED) return 'crit';
+    if (c < CONFIG.COB_AMB) return 'alerta';
+    return 'ok';
+  }
+  var NIVEL_COL = { quiebre: '#b91c1c', crit: 'var(--red)', alerta: 'var(--yel)', ok: 'var(--grn)', nd: 'var(--txt3)' };
+  var conteo = { quiebre: 0, crit: 0, alerta: 0, ok: 0 };
+  var porPlantaRN = {}; // planta -> {cobMin, nivelPeor, prods:[]}
+  Object.keys(celda).forEach(function(k) {
+    var c = celda[k], pl = k.split('|')[0], pr = k.split('|')[1];
+    var nv = nivel(c.cob, c.quiebre, c.sinDato);
+    c.nivel = nv;
+    if (nv !== 'nd') conteo[nv]++;
+    if (!porPlantaRN[pl]) porPlantaRN[pl] = { cobMin: 999, peor: 'ok', prods: [] };
+    var o = porPlantaRN[pl];
+    o.prods.push({ prod: pr, cob: c.cob, nivel: nv });
+    var rango = { quiebre: 0, crit: 1, alerta: 2, ok: 3, nd: 4 };
+    if (rango[nv] < rango[o.peor]) o.peor = nv;
+    if (nv !== 'nd' && nv !== 'quiebre' && c.cob < o.cobMin) o.cobMin = c.cob;
+    if (nv === 'quiebre') o.cobMin = 0;
+  });
+  var plantasQuiebre = Object.keys(porPlantaRN).filter(function(p){ return porPlantaRN[p].peor === 'quiebre'; });
+  var plantasCrit = Object.keys(porPlantaRN).filter(function(p){ return porPlantaRN[p].peor === 'crit'; });
+  var plantasAlerta = Object.keys(porPlantaRN).filter(function(p){ return porPlantaRN[p].peor === 'alerta'; });
+  var plantasOk = Object.keys(porPlantaRN).filter(function(p){ return porPlantaRN[p].peor === 'ok'; });
+  var totalPos = conteo.quiebre + conteo.crit + conteo.alerta + conteo.ok;
+
+  // ── Cobertura nacional por producto (18 plantas de venta) ──────────
+  var porProd = {};
+  PRODS_RN.forEach(function(pr){ porProd[pr] = { inv: 0, vf: 0, n: 0, riesgo: [], quiebre: [] }; });
+  Object.keys(celda).forEach(function(k) {
+    var c = celda[k], pl = k.split('|')[0], pr = k.split('|')[1];
+    if (c.sinDato) return;
+    var o = porProd[pr];
+    if (invFilaValida(c.fila)) o.inv += c.inv;
+    o.vf += c.vf; o.n++;
+    if (c.nivel === 'quiebre') o.quiebre.push(pl);
+    else if (c.nivel === 'crit') o.riesgo.push(pl);
+  });
+
+  // ── Semáforo nacional ──────────────────────────────────────────────
+  var semNivel = plantasQuiebre.length ? 'quiebre' : plantasCrit.length ? 'crit' : plantasAlerta.length ? 'alerta' : 'ok';
+  var semCol = NIVEL_COL[semNivel];
+  var semTxt = { quiebre: 'QUIEBRE DE STOCK', crit: 'RIESGO CRÍTICO', alerta: 'EN ADVERTENCIA', ok: 'OPERACIÓN NORMAL' }[semNivel];
+  var semFrase = plantasQuiebre.length
+    ? plantasQuiebre.length + ' planta' + (plantasQuiebre.length > 1 ? 's' : '') + ' sin stock (' + plantasQuiebre.slice(0, 3).join(', ') + (plantasQuiebre.length > 3 ? '…' : '') + ')'
+    : plantasCrit.length
+      ? plantasCrit.length + ' planta' + (plantasCrit.length > 1 ? 's' : '') + ' con menos de ' + CONFIG.COB_RED + ' días de cobertura'
+      : plantasAlerta.length ? plantasAlerta.length + ' planta' + (plantasAlerta.length > 1 ? 's' : '') + ' en advertencia, ninguna crítica' : 'Todas las plantas con cobertura suficiente';
+
+  // ── Reposición en ruta (misma fuente que RepoMar) ──────────────────
+  var btCache = Array.isArray(window._repomarBTMapCompletoCache) ? window._repomarBTMapCompletoCache : null;
+  if (!btCache && typeof _repomarFetchBTMapCompleto === 'function') _repomarFetchBTMapCompleto();
+  var llegadas = {}; // buque|terminal|fecha -> {buque, terminal, fecha, prods:{}, estado}
+  var buquesActivos = {}, mbEnRuta = 0;
+  (btCache || []).forEach(function(n) {
+    if (!n || !n.buque || n.estado === 'COMPLETADO') return;
+    var f = (n.fecha_hasta || '').slice(0, 10);
+    if (!f || f < hoyISO) return;
+    var term = (n.terminal || '').trim();
+    if (!term || term.toUpperCase() === 'TALARA') return;
+    buquesActivos[n.buque.toUpperCase()] = true;
+    mbEnRuta += (n.vol || 0);
+    var k = n.buque.toUpperCase() + '|' + term.toUpperCase() + '|' + f;
+    if (!llegadas[k]) llegadas[k] = { buque: n.buque, terminal: term, fecha: f, prods: {}, estado: n.estado || '' };
+    var ab = _repomarAbrevProd(n.producto || '');
+    llegadas[k].prods[ab] = (llegadas[k].prods[ab] || 0) + (n.vol || 0);
+  });
+  var listaLlegadas = Object.keys(llegadas).map(function(k){ return llegadas[k]; }).sort(function(a, b){ return a.fecha.localeCompare(b.fecha) || a.buque.localeCompare(b.buque); });
+  var nBuques = Object.keys(buquesActivos).length;
+  var proxima = listaLlegadas[0] || null;
+  function diasHasta(f) { return Math.round((new Date(f + 'T12:00:00') - new Date(hoyISO + 'T12:00:00')) / 86400000); }
+  function fechaCorta(f) { if (!f) return '—'; var p = f.slice(0, 10).split('-'); return p[2] + '/' + p[1]; }
+  var barcazasNav = Array.isArray(window._fluvialBarges) ? window._fluvialBarges.length : 0;
+  var barcazasCarg = Array.isArray(window._fluvialBarges) ? window._fluvialBarges.filter(function(b){ return b.cargado === true; }).length : 0;
+  var barcazasDisp = Array.isArray(window._fluvialBargesDisponibles) ? window._fluvialBargesDisponibles.length : 0;
+
+  // ── Recomendaciones (Centro de Decisiones) ─────────────────────────
+  var recsRN = [];
+  try { recsRN = decBuildRecs(); } catch (eRecs) { recsRN = []; }
+  var ordenSev = { urgente: 0, alta: 1, media: 2 };
+  recsRN.sort(function(a, b){ return (a.sev in ordenSev ? ordenSev[a.sev] : 9) - (b.sev in ordenSev ? ordenSev[b.sev] : 9); });
+  var nUrgentes = recsRN.filter(function(r){ return r.sev === 'urgente'; }).length;
+
+  // ── Puertos cerrados y reporte del día ─────────────────────────────
+  var puertosCerrados = [];
+  try { puertosCerrados = (typeof parseClosedPorts === 'function') ? parseClosedPorts() : []; } catch (ePC) {}
+  var trk = window._segDTrackingHoy || null;
+  var trkRep = trk ? trk.filter(function(t){ return t.estado === 'Reportado' || t.estado === 'Validado'; }).length : null;
+  var trkTot = trk ? trk.length : null;
+  var trkPend = trk ? trk.filter(function(t){ return !(t.estado === 'Reportado' || t.estado === 'Validado'); }).map(function(t){ return _segDLabel(t.planta || ''); }) : [];
+
+  var spk14 = sparkline(fechas.slice(-14), RAW);
+  function pct(n) { return totalPos ? Math.round(n / totalPos * 100) : 0; }
+  function esc(t) { return String(t == null ? '' : t).replace(/[&<>"]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
+  var sevCfgRN = { urgente: { col: 'var(--red)', lbl: 'URGENTE' }, alta: { col: 'var(--ora)', lbl: 'ALTA' }, media: { col: 'var(--yel)', lbl: 'MEDIA' } };
+
+  // ── Render ─────────────────────────────────────────────────────────
+  var h = '';
+  // 1. Encabezado
+  h += '<div class="page-header rn-head">'
+    + '<div><div class="page-header-title">🏠 Resumen Nacional</div>'
+    + '<div class="page-header-subtitle">Petroperú · ' + PLANTAS_18_OFICIALES.length + ' plantas de venta · Datos al ' + fmtDate(fechaUso) + (fechaUso !== hoyISO ? ' (proyectado al ' + fmtDate(hoyISO) + ')' : '') + '</div></div>'
+    + '<div class="rn-head-acc"><button class="rn-btn" data-rn="refrescar">↻ Actualizar</button></div>'
+    + '</div>';
+
+  // 2. Franja ejecutiva: estado + indicadores
+  h += '<div class="rn-hero">'
+    + '<div class="rn-estado" style="--sem:' + semCol + '">'
+    +   '<div class="rn-estado-lbl">Estado nacional</div>'
+    +   '<div class="rn-estado-txt">' + semTxt + '</div>'
+    +   '<div class="rn-estado-sub">' + esc(semFrase) + '</div>'
+    +   '<div class="rn-dist" title="Posiciones planta × producto">'
+    +     (conteo.quiebre ? '<span style="flex:' + conteo.quiebre + ';background:' + NIVEL_COL.quiebre + '"></span>' : '')
+    +     (conteo.crit ? '<span style="flex:' + conteo.crit + ';background:' + NIVEL_COL.crit + '"></span>' : '')
+    +     (conteo.alerta ? '<span style="flex:' + conteo.alerta + ';background:' + NIVEL_COL.alerta + '"></span>' : '')
+    +     (conteo.ok ? '<span style="flex:' + conteo.ok + ';background:' + NIVEL_COL.ok + '"></span>' : '')
+    +   '</div>'
+    +   '<div class="rn-dist-leg">'
+    +     '<b style="color:' + NIVEL_COL.quiebre + '">' + conteo.quiebre + '</b> quiebre · <b style="color:' + NIVEL_COL.crit + '">' + conteo.crit + '</b> críticas · <b style="color:' + NIVEL_COL.alerta + '">' + conteo.alerta + '</b> alerta · <b style="color:' + NIVEL_COL.ok + '">' + conteo.ok + '</b> normales'
+    +     '<span class="rn-dist-n">' + totalPos + ' posiciones</span>'
+    +   '</div>'
+    + '</div>'
+    + '<div class="rn-kpis">'
+    +   '<div class="rn-kpi"><div class="rn-kpi-lbl">Inventario nacional</div><div class="rn-kpi-val">' + fmtN(invTotal) + '<small>MB</small></div>'
+    +     '<div class="rn-kpi-sub"><span style="color:' + (deltaInv >= 0 ? 'var(--grn)' : 'var(--red)') + ';font-weight:700">' + (deltaInv >= 0 ? '▲' : '▼') + ' ' + Math.abs(deltaInv).toFixed(0) + ' MB</span> vs día anterior</div>' + (spk14 ? '<div class="rn-spk">' + spk14 + '<span>14 días</span></div>' : '') + '</div>'
+    +   '<div class="rn-kpi"><div class="rn-kpi-lbl">Cobertura promedio</div><div class="rn-kpi-val" style="color:' + cobClass(cobProm) + '">' + fmtN(cobProm) + '<small>días</small></div>'
+    +     '<div class="rn-kpi-sub">' + (riesgosTop.length ? 'Mínima: <b>' + esc(riesgosTop[0]) + '</b> ' + (porPlanta[riesgosTop[0]].cobMin === 999 ? '—' : porPlanta[riesgosTop[0]].cobMin.toFixed(DEC) + 'd') : '—') + '</div></div>'
+    +   '<div class="rn-kpi"><div class="rn-kpi-lbl">Plantas en riesgo</div><div class="rn-kpi-val" style="color:' + ((plantasQuiebre.length + plantasCrit.length) ? 'var(--red)' : 'var(--grn)') + '">' + (plantasQuiebre.length + plantasCrit.length) + '<small>de ' + Object.keys(porPlantaRN).length + '</small></div>'
+    +     '<div class="rn-kpi-sub">' + plantasQuiebre.length + ' sin stock · ' + plantasCrit.length + ' críticas · ' + plantasAlerta.length + ' en alerta</div></div>'
+    +   '<div class="rn-kpi"><div class="rn-kpi-lbl">Reposición en ruta</div><div class="rn-kpi-val">' + (btCache ? nBuques : '…') + '<small>buque' + (nBuques === 1 ? '' : 's') + '</small></div>'
+    +     '<div class="rn-kpi-sub">' + (btCache ? (mbEnRuta.toFixed(0) + ' MB · ' + (proxima ? 'próx. ' + esc(proxima.terminal) + ' ' + fechaCorta(proxima.fecha) : 'sin llegadas programadas')) : 'cargando…') + '</div></div>'
+    +   '<div class="rn-kpi" id="rn-kpi-reporte"><div class="rn-kpi-lbl">Reporte de hoy</div><div class="rn-kpi-val" style="color:' + (trkTot === null ? 'var(--txt2)' : (trkRep === trkTot ? 'var(--grn)' : 'var(--yel)')) + '">' + (trkTot === null ? '…' : trkRep) + '<small>' + (trkTot === null ? '' : 'de ' + trkTot + ' plantas') + '</small></div>'
+    +     '<div class="rn-kpi-sub">' + (trkTot === null ? 'consultando…' : (trkPend.length ? 'Faltan: ' + esc(trkPend.slice(0, 3).join(', ')) + (trkPend.length > 3 ? ' +' + (trkPend.length - 3) : '') : 'Todas reportaron ✓')) + '</div></div>'
+    + '</div>'
+    + '</div>';
+
+  // Avisos operativos (puertos cerrados, datos excluidos)
+  var avisos = '';
+  if (puertosCerrados.length) avisos += '<div class="rn-aviso rn-aviso-red">⚓ <b>Puerto' + (puertosCerrados.length > 1 ? 's' : '') + ' cerrado' + (puertosCerrados.length > 1 ? 's' : '') + ':</b> ' + esc(puertosCerrados.join(', ')) + ' — las descargas por mar ahí quedan en espera</div>';
+  if (cobOutliers.length) avisos += '<div class="rn-aviso rn-aviso-yel">⚠ <b>' + cobOutliers.length + ' dato(s) excluido(s)</b> por cobertura implausible (&gt;' + COB_SANO_MAX + 'd): ' + esc(cobOutliers.slice(0, 4).map(function(o){ return o.planta + '/' + o.producto; }).join(', ')) + (cobOutliers.length > 4 ? '…' : '') + ' — revisar la fuente</div>';
+  if (avisos) h += '<div class="rn-avisos">' + avisos + '</div>';
+
+  // 3. Cobertura nacional por producto
+  h += '<div class="rn-sec"><div class="rn-sec-t">Cobertura nacional por producto <span>18 plantas de venta · inventario ÷ venta diaria</span></div>'
+    + '<div class="rn-prods">'
+    + PRODS_RN.map(function(pr) {
+        var o = porProd[pr];
+        if (!o.n) return '';
+        var cobP = o.vf > 0 ? Math.round(o.inv / o.vf) : 0;
+        var nv = nivel(cobP, o.inv <= 0, false);
+        var ancho = Math.min(100, Math.round(cobP / 30 * 100));
+        var riesgoTxt = o.quiebre.length ? '<span style="color:' + NIVEL_COL.quiebre + '">⛔ ' + esc(o.quiebre.slice(0, 2).join(', ')) + (o.quiebre.length > 2 ? ' +' + (o.quiebre.length - 2) : '') + '</span>'
+          : o.riesgo.length ? '<span style="color:var(--red)">▲ ' + esc(o.riesgo.slice(0, 2).join(', ')) + (o.riesgo.length > 2 ? ' +' + (o.riesgo.length - 2) : '') + '</span>'
+          : '<span style="color:var(--grn)">✓ sin plantas críticas</span>';
+        return '<div class="rn-prod" data-rn="prod" data-prod="' + esc(pr) + '" style="--c:' + NIVEL_COL[nv] + '">'
+          + '<div class="rn-prod-n">' + PROD_CORTO[pr] + '</div>'
+          + '<div class="rn-prod-c">' + (o.vf > 0 ? cobP : '—') + '<small>días</small></div>'
+          + '<div class="rn-prod-bar"><span style="width:' + ancho + '%"></span></div>'
+          + '<div class="rn-prod-i">' + o.inv.toFixed(0) + ' MB · ' + o.n + ' plantas</div>'
+          + '<div class="rn-prod-r">' + riesgoTxt + '</div>'
+          + '</div>';
+      }).join('')
+    + '</div></div>';
+
+  // 4 + 5. Mapa de calor y columna de atención
+  function filaCalor(pl) {
+    var o = porPlantaRN[pl];
+    var catalogo = PRODUCTOS_POR_PLANTA_EXEC[pl] || [];
+    var peorCol = o ? NIVEL_COL[o.peor] : 'var(--txt3)';
+    return '<tr data-rn="planta" data-planta="' + esc(pl) + '">'
+      + '<td class="rn-hm-pl"><span class="rn-hm-dot" style="background:' + peorCol + '"></span>' + esc(pl) + (o && o.prods.some(function(x){ return celda[pl + '|' + x.prod] && celda[pl + '|' + x.prod].minima; }) ? ' <span class="rn-hm-min" title="Existencia mínima">EM</span>' : '') + '</td>'
+      + PRODS_RN.map(function(pr) {
+          var c = celda[pl + '|' + pr];
+          var maneja = catalogo.indexOf(pr) !== -1;
+          if (!maneja && !c) return '<td class="rn-hm-c rn-hm-na"></td>';
+          if (!c || c.sinDato) return '<td class="rn-hm-c rn-hm-nd" title="Sin dato reportado">·</td>';
+          var txt = c.nivel === 'quiebre' ? '⛔' : (c.cob >= 999 ? '99+' : c.cob);
+          return '<td class="rn-hm-c rn-' + c.nivel + '" title="' + esc(pl + ' · ' + pr + ': ' + (c.nivel === 'quiebre' ? 'sin stock' : c.cob + ' días') + ' · inv ' + c.inv.toFixed(DEC) + ' MB') + '">' + txt + '</td>';
+        }).join('')
+      + '</tr>';
+  }
+  h += '<div class="rn-grid">'
+    + '<div class="rn-sec rn-sec-hm"><div class="rn-sec-t">Cobertura por planta y producto <span>días · clic en una planta abre su detalle</span></div>'
+    +   '<div class="rn-hm-wrap"><table class="rn-hm"><thead><tr><th></th>' + PRODS_RN.map(function(pr){ return '<th>' + PROD_CORTO[pr] + '</th>'; }).join('') + '</tr></thead><tbody>'
+    +   '<tr class="rn-hm-grp"><td colspan="' + (PRODS_RN.length + 1) + '">Costa</td></tr>' + COSTA.map(filaCalor).join('')
+    +   '<tr class="rn-hm-grp"><td colspan="' + (PRODS_RN.length + 1) + '">Sierra y selva</td></tr>' + INTERIOR.map(filaCalor).join('')
+    +   '</tbody></table></div>'
+    +   '<div class="rn-hm-leg"><span style="background:' + NIVEL_COL.quiebre + '"></span>Sin stock <span style="background:' + NIVEL_COL.crit + '"></span>&lt;' + CONFIG.COB_RED + 'd <span style="background:' + NIVEL_COL.alerta + '"></span>' + CONFIG.COB_RED + '–' + (CONFIG.COB_AMB - 1) + 'd <span style="background:' + NIVEL_COL.ok + '"></span>≥' + CONFIG.COB_AMB + 'd <span class="rn-hm-leg-em">EM</span>existencia mínima</div>'
+    + '</div>'
+    + '<div class="rn-col">'
+    +   '<div class="rn-sec"><div class="rn-sec-t">Requiere atención hoy <span>' + (recsRN.length ? recsRN.length + ' recomendaciones · ' + nUrgentes + ' urgentes' : 'sin alertas accionables') + '</span></div>'
+    +     (recsRN.length ? '<div class="rn-recs">' + recsRN.slice(0, 5).map(function(rc) {
+            var sc = sevCfgRN[rc.sev] || sevCfgRN.media;
+            return '<div class="rn-rec" style="--c:' + sc.col + '"><div class="rn-rec-h"><span class="rn-rec-sev">' + sc.lbl + '</span><span class="rn-rec-t">' + rc.titulo + '</span></div>'
+              + '<div class="rn-rec-d">' + rc.detalle + '</div><div class="rn-rec-a">→ ' + rc.accion + '</div></div>';
+          }).join('') + '</div>' : '<div class="rn-vacio">✅ Ninguna planta requiere acción inmediata</div>')
+    +     (recsRN.length > 5 ? '<button class="rn-link" data-rn="ir" data-pid="pDec">Ver las ' + recsRN.length + ' en Centro de Decisiones →</button>' : '<button class="rn-link" data-rn="ir" data-pid="pDec">Abrir Centro de Decisiones →</button>')
+    +   '</div>'
+    +   '<div class="rn-sec"><div class="rn-sec-t">Próximas llegadas por mar <span>' + (btCache ? (listaLlegadas.length ? listaLlegadas.length + ' escalas programadas' : 'sin escalas pendientes') : 'cargando…') + '</span></div>'
+    +     (listaLlegadas.length ? '<div class="rn-lleg">' + listaLlegadas.slice(0, 6).map(function(l) {
+            var d = diasHasta(l.fecha);
+            var cuando = d <= 0 ? 'hoy' : d === 1 ? 'mañana' : 'en ' + d + ' días';
+            var enCurso = /DESCARG/i.test(l.estado);
+            return '<div class="rn-lleg-i"><div class="rn-lleg-f"><b>' + fechaCorta(l.fecha) + '</b><span>' + (enCurso ? 'descargando' : cuando) + '</span></div>'
+              + '<div class="rn-lleg-b"><div class="rn-lleg-t">🚢 ' + esc(l.buque) + ' → <b>' + esc(l.terminal) + '</b></div>'
+              + '<div class="rn-lleg-p">' + Object.keys(l.prods).map(function(ab){ return esc(ab) + ' ' + l.prods[ab].toFixed(1); }).join(' · ') + ' MB</div></div></div>';
+          }).join('') + '</div>' : (btCache ? '<div class="rn-vacio">Sin escalas de descarga pendientes</div>' : '<div class="rn-vacio">…</div>'))
+    +     '<div class="rn-fluv">🛥️ <b>' + barcazasNav + '</b> barcaza' + (barcazasNav === 1 ? '' : 's') + ' fluvial' + (barcazasNav === 1 ? '' : 'es') + ' en tránsito' + (barcazasNav ? ' (' + barcazasCarg + ' cargada' + (barcazasCarg === 1 ? '' : 's') + ' hacia Iquitos)' : '') + (barcazasDisp ? ' · ' + barcazasDisp + ' disponible' + (barcazasDisp === 1 ? '' : 's') + ' en bahía' : '') + '</div>'
+    +     '<div class="rn-links"><button class="rn-link" data-rn="ir" data-pid="pRepoMar">Reposiciones Marítimas →</button><button class="rn-link" data-rn="ir" data-pid="pA">Mapa de operaciones →</button></div>'
+    +   '</div>'
+    + '</div>'
+    + '</div>';
+
+  // 6. Accesos rápidos (compactos)
+  h += '<div class="rn-acc">'
+    + [ {pid:'pC', ico:'📋', lbl:'Coberturas'}, {pid:'pTend', ico:'📈', lbl:'Tendencia'}, {pid:'pInv', ico:'📊', lbl:'Inv. Nacional'}, {pid:'pR', ico:'✂️', lbl:'Restricciones'},
+        {pid:'pB', ico:'📅', lbl:'Timeline BT'}, {pid:'pSegD', ico:'📡', lbl:'Seg. Diario'}, {pid:'pDec', ico:'🎯', lbl:'Decisiones'} ]
+      .map(function(m){ return '<button class="rn-chip" data-rn="ir" data-pid="' + m.pid + '">' + m.ico + ' ' + m.lbl + '</button>'; }).join('')
+    + '</div>';
+
+  el.innerHTML = h;
+
+  // Eventos por delegación (sin onclick en línea)
+  if (!el._rnBound) {
+    el._rnBound = true;
+    el.addEventListener('click', function(ev) {
+      var t = ev.target.closest('[data-rn]');
+      if (!t) return;
+      var tipo = t.getAttribute('data-rn');
+      var irA = function(pid, cb) {
+        showPage(pid, document.querySelector('.sb-item[data-pid=' + pid + ']'));
+        if (cb) setTimeout(cb, 200);
+      };
+      if (tipo === 'refrescar') { renderPResumen(); return; }
+      if (tipo === 'ir') { irA(t.getAttribute('data-pid')); return; }
+      if (tipo === 'planta') { var pl = t.getAttribute('data-planta'); irA('pC', function(){ window._filtroProd = null; window._filtroPlanta = pl; rerenderActivePage(); }); return; }
+      if (tipo === 'prod') { var pr = t.getAttribute('data-prod'); irA('pC', function(){ window._filtroPlanta = null; window._filtroProd = pr; rerenderActivePage(); }); return; }
+    });
+  }
+}
+// Estilos del Resumen Nacional (inyectados una sola vez; usan las
+// variables del tema, así que funcionan en modo oscuro y claro)
+function _rnEstilos() {
+  if (document.getElementById('rn-css')) return;
+  var st = document.createElement('style'); st.id = 'rn-css';
+  st.textContent = [
+    '.rn-head{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}',
+    '.rn-btn{padding:6px 12px;border-radius:6px;border:1px solid var(--bdr);background:var(--bg3);color:var(--txt2);font-size:11px;font-weight:700;cursor:pointer;font-family:var(--sans)}',
+    '.rn-hero{display:grid;grid-template-columns:minmax(230px,1.1fr) 3fr;gap:12px;padding:12px 18px 0}',
+    '.rn-estado{background:linear-gradient(135deg,var(--sem),color-mix(in srgb,var(--sem) 55%,#000));color:#fff;border-radius:10px;padding:16px 18px;display:flex;flex-direction:column;gap:6px;box-shadow:0 6px 20px color-mix(in srgb,var(--sem) 35%,transparent)}',
+    '.rn-estado-lbl{font-size:9.5px;font-weight:700;letter-spacing:.9px;text-transform:uppercase;opacity:.85}',
+    '.rn-estado-txt{font-size:21px;font-weight:800;letter-spacing:-.01em;line-height:1.1}',
+    '.rn-estado-sub{font-size:11px;opacity:.92;line-height:1.35}',
+    '.rn-dist{display:flex;height:9px;border-radius:5px;overflow:hidden;gap:2px;margin-top:8px;background:rgba(0,0,0,.25)}',
+    '.rn-dist span{display:block;min-width:3px}',
+    '.rn-dist-leg{font-size:10px;opacity:.95;display:flex;flex-wrap:wrap;gap:4px;align-items:center}.rn-dist-leg b{color:#fff!important;font-weight:800}',
+    '.rn-dist-n{margin-left:auto;opacity:.75}',
+    '.rn-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}',
+    '.rn-kpi{background:var(--card);border:1px solid var(--bdr);border-radius:10px;padding:13px 15px;display:flex;flex-direction:column;gap:4px;min-width:0;box-shadow:0 1px 4px rgba(10,30,70,.06)}',
+    '.rn-kpi-lbl{font-size:9.5px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px}',
+    '.rn-kpi-val{font-size:26px;font-weight:800;color:var(--txt);line-height:1;font-family:var(--mono);letter-spacing:-.03em;display:flex;align-items:baseline;gap:5px}',
+    '.rn-kpi-val small{font-size:10px;font-weight:600;color:var(--txt3);font-family:var(--sans);letter-spacing:0}',
+    '.rn-kpi-sub{font-size:10px;color:var(--txt2);line-height:1.3}',
+    '.rn-spk{display:flex;align-items:flex-end;gap:6px}.rn-spk svg{margin-top:2px!important}.rn-spk span{font-size:8.5px;color:var(--txt3)}',
+    '.rn-avisos{padding:10px 18px 0;display:flex;flex-direction:column;gap:6px}',
+    '.rn-aviso{font-size:11px;padding:8px 12px;border-radius:8px;border:1px solid}',
+    '.rn-aviso-red{color:var(--red);background:color-mix(in srgb,var(--red) 8%,transparent);border-color:color-mix(in srgb,var(--red) 30%,transparent)}',
+    '.rn-aviso-yel{color:var(--yel);background:color-mix(in srgb,var(--yel) 8%,transparent);border-color:color-mix(in srgb,var(--yel) 30%,transparent)}',
+    '.rn-sec{padding:14px 18px 0}.rn-sec-t{font-size:10px;font-weight:800;color:var(--txt3);text-transform:uppercase;letter-spacing:.7px;margin-bottom:9px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}',
+    '.rn-sec-t::before{content:"";width:3px;height:14px;border-radius:1px;background:var(--acc);display:inline-block}',
+    '.rn-sec-t span{font-weight:600;text-transform:none;letter-spacing:0;color:var(--txt3);opacity:.8}',
+    '.rn-prods{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px}',
+    '.rn-prod{background:var(--card);border:1px solid var(--bdr);border-top:3px solid var(--c);border-radius:10px;padding:11px 13px;cursor:pointer;transition:border-color .15s,transform .15s}',
+    '.rn-prod:hover{border-color:var(--acc);transform:translateY(-1px)}',
+    '.rn-prod-n{font-size:11px;font-weight:800;color:var(--txt)}.rn-prod-c{font-size:24px;font-weight:800;font-family:var(--mono);color:var(--c);line-height:1.1;display:flex;align-items:baseline;gap:4px}',
+    '.rn-prod-c small{font-size:9.5px;color:var(--txt3);font-family:var(--sans);font-weight:600}',
+    '.rn-prod-bar{height:5px;border-radius:3px;background:var(--bg3);margin:7px 0 6px;overflow:hidden}.rn-prod-bar span{display:block;height:100%;background:var(--c);border-radius:3px}',
+    '.rn-prod-i{font-size:9.5px;color:var(--txt2);font-family:var(--mono)}.rn-prod-r{font-size:9.5px;margin-top:3px;font-weight:700}',
+    '.rn-grid{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(300px,1fr);gap:0 12px;align-items:start}',
+    '.rn-col{display:flex;flex-direction:column;min-width:0}',
+    '.rn-hm-wrap{background:var(--card);border:1px solid var(--bdr);border-radius:10px;overflow:auto}',
+    '.rn-hm{width:100%;border-collapse:separate;border-spacing:0;font-size:11px}',
+    '.rn-hm th{background:var(--bg3);color:var(--txt3);font-size:8.5px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;padding:7px 6px;text-align:center;border-bottom:1px solid var(--bdr);position:sticky;top:0}',
+    '.rn-hm th:first-child{text-align:left;padding-left:12px}',
+    '.rn-hm-grp td{font-size:8.5px;font-weight:800;color:var(--txt3);text-transform:uppercase;letter-spacing:.7px;padding:7px 12px 3px;background:var(--card2)}',
+    '.rn-hm tr[data-rn]{cursor:pointer}.rn-hm tr[data-rn]:hover td{filter:brightness(1.08)}',
+    '.rn-hm-pl{padding:5px 12px;font-weight:700;color:var(--txt);white-space:nowrap;border-bottom:1px solid color-mix(in srgb,var(--bdr) 40%,transparent)}',
+    '.rn-hm-dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:7px;vertical-align:middle}',
+    '.rn-hm-min{font-size:7.5px;font-weight:800;color:#fff;background:#6b1212;padding:1px 4px;border-radius:3px;vertical-align:middle;margin-left:4px}',
+    '.rn-hm-c{text-align:center;font-family:var(--mono);font-weight:800;font-size:12px;padding:5px 4px;border-bottom:1px solid color-mix(in srgb,var(--bdr) 40%,transparent);border-left:1px solid color-mix(in srgb,var(--bdr) 40%,transparent)}',
+    '.rn-hm-na{background:repeating-linear-gradient(45deg,transparent 0 4px,color-mix(in srgb,var(--bdr) 50%,transparent) 4px 5px)}',
+    '.rn-hm-nd{color:var(--txt3)}',
+    '.rn-quiebre{background:#b91c1c;color:#fff}.rn-crit{background:color-mix(in srgb,var(--red) 22%,var(--card));color:var(--red)}',
+    '.rn-alerta{background:color-mix(in srgb,var(--yel) 20%,var(--card));color:var(--yel)}.rn-ok{background:color-mix(in srgb,var(--grn) 14%,var(--card));color:var(--grn)}',
+    '.rn-hm-leg{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:9.5px;color:var(--txt3);margin-top:7px}.rn-hm-leg span{display:inline-block;width:12px;height:9px;border-radius:2px;margin-left:8px}',
+    '.rn-hm-leg .rn-hm-leg-em{width:auto;height:auto;font-size:7.5px;font-weight:800;color:#fff;background:#6b1212;padding:1px 4px;border-radius:3px;margin-right:3px}',
+    '.rn-recs{display:flex;flex-direction:column;gap:7px}',
+    '.rn-rec{background:var(--card);border:1px solid var(--bdr);border-left:4px solid var(--c);border-radius:9px;padding:9px 12px}',
+    '.rn-rec-h{display:flex;align-items:flex-start;gap:8px}.rn-rec-sev{font-size:8px;font-weight:800;letter-spacing:.5px;color:var(--c);border:1px solid var(--c);padding:2px 6px;border-radius:7px;white-space:nowrap;margin-top:1px}',
+    '.rn-rec-t{font-size:11.5px;font-weight:800;color:var(--txt);line-height:1.25}.rn-rec-d{font-size:10px;color:var(--txt3);margin-top:3px}.rn-rec-a{font-size:10.5px;color:var(--txt2);margin-top:4px;font-weight:600}',
+    '.rn-vacio{font-size:11px;color:var(--grn);background:var(--card);border:1px dashed var(--bdr);border-radius:9px;padding:14px;text-align:center;font-weight:700}',
+    '.rn-link{display:inline-block;margin-top:8px;background:none;border:none;color:var(--acc2);font-size:10.5px;font-weight:700;cursor:pointer;font-family:var(--sans);padding:2px 0}.rn-link:hover{text-decoration:underline}',
+    '.rn-links{display:flex;gap:16px;flex-wrap:wrap}',
+    '.rn-lleg{display:flex;flex-direction:column;gap:6px}',
+    '.rn-lleg-i{display:flex;gap:10px;background:var(--card);border:1px solid var(--bdr);border-radius:9px;padding:8px 11px;align-items:center}',
+    '.rn-lleg-f{display:flex;flex-direction:column;align-items:center;min-width:46px;border-right:1px solid var(--bdr);padding-right:10px}.rn-lleg-f b{font-family:var(--mono);font-size:13px;color:var(--txt)}.rn-lleg-f span{font-size:8.5px;color:var(--txt3);white-space:nowrap}',
+    '.rn-lleg-b{min-width:0}.rn-lleg-t{font-size:11px;color:var(--txt2)}.rn-lleg-t b{color:var(--txt)}.rn-lleg-p{font-size:9.5px;color:var(--txt3);font-family:var(--mono);margin-top:2px}',
+    '.rn-fluv{font-size:10.5px;color:var(--txt2);margin-top:9px;padding:7px 11px;background:var(--card2);border:1px solid var(--bdr);border-radius:8px}',
+    '.rn-acc{display:flex;flex-wrap:wrap;gap:6px;padding:16px 18px 20px;border-top:1px solid var(--bdr);margin-top:14px}',
+    '.rn-chip{background:var(--card);border:1px solid var(--bdr);border-radius:20px;color:var(--txt2);font-size:10.5px;font-weight:700;padding:5px 12px;cursor:pointer;font-family:var(--sans)}.rn-chip:hover{border-color:var(--acc);color:var(--txt)}',
+    '@media(max-width:1100px){.rn-hero{grid-template-columns:1fr}.rn-grid{grid-template-columns:1fr}}',
+    '@media(max-width:640px){.rn-hero,.rn-sec,.rn-avisos{padding-left:12px;padding-right:12px}.rn-kpis{grid-template-columns:1fr 1fr}.rn-kpi-val{font-size:21px}.rn-estado-txt{font-size:17px}}'
+  ].join('\n');
+  document.head.appendChild(st);
 }
 // ═══════════════════════════════════════════════════════════════════════
 // SEGUIMIENTO DIARIO — quién ya reportó hoy (alimentado por
@@ -6003,6 +6256,11 @@ function _segDUpdateBadgeOnly() {
     .then(function(res) {
       if (!res || !res.success) return;
       var tracking = res.tracking || [];
+      // ⚠️ AGREGADO — se guarda para el indicador "Reporte de hoy" del
+      // Resumen Nacional (misma consulta, sin pedirla dos veces).
+      var _primeraVez = !window._segDTrackingHoy;
+      window._segDTrackingHoy = tracking;
+      if (_primeraVez) { var _pg = document.getElementById('pResumen'); if (_pg && _pg.classList.contains('active') && typeof renderPResumen === 'function') renderPResumen(); }
       var reportadas = tracking.filter(function(t) { return t.estado === 'Reportado' || t.estado === 'Validado'; }).length;
       var pendientes = tracking.length - reportadas;
       var badge = document.getElementById('sb-badge-pSegD');
@@ -31838,6 +32096,7 @@ function _repomarFetchBTMapCompleto() {
       window._repomarCargaInicialEnCurso = false;
       var activePageEl = document.querySelector('.page.active');
       if (activePageEl && activePageEl.id === 'pRepoMar' && typeof renderPRepoMar === 'function') renderPRepoMar();
+      if (activePageEl && activePageEl.id === 'pResumen' && typeof renderPResumen === 'function') renderPResumen(); // indicador "Reposición en ruta"
     })
     .catch(function() { window._repomarBTMapCompletoPendiente = false; });
 }
