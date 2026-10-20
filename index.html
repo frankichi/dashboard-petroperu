@@ -8731,6 +8731,7 @@ function showPageById(pageId) {
 }
 window.showPageById = showPageById;
 function renderPR() {
+  (function(){ var elR = document.getElementById('pR-content'); if (elR && !elR._rnBound) { elR._rnBound = true; if (typeof _rnEstilos === 'function') _rnEstilos(); elR.addEventListener('click', function(ev){ var t = ev.target.closest('[data-rn]'); if (t && typeof _rnAccion === 'function') { if (!window._rnDetalleProd) { try { _rnCalcularDetalle(); } catch(e0) {} } _rnAccion(t.getAttribute('data-rn'), t); } }); } })();
   const today = byDateLatestPerPlant(currentDate || (DATES.length ? DATES[DATES.length-1] : ''));
   if (!today.length) {
     document.getElementById('pR-content').innerHTML = '<div style="padding:60px;text-align:center;color:var(--txt3)">Sin datos</div>';
@@ -8904,6 +8905,7 @@ function renderPR() {
       return `<div class="restr-plantacard"${_colorPl?` style="border-left:5px solid ${_colorPl};box-shadow:0 1px 6px ${_colorPl}22"`:''}>
         <div class="restr-plantacard-head"${_colorPl?` style="background:${_colorPl}14"`:''}>
           <span class="restr-plantacard-name">${planta}</span>
+          <button class="rn-btn" data-rn="planta" data-planta="${planta.replace(/"/g,'&quot;')}" title="Ficha ejecutiva de ${planta}" style="padding:2px 8px;font-size:10px">🏭 Ficha</button>
           <span class="restr-plantacard-count">${nProds} producto${nProds!==1?'s':''}</span>
           ${dLabel?`<span class="restr-plantacard-gain">hasta ${dLabel}</span>`:''}
         </div>
@@ -10416,6 +10418,53 @@ window.cobSaveToGS = async function(btn) {
   }
   if (typeof _origCobSaveToGS === 'function') return _origCobSaveToGS(btn);
 };
+// ⚠️ AGREGADO — a pedido (20-oct): franja ejecutiva sobre la tabla de
+// Coberturas — cuántas plantas en cada nivel, cuáles, y dos atajos:
+// "Solo en riesgo" (despliega las plantas en riesgo y pliega el resto)
+// y "Todas". Clic en una planta la despliega y la lleva a la vista.
+// Usa los mismos cálculos del Resumen Nacional (_rnCalcularDetalle).
+function _cobResumenEjecutivo() {
+  try {
+    if (typeof _rnCalcularDetalle !== 'function') return '';
+    var RN = _rnCalcularDetalle();
+    if (typeof _rnEstilos === 'function') _rnEstilos();
+    if (!document.getElementById('cob-exec-css')) { var st = document.createElement('style'); st.id = 'cob-exec-css'; st.textContent = '.cob-exec{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;margin:10px 22px 8px;padding:9px 14px;background:var(--card);border:1px solid var(--bdr);border-left:5px solid var(--c);border-radius:10px}.cob-exec-k{display:flex;flex-direction:column;align-items:center;min-width:52px}.cob-exec-k b{font:800 18px var(--mono);line-height:1}.cob-exec-k span{font-size:8.5px;color:var(--txt3);text-transform:uppercase;letter-spacing:.4px;margin-top:3px}.cob-exec-chips{display:flex;flex-wrap:wrap;gap:4px;flex:1;min-width:200px}.cob-exec-chip{font:700 10px var(--mono);border:1px solid var(--c);color:var(--c);background:color-mix(in srgb,var(--c) 12%,transparent);border-radius:7px;padding:2px 8px;cursor:pointer}.cob-exec-chip:hover{background:var(--c);color:#fff}.cob-exec-btns{display:flex;gap:5px;margin-left:auto}'; document.head.appendChild(st); }
+    var esc = function(t){ return String(t==null?'':t).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); };
+    var NC = RN.NIVEL_COL;
+    var riesgo = Object.keys(RN.porPlantaRN).filter(function(pl){ var o = RN.porPlantaRN[pl]; return o.peor === 'quiebre' || o.peor === 'crit' || o.peor === 'alerta'; })
+      .sort(function(a,b){ var ra = {quiebre:0,crit:1,alerta:2}; var oa = RN.porPlantaRN[a], ob = RN.porPlantaRN[b]; return (ra[oa.peor]-ra[ob.peor]) || (oa.cobMin-ob.cobMin); });
+    var chips = riesgo.map(function(pl){ var o = RN.porPlantaRN[pl]; return '<span class="cob-exec-chip" data-cob-ir="' + esc(pl) + '" style="--c:' + NC[o.peor] + '" title="Desplegar ' + esc(pl) + '">' + esc(pl) + ' ' + (o.peor==='quiebre'?'⛔':o.cobMin+'d') + '</span>'; }).join('');
+    return '<div class="cob-exec" style="--c:' + RN.semCol + '">'
+      + '<div class="cob-exec-k"><b style="color:' + NC.quiebre + '">' + RN.plantasQuiebre.length + '</b><span>sin stock</span></div>'
+      + '<div class="cob-exec-k"><b style="color:' + NC.crit + '">' + RN.plantasCrit.length + '</b><span>críticas</span></div>'
+      + '<div class="cob-exec-k"><b style="color:' + NC.alerta + '">' + RN.plantasAlerta.length + '</b><span>en alerta</span></div>'
+      + '<div class="cob-exec-k"><b style="color:' + NC.ok + '">' + RN.plantasOk.length + '</b><span>normales</span></div>'
+      + '<div class="cob-exec-chips">' + (chips || '<span style="font-size:10.5px;color:var(--grn);font-weight:700">✅ Ninguna planta en riesgo</span>') + '</div>'
+      + '<div class="cob-exec-btns"><button class="rn-btn" data-cob-ver="riesgo">Solo en riesgo</button><button class="rn-btn" data-cob-ver="todas">Desplegar todas</button><button class="rn-btn" data-cob-ver="ninguna">Plegar todas</button></div>'
+      + '</div>';
+  } catch (e) { console.warn('[Coberturas] resumen ejecutivo:', e && e.message); return ''; }
+}
+(function(){
+  document.addEventListener('click', function(ev) {
+    var v = ev.target.closest('[data-cob-ver]'), ir = ev.target.closest('[data-cob-ir]');
+    if (!v && !ir) return;
+    var RN = window._rnDetalleProd;
+    if (ir) {
+      var pl = ir.getAttribute('data-cob-ir'); if (cobCollapsed[pl] !== false) cobTogglePlanta(pl);
+      var hdr = document.getElementById('cob-ph-' + pl.replace(/[^a-zA-Z0-9]/g,'_'));
+      if (hdr && hdr.scrollIntoView) { hdr.scrollIntoView({ block: 'center', behavior: 'smooth' }); hdr.style.outline = '2px solid var(--acc)'; setTimeout(function(){ hdr.style.outline = ''; }, 1600); }
+      return;
+    }
+    var modo = v.getAttribute('data-cob-ver');
+    document.querySelectorAll('.cob-planta-row').forEach(function(tr) {
+      var nm = tr.getAttribute('data-planta'); if (!nm) return;
+      var peor = (RN && RN.porPlanta && RN.porPlanta[nm]) ? RN.porPlanta[nm].peor : 'ok';
+      var abrir = modo === 'todas' ? true : modo === 'ninguna' ? false : (peor === 'quiebre' || peor === 'crit' || peor === 'alerta');
+      var actual = cobCollapsed[nm] !== false;
+      if (abrir === actual) cobTogglePlanta(nm);
+    });
+  });
+})();
 function cobTogglePlanta(planta) {
   var wasCollapsed = cobCollapsed[planta] !== false; // default is collapsed
   cobCollapsed[planta] = !wasCollapsed;
@@ -11016,7 +11065,7 @@ function _renderP2Body() {
     var cobColor = minCobInt < CONFIG.COB_RED ? 'var(--red)' : minCobInt < CONFIG.COB_YEL ? 'var(--yel)' : 'var(--grn)';
     var pillBg = minCobInt < CONFIG.COB_RED ? 'var(--red)1a' : minCobInt < CONFIG.COB_YEL ? 'var(--yel)1a' : 'var(--grn)14';
     var isCollapsed = cobCollapsed[planta] !== false; // Default collapsed
-    tbody += '<tr class="cob-planta-row' + (isCollapsed ? ' collapsed' : '') + '" id="cob-ph-' + safePlanta + '" onclick="cobTogglePlanta(\'' + planta.replace(/'/g, "\\'") + '\')">'
+    tbody += '<tr class="cob-planta-row' + (isCollapsed ? ' collapsed' : '') + '" id="cob-ph-' + safePlanta + '" data-planta="' + planta.replace(/"/g, '&quot;') + '" onclick="cobTogglePlanta(\'' + planta.replace(/'/g, "\\'") + '\')">'
       + '<td colspan="17"><span class="toggle-arrow">\u25BC</span>' + planta
       + '<span class="pill" style="background:' + pillBg + ';color:' + cobColor + '">' + rows.length + ' prod.</span>'
       + (minCobInt < 999 ? '<span class="pill" style="background:' + pillBg + ';color:' + cobColor + '">min ' + minCobInt + 'd</span>' : '')
@@ -11480,6 +11529,7 @@ function _renderP2Body() {
     + '<button class="upload-btn upload-btn-primary" onclick="cobApplyRefinery()" style="font-size:10px;padding:6px 16px">\u2705 Aplicar al inventario</button>'
     + '<button class="upload-btn upload-btn-secondary" onclick="cobToggleRefPanel()" style="font-size:10px;padding:6px 16px">Cerrar</button>'
     + '</div></div>'
+    + _cobResumenEjecutivo()
     + '<div class="cob-tbl-wrap"><table class="cob-tbl"><thead><tr>'
     + '<th class="cobal-ind" style="position:sticky;top:0;z-index:20;background:var(--bg3)"></th>'
     + '<th style="position:sticky;top:0;z-index:20;background:var(--bg3)">Producto</th>'
@@ -13899,86 +13949,81 @@ function renderPB() {
   const ganttColors = {UCAYALI:'#2d8cf0', MOCHE:'#22c55e', URUBAMBA:'#f97316'};
   const ganttColorsFallback = ['#2d8cf0','#22c55e','#f97316','#a855f7','#ec4899','#14b8a6'];
   let colorIdx = 0;
-  const allCargas = Array.isArray(_cargasNavesCache) ? _cargasNavesCache : [];
+  // ⚠️ REDISEÑADO — a pedido (20-oct): una carrera por BUQUE (no una
+  // fila por escala del histórico). Usa el viaje VIGENTE de cada buque
+  // (_buildRepoMarBuques, la misma fuente de RepoMar y de la ficha),
+  // con zarpe y retorno marcados; el Cabotaje Proyectado (Simulador BT)
+  // va en carreras aparte, punteadas. Clic en el buque o en una escala
+  // abre la ficha del viaje actual.
+  if (!document.getElementById('gantt2-css')) { const stG = document.createElement('style'); stG.id = 'gantt2-css'; stG.textContent = '.g2-row{display:flex;align-items:center;gap:8px;min-height:46px;border-bottom:1px solid color-mix(in srgb,var(--bdr) 50%,transparent)}.g2-lbl{width:160px;flex-shrink:0;cursor:pointer;display:flex;align-items:center;gap:8px}.g2-lbl:hover .g2-name{text-decoration:underline}.g2-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}.g2-name{font-size:12px;font-weight:800;color:var(--txt)}.g2-sub{font-size:9px;color:var(--txt3);display:block;margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:120px}.g2-track{flex:1;position:relative;height:38px}.g2-blk{position:absolute;top:4px;height:19px;border-radius:6px;display:flex;align-items:center;justify-content:center;font:700 9.5px var(--sans);color:#fff;white-space:nowrap;overflow:hidden;padding:0 5px;cursor:pointer;box-sizing:border-box;min-width:26px;transition:transform .12s}.g2-blk:hover{transform:translateY(-1px);z-index:3}.g2-blk.alt{top:21px}.g2-track{height:44px}.g2-blk.done{opacity:.5}.g2-blk.now{box-shadow:0 0 0 3px color-mix(in srgb,var(--ora) 45%,transparent);animation:g2Pulse 1.6s ease-in-out infinite}.g2-blk.prog{background:transparent!important;border:1.5px dashed var(--c);color:var(--c)}.g2-blk.carga{border-style:solid;border-width:1.5px;background:color-mix(in srgb,var(--c) 18%,transparent)!important;color:var(--txt)}@keyframes g2Pulse{0%,100%{box-shadow:0 0 0 3px color-mix(in srgb,var(--ora) 45%,transparent)}50%{box-shadow:0 0 0 7px color-mix(in srgb,var(--ora) 12%,transparent)}}.g2-mark{position:absolute;top:2px;bottom:2px;width:2px;background:var(--c);opacity:.8}.g2-mark::after{content:attr(data-l);position:absolute;top:-1px;left:4px;font:700 8px var(--sans);color:var(--c);white-space:nowrap}.g2-mark.ret{border-left:2px dashed var(--c);background:none}.g2-grp{font-size:9px;font-weight:800;color:var(--txt3);text-transform:uppercase;letter-spacing:.6px;padding:10px 0 4px}.g2-strip{display:flex;flex-wrap:wrap;gap:8px 18px;margin:0 0 10px;padding:9px 14px;background:var(--card);border:1px solid var(--bdr);border-left:4px solid var(--acc);border-radius:10px}.g2-k{display:flex;flex-direction:column}.g2-k b{font:800 15px var(--mono);color:var(--txt);line-height:1.1}.g2-k span{font-size:8.5px;color:var(--txt3);text-transform:uppercase;letter-spacing:.4px;margin-top:2px}.g2-k-w b{font-size:12px;font-family:var(--sans)}'; document.head.appendChild(stG); }
+  const escG = t => String(t == null ? '' : t).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  const fmtG = f => { if (!f) return ''; const q = String(f).slice(0,10).split('-'); return q[2] + '/' + q[1]; };
+  const startISO = startDate.toISOString().slice(0,10);
+  const endISO = new Date(startDate.getTime() + (totalDays - 1) * DAY_MS).toISOString().slice(0,10);
+  let buquesG = [];
+  try { buquesG = _buildRepoMarBuques(); } catch (eG) { console.warn('[Timeline] buques:', eG && eG.message); }
   const PP_BUQUES = ['UCAYALI','MOCHE','URUBAMBA'];
-  const btMap = {};
-  allCargas.forEach(r => {
-    if (!r.buque) return;
-    const b = r.buque.toUpperCase();
-    if (!PP_BUQUES.includes(b)) return;
-    if (!r.fecha_desde && !r.fecha_hasta) return;
-    if (!btMap[b]) btMap[b] = [];
-    btMap[b].push({terminal:r.terminal||'?', desde:r.fecha_desde||'', hasta:r.fecha_hasta||r.fecha_desde||'',
-      producto:r.producto||'', vol:r.volumen_mb||0, estado:r.estado||''});
-  });
-  today.forEach(r => {
-    if (!r.bt || r.bt === '' || r.bt === '-') return;
-    const b = r.bt.toUpperCase();
-    if (!PP_BUQUES.includes(b)) return;
-    if (!btMap[b]) btMap[b] = [];
-    const exists = btMap[b].some(x => x.terminal.toUpperCase() === (r.planta||'').toUpperCase() && x.producto === r.producto);
-    if (!exists && (r.vol_rep||0) > 0 && r.fecha_reposicion) {
-      btMap[b].push({terminal:r.planta||'?', desde:r.fecha_reposicion, hasta:r.fecha_reposicion,
-        producto:r.producto||'', vol:r.vol_rep||0, estado:'PROGRAMADO'});
-    }
-  });
-  if (typeof simShips !== 'undefined' && simShips.length > 0) {
-    simShips.forEach(function(ship) {
-      const b = (ship.name||'').toUpperCase();
-      (ship.stops||[]).forEach(function(st) {
-        const prods = (st.prods||[]).map(p => (p.producto||'')+(p.vol>0?' '+p.vol.toFixed(DEC):''));
-        const vol   = (st.prods||[]).reduce((s,p)=>s+(p.vol||0),0);
-        if (!btMap[b]) btMap[b] = [];
-        if (st.etaDate) btMap[b].push({terminal:st.planta||'?', desde:st.etaDate, hasta:st.etaDate,
-          producto:prods.join(' · ')||'', vol, estado:'PROYECTADO'});
-      });
+  PP_BUQUES.forEach(nm => { if (!buquesG.some(b => (b.buque||'').toUpperCase().replace(/\s*\d+$/,'') === nm)) buquesG.push({ buque: nm, legs: [], _sinViaje: true }); });
+  const laneHTML = (b, proyectado) => {
+    const nm = (b.buque||'').toUpperCase().replace(/\s*\d+$/,'');
+    const col = ganttColors[nm] || ganttColorsFallback[colorIdx++ % ganttColorsFallback.length];
+    const legs = (b.legs||[]).slice().sort((x,y) => (x.fecha_hasta||'').localeCompare(y.fecha_hasta||''));
+    const grupos = (typeof _repomarAgruparEscalas === 'function') ? _repomarAgruparEscalas(legs) : [];
+    const dentro = f => f && f.slice(0,10) >= startISO && f.slice(0,10) <= endISO;
+    let blocks = '', lastF = '', alt = false;
+    grupos.forEach(g => {
+      const f = (g.fecha_hasta||'').slice(0,10); if (!dentro(f)) return;
+      // escalas en días consecutivos se alternan arriba/abajo para no taparse
+      const dd = lastF ? Math.round((new Date(f+'T12:00:00') - new Date(lastF+'T12:00:00'))/DAY_MS) : 99;
+      alt = dd <= 1 ? !alt : false; lastF = f;
+      const mb = (g.productos||[]).reduce((s2,x) => s2 + (x.vol||0), 0);
+      const presente = typeof _repomarBuquePresenteEnTerminal === 'function' && _repomarBuquePresenteEnTerminal(b.buque, g.terminalNorm);
+      const cls = proyectado ? 'prog' : g.estado === 'COMPLETADO' ? 'done' : (g.estado === 'DESCARGANDO' || presente) ? 'now' : 'prog';
+      const tipo = g.tipo === 'carga' ? 'carga' : '';
+      const left = pct(f), w = Math.max(100 / totalDays * 1.6, 3);
+      const tip = `${nm} → ${g.terminal} · ${fmtG(f)} · ${(g.productos||[]).map(x => (x.abrev||x.producto) + ' ' + (x.vol||0).toFixed(1)).join(' · ')} MB · ${g.estado === 'COMPLETADO' ? (g.tipo==='carga'?'cargó':'descargó') : presente ? 'en puerto' : g.tipo==='carga' ? 'carga programada' : 'descarga programada'}`;
+      blocks += `<div class="g2-blk ${cls} ${tipo}${alt ? ' alt' : ''}" data-g2-buque="${escG(b.buque)}" style="--c:${col};left:calc(${left}% - ${w/2}%);width:${w}%;background:${col}" title="${escG(tip)}">${escG(g.terminal)}${mb ? ' · ' + mb.toFixed(0) : ''}</div>`;
     });
+    if (!proyectado && b.zarpe && dentro(b.zarpe)) blocks += `<div class="g2-mark" data-l="zarpe ${fmtG(b.zarpe)}" style="--c:${col};left:${pct(b.zarpe.slice(0,10))}%"></div>`;
+    const ret = b.retornoTalara || b.retornoEstimado;
+    if (!proyectado && ret && dentro(ret)) blocks += `<div class="g2-mark ret" data-l="retorno${b.retornoTalara?'':' est.'} ${fmtG(ret)}" style="--c:${col};left:${pct(ret.slice(0,10))}%"></div>`;
+    const prox = grupos.filter(g => g.estado !== 'COMPLETADO' && (g.fecha_hasta||'').slice(0,10) >= currentDate)[0];
+    const sub = b._sinViaje ? 'sin viaje vigente' : prox ? `próx. ${prox.terminal} ${fmtG(prox.fecha_hasta)}` : (grupos.length ? 'todas las escalas completadas' : 'sin escalas en la ventana');
+    return `<div class="g2-row"><div class="g2-lbl" data-g2-buque="${escG(b.buque)}" title="Ficha del viaje actual"><span class="g2-dot" style="background:${col}"></span><div><span class="g2-name">${escG(nm)}</span><span class="g2-sub">${escG(sub)}</span></div></div>
+      <div class="g2-track"><div class="gantt-today" style="left:${todayPct}%"></div>${blocks || '<span style="font-size:9px;color:var(--txt3);padding-left:4px;line-height:38px">Sin escalas en esta ventana</span>'}</div></div>`;
+  };
+  const rowsConf = buquesG.map(b => laneHTML(b, false)).join('');
+  let rowsProy = '';
+  if (typeof simShips !== 'undefined' && simShips.length > 0 && typeof _repomarSimShipsABuques === 'function') {
+    try { rowsProy = _repomarSimShipsABuques().map(b => laneHTML(b, true)).join(''); } catch (eP) {}
   }
-  const rows = PP_BUQUES.flatMap(buque => {
-    const entries = btMap[buque] || [];
-    if (!entries.length) {
-      return [`<div class="gantt-row"><div class="gantt-label" style="color:var(--txt3)">${buque}</div>
-        <div class="gantt-track"><div class="gantt-today" style="left:${todayPct}%"></div>
-        <span style="font-size:9px;color:var(--txt3);padding-left:4px">Sin registros</span></div></div>`];
-    }
-    const col = ganttColors[buque] || ganttColorsFallback[colorIdx++ % ganttColorsFallback.length];
-    return entries
-      .filter(e => e.hasta >= startDate.toISOString().slice(0,10) || !e.hasta)
-      .sort((a,b) => (a.desde||'').localeCompare(b.desde||''))
-      .map(e => {
-        const startP = pct(e.desde || currentDate);
-        const endP   = pct(e.hasta || e.desde || currentDate);
-        const w = Math.max(1.5, endP - startP);
-        const isActual = e.estado === 'ACTUAL' || (e.desde <= currentDate && e.hasta >= currentDate);
-        const opacity  = e.estado === 'COMPLETADO' ? '0.45' : '1';
-        const label    = `${buque} → ${e.terminal}`;
-        const tooltip  = `${buque} V${e.producto} ${e.vol.toFixed(DEC)} MB · ${fmtDate(e.desde)}${e.hasta!==e.desde?' → '+fmtDate(e.hasta):''} [${e.estado}]`;
-        return `<div class="gantt-row">
-          <div class="gantt-label" title="${tooltip}">${label}</div>
-          <div class="gantt-track">
-            <div class="gantt-today" style="left:${todayPct}%"></div>
-            <div class="gantt-block" style="left:${startP}%;width:${w}%;background:${col};opacity:${opacity};${isActual?'box-shadow:0 0 8px '+col+'88':'border:1px dashed '+col+'99'}"
-              title="${tooltip}">
-              <span>${e.terminal} · ${e.vol.toFixed(DEC)} MB</span>
-            </div>
-          </div>
-        </div>`;
-      });
-  }).filter(Boolean).join('');
+  const rows = rowsConf + (rowsProy ? `<div class="g2-grp">📋 Cabotaje proyectado (Simulador BT, aún no confirmado)</div>` + rowsProy : '');
+  // Franja: qué llega en la ventana
+  let stripG = '';
+  try {
+    const pend = []; buquesG.forEach(b => (b.legs||[]).forEach(l => { if (l.estado === 'COMPLETADO' || l._sintetica || !(l.vol > 0) || (l.tipo||'descarga') !== 'descarga') return; const f = (l.fecha_hasta||'').slice(0,10); if (f >= currentDate && f <= endISO) pend.push({ b: b.buque, t: l.terminal, f, v: l.vol }); }));
+    const mb = pend.reduce((s2,x) => s2 + x.v, 0); const porT = {}; pend.forEach(x => porT[x.t] = (porT[x.t]||0) + x.v);
+    const prox = pend.slice().sort((x,y) => x.f.localeCompare(y.f))[0];
+    stripG = `<div class="g2-strip"><div class="g2-k"><b>${buquesG.filter(b => !b._sinViaje).length}</b><span>buques con viaje vigente</span></div><div class="g2-k"><b>${pend.length}</b><span>descargas en la ventana</span></div><div class="g2-k"><b>${mb.toFixed(0)}</b><span>MB por descargar</span></div><div class="g2-k g2-k-w"><b>${prox ? escG(prox.t) + ' ' + fmtG(prox.f) + ' · ' + escG(prox.b) : '—'}</b><span>próxima descarga</span></div>${Object.keys(porT).length ? `<div class="g2-k g2-k-w"><b>${Object.keys(porT).sort((x,y) => porT[y]-porT[x]).slice(0,5).map(t => escG(t) + ' ' + porT[t].toFixed(0)).join(' · ')}</b><span>MB por terminal</span></div>` : ''}<div class="g2-k g2-k-w" style="margin-left:auto"><b style="font-weight:600;color:var(--txt3)">Clic en un buque o escala: ficha del viaje</b><span>&nbsp;</span></div></div>`;
+  } catch (eS) {}
+  const elPB = document.getElementById('pB-content');
+  if (elPB && !elPB._g2Bound) { elPB._g2Bound = true; elPB.addEventListener('click', ev => { const t = ev.target.closest('[data-g2-buque]'); if (t && typeof openBTModal === 'function') openBTModal(t.getAttribute('data-g2-buque')); }); }
   document.getElementById('pB-content').innerHTML = `
     <div class="page-header">
       <div class="page-header-title">📅 Timeline de Reposiciones BT</div>
-      <div class="page-header-subtitle">Gantt de buques de transferencia · Ventana de 28 días · Línea roja = hoy</div>
+      <div class="page-header-subtitle">Viaje vigente de cada buque · ventana de 28 días (7 atrás, 21 adelante) · línea roja = hoy</div>
     </div>
     ${buildDateBar('dateBarPB')}
     <div class="gantt-wrap">
+      ${stripG}
       <div style="display:flex;align-items:center;margin-bottom:6px;gap:8px;padding:0 0 6px;border-bottom:1px solid var(--bdr)">
-        <span style="width:160px;font-size:9px;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px;font-weight:700">Buque → Destino</span>
+        <span style="width:160px;font-size:9px;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px;font-weight:700">Buque · viaje vigente</span>
         <div class="gantt-header" style="flex:1;margin-left:0">${dayHeaders}</div>
       </div>
       ${rows || '<div style="padding:40px;text-align:center;color:var(--txt3)">Sin datos de Cargas de Naves. Sube el PDF en Carga Datos para ver el timeline.</div>'}
       <div style="margin-top:16px;display:flex;gap:16px;font-size:10px;color:var(--txt3);flex-wrap:wrap">
         <span style="display:flex;align-items:center;gap:5px"><span style="width:14px;height:2px;background:var(--red);display:inline-block"></span> Hoy</span>
+        <span>■ sólido = descargó</span><span>■ con halo = en puerto / descargando</span><span>▭ punteado = programado</span><span>▭ relleno suave = carga</span><span>│ zarpe · ┆ retorno</span>
         ${Object.entries(ganttColors).map(([b,c])=>`<span style="display:flex;align-items:center;gap:5px"><span style="width:12px;height:12px;border-radius:3px;background:${c};display:inline-block"></span>${b}</span>`).join('')}
       </div>
     </div>
@@ -14148,6 +14193,17 @@ function renderPPronEv() {
 }
 
 function _pronEvRender(el) {
+  if (!el._pevBound) {
+    el._pevBound = true;
+    el.addEventListener('click', function(ev) {
+      var t = ev.target.closest('[data-pev]'); if (!t) return;
+      var k = t.getAttribute('data-pev');
+      if (k === 'prod') { var v = t.getAttribute('data-v'); _pronEvFilter.producto = (_pronEvFilter.producto === v) ? '' : v; _pronEvRender(el); return; }
+      if (k === 'limpiar') { _pronEvFilter.planta = ''; _pronEvFilter.producto = ''; _pronEvRender(el); return; }
+      if (k === 'sort') { var c = t.getAttribute('data-col'); var S2 = window._pronEvSort; if (S2.col === c) S2.dir = -S2.dir; else { S2.col = c; S2.dir = (c === 'planta' || c === 'producto') ? 1 : -1; } _pronEvRender(el); return; }
+      if (k === 'fila') { var pl = t.getAttribute('data-planta'), pr = t.getAttribute('data-prod'); _pTendPlanta = pl; _pTendProd = pr; showPage('pTend', document.querySelector('.sb-item[data-pid="pTend"]')); return; }
+    });
+  }
   var meses   = _pronEvData.meses || [];
   var allData = _pronEvData.data  || [];
   if (!meses.length || !allData.length) {
@@ -14218,7 +14274,7 @@ function _pronEvRender(el) {
   }
 
   // Construir tabla
-  var tbody = datos.map(function(r) {
+  var tbody = ''; var _tbodyFn = function() { return datos.map(function(r) {
     var d   = delta(r);
     var p   = pct(r);
     var ult = meses.length ? (r.meses[meses[meses.length-1]] !== undefined ? r.meses[meses[meses.length-1]].toFixed(DEC) : '—') : '—';
@@ -14230,7 +14286,7 @@ function _pronEvRender(el) {
       return '<td style="text-align:right;font-family:var(--mono);font-size:10px;padding:6px 10px;border-bottom:1px solid var(--bdr)22">' +
         (v !== undefined ? v.toFixed(DEC) : '<span style="color:var(--bdr)">—</span>') + '</td>';
     }).join('');
-    return '<tr>' +
+    return '<tr class="pev-row" data-pev="fila" data-planta="' + _escE(r.planta) + '" data-prod="' + _escE(r.producto) + '" title="Ver tendencia">' +
       '<td style="padding:6px 12px;border-bottom:1px solid var(--bdr)22;font-weight:700;color:var(--txt);white-space:nowrap">' + r.planta + '</td>' +
       '<td style="padding:6px 12px;border-bottom:1px solid var(--bdr)22;font-size:11px;color:var(--txt2)">' + r.producto + '</td>' +
       mesesCols +
@@ -14238,10 +14294,67 @@ function _pronEvRender(el) {
       '<td style="padding:6px 10px;border-bottom:1px solid var(--bdr)22;font-family:var(--mono);font-weight:800;font-size:11px;color:' + dCol + '">' + pStr + '</td>' +
       '<td style="padding:4px 10px 4px 14px;border-bottom:1px solid var(--bdr)22">' + sparkRow(r) + '</td>' +
     '</tr>';
-  }).join('');
+  }).join(''); };
 
   // KPIs resumen
+  // ⚠️ REDISEÑADO — a pedido (20-oct): lectura ejecutiva de la evolución.
+  //  1) Demanda nacional por producto (suma de plantas padre, sin doble
+  //     conteo de sub-plantas) con variación del último mes.
+  //  2) Mayores subidas y bajadas (planta · producto) con acceso directo.
+  //  3) Tabla ordenada por magnitud de cambio (clic en cabeceras para
+  //     cambiar el orden) y filtros rápidos por producto.
+  if (typeof _rnEstilos === 'function') _rnEstilos();
+  if (!document.getElementById('pev-css')) { var stE = document.createElement('style'); stE.id = 'pev-css'; stE.textContent = '.pev-prods{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:9px;padding:0 18px}.pev-prod{background:var(--card);border:1px solid var(--bdr);border-top:3px solid var(--c);border-radius:10px;padding:10px 12px;cursor:pointer;transition:transform .15s,border-color .15s}.pev-prod:hover{transform:translateY(-1px);border-color:var(--acc)}.pev-prod.on{outline:1.5px solid var(--acc)}.pev-prod-n{font-size:11px;font-weight:800;color:var(--txt)}.pev-prod-v{font:800 20px var(--mono);color:var(--txt);margin-top:2px;display:flex;align-items:baseline;gap:4px}.pev-prod-v small{font-size:9px;color:var(--txt3);font-family:var(--sans);font-weight:600}.pev-prod-d{font:800 11px var(--mono);color:var(--c);margin-top:2px}.pev-prod-d span{font:600 9.5px var(--sans);color:var(--txt3)}.pev-prod-s{display:flex;align-items:flex-end;gap:6px;margin-top:4px}.pev-prod-s small{font-size:8.5px;color:var(--txt3)}.pev-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:12px 18px 0}.pev-mov{background:var(--card);border:1px solid var(--bdr);border-radius:10px;overflow:hidden}.pev-mov-t{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.6px;padding:8px 12px;border-bottom:1px solid var(--bdr);color:var(--c)}.pev-mov-r{display:grid;grid-template-columns:1fr auto auto;gap:10px;align-items:center;padding:6px 12px;border-bottom:1px solid color-mix(in srgb,var(--bdr) 40%,transparent);font-size:11px;cursor:pointer}.pev-mov-r:hover{background:var(--bg3)}.pev-mov-r:last-child{border-bottom:none}.pev-mov-r b{color:var(--txt)}.pev-mov-r small{color:var(--txt3);display:block;font-size:9.5px}.pev-mov-bar{width:90px;height:7px;background:var(--bg3);border-radius:4px;overflow:hidden}.pev-mov-bar span{display:block;height:100%;background:var(--c);border-radius:4px}.pev-mov-p{font:800 11px var(--mono);color:var(--c);min-width:52px;text-align:right}.pev-vacio{padding:10px 12px;font-size:10.5px;color:var(--txt3)}.pev-th{cursor:pointer;user-select:none}.pev-th:hover{color:var(--txt)!important}.pev-chip{background:var(--card);border:1px solid var(--bdr);color:var(--txt2);border-radius:20px;padding:3px 10px;font-size:10px;font-weight:700;cursor:pointer;font-family:var(--sans)}.pev-row{cursor:pointer}.pev-row:hover td{background:var(--bg3)}@media(max-width:900px){.pev-grid{grid-template-columns:1fr}}'; document.head.appendChild(stE); }
+  window._pronEvSort = window._pronEvSort || { col: 'pct', dir: -1 };
+  var _escE = function(t){ return String(t==null?'':t).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); };
+  var mUlt = meses[meses.length-1], mAnt = meses.length > 1 ? meses[meses.length-2] : null;
+  var nacional = {};
+  allData.forEach(function(r) {
+    var padres = (typeof PRON_PADRE_PLANTS !== 'undefined' && PRON_PADRE_PLANTS[r.producto]) || null;
+    if (padres && !padres.has(r.planta)) return;
+    if (!padres && typeof VENTAS_SUB_PLANTS !== 'undefined' && VENTAS_SUB_PLANTS.has(r.planta + '|' + r.producto)) return;
+    if (!nacional[r.producto]) nacional[r.producto] = { meses: {}, n: 0 };
+    nacional[r.producto].n++;
+    meses.forEach(function(m){ if (r.meses[m] !== undefined) nacional[r.producto].meses[m] = (nacional[r.producto].meses[m] || 0) + r.meses[m]; });
+  });
+  var ordenProd = ['Diesel','G. Regular','G. Premium','G. 84','TA1','GLP'];
+  var prodsNac = Object.keys(nacional).sort(function(a2,b2){ var ia = ordenProd.indexOf(a2), ib = ordenProd.indexOf(b2); return (ia<0?99:ia)-(ib<0?99:ib) || a2.localeCompare(b2); });
+  var prodTiles = prodsNac.map(function(pr) {
+    var o = nacional[pr], vU = o.meses[mUlt], vA = mAnt ? o.meses[mAnt] : undefined;
+    var d = (vU !== undefined && vA !== undefined) ? vU - vA : null, pc = (d !== null && vA) ? d / vA * 100 : null;
+    var col = d === null ? 'var(--txt3)' : d > 0.0001 ? 'var(--grn)' : d < -0.0001 ? 'var(--red)' : 'var(--txt3)';
+    return '<div class="pev-prod' + (_pronEvFilter.producto === pr ? ' on' : '') + '" data-pev="prod" data-v="' + _escE(pr) + '" style="--c:' + col + '" title="Filtrar la tabla por ' + _escE(pr) + '">'
+      + '<div class="pev-prod-n">' + _escE(pr) + '</div>'
+      + '<div class="pev-prod-v">' + (vU !== undefined ? vU.toFixed(1) : '—') + '<small>MB/día · ' + fmtMes(mUlt) + '</small></div>'
+      + '<div class="pev-prod-d">' + (d === null ? '—' : (d >= 0 ? '+' : '') + d.toFixed(1) + ' (' + (pc === null ? '' : (pc >= 0 ? '+' : '') + pc.toFixed(1)) + '%)') + ' <span>vs ' + (mAnt ? fmtMes(mAnt) : '—') + '</span></div>'
+      + '<div class="pev-prod-s">' + sparkRow({ meses: o.meses }) + '<small>' + o.n + ' plantas</small></div>'
+      + '</div>';
+  }).join('');
+  var conPct = datos.map(function(r){ return { r: r, p: pct(r), d: delta(r) }; }).filter(function(x){ return x.p !== null; });
+  var subidas = conPct.filter(function(x){ return x.p > 0.05; }).sort(function(a2,b2){ return b2.p - a2.p; }).slice(0,6);
+  var bajadas = conPct.filter(function(x){ return x.p < -0.05; }).sort(function(a2,b2){ return a2.p - b2.p; }).slice(0,6);
+  var maxAbs = Math.max.apply(null, conPct.map(function(x){ return Math.abs(x.p); }).concat([1]));
+  var movHtml = function(lista, titulo, col) {
+    return '<div class="pev-mov" style="--c:' + col + '"><div class="pev-mov-t">' + titulo + '</div>'
+      + (lista.length ? lista.map(function(x){ var r = x.r; return '<div class="pev-mov-r" data-pev="fila" data-planta="' + _escE(r.planta) + '" data-prod="' + _escE(r.producto) + '" title="Ver tendencia de ' + _escE(r.producto) + ' en ' + _escE(r.planta) + '"><div><b>' + _escE(r.planta) + '</b><small>' + _escE(r.producto) + ' · ' + (r.meses[mUlt] !== undefined ? r.meses[mUlt].toFixed(1) : '—') + ' MB/día</small></div><div class="pev-mov-bar"><span style="width:' + Math.round(Math.abs(x.p) / maxAbs * 100) + '%"></span></div><div class="pev-mov-p">' + (x.p >= 0 ? '+' : '') + x.p.toFixed(1) + '%</div></div>'; }).join('') : '<div class="pev-vacio">Sin cambios relevantes</div>')
+      + '</div>';
+  };
+  var moversHtml = mAnt ? '<div class="pev-grid">' + movHtml(subidas, '▲ Mayores subidas · ' + fmtMes(mAnt) + ' → ' + fmtMes(mUlt), 'var(--grn)') + movHtml(bajadas, '▼ Mayores bajadas · ' + fmtMes(mAnt) + ' → ' + fmtMes(mUlt), 'var(--red)') + '</div>' : '';
+  var S = window._pronEvSort;
+  datos.sort(function(a2, b2) {
+    var va, vb;
+    if (S.col === 'planta') return S.dir * a2.planta.localeCompare(b2.planta);
+    if (S.col === 'producto') return S.dir * a2.producto.localeCompare(b2.producto);
+    if (S.col === 'ult') { va = a2.meses[mUlt]; vb = b2.meses[mUlt]; }
+    else if (S.col === 'delta') { va = delta(a2); vb = delta(b2); }
+    else { va = pct(a2); vb = pct(b2); }
+    if (va === null || va === undefined) va = -Infinity; if (vb === null || vb === undefined) vb = -Infinity;
+    if (S.col === 'pct' || S.col === 'delta') { va = va === -Infinity ? va : Math.abs(va); vb = vb === -Infinity ? vb : Math.abs(vb); }
+    return S.dir * (va - vb);
+  });
+  var thSort = function(col, lbl, align) { return '<th class="pev-th" data-pev="sort" data-col="' + col + '" style="background:var(--bg3);color:' + (S.col===col?'var(--acc2)':'var(--txt3)') + ';font-size:8.5px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;padding:7px 10px;border-bottom:2px solid var(--bdr);text-align:' + align + ';white-space:nowrap;position:sticky;top:0">' + lbl + (S.col===col ? (S.dir<0?' ↓':' ↑') : '') + '</th>'; };
   var aumentaron = datos.filter(function(r){ var d=delta(r); return d!==null && d>0.0001; }).length;
+
   var bajaron    = datos.filter(function(r){ var d=delta(r); return d!==null && d<-0.0001; }).length;
   var estables   = datos.filter(function(r){ var d=delta(r); return d!==null && Math.abs(d)<=0.0001; }).length;
   var sinComp    = datos.filter(function(r){ return delta(r)===null; }).length;
@@ -14284,21 +14397,26 @@ function _pronEvRender(el) {
         productos.map(function(p){ return '<option value="' + p + '"' + (_pronEvFilter.producto===p?' selected':'') + '>' + p + '</option>'; }).join('') +
       '</select>' +
       '<span style="font-size:10px;color:var(--txt3);margin-left:8px">' + datos.length + ' combinaciones</span>' +
+      (_pronEvFilter.planta || _pronEvFilter.producto ? '<button class="pev-chip" data-pev="limpiar" style="margin-left:6px">✕ Quitar filtros</button>' : '') +
     '</div>' +
+    '<div class="rn-sec" style="padding-top:12px"><div class="rn-sec-t">Demanda nacional por producto <span>suma de plantas · ' + fmtMes(mUlt) + (mAnt ? ' vs ' + fmtMes(mAnt) : '') + ' · clic filtra la tabla</span></div></div>' +
+    '<div class="pev-prods">' + prodTiles + '</div>' +
+    moversHtml +
+    '<div class="rn-sec" style="padding-top:14px"><div class="rn-sec-t">Detalle por planta y producto <span>' + datos.length + ' combinaciones · ordenado por ' + ({pct:'variación %', delta:'variación', ult:'último mes', planta:'planta', producto:'producto'})[S.col] + ' · clic en una cabecera cambia el orden · clic en una fila abre la tendencia</span></div></div>' +
     // Tabla
     '<div style="padding:0 18px 20px;overflow-x:auto">' +
-      '<table style="width:100%;border-collapse:collapse;font-size:11.5px;margin-top:14px">' +
+      '<table style="width:100%;border-collapse:collapse;font-size:11.5px">' +
         '<thead><tr>' +
-          '<th style="background:var(--bg3);color:var(--txt3);font-size:8.5px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;padding:7px 12px;border-bottom:2px solid var(--bdr);text-align:left;white-space:nowrap;position:sticky;top:0">Planta</th>' +
-          '<th style="background:var(--bg3);color:var(--txt3);font-size:8.5px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;padding:7px 12px;border-bottom:2px solid var(--bdr);text-align:left;white-space:nowrap;position:sticky;top:0">Producto</th>' +
+          thSort('planta','Planta','left') +
+          thSort('producto','Producto','left') +
           meses.map(function(m) {
             return '<th style="background:var(--bg3);color:var(--acc2);font-size:8.5px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;padding:7px 10px;border-bottom:2px solid var(--bdr);text-align:right;white-space:nowrap;position:sticky;top:0">' + fmtMes(m) + '</th>';
           }).join('') +
-          '<th style="background:var(--bg3);color:var(--txt3);font-size:8.5px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;padding:7px 10px;border-bottom:2px solid var(--bdr);text-align:right;white-space:nowrap;position:sticky;top:0">Δ Último</th>' +
-          '<th style="background:var(--bg3);color:var(--txt3);font-size:8.5px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;padding:7px 10px;border-bottom:2px solid var(--bdr);text-align:right;white-space:nowrap;position:sticky;top:0">% Var.</th>' +
+          thSort('delta','Δ Último','right') +
+          thSort('pct','% Var.','right') +
           '<th style="background:var(--bg3);color:var(--txt3);font-size:8.5px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;padding:7px 14px;border-bottom:2px solid var(--bdr);text-align:left;white-space:nowrap;position:sticky;top:0">Tendencia</th>' +
         '</tr></thead>' +
-        '<tbody>' + tbody + '</tbody>' +
+        '<tbody>' + _tbodyFn() + '</tbody>' +
       '</table>' +
     '</div>';
 }
