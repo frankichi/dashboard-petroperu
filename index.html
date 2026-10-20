@@ -6211,8 +6211,10 @@ function _rnAccion(tipo, t) {
     if (cb) setTimeout(cb, 150);
   };
   if (tipo === 'refrescar') { renderPResumen(); return; }
-  if (tipo === 'ir') { irA(t.getAttribute('data-pid')); return; }
+  if (tipo === 'ir') { _rnCerrarModal(); irA(t.getAttribute('data-pid')); return; }
   if (tipo === 'cerrar-modal') { _rnCerrarModal(); return; }
+  if (tipo === 'bt-step') { var iS = parseInt(t.getAttribute('data-i'), 10); if (!isNaN(iS) && iS >= 0) { window._btFichaEstado.sel = iS; openBTModal(window._btFichaEstado.buque); } return; }
+  if (tipo === 'bt-hist') { _rnCerrarModal(); openBTModalHistorial(t.getAttribute('data-buque')); return; }
   if (tipo === 'planta') { _rnAbrirPlanta(t.getAttribute('data-planta')); return; }
   if (tipo === 'prod') { _rnAbrirProducto(t.getAttribute('data-prod')); return; }
   if (tipo === 'planta-prod') { _rnAbrirProducto(t.getAttribute('data-prod')); return; }
@@ -6260,7 +6262,16 @@ function _rnCerrarModal() {
   var m = document.getElementById('rn-modal'); if (m) m.remove();
   document.removeEventListener('keydown', _rnEscModal);
 }
-function _rnEscModal(ev) { if (ev.key === 'Escape') _rnCerrarModal(); }
+function _rnEscModal(ev) {
+  if (ev.key === 'Escape') { _rnCerrarModal(); return; }
+  var m = document.getElementById('rn-modal');
+  if (m && m.getAttribute('data-buque') && (ev.key === 'ArrowLeft' || ev.key === 'ArrowRight')) {
+    var n = m.querySelectorAll('.btf-step').length, cur = window._btFichaEstado.sel;
+    var nx = ev.key === 'ArrowRight' ? Math.min(n - 1, cur + 1) : Math.max(0, cur - 1);
+    if (nx !== cur) { window._btFichaEstado.sel = nx; openBTModal(window._btFichaEstado.buque); }
+    ev.preventDefault();
+  }
+}
 function _rnAbrirProducto(pr) {
   var D = window._rnDetalleProd; if (!D || !D.porProd[pr]) return;
   var o = D.porProd[pr], NC = D.nivelCol;
@@ -9113,7 +9124,7 @@ function _navEstadoActualTexto(buqueName) {
   return verbo + conPuerto + ' el ' + fechaCorta + ' ' + horaEvento + ' hrs' + sufijoDias + notaEspera + siguienteHTML;
 }
 
-async function openBTModal(buqueName) {
+async function openBTModalHistorial(buqueName) {
   var m = document.getElementById('whatif-modal');
   document.getElementById('whatif-content').innerHTML =
     '<div style="padding:48px;text-align:center;color:var(--txt3)">'
@@ -9593,6 +9604,190 @@ function _btKpi(label, value, color) {
 }
 function _btKpiSm(label, value) {
   return `<div style="font-size:9px;color:var(--txt3)">${label}: <span style="font-weight:700;color:var(--txt)">${value}</span></div>`;
+}
+window.openBTModalHistorial = openBTModalHistorial;
+// ═══════════════════════════════════════════════════════════════════════
+// ⚠️ REDISEÑADO — a pedido (20-oct): FICHA DEL BUQUE. Antes, al tocar un
+// buque se abría el historial completo de viajes (mucha información).
+// Ahora se muestra SOLO el viaje actual, con el mismo modelo que usa
+// Reposiciones Marítimas (_buildRepoMarBuques: escalas vigentes, zarpe,
+// retorno, posición real) — un recorrido paso a paso en el que se puede
+// tocar cada escala para ver su detalle. El historial completo queda a
+// un clic ("Historial de viajes").
+// ═══════════════════════════════════════════════════════════════════════
+function _btFichaEstilos() {
+  if (document.getElementById('btf-css')) return;
+  var st = document.createElement('style'); st.id = 'btf-css';
+  st.textContent = [
+    '.btf-head{display:flex;align-items:center;gap:12px;padding:14px 18px;border-bottom:1px solid var(--bdr);border-top:4px solid var(--c)}',
+    '.btf-ico{width:42px;height:42px;border-radius:11px;background:linear-gradient(135deg,#1a5dc8,#0a2e70);display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;box-shadow:0 4px 12px #1a5dc840}',
+    '.btf-t{font-size:18px;font-weight:800;color:var(--txt);line-height:1.1}.btf-sub{display:flex;gap:6px;flex-wrap:wrap;margin-top:4px;align-items:center}',
+    '.btf-chip{font-size:9.5px;font-weight:800;letter-spacing:.4px;padding:3px 9px;border-radius:9px;border:1px solid var(--c);color:var(--c);background:color-mix(in srgb,var(--c) 12%,transparent);text-transform:uppercase}',
+    '.btf-meta{font-size:10px;color:var(--txt3)}',
+    '.btf-tiles{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding:12px 18px 0}',
+    '.btf-tile{background:var(--card2);border:1px solid var(--bdr);border-radius:9px;padding:9px 11px}.btf-tile-l{font-size:8.5px;font-weight:800;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px}.btf-tile-v{font-size:14px;font-weight:800;color:var(--txt);margin-top:3px;line-height:1.2}.btf-tile-v small{font-size:10px;color:var(--txt2);font-weight:600}.btf-tile-s{font-size:9.5px;color:var(--txt2);margin-top:2px}',
+    '.btf-sec{padding:14px 18px 0}',
+    '.btf-steps{display:flex;align-items:stretch;gap:0;overflow-x:auto;padding:6px 2px 10px;scrollbar-width:thin}',
+    '.btf-step{position:relative;flex:0 0 auto;width:118px;display:flex;flex-direction:column;align-items:center;cursor:pointer;padding:4px 2px;border-radius:9px;transition:background .15s}.btf-step:hover{background:var(--bg3)}',
+    '.btf-step.sel{background:color-mix(in srgb,var(--acc) 14%,transparent);outline:1.5px solid var(--acc)}',
+    '.btf-step .btf-line{position:absolute;top:21px;left:50%;width:100%;height:3px;background:var(--bdr);z-index:0}.btf-step:last-child .btf-line{display:none}.btf-step .btf-line.done{background:var(--grn)}',
+    '.btf-node{position:relative;z-index:1;width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;border:2.5px solid var(--n);background:var(--bg2);color:var(--n);font-weight:800}',
+    '.btf-node.done{background:var(--grn);border-color:var(--grn);color:#fff}.btf-node.now{background:var(--n);color:#fff;box-shadow:0 0 0 5px color-mix(in srgb,var(--n) 28%,transparent);animation:btfPulse 1.6s ease-in-out infinite}',
+    '@keyframes btfPulse{0%,100%{box-shadow:0 0 0 4px color-mix(in srgb,var(--n) 30%,transparent)}50%{box-shadow:0 0 0 9px color-mix(in srgb,var(--n) 10%,transparent)}}',
+    '.btf-term{font-size:11px;font-weight:800;color:var(--txt);margin-top:6px;text-align:center;line-height:1.15}.btf-fecha{font:700 10px var(--mono);color:var(--txt2);margin-top:2px}.btf-est{font-size:8.5px;font-weight:800;text-transform:uppercase;letter-spacing:.4px;margin-top:3px;color:var(--n)}.btf-mb{font:600 9px var(--mono);color:var(--txt3);margin-top:1px}',
+    '.btf-aqui{position:absolute;top:-6px;left:50%;transform:translateX(-50%);font-size:7.5px;font-weight:800;letter-spacing:.5px;color:#fff;background:var(--n);padding:1px 6px;border-radius:6px;z-index:2}',
+    '.btf-det{margin-top:6px;background:var(--card);border:1px solid var(--bdr);border-left:4px solid var(--n);border-radius:10px;padding:11px 13px}',
+    '.btf-det-h{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}.btf-det-t{font-size:13px;font-weight:800;color:var(--txt)}.btf-det-e{font-size:10px;font-weight:800;color:var(--n);text-transform:uppercase;letter-spacing:.4px}.btf-det-f{font:700 11px var(--mono);color:var(--txt2);margin-left:auto}',
+    '.btf-det-l{font-size:11px;color:var(--txt2);margin-top:5px;line-height:1.4}',
+    '.btf-prods{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:6px;margin-top:9px}',
+    '.btf-prod{display:flex;justify-content:space-between;align-items:center;gap:6px;background:var(--card2);border:1px solid var(--bdr);border-radius:7px;padding:6px 9px;font-size:10.5px;color:var(--txt)}.btf-prod b{font-family:var(--mono);color:var(--txt)}.btf-prod small{display:block;font-size:8.5px;color:var(--txt3)}',
+    '.btf-nav{display:flex;justify-content:space-between;align-items:center;margin-top:6px;font-size:9.5px;color:var(--txt3)}.btf-nav button{background:var(--bg3);border:1px solid var(--bdr);color:var(--txt2);border-radius:6px;padding:3px 9px;font-size:10px;cursor:pointer;font-family:var(--sans)}.btf-nav button:disabled{opacity:.4;cursor:default}',
+    '.btf-carga{display:flex;flex-wrap:wrap;gap:5px;margin-top:6px}.btf-carga span{font:700 10px var(--mono);background:var(--card2);border:1px solid var(--bdr);border-radius:7px;padding:3px 8px;color:var(--txt)}.btf-carga span.ok{text-decoration:line-through;color:var(--txt3)}',
+    '@media(max-width:640px){.btf-tiles{grid-template-columns:1fr 1fr}.btf-step{width:100px}}'
+  ].join('\n');
+  document.head.appendChild(st);
+}
+window._btFichaEstado = { buque: '', sel: 0 };
+function openBTModal(buqueName) {
+  _rnEstilos(); _btFichaEstilos();
+  var key = String(buqueName || '').toUpperCase().replace(/\s*\d+$/, '').trim();
+  if (!key) return;
+  var esc = function(t) { return String(t == null ? '' : t).replace(/[&<>"]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); };
+  // Datos aún no cargados: pedirlos y mostrar la ficha en modo "cargando"
+  if (!Array.isArray(window._repomarBTMapCompletoCache)) {
+    if (typeof _repomarFetchBTMapCompleto === 'function') _repomarFetchBTMapCompleto();
+    _rnMontarModal('<div id="rn-modal" class="rn-modal"><div class="rn-m" style="--c:var(--acc)"><div class="btf-head"><div class="btf-ico">🚢</div><div><div class="btf-t">' + esc(key) + '</div><div class="btf-meta">Cargando el viaje actual…</div></div><button class="rn-m-x" data-rn="cerrar-modal">✕</button></div><div class="rn-m-body" style="padding:30px;text-align:center;color:var(--txt3)"><div style="width:30px;height:30px;border:3px solid var(--bdr);border-top-color:var(--acc);border-radius:50%;animation:spin 1s linear infinite;margin:0 auto 10px"></div>Consultando Cargas de Naves y Posicionamiento…</div></div></div>');
+    var _intentos = 0;
+    (function esperar(){ _intentos++; if (Array.isArray(window._repomarBTMapCompletoCache)) { if (document.getElementById('rn-modal')) openBTModal(buqueName); } else if (_intentos < 40) setTimeout(esperar, 500); })();
+    return;
+  }
+  var buques = [];
+  try { buques = _buildRepoMarBuques(); } catch (eB) { console.warn('[Ficha buque]', eB && eB.message); }
+  var b = buques.filter(function(x){ return String(x.buque||'').toUpperCase().replace(/\s*\d+$/, '').trim() === key; })[0];
+  if (!b) { openBTModalHistorial(buqueName); return; } // sin viaje vigente: se muestra el historial
+  if (window._btFichaEstado.buque !== key) window._btFichaEstado = { buque: key, sel: -1 };
+
+  var nav = (window._navPosData || {})[key] || (window._navPosData || {})[key + ' 2'] || null;
+  var puertoActual = nav && typeof _navCurrentPort === 'function' ? (_navCurrentPort(nav) || '') : '';
+  var ubicTxt = nav ? String(nav.ubicacion || '') : '';
+  var estadoLinea = '';
+  if (nav && (nav.estado_nav || nav.estado)) { var ls = String(nav.estado_nav || nav.estado).split('\n').map(function(l){ return l.trim(); }).filter(Boolean); if (ls[0] && ls[0].toUpperCase() === key) ls.shift(); estadoLinea = ls[0] || ''; }
+  var navegando = /NAVEG|EN RUTA|TR[ÁA]NSITO|RUMBO/i.test(ubicTxt + ' ' + estadoLinea);
+  var fmtF = function(f) { if (!f) return '—'; var p2 = String(f).slice(0,10).split('-'); return p2.length === 3 ? p2[2] + '/' + p2[1] : String(f); };
+  var fmtFH = function(f) { if (!f) return '—'; var d = fmtF(f); var h = String(f).indexOf('T') > 0 ? ' ' + String(f).split('T')[1].slice(0,5) : ''; return d + h; };
+  var hoy = (typeof currentDate !== 'undefined' && currentDate) ? currentDate : new Date().toISOString().slice(0,10);
+  var dias = function(f) { return Math.round((new Date(String(f).slice(0,10) + 'T12:00:00') - new Date(hoy + 'T12:00:00')) / 86400000); };
+  var enDias = function(f) { var d = dias(f); return d < 0 ? 'hace ' + (-d) + ' d' : d === 0 ? 'hoy' : d === 1 ? 'mañana' : 'en ' + d + ' días'; };
+
+  // ── Pasos del viaje: zarpe → escalas → retorno ──
+  var grupos = _repomarAgruparEscalas(b.legs.slice().sort(function(x,y){ return (x.fecha_hasta||'').localeCompare(y.fecha_hasta||''); }));
+  var pasos = [];
+  pasos.push({ tipo: 'zarpe', terminal: 'Talara', fecha: b.zarpe || '', estado: b.zarpe ? 'COMPLETADO' : 'PROGRAMADO', productos: [], nota: b.zarpe ? 'Zarpó de Talara' : (b.estadoActualPreZarpe || 'Aún en Talara') });
+  grupos.forEach(function(g) {
+    var presente = typeof _repomarBuquePresenteEnTerminal === 'function' && _repomarBuquePresenteEnTerminal(b.buque, g.terminalNorm);
+    pasos.push({ tipo: g.tipo || 'descarga', terminal: g.terminal, terminalNorm: g.terminalNorm, fecha: g.fecha_hasta || '', estado: g.estado, productos: g.productos || [], presente: presente, sintetica: (b.legs.find(function(l){ return l.terminalNorm === g.terminalNorm && l._sintetica; }) || {})._sintetica });
+  });
+  // Orden cronológico real (una carga en Bayóvar puede ser anterior al zarpe de Talara)
+  pasos.sort(function(x, y) { var fx = (x.fecha || '').slice(0, 10), fy = (y.fecha || '').slice(0, 10); if (!fx && !fy) return 0; if (!fx) return -1; if (!fy) return 1; return fx.localeCompare(fy); });
+  var retorno = b.retornoTalara || b.retornoEstimado || '';
+  if (retorno) pasos.push({ tipo: 'retorno', terminal: 'Talara', fecha: retorno, estado: 'PROGRAMADO', productos: [], estimado: !b.retornoTalara, nota: b.retornoTalara ? 'Retorno confirmado por Posicionamiento' : 'Retorno estimado (última escala + 1 día de estadía + tiempo de navegación)' });
+  // Paso "actual": donde está el buque, o la primera escala pendiente
+  var idxNow = -1;
+  pasos.forEach(function(ps, i){ if (idxNow === -1 && ps.presente) idxNow = i; });
+  if (idxNow === -1) { pasos.forEach(function(ps, i){ if (idxNow === -1 && ps.estado !== 'COMPLETADO' && i > 0) idxNow = i; }); }
+  if (idxNow === -1) idxNow = pasos.length - 1;
+  if (!b.zarpe && !pasos.some(function(ps){ return ps.presente; })) idxNow = pasos.findIndex(function(ps){ return ps.tipo === 'zarpe'; }); // aún en Talara
+  var sel = window._btFichaEstado.sel >= 0 && window._btFichaEstado.sel < pasos.length ? window._btFichaEstado.sel : idxNow;
+  window._btFichaEstado.sel = sel;
+
+  var colEst = function(ps) { return ps.estado === 'COMPLETADO' ? 'var(--grn)' : (ps.estado === 'DESCARGANDO' || ps.estado === 'ACTUAL' || ps.presente) ? 'var(--ora)' : ps.tipo === 'zarpe' ? 'var(--txt3)' : 'var(--acc2)'; };
+  var txtEst = function(ps) {
+    if (ps.tipo === 'zarpe') return ps.estado === 'COMPLETADO' ? 'Zarpó' : 'Pendiente';
+    if (ps.tipo === 'retorno') return ps.estimado ? 'Retorno est.' : 'Retorno';
+    if (ps.estado === 'COMPLETADO') return ps.tipo === 'carga' ? 'Cargó' : 'Descargó';
+    if (ps.estado === 'DESCARGANDO') return 'Descargando';
+    if (ps.presente) return 'En puerto';
+    return ps.tipo === 'carga' ? 'Carga' : ps.tipo === 'transito' ? 'Tránsito' : 'Descarga';
+  };
+  var icoEst = function(ps) { return ps.estado === 'COMPLETADO' ? '✓' : ps.tipo === 'zarpe' ? '⚓' : ps.tipo === 'retorno' ? '↩' : ps.tipo === 'carga' ? '▲' : ps.tipo === 'transito' ? '→' : '▼'; };
+  var mbPaso = function(ps) { return ps.productos.reduce(function(a2, x){ return a2 + (x.vol || 0); }, 0); };
+
+  // ── Resumen ──
+  var proxima = pasos.filter(function(ps, i){ return i > 0 && ps.tipo !== 'retorno' && ps.estado !== 'COMPLETADO'; })[0] || null;
+  var aBordo = {};
+  b.legs.forEach(function(l){ if ((l.tipo || 'descarga') === 'descarga' && l.estado !== 'COMPLETADO' && !l._sintetica && l.vol > 0) { var ab = _repomarAbrevProd(l.producto); aBordo[ab] = (aBordo[ab] || 0) + l.vol; } });
+  var mbABordo = Object.keys(aBordo).reduce(function(a2, k){ return a2 + aBordo[k]; }, 0);
+  var cargaChips = Object.keys(b.cargaInicial || {}).map(function(ab){ var ent = (b.productosEntregados || {})[ab]; return '<span class="' + (ent ? 'ok' : '') + '" title="' + (ent ? 'Ya entregado' : 'A bordo / pendiente') + '">' + esc(ab) + ' ' + Number(b.cargaInicial[ab]).toFixed(1) + '</span>'; }).join('');
+
+  var estadoChip = navegando ? 'Navegando' + (proxima ? ' → ' + proxima.terminal : '') : puertoActual ? 'En puerto · ' + puertoActual : (!b.zarpe ? 'En Talara' : 'En viaje');
+  var colChip = navegando ? 'var(--acc2)' : puertoActual ? 'var(--ora)' : 'var(--txt2)';
+
+  var stepsHtml = pasos.map(function(ps, i) {
+    var c = colEst(ps);
+    var cls = 'btf-node' + (ps.estado === 'COMPLETADO' ? ' done' : '') + (i === idxNow ? ' now' : '');
+    var lineDone = ps.estado === 'COMPLETADO' && pasos[i+1] && (pasos[i+1].estado === 'COMPLETADO' || pasos[i+1].presente);
+    return '<div class="btf-step' + (i === sel ? ' sel' : '') + '" data-rn="bt-step" data-i="' + i + '" style="--n:' + c + '">'
+      + '<div class="btf-line' + (lineDone ? ' done' : '') + '"></div>'
+      + (i === idxNow && (ps.presente || ps.tipo === 'zarpe' && !b.zarpe) ? '<div class="btf-aqui">AQUÍ</div>' : '')
+      + '<div class="' + cls + '">' + icoEst(ps) + '</div>'
+      + '<div class="btf-term">' + esc(ps.terminal) + '</div>'
+      + '<div class="btf-fecha">' + (ps.fecha ? fmtF(ps.fecha) : '—') + '</div>'
+      + '<div class="btf-est">' + txtEst(ps) + '</div>'
+      + (ps.productos.length ? '<div class="btf-mb">' + mbPaso(ps).toFixed(1) + ' MB</div>' : '')
+      + '</div>';
+  }).join('');
+
+  var ps = pasos[sel];
+  var detLectura = ps.tipo === 'zarpe' ? (b.zarpe ? 'Zarpó de Talara el ' + fmtFH(b.zarpe) + '.' : esc(ps.nota) + '.')
+    : ps.tipo === 'retorno' ? esc(ps.nota) + ': ' + fmtF(ps.fecha) + ' (' + enDias(ps.fecha) + ').'
+    : ps.estado === 'COMPLETADO' ? (ps.tipo === 'carga' ? 'Cargó' : 'Terminó de descargar') + ' en ' + esc(ps.terminal) + ' el ' + fmtFH(ps.fecha) + '.'
+    : ps.estado === 'DESCARGANDO' ? 'Descargando en ' + esc(ps.terminal) + ' desde el ' + fmtFH(ps.fecha) + '.'
+    : ps.presente ? 'El buque está en ' + esc(ps.terminal) + ' ahora' + (estadoLinea ? ' (' + esc(estadoLinea) + ')' : '') + '. ' + (ps.tipo === 'carga' ? 'Cargará' : 'Descargará') + ' lo indicado.'
+    : (ps.tipo === 'carga' ? 'Carga programada' : ps.tipo === 'transito' ? 'Tránsito programado' : 'Descarga programada') + ' en ' + esc(ps.terminal) + ' para el ' + fmtF(ps.fecha) + ' (' + enDias(ps.fecha) + ').';
+  var RNd = window._rnDetalleProd;
+  var prodsHtml = ps.productos.map(function(x) {
+    var extra = '';
+    if (RNd && ps.tipo === 'descarga' && ps.estado !== 'COMPLETADO') {
+      var pn = typeof normProd === 'function' ? normProd(x.producto) : x.producto;
+      var cel = RNd.celda[ps.terminal + '|' + pn];
+      if (cel) extra = '<small>planta: ' + (cel.nivel === 'quiebre' ? 'sin stock' : cel.cob + ' d de cobertura') + '</small>';
+    }
+    return '<div class="btf-prod"><span>' + esc(x.abrev || x.producto) + extra + '</span><b>' + Number(x.vol || 0).toFixed(1) + ' MB</b></div>';
+  }).join('');
+  var detHtml = '<div class="btf-det" style="--n:' + colEst(ps) + '">'
+    + '<div class="btf-det-h"><span class="btf-det-t">' + (sel + 1) + '/' + pasos.length + ' · ' + esc(ps.terminal) + '</span><span class="btf-det-e">' + txtEst(ps) + '</span><span class="btf-det-f">' + (ps.fecha ? fmtFH(ps.fecha) : '') + '</span></div>'
+    + '<div class="btf-det-l">' + detLectura + '</div>'
+    + (prodsHtml ? '<div class="btf-prods">' + prodsHtml + '</div>' : '')
+    + '<div class="btf-nav"><button data-rn="bt-step" data-i="' + (sel - 1) + '"' + (sel <= 0 ? ' disabled' : '') + '>← Anterior</button><span>Usa ← → para recorrer el viaje</span><button data-rn="bt-step" data-i="' + (sel + 1) + '"' + (sel >= pasos.length - 1 ? ' disabled' : '') + '>Siguiente →</button></div>'
+    + '</div>';
+
+  var html = '<div id="rn-modal" class="rn-modal"><div class="rn-m" style="--c:' + colChip + ';width:min(760px,100%)">'
+    + '<div class="btf-head"><div class="btf-ico">🚢</div><div style="flex:1;min-width:0"><div class="btf-t">' + esc(b.buque) + '</div>'
+    +   '<div class="btf-sub"><span class="btf-chip" style="--c:' + colChip + '">' + esc(estadoChip) + '</span>' + (b.viaje ? '<span class="btf-meta">Viaje ' + esc(b.viaje) + '</span>' : '') + (nav && nav.fecha ? '<span class="btf-meta">Posicionamiento del ' + fmtF(nav.fecha) + '</span>' : '') + '</div></div>'
+    +   '<button class="rn-m-x" data-rn="cerrar-modal" title="Cerrar">✕</button></div>'
+    + '<div class="rn-m-body">'
+    +   '<div class="btf-tiles">'
+    +     '<div class="btf-tile"><div class="btf-tile-l">Próxima escala</div><div class="btf-tile-v">' + (proxima ? esc(proxima.terminal) + ' <small>' + fmtF(proxima.fecha) + '</small>' : '—') + '</div><div class="btf-tile-s">' + (proxima ? (proxima.presente ? 'en puerto ahora' : enDias(proxima.fecha)) + ' · ' + (proxima.tipo === 'carga' ? 'carga' : 'descarga') + ' ' + mbPaso(proxima).toFixed(1) + ' MB' : 'sin escalas pendientes') + '</div></div>'
+    +     '<div class="btf-tile"><div class="btf-tile-l">Carga por entregar</div><div class="btf-tile-v">' + mbABordo.toFixed(1) + ' <small>MB</small></div><div class="btf-tile-s">' + (Object.keys(aBordo).length ? Object.keys(aBordo).map(function(k){ return esc(k) + ' ' + aBordo[k].toFixed(1); }).join(' · ') : 'todo entregado') + '</div></div>'
+    +     '<div class="btf-tile"><div class="btf-tile-l">Retorno a Talara</div><div class="btf-tile-v">' + (retorno ? fmtF(retorno) : '—') + (retorno && !b.retornoTalara ? ' <small>est.</small>' : '') + '</div><div class="btf-tile-s">' + (retorno ? enDias(retorno) : 'sin dato') + '</div></div>'
+    +   '</div>'
+    +   (cargaChips ? '<div class="btf-sec"><div class="rn-sec-t">Carga del viaje <span>tachado = ya entregado</span></div><div class="btf-carga">' + cargaChips + '</div></div>' : '')
+    +   '<div class="btf-sec"><div class="rn-sec-t">Recorrido del viaje actual <span>toca una escala para ver su detalle</span></div>'
+    +     '<div class="btf-steps">' + stepsHtml + '</div>' + detHtml + '</div>'
+    + '</div>'
+    + '<div class="rn-m-foot"><button class="rn-btn" data-rn="bt-hist" data-buque="' + esc(b.buque) + '">Historial de viajes</button><button class="rn-btn" data-rn="cerrar-modal">Cerrar</button><button class="rn-btn rn-btn-acc" data-rn="ir" data-pid="pRepoMar">Ver en Reposiciones Marítimas →</button></div>'
+    + '</div></div>';
+  // Si la ficha ya está abierta (cambio de escala), solo se reemplaza el contenido para no parpadear
+  var existente = document.getElementById('rn-modal');
+  if (existente && existente.getAttribute('data-buque') === key) {
+    var tmp = document.createElement('div'); tmp.innerHTML = html;
+    existente.innerHTML = tmp.firstElementChild.innerHTML;
+    var selEl = existente.querySelector('.btf-step.sel'); if (selEl && selEl.scrollIntoView) selEl.scrollIntoView({ block: 'nearest', inline: 'center', behavior: 'smooth' });
+  } else {
+    _rnMontarModal(html);
+    var m2 = document.getElementById('rn-modal'); if (m2) m2.setAttribute('data-buque', key);
+    var selEl2 = m2 && m2.querySelector('.btf-step.sel'); if (selEl2 && selEl2.scrollIntoView) selEl2.scrollIntoView({ block: 'nearest', inline: 'center' });
+  }
 }
 window.openBTModal = openBTModal;
 let cobOverrides = {};
