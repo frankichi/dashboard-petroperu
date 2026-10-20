@@ -6664,14 +6664,11 @@ function _segDNotificarPendientes() {
 function renderPComent() {
   var el = document.getElementById('pComent-content');
   var raw = Array.isArray(window.RAW) ? window.RAW : [];
+  var esc = function(t) { return String(t == null ? '' : t).replace(/[&<>"]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); };
+  var lbl = function(p) { return (typeof _segDLabel === 'function') ? _segDLabel(p) : p; };
 
-  // Construir lista de eventos de comentario, deduplicando el comentario
-  // general (se guarda repetido en cada producto de la misma planta/fecha
-  // — la columna COMENTARIO de inventario es una copia histórica del
-  // comentario real, que vive en reporte_estado).
-  // Filtro defensivo: filas antiguas de inventario solo tienen un código
-  // de estatus corto (N/RS/RP, de un proceso más viejo) en esa columna,
-  // no un comentario real — no deben mostrarse como si lo fueran.
+  // ── Eventos de comentario (dedupe del general por planta/fecha; se
+  //    descartan códigos de estatus viejos N/RS/RP que no son comentario)
   var STATUS_CODES_GEN = ['N', 'S', 'RS', 'RP', 'RSN', 'RPN'];
   var vistoGeneral = {};
   var eventos = [];
@@ -6681,83 +6678,175 @@ function renderPComent() {
     var prod = (r.comentario_prod || '').trim();
     if (gen) {
       var kg = r.fecha + '|' + r.planta;
-      if (!vistoGeneral[kg]) {
-        vistoGeneral[kg] = true;
-        eventos.push({ fecha: r.fecha, planta: r.planta, producto: '', texto: gen, tipo: 'general' });
-      }
+      if (!vistoGeneral[kg]) { vistoGeneral[kg] = true; eventos.push({ fecha: r.fecha, planta: r.planta, producto: '', texto: gen, tipo: 'general' }); }
     }
-    if (prod) {
-      eventos.push({ fecha: r.fecha, planta: r.planta, producto: r.producto, texto: prod, tipo: 'producto' });
-    }
+    if (prod) eventos.push({ fecha: r.fecha, planta: r.planta, producto: r.producto, texto: prod, tipo: 'producto' });
   });
-  eventos.sort(function(a, b) {
-    if (a.fecha !== b.fecha) return a.fecha < b.fecha ? 1 : -1;
-    return (a.planta || '').localeCompare(b.planta || '');
-  });
+  // ── Clasificación por tema (palabras clave del lenguaje operativo)
+  var TEMAS = [
+    { id: 'quiebre',   lbl: 'Sin stock / quiebre',   ico: '⛔', col: 'var(--red)', re: /quiebre|sin stock|sin producto|desabast|agot|stock cero|no hay (producto|stock)/i },
+    { id: 'puerto',    lbl: 'Puerto / oleaje',        ico: '🌊', col: '#0891b2',   re: /puerto|oleaje|marea|cerrad|capitan[ií]a|amarr|muelle|fondea|bah[ií]a/i },
+    { id: 'bt',        lbl: 'Buque / barcaza',        ico: '🚢', col: 'var(--acc)', re: /\bb\/?t\b|buque|barcaza|descarga|nave|zarp|arrib|eta\b|convoy|empujador/i },
+    { id: 'cisterna',  lbl: 'Cisternas / carretera',  ico: '🚛', col: '#7c3aed',   re: /cistern|camion|carretera|bloqueo|paro|huelga|v[ií]a\b|transporte terrestre/i },
+    { id: 'manto',     lbl: 'Mantenimiento / falla',  ico: '🔧', col: 'var(--ora)', re: /manten|falla|aver[ií]a|reparac|inoperativ|fuera de servicio|bomba|tanque|medidor|calibr/i },
+    { id: 'demanda',   lbl: 'Demanda / ventas',       ico: '📈', col: 'var(--grn)', re: /demanda|venta|despach|cliente|pedido|consumo|mayor salida|alta rotaci/i },
+    { id: 'calidad',   lbl: 'Calidad / inventario',   ico: '🧪', col: 'var(--yel)', re: /calidad|laborator|contamin|agua|sedimen|inventario|medici[oó]n|ajuste|sondaje|diferencia/i }
+  ];
+  var temaDe = function(txt) { var t = TEMAS.filter(function(x){ return x.re.test(txt); }); return t.length ? t : [{ id: 'otro', lbl: 'Otros', ico: '💬', col: 'var(--txt3)' }]; };
+  eventos.forEach(function(e){ e.temas = temaDe(e.texto); });
+  eventos.sort(function(a, b) { if (a.fecha !== b.fecha) return a.fecha < b.fecha ? 1 : -1; return (a.planta || '').localeCompare(b.planta || ''); });
 
   var fechas = [...new Set(eventos.map(function(e){ return e.fecha; }))].sort().reverse();
   var plantasConComent = [...new Set(eventos.map(function(e){ return e.planta; }))].sort();
+  var hoyStr = (typeof _hoyLima === 'function') ? _hoyLima() : new Date().toISOString().slice(0,10);
+  var ultFecha = fechas[0] || hoyStr;              // último día con comentarios
+  var d7 = new Date(ultFecha + 'T12:00:00'); d7.setDate(d7.getDate() - 6); var desde7 = d7.toISOString().slice(0,10);
+  var evHoy = eventos.filter(function(e){ return e.fecha === hoyStr; });
+  var evUlt = eventos.filter(function(e){ return e.fecha === ultFecha; });
+  var ev7 = eventos.filter(function(e){ return e.fecha >= desde7 && e.fecha <= ultFecha; });
 
   var badge = document.getElementById('sb-badge-pComent');
-  if (badge) {
-    var hoyStr = (typeof _hoyLima === 'function') ? _hoyLima() : new Date().toISOString().slice(0,10);
-    var nHoy = eventos.filter(function(e){ return e.fecha === hoyStr; }).length;
-    if (nHoy > 0) { badge.style.display = ''; badge.textContent = nHoy; } else { badge.style.display = 'none'; }
-  }
+  if (badge) { if (evHoy.length > 0) { badge.style.display = ''; badge.textContent = evHoy.length; } else { badge.style.display = 'none'; } }
 
   if (!window._pcFiltroFecha) window._pcFiltroFecha = '';
   if (!window._pcFiltroPlanta) window._pcFiltroPlanta = '';
+  window._pcEstado = window._pcEstado || { tema: '', q: '' };
+
+  // ── Resumen ejecutivo
+  var cuentaTema = {}; ev7.forEach(function(e){ e.temas.forEach(function(t){ cuentaTema[t.id] = (cuentaTema[t.id] || 0) + 1; }); });
+  var temasOrden = TEMAS.concat([{ id: 'otro', lbl: 'Otros', ico: '💬', col: 'var(--txt3)' }]).filter(function(t){ return cuentaTema[t.id]; }).sort(function(a,b){ return cuentaTema[b.id] - cuentaTema[a.id]; });
+  var porPlanta7 = {}; ev7.forEach(function(e){ porPlanta7[e.planta] = (porPlanta7[e.planta] || 0) + 1; });
+  var recurrentes = Object.entries(porPlanta7).filter(function(e){ return e[1] >= 3; }).sort(function(a,b){ return b[1]-a[1]; });
+  var plantasUlt = [...new Set(evUlt.map(function(e){ return e.planta; }))];
+  var criticosUlt = evUlt.filter(function(e){ return e.temas.some(function(t){ return t.id === 'quiebre' || t.id === 'puerto' || t.id === 'manto'; }); });
+  var RN = null; try { if (typeof _rnCalcularDetalle === 'function') _rnCalcularDetalle(); RN = window._rnDetalleProd || null; } catch (e) { RN = null; }
+  var cobChip = function(pl) {
+    var o = RN && RN.porPlanta && RN.porPlanta[pl]; if (!o) return '';
+    var c = (o.cobMin != null && o.cobMin < 900) ? o.cobMin.toFixed(1) + ' d' : (o.peor === 'quiebre' ? 'sin stock' : 's/d');
+    return '<span class="pcm-cob pcm-cob-' + (o.peor || 'nd') + '" title="Cobertura mínima actual de la planta">cob. ' + c + '</span>';
+  };
+  var lectura;
+  if (!eventos.length) lectura = 'Aún no hay comentarios registrados por las plantas.';
+  else {
+    lectura = (ultFecha === hoyStr ? 'Hoy ' : 'El ' + ultFecha + ' ') + '<b>' + plantasUlt.length + (plantasUlt.length === 1 ? ' planta dejó' : ' plantas dejaron') + ' ' + evUlt.length + ' comentario' + (evUlt.length === 1 ? '' : 's') + '</b>';
+    if (temasOrden.length) lectura += '. En los últimos 7 días el tema dominante es <b>' + temasOrden[0].ico + ' ' + temasOrden[0].lbl + '</b> (' + cuentaTema[temasOrden[0].id] + ' menciones)';
+    if (criticosUlt.length) lectura += '. <span style="color:var(--red);font-weight:800">Requieren lectura:</span> ' + [...new Set(criticosUlt.map(function(e){ return lbl(e.planta); }))].slice(0,4).map(esc).join(', ') + ' (sin stock, puerto o falla)';
+    if (recurrentes.length) lectura += '. Plantas con comentarios recurrentes: ' + recurrentes.slice(0,3).map(function(r){ return '<b>' + esc(lbl(r[0])) + '</b> (' + r[1] + ')'; }).join(', ');
+    lectura += '.';
+  }
+  var stripHTML = '<div class="pcm-strip">'
+    + '<div class="pcm-hero"><div class="pcm-k">Comentarios ' + (ultFecha === hoyStr ? 'de hoy' : 'del último reporte') + '</div><div class="pcm-n">' + evUlt.length + '<small>' + plantasUlt.length + ' plantas · ' + esc(ultFecha) + '</small></div><div class="pcm-s">' + evUlt.filter(function(e){ return e.tipo === 'general'; }).length + ' generales · ' + evUlt.filter(function(e){ return e.tipo === 'producto'; }).length + ' por producto</div></div>'
+    + '<div class="pcm-kpi"><div class="pcm-k">Requieren lectura</div><div class="pcm-n" style="color:' + (criticosUlt.length ? 'var(--red)' : 'var(--grn)') + '">' + criticosUlt.length + '</div><div class="pcm-s">mencionan sin stock, puerto cerrado o falla</div></div>'
+    + '<div class="pcm-kpi"><div class="pcm-k">Últimos 7 días</div><div class="pcm-n">' + ev7.length + '</div><div class="pcm-s">' + Object.keys(porPlanta7).length + ' plantas · ' + recurrentes.length + ' recurrentes (≥3)</div></div>'
+    + '<div class="pcm-kpi"><div class="pcm-k">Temas (7 días)</div><div class="pcm-temas">' + (temasOrden.length ? temasOrden.slice(0,4).map(function(t){ return '<span class="pcm-tema" style="--c:' + t.col + '">' + t.ico + ' ' + esc(t.lbl) + ' <b>' + cuentaTema[t.id] + '</b></span>'; }).join('') : '<span class="pcm-s">sin datos</span>') + '</div></div>'
+    + '</div>'
+    + '<div class="pcm-lectura">' + lectura + '</div>';
 
   function draw() {
+    var E = window._pcEstado;
+    var q = (E.q || '').toLowerCase();
     var filtrados = eventos.filter(function(e) {
       if (window._pcFiltroFecha && e.fecha !== window._pcFiltroFecha) return false;
       if (window._pcFiltroPlanta && e.planta !== window._pcFiltroPlanta) return false;
+      if (E.tema && !e.temas.some(function(t){ return t.id === E.tema; })) return false;
+      if (q && (e.texto + ' ' + e.planta + ' ' + e.producto).toLowerCase().indexOf(q) < 0) return false;
       return true;
     });
+    var chips = '<button class="dec-chip' + (!E.tema ? ' on' : '') + '" style="--c:var(--acc)" data-pc="tema" data-v="">Todos <b>' + eventos.length + '</b></button>'
+      + TEMAS.concat([{ id: 'otro', lbl: 'Otros', ico: '💬', col: 'var(--txt3)' }]).map(function(t){
+        var n = eventos.filter(function(e){ return e.temas.some(function(x){ return x.id === t.id; }); }).length; if (!n) return '';
+        return '<button class="dec-chip' + (E.tema === t.id ? ' on' : '') + '" style="--c:' + t.col + '" data-pc="tema" data-v="' + t.id + '">' + t.ico + ' ' + esc(t.lbl) + ' <b>' + n + '</b></button>';
+      }).join('');
+    document.getElementById('pcom-chips').innerHTML = chips;
 
-    var cardsHtml = filtrados.length ? filtrados.map(function(e) {
-      var icono = e.tipo === 'general' ? '🏭' : '🧪';
-      var etiqueta = e.tipo === 'general' ? 'Comentario general de planta' : ('Producto: ' + e.producto);
-      var color = e.tipo === 'general' ? 'var(--acc)' : '#0071A4';
-      return '<div style="background:var(--card);border:1px solid var(--bdr);border-left:3px solid ' + color + ';border-radius:var(--r);padding:12px 14px;margin-bottom:8px">' +
-        '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">' +
-          '<span style="font-size:14px">' + icono + '</span>' +
-          '<span style="font-size:12.5px;font-weight:800;color:var(--txt)">' + (_segDLabel ? _segDLabel(e.planta) : e.planta) + '</span>' +
-          '<span class="badge" style="background:' + color + '14;color:' + color + ';border:1px solid ' + color + '40;font-size:9px">' + etiqueta + '</span>' +
-          '<span style="margin-left:auto;font-size:10px;color:var(--txt3)">' + e.fecha + '</span>' +
-        '</div>' +
-        '<div style="font-size:12px;color:var(--txt2);line-height:1.4">' + String(e.texto).replace(/</g,'&lt;') + '</div>' +
-      '</div>';
-    }).join('') : '<div style="padding:30px;text-align:center;color:var(--txt3);font-size:12px">Sin comentarios registrados para este filtro.</div>';
-
-    document.getElementById('pcom-body').innerHTML = cardsHtml;
+    // agrupar por fecha → tarjetas por planta
+    var porFecha = {}; filtrados.forEach(function(e){ (porFecha[e.fecha] = porFecha[e.fecha] || []).push(e); });
+    var html = Object.keys(porFecha).sort().reverse().map(function(f) {
+      var lista = porFecha[f];
+      var porPl = {}; lista.forEach(function(e){ (porPl[e.planta] = porPl[e.planta] || []).push(e); });
+      var dia = f === hoyStr ? 'Hoy · ' + f : f;
+      return '<div class="pcm-dia"><div class="pcm-dia-h"><span>' + esc(dia) + '</span><span class="pcm-dia-n">' + lista.length + ' comentario' + (lista.length === 1 ? '' : 's') + ' · ' + Object.keys(porPl).length + ' planta' + (Object.keys(porPl).length === 1 ? '' : 's') + '</span></div>'
+        + '<div class="pcm-grid">' + Object.keys(porPl).sort().map(function(pl) {
+          var evs = porPl[pl];
+          var sev = evs.some(function(e){ return e.temas.some(function(t){ return t.id === 'quiebre'; }); }) ? 'var(--red)' : evs.some(function(e){ return e.temas.some(function(t){ return t.id === 'puerto' || t.id === 'manto'; }); }) ? 'var(--ora)' : 'var(--acc)';
+          var tags = [...new Set([].concat.apply([], evs.map(function(e){ return e.temas; })).map(function(t){ return t.ico + ' ' + t.lbl; }))].slice(0,3);
+          var plOf = (typeof _cisPlantaOficial === 'function') ? _cisPlantaOficial(pl) : null;
+          return '<div class="pcm-card" style="--sev:' + sev + '">'
+            + '<div class="pcm-card-h"><div class="pcm-card-pl">' + esc(lbl(pl)) + '</div>' + (plOf ? cobChip(plOf) : '') + '</div>'
+            + '<div class="pcm-tags">' + tags.map(function(t){ return '<span class="pcm-tag">' + esc(t) + '</span>'; }).join('') + '</div>'
+            + evs.map(function(e) {
+                var txt = esc(e.texto); if (q) txt = txt.replace(new RegExp('(' + q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ')', 'ig'), '<mark>$1</mark>');
+                return '<div class="pcm-ev"><div class="pcm-ev-k">' + (e.tipo === 'general' ? '🏭 General' : '🧪 ' + esc(e.producto)) + '</div><div class="pcm-ev-t">' + txt + '</div></div>';
+              }).join('')
+            + (plOf ? '<div class="pcm-card-f"><button class="cis-mini" data-rn="planta" data-planta="' + esc(plOf) + '">📋 Ficha</button><button class="cis-mini" data-rn="ver-tend" data-planta="' + esc(plOf) + '">📈 Tendencia</button><button class="cis-mini" data-pc="solo-planta" data-v="' + esc(pl) + '">🔎 Solo esta planta</button></div>' : '')
+            + '</div>';
+        }).join('') + '</div></div>';
+    }).join('');
+    document.getElementById('pcom-body').innerHTML = html || '<div class="pcm-vacio">Sin comentarios para este filtro.</div>';
     document.getElementById('pcom-count').textContent = filtrados.length + ' comentario(s)';
   }
 
   el.innerHTML =
     '<div class="page-header">' +
       '<div class="page-header-title">💬 Comentarios de Plantas</div>' +
-      '<div class="page-header-subtitle">Comentarios generales y por producto registrados en Registro Diario — trazabilidad completa, no solo en el Sheets</div>' +
+      '<div class="page-header-subtitle">Lo que reportan las plantas en el Registro Diario — clasificado por tema, con la situación de inventario de cada una</div>' +
       '<div class="date-bar" style="padding:6px 0 0;flex-wrap:wrap;gap:8px">' +
         '<span class="f-label">Fecha</span>' +
-        '<select id="pcom-fecha"><option value="">Todas</option>' +
-          fechas.map(function(f){ return '<option value="' + f + '">' + f + '</option>'; }).join('') +
-        '</select>' +
+        '<select id="pcom-fecha"><option value="">Todas</option>' + fechas.map(function(f){ return '<option value="' + f + '">' + f + '</option>'; }).join('') + '</select>' +
         '<span class="f-label">Planta</span>' +
-        '<select id="pcom-planta"><option value="">Todas</option>' +
-          plantasConComent.map(function(p){ return '<option value="' + p + '">' + (_segDLabel ? _segDLabel(p) : p) + '</option>'; }).join('') +
-        '</select>' +
+        '<select id="pcom-planta"><option value="">Todas</option>' + plantasConComent.map(function(p){ return '<option value="' + p + '">' + esc(lbl(p)) + '</option>'; }).join('') + '</select>' +
+        '<input id="pcom-q" class="pcm-q" type="search" placeholder="Buscar en comentarios…" value="' + esc(window._pcEstado.q || '') + '">' +
         '<span class="date-count" id="pcom-count"></span>' +
       '</div>' +
     '</div>' +
-    '<div id="pcom-body" style="padding:16px 18px;max-width:900px"></div>';
+    '<div style="padding:14px 18px 0">' + stripHTML + '<div id="pcom-chips" class="pcm-chips"></div></div>' +
+    '<div id="pcom-body" style="padding:6px 18px 18px"></div>';
+  _pcEstilos();
 
   document.getElementById('pcom-fecha').value = window._pcFiltroFecha;
   document.getElementById('pcom-planta').value = window._pcFiltroPlanta;
   document.getElementById('pcom-fecha').addEventListener('change', function(){ window._pcFiltroFecha = this.value; draw(); });
   document.getElementById('pcom-planta').addEventListener('change', function(){ window._pcFiltroPlanta = this.value; draw(); });
-
+  document.getElementById('pcom-q').addEventListener('input', function(){ window._pcEstado.q = this.value; draw(); });
+  if (!el._pcBound) {
+    el._pcBound = true;
+    el.addEventListener('click', function(ev) {
+      var r = ev.target.closest('[data-rn]'); if (r && el.contains(r)) { ev.stopPropagation(); if (typeof _rnAccion === 'function') _rnAccion(r.getAttribute('data-rn'), r); return; }
+      var t = ev.target.closest('[data-pc]'); if (!t || !el.contains(t)) return;
+      var k = t.getAttribute('data-pc'), v = t.getAttribute('data-v') || '';
+      if (k === 'tema') window._pcEstado.tema = v;
+      if (k === 'solo-planta') { window._pcFiltroPlanta = (window._pcFiltroPlanta === v) ? '' : v; var s = document.getElementById('pcom-planta'); if (s) s.value = window._pcFiltroPlanta; }
+      draw();
+    });
+  }
   draw();
+}
+function _pcEstilos() {
+  if (document.getElementById('pcm-estilos')) return;
+  var s = document.createElement('style'); s.id = 'pcm-estilos';
+  s.textContent = ''
+  + '.pcm-strip{display:grid;grid-template-columns:minmax(220px,1.2fr) repeat(3,minmax(150px,1fr));gap:10px;margin-bottom:10px}'
+  + '.pcm-hero{background:linear-gradient(135deg,color-mix(in srgb,var(--acc) 14%,var(--card)),var(--card));border:1px solid color-mix(in srgb,var(--acc) 35%,var(--bdr));border-radius:12px;padding:12px 14px}'
+  + '.pcm-kpi{background:var(--card);border:1px solid var(--bdr);border-radius:12px;padding:12px 14px}'
+  + '.pcm-k{font-size:9.5px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--txt3)}'
+  + '.pcm-n{font-family:var(--mono);font-size:30px;font-weight:900;line-height:1;color:var(--txt);margin-top:6px}.pcm-n small{font-size:11px;font-weight:700;color:var(--txt2);font-family:var(--sans);margin-left:8px}'
+  + '.pcm-s{font-size:10.5px;color:var(--txt2);margin-top:6px;line-height:1.35}'
+  + '.pcm-temas{display:flex;flex-wrap:wrap;gap:4px;margin-top:8px}.pcm-tema{font-size:10px;font-weight:700;padding:2px 7px;border-radius:999px;background:color-mix(in srgb,var(--c) 14%,transparent);border:1px solid color-mix(in srgb,var(--c) 40%,transparent);color:var(--txt)}.pcm-tema b{font-family:var(--mono)}'
+  + '.pcm-lectura{background:color-mix(in srgb,var(--acc) 8%,var(--card));border:1px solid color-mix(in srgb,var(--acc) 25%,var(--bdr));border-left:4px solid var(--acc);border-radius:10px;padding:10px 14px;font-size:12.5px;line-height:1.55;color:var(--txt);margin-bottom:10px}.pcm-lectura b{color:var(--acc)}'
+  + '.pcm-chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px}'
+  + '.pcm-q{background:var(--bg3);border:1px solid var(--bdr);color:var(--txt);font-size:11px;padding:4px 9px;border-radius:6px;min-width:200px;font-family:var(--sans)}'
+  + '.pcm-dia{margin-top:12px}.pcm-dia-h{display:flex;justify-content:space-between;align-items:baseline;font-size:12.5px;font-weight:800;color:var(--txt);padding-bottom:6px;border-bottom:1px solid var(--bdr);margin-bottom:8px}.pcm-dia-n{font-size:10.5px;font-weight:600;color:var(--txt3)}'
+  + '.pcm-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:8px}'
+  + '.pcm-card{background:var(--card);border:1px solid var(--bdr);border-left:4px solid var(--sev);border-radius:10px;padding:10px 12px}'
+  + '.pcm-card-h{display:flex;justify-content:space-between;align-items:center;gap:6px}.pcm-card-pl{font-size:13px;font-weight:800;color:var(--txt)}'
+  + '.pcm-cob{font-family:var(--mono);font-size:10px;font-weight:800;padding:2px 6px;border-radius:999px;white-space:nowrap}.pcm-cob-quiebre,.pcm-cob-crit{background:color-mix(in srgb,var(--red) 16%,transparent);color:var(--red)}.pcm-cob-alerta{background:color-mix(in srgb,var(--yel) 18%,transparent);color:var(--yel)}.pcm-cob-ok{background:color-mix(in srgb,var(--grn) 14%,transparent);color:var(--grn)}.pcm-cob-nd{background:var(--bg3);color:var(--txt3)}'
+  + '.pcm-tags{display:flex;flex-wrap:wrap;gap:4px;margin:6px 0 4px}.pcm-tag{font-size:9.5px;font-weight:700;padding:1px 7px;border-radius:999px;background:var(--bg3);color:var(--txt2);border:1px solid var(--bdr)}'
+  + '.pcm-ev{padding:6px 0;border-top:1px dashed var(--bdr)}.pcm-ev-k{font-size:9.5px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:var(--txt3)}.pcm-ev-t{font-size:12px;color:var(--txt);line-height:1.45;margin-top:2px}.pcm-ev-t mark{background:color-mix(in srgb,var(--yel) 40%,transparent);color:inherit;border-radius:2px}'
+  + '.pcm-card-f{display:flex;gap:6px;margin-top:8px;padding-top:7px;border-top:1px dashed var(--bdr);flex-wrap:wrap}'
+  + '.cis-mini{font-size:10px;font-weight:700;padding:3px 8px;border-radius:6px;border:1px solid var(--bdr);background:transparent;color:var(--txt2);cursor:pointer;font-family:var(--sans)}.cis-mini:hover{border-color:var(--acc);color:var(--acc)}'
+  + '.pcm-vacio{padding:30px;text-align:center;color:var(--txt3);font-size:12px}'
+  + '@media(max-width:1000px){.pcm-strip{grid-template-columns:1fr 1fr}}@media(max-width:600px){.pcm-strip{grid-template-columns:1fr}}';
+  document.head.appendChild(s);
 }
 // Actualiza solo el badge de "Comentarios" en el sidebar, usando los datos
 // ya cargados en RAW (sin request adicional al servidor).
@@ -15777,12 +15866,76 @@ function _pTendRestoreHidden() {
     window._pTendChart.update('none');
   }
 }
+// ─────────────────────────────────────────────────────────────────────
+// CURVA DE INVENTARIO · proyección compartida (tarjetas + resumen)
+// Devuelve, para una fila planta|producto y el escenario activo, las
+// series de 21 días y los hitos: día de quiebre normal, día de quiebre en
+// el escenario, día de llegada del BT y si el BT llega tarde.
+// ─────────────────────────────────────────────────────────────────────
+function _curvaProyectar(r, escenario) {
+  const inv = r.inv || 0;
+  const pk = r.planta + '|' + r.producto;
+  const pronV = pronSheet[pk] || r.pron_mes || r.pron || 0;
+  const vfactV = r.vfact || 0;
+  const dem = Math.abs(vfactV > 0 ? vfactV : (pronV > 0 ? pronV : (r.dem_prom || r.dem || 0)));
+  const days = 21;
+  const hoyMs = new Date(currentDate + 'T12:00:00').getTime();
+  const btEtaMs = r.fecha_reposicion ? new Date(r.fecha_reposicion + 'T12:00:00').getTime() : null;
+  const btVol = (r.vol_rep || 0) + (r.vol_rep_bt2 || 0);
+  const esFluvial = CURVE_FLUVIAL_PLANTS.indexOf(r.planta) >= 0;
+  let scEtaMs = btEtaMs, scVol = btVol, scActive = (escenario !== 'normal');
+  if (escenario === 'sinbt') scVol = 0;
+  else if (escenario === 'bt3' && btEtaMs) scEtaMs = btEtaMs + 3 * 86400000;
+  else if (escenario === 'cierre7' && btEtaMs) scEtaMs = Math.max(btEtaMs, hoyMs + 7 * 86400000);
+  else if (escenario === 'vaciante') { if (esFluvial) scVol = 0; else scActive = false; }
+  const labels = [], invLine = [], scenLine = [];
+  let curInv = inv, scInv = inv, btAdded = false, scAdded = false;
+  for (let d = 0; d <= days; d++) {
+    const dt = new Date(hoyMs + d * 86400000);
+    labels.push(dt.getDate() + '/' + (dt.getMonth() + 1));
+    invLine.push(Math.round(Math.max(0, curInv) * 100) / 100);
+    if (!btAdded && btEtaMs && dt.getTime() >= btEtaMs && btVol > 0) { curInv += btVol; btAdded = true; }
+    curInv -= dem;
+    scenLine.push(Math.round(Math.max(0, scInv) * 100) / 100);
+    if (!scAdded && scEtaMs && dt.getTime() >= scEtaMs && scVol > 0) { scInv += scVol; scAdded = true; }
+    scInv -= dem;
+  }
+  const primerCero = function(L) { for (let d = 0; d < L.length; d++) if (L[d] <= 0) return d; return null; };
+  const qNormal = primerCero(invLine), qScen = scActive ? primerCero(scenLine) : null;
+  const btDia = (btEtaMs && btVol > 0) ? Math.round((btEtaMs - hoyMs) / 86400000) : null;
+  const diasSinBT = dem > 0 ? Math.floor(inv / dem) : (inv > 0 ? 999 : 0);  // autonomía sin reposición
+  const llegaTarde = (btDia != null && btDia >= 0 && diasSinBT < 999 && btDia > diasSinBT);
+  return { inv, dem, labels, invLine, scenLine, scActive, qNormal, qScen, btDia, btVol, btEta: r.fecha_reposicion || '', diasSinBT, llegaTarde, esFluvial };
+}
+function _curvaEstilos() {
+  if (document.getElementById('curva-estilos')) return;
+  var s = document.createElement('style'); s.id = 'curva-estilos';
+  s.textContent = ''
+  + '.cv-strip{display:grid;grid-template-columns:minmax(230px,1.3fr) repeat(4,minmax(130px,1fr));gap:10px;padding:12px 18px 0}'
+  + '.cv-hero{background:linear-gradient(135deg,color-mix(in srgb,var(--acc) 14%,var(--card)),var(--card));border:1px solid color-mix(in srgb,var(--acc) 35%,var(--bdr));border-radius:12px;padding:12px 14px}'
+  + '.cv-kpi{background:var(--card);border:1px solid var(--bdr);border-radius:12px;padding:12px 14px;cursor:pointer;transition:border-color .12s}.cv-kpi:hover{border-color:var(--acc)}.cv-kpi.on{border-color:var(--acc);box-shadow:0 0 0 2px color-mix(in srgb,var(--acc) 30%,transparent)}'
+  + '.cv-k{font-size:9.5px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--txt3)}'
+  + '.cv-n{font-family:var(--mono);font-size:28px;font-weight:900;line-height:1;color:var(--txt);margin-top:6px}.cv-n small{font-size:11px;font-weight:700;color:var(--txt2);font-family:var(--sans);margin-left:6px}'
+  + '.cv-s{font-size:10.5px;color:var(--txt2);margin-top:6px;line-height:1.35}'
+  + '.cv-lectura{margin:10px 18px 0;background:color-mix(in srgb,var(--acc) 8%,var(--card));border:1px solid color-mix(in srgb,var(--acc) 25%,var(--bdr));border-left:4px solid var(--acc);border-radius:10px;padding:10px 14px;font-size:12.5px;line-height:1.55;color:var(--txt)}.cv-lectura b{color:var(--acc)}'
+  + '.cv-rank{margin:12px 18px 0;background:var(--card);border:1px solid var(--bdr);border-radius:12px;padding:10px 14px}'
+  + '.cv-rank-h{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px}.cv-rank-t{font-size:12px;font-weight:800;color:var(--txt)}.cv-rank-s{font-size:10px;color:var(--txt3)}'
+  + '.cv-row{display:grid;grid-template-columns:120px 1fr 150px;gap:10px;align-items:center;padding:4px 0;border-top:1px dashed var(--bdr);cursor:pointer;font-size:11px}.cv-row:hover{background:color-mix(in srgb,var(--acc) 6%,transparent)}'
+  + '.cv-row-pl{font-weight:800;color:var(--txt);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}'
+  + '.cv-tl{position:relative;height:14px;background:var(--bg3);border-radius:7px;overflow:visible}'
+  + '.cv-tl-inv{position:absolute;left:0;top:0;height:100%;border-radius:7px;background:var(--c)}'
+  + '.cv-tl-bt{position:absolute;top:-3px;width:2px;height:20px;background:var(--txt);opacity:.9}.cv-tl-bt::after{content:"🚢";position:absolute;top:-14px;left:-7px;font-size:11px}'
+  + '.cv-tl-q{position:absolute;top:-2px;width:18px;height:18px;line-height:18px;text-align:center;font-size:11px;margin-left:-9px}'
+  + '.cv-row-r{font-family:var(--mono);font-size:10.5px;color:var(--txt2);text-align:right;white-space:nowrap}.cv-row-r b{color:var(--txt)}'
+  + '.cv-tl-ax{display:grid;grid-template-columns:120px 1fr 150px;gap:10px;font-size:9px;color:var(--txt3);margin-top:2px}.cv-tl-ax div:nth-child(2){display:flex;justify-content:space-between}'
+  + '.cv-badge{display:inline-block;font-size:9.5px;font-weight:800;padding:2px 7px;border-radius:999px;margin-right:4px}.cv-badge-rojo{background:color-mix(in srgb,var(--red) 16%,transparent);color:var(--red)}.cv-badge-ok{background:color-mix(in srgb,var(--grn) 14%,transparent);color:var(--grn)}.cv-badge-yel{background:color-mix(in srgb,var(--yel) 18%,transparent);color:var(--yel)}.cv-badge-sc{background:color-mix(in srgb,#7c3aed 16%,transparent);color:#a78bfa}'
+  + '@media(max-width:1100px){.cv-strip{grid-template-columns:1fr 1fr 1fr}}@media(max-width:700px){.cv-strip{grid-template-columns:1fr 1fr}.cv-row{grid-template-columns:90px 1fr 110px}}';
+  document.head.appendChild(s);
+}
+window._curvaEstado = window._curvaEstado || { vista: 'todas' };
 function renderPD() {
-  // ⚠️ AGREGADO — mismo guardia que en openWhatIf/Vista Ejecutiva/
-  // renderCharts: la página "pD" (curvas) se puede abrir directo desde el
-  // menú sin haber disparado antes la carga de Chart.js, y el código de
-  // esta vista arma sus gráficas con `new Chart(...)` sin verificar que
-  // la librería ya esté cargada.
+  // ⚠️ Guardia: esta vista arma sus gráficas con `new Chart(...)`, y puede
+  // abrirse directo desde el menú antes de que Chart.js esté cargado.
   if (typeof Chart === 'undefined') {
     if (typeof ensureChartJS === 'function') {
       ensureChartJS().then(function(){ if (document.getElementById('pD')?.classList.contains('active')) renderPD(); })
@@ -15790,21 +15943,21 @@ function renderPD() {
     }
     return;
   }
+  _curvaEstilos();
+  const esc = function(t) { return String(t == null ? '' : t).replace(/[&<>"]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); };
   const today = byLatest();
   const EXCLUIR = ['ULSD EXPO','Regular HS'];
-  const active = today.filter(r => !EXCLUIR.some(x => r.producto && r.producto.toUpperCase().includes(x.toUpperCase())) && !SKIP_COMBOS.has((r.planta||'')+'|'+(r.producto||'')) && (typeof PRODUCTOS_POR_PLANTA_EXEC === 'undefined' || !PRODUCTOS_POR_PLANTA_EXEC[r.planta] || PRODUCTOS_POR_PLANTA_EXEC[r.planta].indexOf(r.producto) !== -1));
+  const active = today.filter(r => !EXCLUIR.some(x => r.producto && r.producto.toUpperCase().includes(x.toUpperCase())) && !SKIP_COMBOS.has((r.planta||'')+'|'+(r.producto||'')) && (typeof PRODUCTOS_POR_PLANTA_EXEC === 'undefined' || !PRODUCTOS_POR_PLANTA_EXEC[r.planta] || PRODUCTOS_POR_PLANTA_EXEC[r.planta].indexOf(r.producto) >= 0));
   const productos = [...new Set(active.map(r=>r.producto))].sort();
   if (!productos.includes(curveProdFilter)) curveProdFilter = productos[0]||'';
   const prodBtns = productos.map(p =>
     `<button class="curve-prod-btn ${p===curveProdFilter?'active':''}" onclick="setCurveProd('${p.replace(/'/g,"\\'")}');">${p}</button>`
   ).join('');
+  // Proyección de cada planta del producto elegido
   const rows = active.filter(r => r.producto === curveProdFilter).map(r => {
-    const pk  = r.planta + '|' + r.producto;
-    const dem = (pronSheet[pk] || r.pron_mes || r.pron || 0);
-    const vf  = r.vfact || 0;
-    const dmRate = vf > 0 ? vf : (dem > 0 ? dem : (r.dem_prom || r.dem || 0));
-    const calcCob = (r.inv > 0 && dmRate > 0) ? Math.round(r.inv / dmRate) : (r.inv > 0 ? 999 : 0);
-    return Object.assign({}, r, { _calcCob: calcCob });
+    const P = _curvaProyectar(r, curveScenario);
+    const calcCob = (P.inv > 0 && P.dem > 0) ? Math.round(P.inv / P.dem) : (P.inv > 0 ? 999 : 0);
+    return Object.assign({}, r, { _calcCob: calcCob, _P: P });
   }).sort((a, b) => {
     const ca = a._calcCob, cb = b._calcCob;
     if (ca === cb) return (b.inv||0) - (a.inv||0);
@@ -15816,37 +15969,77 @@ function renderPD() {
   });
   Object.values(curveCharts).forEach(ch => { try{ch.destroy();}catch(e){} });
   curveCharts = {};
-  const cards = rows.map(r => {
-    const inv   = r.inv   || 0;
-    const pk = r.planta + '|' + r.producto;
-    const pronV = pronSheet[pk] || r.pron_mes || r.pron || 0;
-    const vfactV = r.vfact || 0;
-    const dem   = Math.abs(vfactV > 0 ? vfactV : (pronV > 0 ? pronV : (r.dem_prom || r.dem || 0)));
-    const days  = 21;
-    const daysToQuiebre = dem > 0 ? Math.round(inv/dem) : 999;
-    const btETA = r.fecha_reposicion || '';
+
+  // ── Resumen ejecutivo del producto (misma proyección de las tarjetas)
+  const E = window._curvaEstado;
+  const scLbl = CURVE_SCENARIOS[curveScenario].lbl.replace(/^[^\w]*\s/, '');
+  const conQuiebreNormal = rows.filter(r => r._P.qNormal !== null);
+  const conQuiebreScen = rows.filter(r => r._P.scActive && r._P.qScen !== null);
+  const llegaTarde = rows.filter(r => r._P.llegaTarde);
+  const sinRepo = rows.filter(r => r._P.btDia == null && r._P.diasSinBT < 21);
+  const rescatadas = rows.filter(r => r._P.btDia != null && r._P.diasSinBT < 21 && r._P.qNormal === null);
+  const nuevasPorEscenario = conQuiebreScen.filter(r => r._P.qNormal === null);
+  const minQ = conQuiebreNormal.length ? Math.min.apply(null, conQuiebreNormal.map(r => r._P.qNormal)) : null;
+  const plMinQ = conQuiebreNormal.filter(r => r._P.qNormal === minQ).map(r => r.planta);
+  const cls = (n, sev) => n ? (sev === 'red' ? 'var(--red)' : 'var(--yel)') : 'var(--grn)';
+  let lectura = `Para <b>${esc(curveProdFilter)}</b>, `;
+  if (!rows.length) lectura += 'no hay plantas con datos.';
+  else if (!conQuiebreNormal.length) lectura += `ninguna de las ${rows.length} plantas quiebra en los próximos 21 días con la reposición programada.`;
+  else lectura += `<b style="color:var(--red)">${conQuiebreNormal.length} de ${rows.length} plantas</b> quiebran dentro de 21 días aun con la reposición programada; la primera es <b>${esc(plMinQ.join(', '))}</b> en ${minQ === 0 ? 'este momento (ya sin stock)' : '~' + minQ + ' día' + (minQ === 1 ? '' : 's')}.`;
+  if (llegaTarde.length) lectura += ` El BT llega <b style="color:var(--red)">después del quiebre</b> en ${llegaTarde.map(r => esc(r.planta) + ' (' + (r._P.btDia - r._P.diasSinBT) + 'd tarde)').join(', ')}.`;
+  if (sinRepo.length) lectura += ` Sin reposición programada y con menos de 21 días de autonomía: <b style="color:var(--yel)">${sinRepo.map(r => esc(r.planta)).join(', ')}</b>.`;
+  if (rescatadas.length) lectura += ` La reposición programada evita el quiebre en ${rescatadas.map(r => esc(r.planta)).join(', ')}.`;
+  if (curveScenario !== 'normal') lectura += ` <span style="color:#a78bfa;font-weight:800">Escenario "${esc(scLbl)}":</span> ${conQuiebreScen.length} planta${conQuiebreScen.length === 1 ? '' : 's'} quiebra${conQuiebreScen.length === 1 ? '' : 'n'}` + (nuevasPorEscenario.length ? `, ${nuevasPorEscenario.length} que no quebraba${nuevasPorEscenario.length === 1 ? '' : 'n'} en el caso normal (${nuevasPorEscenario.map(r => esc(r.planta)).join(', ')}).` : '.');
+  const kpi = (id, k, n, s, col) => `<div class="cv-kpi${E.vista === id ? ' on' : ''}" data-cv="vista" data-v="${id}" title="Clic para ver solo estas plantas"><div class="cv-k">${k}</div><div class="cv-n" style="color:${col}">${n}</div><div class="cv-s">${s}</div></div>`;
+  const strip = `<div class="cv-strip">
+      <div class="cv-hero"><div class="cv-k">Plantas analizadas · ${esc(curveProdFilter)}</div><div class="cv-n">${rows.length}<small>horizonte 21 días</small></div><div class="cv-s">Escenario: <b style="color:var(--txt)">${esc(CURVE_SCENARIOS[curveScenario].lbl)}</b> · ${esc(CURVE_SCENARIOS[curveScenario].desc)}</div></div>
+      ${kpi('quiebre', 'Quiebran en 21 días', conQuiebreNormal.length, minQ === null ? 'con BT programado' : 'primera: ' + esc(plMinQ[0]) + (minQ === 0 ? ' (hoy)' : ' en ~' + minQ + 'd'), cls(conQuiebreNormal.length, 'red'))}
+      ${kpi('tarde', 'BT llega tarde', llegaTarde.length, llegaTarde.length ? llegaTarde.slice(0,3).map(r => esc(r.planta)).join(', ') : 'toda reposición llega antes del quiebre', cls(llegaTarde.length, 'red'))}
+      ${kpi('sinrepo', 'Sin reposición programada', sinRepo.length, sinRepo.length ? 'y menos de 21 d de autonomía' : 'todas las plantas justas tienen BT', cls(sinRepo.length, 'yel'))}
+      ${kpi('rescate', 'Quiebre evitado por BT', rescatadas.length, rescatadas.length ? rescatadas.slice(0,3).map(r => esc(r.planta)).join(', ') : 'ninguna depende del BT en 21 d', 'var(--grn)')}
+    </div>
+    <div class="cv-lectura">${lectura}</div>`;
+
+  // ── Línea de tiempo comparativa: autonomía vs. llegada del BT
+  const horizonte = 21;
+  const rank = rows.slice().sort((a, b) => (a._P.qNormal === null ? 99 : a._P.qNormal) - (b._P.qNormal === null ? 99 : b._P.qNormal) || a._P.diasSinBT - b._P.diasSinBT);
+  const rankHTML = `<div class="cv-rank"><div class="cv-rank-h"><div class="cv-rank-t">⏱️ Autonomía vs. llegada de la reposición</div><div class="cv-rank-s">barra = días de stock sin reposición · 🚢 = día en que llega el BT · ⛔ = quiebre con BT incluido · clic va a la tarjeta</div></div>
+    ${rank.map(r => {
+      const P = r._P, col = P.qNormal === null ? 'var(--grn)' : P.qNormal <= 3 ? 'var(--red)' : 'var(--yel)';
+      const w = Math.min(100, (Math.min(P.diasSinBT, horizonte) / horizonte) * 100);
+      const btPos = (P.btDia != null && P.btDia >= 0 && P.btDia <= horizonte) ? (P.btDia / horizonte) * 100 : null;
+      const qPos = (P.qNormal !== null) ? (P.qNormal / horizonte) * 100 : null;
+      const res = P.qNormal === null ? '<b>sin quiebre</b> en 21 d' : '<b style="color:var(--red)">quiebre día ' + P.qNormal + '</b>';
+      const bt = P.btDia == null ? 'sin BT' : (P.btDia < 0 ? 'BT ya llegó' : 'BT día ' + P.btDia + ' (+' + (P.btVol).toFixed(DEC) + ' MB)');
+      return `<div class="cv-row" data-cv="ir" data-planta="${esc(r.planta)}"><div class="cv-row-pl">${esc(r.planta)}</div><div class="cv-tl" style="--c:${col}"><div class="cv-tl-inv" style="width:${w}%"></div>${btPos != null ? `<div class="cv-tl-bt" style="left:${btPos}%" title="${bt}"></div>` : ''}${qPos != null ? `<div class="cv-tl-q" style="left:${qPos}%" title="Quiebre día ${P.qNormal}">⛔</div>` : ''}</div><div class="cv-row-r">${res}<br>${bt}</div></div>`;
+    }).join('')}
+    <div class="cv-tl-ax"><div></div><div><span>hoy</span><span>+7 d</span><span>+14 d</span><span>+21 d</span></div><div></div></div></div>`;
+
+  // ── Tarjetas (filtradas por la vista elegida en los KPI)
+  const visibles = rows.filter(r => E.vista === 'quiebre' ? r._P.qNormal !== null : E.vista === 'tarde' ? r._P.llegaTarde : E.vista === 'sinrepo' ? (r._P.btDia == null && r._P.diasSinBT < 21) : E.vista === 'rescate' ? (r._P.btDia != null && r._P.diasSinBT < 21 && r._P.qNormal === null) : true);
+  const cards = visibles.map(r => {
+    const P = r._P, inv = P.inv, dem = P.dem;
     const cobDias = r._calcCob || r.cob || 0;
     const statusColor = cobDias < 4 ? '#ef4444' : cobDias < 7 ? '#eab308' : cobDias < 13 ? '#f97316' : '#22c55e';
     const cardId = 'curve_' + r.planta.replace(/[^a-zA-Z0-9]/g,'_');
+    const badges = (P.qNormal !== null ? `<span class="cv-badge cv-badge-rojo">⛔ Quiebre día ${P.qNormal}${P.btDia != null ? ' con BT' : ''}</span>` : `<span class="cv-badge cv-badge-ok">✅ Sin quiebre en 21 d</span>`)
+      + (P.llegaTarde ? `<span class="cv-badge cv-badge-rojo">🚢 BT ${P.btDia - P.diasSinBT} d tarde</span>` : P.btDia != null ? `<span class="cv-badge cv-badge-ok">🚢 BT ${fmtDate(P.btEta)} · +${P.btVol.toFixed(DEC)} MB</span>` : (P.diasSinBT < 21 ? `<span class="cv-badge cv-badge-yel">Sin reposición programada</span>` : ''))
+      + (P.scActive ? `<span class="cv-badge cv-badge-sc">📐 ${esc(scLbl)}: ${P.qScen === null ? 'sin quiebre' : 'quiebre día ' + P.qScen}</span>` : '');
     return `
-      <div class="curve-card">
+      <div class="curve-card" id="cvcard_${cardId}">
         <div class="curve-card-title">
           <span style="width:8px;height:8px;border-radius:50%;background:${statusColor};display:inline-block"></span>
-          ${r.planta}
-          <span style="margin-left:auto;font-size:10px;color:var(--txt3);font-weight:500">${(inv).toFixed?inv.toFixed(DEC):inv} MB inv · ${cobDias}d cob</span>
+          ${esc(r.planta)}
+          <span style="margin-left:auto;font-size:10px;color:var(--txt3);font-weight:500">${inv.toFixed(DEC)} MB inv · ${cobDias === 999 ? '∞' : cobDias}d cob · dem ${dem.toFixed(DEC)} MB/d</span>
         </div>
         <div class="curve-canvas-wrap"><canvas id="${cardId}"></canvas></div>
-        <div class="curve-status">
-          <span class="curve-tag ${cobDias<4?'warn':'ok'}">Quiebre en ~${daysToQuiebre}d</span>
-          ${btETA ? `<span class="curve-tag ok">🚢 BT ETA ${fmtDate(btETA)}</span>` : ''}
-          <span class="curve-tag ${dem>0?'ok':'warn'}" style="margin-left:auto">Dem: ${(dem).toFixed?dem.toFixed(DEC):dem} MB/d</span>
-        </div>
+        <div class="curve-status" style="flex-wrap:wrap;gap:4px">${badges}<button class="cis-mini" style="margin-left:auto" data-rn="planta" data-planta="${esc(r.planta)}">📋 Ficha</button></div>
       </div>`;
   }).join('');
   document.getElementById('pD-content').innerHTML = `
     <div class="page-header">
       <div class="page-header-title">📉 Curva de Inventario Proyectado</div>
-      <div class="page-header-subtitle">Proyección de consumo vs quiebre por planta · ${fmtDate(currentDate)}</div>
+      <div class="page-header-subtitle">¿Cuándo quiebra cada planta y llega a tiempo la reposición? · ${fmtDate(currentDate)}</div>
     </div>
     ${buildDateBar('dateBarPD')}
     <div class="curve-wrap">
@@ -15854,7 +16047,7 @@ function renderPD() {
         <span style="font-size:10px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px">Producto:</span>
         ${prodBtns}
       </div>
-      <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:6px 18px 10px">
+      <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:6px 18px 0">
         <span style="font-size:10px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px">Escenario:</span>
         ${Object.entries(CURVE_SCENARIOS).map(([k,sc]) =>
           `<button onclick="setCurveScenario('${k}')" title="${sc.desc}"
@@ -15863,130 +16056,59 @@ function renderPD() {
             background:${k===curveScenario?'#7c3aed':'transparent'};
             color:${k===curveScenario?'#fff':'var(--txt2)'}">${sc.lbl}</button>`
         ).join('')}
-        ${curveScenario!=='normal' ? `<span style="font-size:10px;color:#7c3aed;font-weight:600;margin-left:6px">📐 ${CURVE_SCENARIOS[curveScenario].desc} — línea punteada vs. normal</span>` : ''}
+        ${curveScenario!=='normal' ? `<span style="font-size:10px;color:#a78bfa;font-weight:600;margin-left:6px">📐 ${CURVE_SCENARIOS[curveScenario].desc} — línea punteada vs. normal</span>` : ''}
       </div>
-      <div class="curve-chart-grid">${cards}</div>
+      ${strip}
+      ${rankHTML}
+      <div style="display:flex;justify-content:space-between;align-items:baseline;padding:14px 18px 0"><div style="font-size:12px;font-weight:800;color:var(--txt)">📈 Curvas por planta${E.vista !== 'todas' ? ' · filtro activo' : ''}</div>${E.vista !== 'todas' ? '<button class="cis-mini" data-cv="vista" data-v="todas">✕ Ver todas las plantas</button>' : ''}</div>
+      <div class="curve-chart-grid">${cards || '<div style="padding:24px;color:var(--txt3);font-size:12px">Ninguna planta cumple este criterio.</div>'}</div>
     </div>
   `;
+  const host = document.getElementById('pD-content');
+  if (!host._cvBound) {
+    host._cvBound = true;
+    host.addEventListener('click', function(ev) {
+      const rn = ev.target.closest('[data-rn]'); if (rn && host.contains(rn)) { ev.stopPropagation(); try { if (typeof _rnCalcularDetalle === 'function') _rnCalcularDetalle(); } catch (e) {} if (typeof _rnAccion === 'function') _rnAccion(rn.getAttribute('data-rn'), rn); return; }
+      const t = ev.target.closest('[data-cv]'); if (!t || !host.contains(t)) return;
+      const k = t.getAttribute('data-cv');
+      if (k === 'vista') { const v = t.getAttribute('data-v'); window._curvaEstado.vista = (window._curvaEstado.vista === v) ? 'todas' : v; renderPD(); return; }
+      if (k === 'ir') {
+        const id = 'cvcard_curve_' + t.getAttribute('data-planta').replace(/[^a-zA-Z0-9]/g,'_');
+        let c = document.getElementById(id);
+        if (!c && window._curvaEstado.vista !== 'todas') { window._curvaEstado.vista = 'todas'; renderPD(); c = document.getElementById(id); }
+        if (c) { c.scrollIntoView({ behavior: 'smooth', block: 'center' }); c.style.boxShadow = '0 0 0 2px var(--acc)'; setTimeout(function(){ c.style.boxShadow = ''; }, 1600); }
+      }
+    });
+  }
   setTimeout(() => {
-    rows.forEach(r => {
-      const inv = r.inv || 0;
-      const pronKey = r.planta + '|' + r.producto;
-      const pronVal = pronSheet[pronKey] || r.pron_mes || r.pron || 0;
-      const vfactVal = r.vfact || 0;
-      const dem = vfactVal > 0 ? vfactVal : (pronVal > 0 ? pronVal : (r.dem_prom || r.dem || 0));
-      const demAbs = Math.abs(dem); // Ensure positive consumption rate
-      const days = 21;
-      const labels = [];
-      const invLine = [];
-      const critLine = [];
-      let curInv = inv;
-      const btEtaMs = r.fecha_reposicion ? new Date(r.fecha_reposicion+'T12:00:00').getTime() : null;
-      const btVol = (r.vol_rep||0) + (r.vol_rep_bt2||0);
-      let btAdded = false;
-      // ── Parámetros del escenario seleccionado ──────────────────────────
-      const esFluvial = CURVE_FLUVIAL_PLANTS.indexOf(r.planta) >= 0;
-      let scEtaMs = btEtaMs, scVol = btVol, scActive = (curveScenario !== 'normal');
-      if (curveScenario === 'sinbt') {
-        scVol = 0;
-      } else if (curveScenario === 'bt3' && btEtaMs) {
-        scEtaMs = btEtaMs + 3*86400000;
-      } else if (curveScenario === 'cierre7' && btEtaMs) {
-        const min7 = new Date(currentDate+'T12:00:00').getTime() + 7*86400000;
-        scEtaMs = Math.max(btEtaMs, min7);
-      } else if (curveScenario === 'vaciante') {
-        if (esFluvial) scVol = 0;       // selva sin reposición
-        else scActive = false;          // costa sin efecto → no dibujar línea
-      }
-      const scenLine = [];
-      let scInv = inv, scAdded = false;
-      for (let d = 0; d <= days; d++) {
-        const dt = new Date(currentDate+'T12:00:00');
-        dt.setDate(dt.getDate()+d);
-        labels.push(dt.getDate()+'/'+(dt.getMonth()+1));
-        invLine.push(Math.round(Math.max(0, curInv)*100)/100);
-        critLine.push(0); // Zero line for reference
-        if (!btAdded && btEtaMs && dt.getTime() >= btEtaMs && btVol > 0) {
-          curInv += btVol;
-          btAdded = true;
-        }
-        curInv -= demAbs;
-        // Línea del escenario
-        scenLine.push(Math.round(Math.max(0, scInv)*100)/100);
-        if (!scAdded && scEtaMs && dt.getTime() >= scEtaMs && scVol > 0) {
-          scInv += scVol;
-          scAdded = true;
-        }
-        scInv -= demAbs;
-      }
-      // Días hasta quiebre en el escenario (primer día con inv 0)
-      let scQuiebre = null;
-      if (scActive) {
-        for (let d = 0; d < scenLine.length; d++) { if (scenLine[d] <= 0) { scQuiebre = d; break; } }
-      }
+    visibles.forEach(r => {
+      const P = r._P;
       const cardId = 'curve_' + r.planta.replace(/[^a-zA-Z0-9]/g,'_');
       const ctx = document.getElementById(cardId);
       if (!ctx) return;
       curveCharts[cardId] = new Chart(ctx, {
         type: 'line',
         data: {
-          labels,
+          labels: P.labels,
           datasets: [
-            {
-              label: 'Normal (BT programado)',
-              data: invLine,
+            { label: 'Normal (BT programado)', data: P.invLine,
               borderColor: r.cob < 4 ? '#ef4444' : r.cob < 7 ? '#eab308' : '#2d8cf0',
               backgroundColor: r.cob < 4 ? 'rgba(239,68,68,.08)' : 'rgba(45,140,240,.08)',
-              fill: true,
-              tension: 0.3,
-              pointRadius: 2,
-              borderWidth: 2,
-            }
-          ].concat(scActive ? [{
-              label: CURVE_SCENARIOS[curveScenario].lbl,
-              data: scenLine,
-              borderColor: '#7c3aed',
-              backgroundColor: 'transparent',
-              fill: false,
-              tension: 0.3,
-              pointRadius: 0,
-              pointHoverRadius: 4,
-              borderWidth: 2.5,
-              borderDash: [7, 4],
-            }] : [])
+              fill: true, tension: 0.3, pointRadius: 2, borderWidth: 2 }
+          ].concat(P.scActive ? [{
+              label: CURVE_SCENARIOS[curveScenario].lbl, data: P.scenLine,
+              borderColor: '#7c3aed', backgroundColor: 'transparent', fill: false, tension: 0.3,
+              pointRadius: 0, pointHoverRadius: 4, borderWidth: 2.5, borderDash: [7, 4] }] : [])
         },
         options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          plugins: {
-            legend: {display: false},
-            tooltip: {
-              callbacks: {
-                label: ctx => '  ' + ctx.dataset.label + ': ' + ctx.parsed.y.toFixed(DEC) + ' MB'
-              }
-            }
-          },
+          responsive: true, maintainAspectRatio: false,
+          plugins: { legend: {display: false}, tooltip: { callbacks: { label: ctx => '  ' + ctx.dataset.label + ': ' + ctx.parsed.y.toFixed(DEC) + ' MB' } } },
           scales: {
             x: {grid:{display:false}, ticks:{color:cssVar('--txt3'),font:{size:9}}},
             y: {grid:{color:cssVar('--bdr')}, ticks:{color:cssVar('--txt3'),font:{size:9}}, min:0}
           }
         }
       });
-      // Badge de quiebre del escenario
-      if (scActive) {
-        var scTag = document.querySelector('.scen-tag-' + r.planta.replace(/[^a-zA-Z0-9]/g,'_'));
-        if (scTag) {
-          scTag.style.display = '';
-          scTag.textContent = scQuiebre !== null
-            ? '📐 Escenario: quiebre en ~' + scQuiebre + 'd'
-            : '📐 Escenario: sin quiebre en 21d';
-          if (scQuiebre !== null && scQuiebre < 7) {
-            scTag.style.background = '#ef444418';
-            scTag.style.color = '#ef4444';
-            scTag.style.borderColor = '#ef444440';
-          }
-        }
-      }
     });
   }, 50);
 }
