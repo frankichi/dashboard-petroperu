@@ -1007,7 +1007,7 @@ function rdShowView(name) {
   });
   if (name === 'registro') rdLimpiarFormRegistro();
   document.getElementById('appShell').style.display = 'none';
-  history.replaceState(null, '', location.pathname);
+  if (name !== 'reset') history.replaceState(null, '', location.pathname);
 }
 
 function rdToast(msg, type) {
@@ -1223,13 +1223,16 @@ document.getElementById('btnRecuperar').addEventListener('click', function () {
 });
 
 document.getElementById('btnReset').addEventListener('click', function () {
-  const token = new URLSearchParams(location.search).get('token');
+  const token = window.RD_RESET_TOKEN || new URLSearchParams(location.search).get('token');
+  if (!token) { rdMsg('resetMsg', 'El enlace no es válido o está incompleto. Solicita uno nuevo desde "Olvidé mi contraseña".', false); return; }
   // ⚠️ AGREGADO — mismo trim() que ya se aplica en el backend, para
   // que la validación "coinciden" de acá sea consistente con lo que
   // realmente se va a guardar (si no, un espacio de más podría
   // "coincidir" en pantalla pero el backend igual lo recorta distinto).
   const p1 = document.getElementById('resetPassword').value.trim();
   const p2 = document.getElementById('resetPassword2').value.trim();
+  if (!p1) { rdMsg('resetMsg', 'Escribe tu nueva contraseña', false); return; }
+  if (p1.length < 8) { rdMsg('resetMsg', 'La contraseña debe tener al menos 8 caracteres', false); return; }
   if (p1 !== p2) { rdMsg('resetMsg', 'Las contraseñas no coinciden', false); return; }
   const btn = this; btn.disabled = true; btn.textContent = 'Guardando…';
   rdPost('rdResetPassword', { token: token, newPassword: p1 }).then(res => {
@@ -4458,7 +4461,7 @@ function rdCheckPlantaHoy() {
     // usar en cada request desde este punto en adelante.
     if (RD.rol === 'admin' && RD.plantaAdminVista) RD.planta = RD.plantaAdminVista;
     rdRenderTopbar();
-    if (view === 'reset' && params.get('token')) { rdShowView('reset'); return; }
+    if (view === 'reset' && params.get('token')) { window.RD_RESET_TOKEN = params.get('token'); rdShowView('reset'); return; }
     if (RD.token) { rdEnterApp(); return; }
     rdShowView('login');
   });
