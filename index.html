@@ -18204,12 +18204,21 @@ function _uplAccordion(id, icon, title, desc, badge, openDefault, bodyHTML, last
     + '</div>';
 }
 window._uplAccordion = _uplAccordion;
-function _uplSetBadge(id,fecha){var el=document.getElementById(id+'-badge');if(!el)return;if(!fecha){el.textContent='';el.style.cssText='';return;}var today=(typeof currentDate!=='undefined'&&currentDate)?currentDate:new Date().toISOString().slice(0,10);var isHoy=(fecha===today);var d=new Date(fecha+'T12:00:00');var label='📅 '+d.toLocaleDateString('es-PE',{weekday:'short',day:'2-digit',month:'short'});el.textContent=label;el.style.background=isHoy?'rgba(26,158,80,.15)':'var(--bg3)';el.style.color=isHoy?'var(--grn)':'var(--txt3)';el.style.border=isHoy?'1px solid rgba(26,158,80,.4)':'1px solid var(--bdr)';el.style.fontWeight=isHoy?'700':'500';el.setAttribute('data-hoy',isHoy?'1':'0');}
+function _uplSetBadge(id,fecha){var el=document.getElementById(id+'-badge');if(!el)return;if(!fecha){el.textContent='';el.style.cssText='';return;}var today=(typeof currentDate!=='undefined'&&currentDate)?currentDate:new Date().toISOString().slice(0,10);var isHoy=(fecha===today);try{var _k='upl_seen_'+id,_p=JSON.parse(localStorage.getItem(_k)||'null');if(!_p||_p.f!==fecha){localStorage.setItem(_k,JSON.stringify({f:fecha,d:today}));if(_p)localStorage.setItem('upl_sub_'+id,today);}}catch(e){}var d=new Date(fecha+'T12:00:00');var label='📅 '+d.toLocaleDateString('es-PE',{weekday:'short',day:'2-digit',month:'short'});el.textContent=label;el.style.background=isHoy?'rgba(26,158,80,.15)':'var(--bg3)';el.style.color=isHoy?'var(--grn)':'var(--txt3)';el.style.border=isHoy?'1px solid rgba(26,158,80,.4)':'1px solid var(--bdr)';el.style.fontWeight=isHoy?'700':'500';el.setAttribute('data-hoy',isHoy?'1':'0');}
 window._uplSetBadge=_uplSetBadge;
 // Marca "subido hoy" por caja: un reporte cargado hoy cuenta como al día aunque su fecha interna sea anterior (ej. naves, cargas)
+function _uplMarcarSubida(w){
+  var hoy = (typeof currentDate !== 'undefined' && currentDate) ? currentDate : new Date().toISOString().slice(0,10);
+  try { localStorage.setItem('upl_sub_' + w.id.replace(/-wrap$/, ''), hoy); } catch (e) {}
+  [800, 2500, 6000].forEach(function(ms){ setTimeout(function(){ if (typeof window._uplRefrescarCategorias === 'function') window._uplRefrescarCategorias(); }, ms); });
+}
+document.addEventListener('drop', function(ev){
+  var dt = ev.dataTransfer; if (!dt || !dt.files || !dt.files.length) return;
+  var w = ev.target.closest && ev.target.closest('[id$="-wrap"]'); if (w) _uplMarcarSubida(w);
+}, true);
 document.addEventListener('change', function(ev){
   var t = ev.target; if (!t || t.type !== 'file' || !t.files || !t.files.length) return;
-  var w = t.closest('[id$="-wrap"]'); if (!w) return;
+  var w = t.closest('[id$="-wrap"]'); if (!w) return; _uplMarcarSubida(w); return;
   var hoy = (typeof currentDate !== 'undefined' && currentDate) ? currentDate : new Date().toISOString().slice(0,10);
   try { localStorage.setItem('upl_sub_' + w.id.replace(/-wrap$/, ''), hoy); } catch (e) {}
   setTimeout(function(){ if (typeof window._uplRefrescarCategorias === 'function') window._uplRefrescarCategorias(); }, 1500);
