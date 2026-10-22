@@ -18447,7 +18447,7 @@ function handleEDFile(file) {
       }
       var colMap = {fecha:-1, planta:-1, producto:-1, inv:-1, despacho:-1,
         prom7d:-1, autonomia:-1, capacidad:-1, condicion:-1, vacio:-1,
-        fondos:-1, existencia_bruta:-1};
+        fondos:-1, fondo_osi:-1, existencia_bruta:-1};
       var btCols = []; // [{idx, header}]
       for (var ci = 0; ci < headers.length; ci++) {
         var h = headers[ci];
@@ -18456,7 +18456,10 @@ function handleEDFile(file) {
         if (h.indexOf('producto') >= 0 && colMap.producto === -1) colMap.producto = ci;
         if (h.indexOf('condici') >= 0) colMap.condicion = ci;
         if (h.indexOf('capacidad') >= 0) colMap.capacidad = ci;
-        if (h.indexOf('fondo') >= 0) colMap.fondos = ci;
+        // Fondos y Fondo OSINERGMIN son columnas distintas del E&D: antes ambas caían en 'fondos'
+        // y ninguna se enviaba al sistema. Ahora se leen por separado.
+        if (h.indexOf('osinerg') >= 0 || (h.indexOf('fondo') >= 0 && (h.indexOf('m\u00edn') >= 0 || h.indexOf('min') >= 0))) { if (colMap.fondo_osi === -1) colMap.fondo_osi = ci; }
+        else if (h.indexOf('fondo') >= 0 && colMap.fondos === -1) colMap.fondos = ci;
         if (h.indexOf('existencia') >= 0 && h.indexOf('net') >= 0) colMap.inv = ci;
         if (h.indexOf('existencia') >= 0 && h.indexOf('brut') >= 0) colMap.existencia_bruta = ci;
         if (h.indexOf('despacho') >= 0 && colMap.despacho === -1) colMap.despacho = ci;
@@ -18543,6 +18546,8 @@ function handleEDFile(file) {
           prom7d: parseFloat(colMap.prom7d >= 0 ? row[colMap.prom7d] : 0) || 0,
           autonomia: parseFloat(colMap.autonomia >= 0 ? row[colMap.autonomia] : 0) || 0,
           capacidad: parseFloat(colMap.capacidad >= 0 ? row[colMap.capacidad] : 0) || 0,
+          fondos: parseFloat(colMap.fondos >= 0 ? row[colMap.fondos] : 0) || 0,
+          fondo_osinergmin: parseFloat(colMap.fondo_osi >= 0 ? row[colMap.fondo_osi] : 0) || 0,
           condicion: colMap.condicion >= 0 ? String(row[colMap.condicion] || '') : '',
           vacio: parseFloat(colMap.vacio >= 0 ? row[colMap.vacio] : 0) || 0,
           bt: bt1Name, vol_bt: vol1, eta_bt: eta1,
@@ -21065,7 +21070,7 @@ async function sendEDToGS() {
         aggMap[key] = {
           fecha: r.fecha, planta: r.planta, producto: r.producto_dash,
           inv: 0, pron: 0, vreal: 0, despacho: 0, autonomia: 0,
-          vacio: 0, capacidad: 0,
+          vacio: 0, capacidad: 0, fondos: 0, fondo_osinergmin: 0,
           bt: '', vol_bt: 0, eta_bt: '', bt2: '', vol_bt2: 0, eta_bt2: '',
           condicion: '', _count: 0
         };
@@ -21080,6 +21085,8 @@ async function sendEDToGS() {
         a.autonomia = a.autonomia > 0 ? Math.min(a.autonomia, r.autonomia) : r.autonomia;
       }
       if (r.capacidad > 0) a.capacidad += r.capacidad;
+      if (r.fondos > 0) a.fondos += r.fondos;
+      if (r.fondo_osinergmin > 0) a.fondo_osinergmin += r.fondo_osinergmin;
       if (r.bt && !a.bt) { a.bt = r.bt; a.vol_bt = r.vol_bt; a.eta_bt = r.eta_bt; }
       if (r.bt2 && !a.bt2) { a.bt2 = r.bt2; a.vol_bt2 = r.vol_bt2; a.eta_bt2 = r.eta_bt2; }
       if (r.condicion && !a.condicion) a.condicion = r.condicion;
@@ -21109,7 +21116,9 @@ async function sendEDToGS() {
         bt2: a.bt2,
         vol_rep_bt2: Math.round(a.vol_bt2 * 100) / 100,
         vacio2: 0,
-        capacidad: Math.round(a.capacidad * 100) / 100  // Sí se actualiza — no cambia por Registro Diario
+        capacidad: Math.round(a.capacidad * 100) / 100,  // Sí se actualiza — no cambia por Registro Diario
+        fondos: Math.round(a.fondos * 100) / 100,                         // Fondos (F) del E&D
+        fondo_osinergmin: Math.round(a.fondo_osinergmin * 100) / 100      // Fondo OSINERGMIN del E&D
       };
     });
     await fetch(CONFIG.API_URL, {
@@ -21125,7 +21134,7 @@ async function sendEDToGS() {
     // despacho ahora viene exclusivamente de Registro Diario (Cognos
     // sigue siendo su propia carga independiente, sin cambios).
     if (status) { status.className = 'upload-status success'; status.textContent = '\u2705 Enviado correctamente (' + apiRecords.length + ' registros)'; }
-    addUploadLog(true, 'E&D enviado: ' + apiRecords.length + ' registros guardados en el sistema (capacidades actualizadas · inventario/despacho de plantas no modificado)');
+    addUploadLog(true, 'E&D enviado: ' + apiRecords.length + ' registros guardados en el sistema (capacidades, fondos y fondo OSINERGMIN actualizados · inventario/despacho de plantas no modificado)');
     _uplSetBadge('acc-ed', uploadEDData ? uploadEDData.fecha : currentDate);
     if (!window.capMap) window.capMap = {};
     apiRecords.forEach(function(r) {
