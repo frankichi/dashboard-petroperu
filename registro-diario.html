@@ -1,6 +1,5 @@
 <!DOCTYPE html>
 <html lang="es">
-  
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
@@ -397,6 +396,11 @@ body.rd-print-mode #rdPrintCerrarBtn{ display:flex; align-items:center; gap:6px;
 .rdcal-day.sin-dato:not(.otro-mes):not(.futuro) { background:#fee2e2; color:#991b1b; cursor:pointer; }
 .rdcal-day.sin-dato:not(.otro-mes):not(.futuro):hover { transform:scale(1.15); z-index:5; box-shadow:0 2px 6px rgba(0,0,0,.18); }
 .rdcal-day.futuro { color:var(--txt3); }
+.rdcal-day.dom-replica:not(.otro-mes):not(.futuro) { background:#f1f5f9; color:#64748b; cursor:pointer; }
+.rdcal-falt { margin-top:7px; font-size:9px; color:var(--txt2); line-height:1.7; }
+.rdcal-falt.ok { color:#166534; font-weight:700; }
+.rdcal-chip { border:1px solid #fca5a5; background:#fee2e2; color:#991b1b; border-radius:5px; font-size:9px; font-weight:800; padding:1px 5px; margin:1px 2px; cursor:pointer; font-family:inherit; }
+.rdcal-chip:hover { background:#fecaca; }
 .rdcal-day.rdcal-clickeable { cursor:pointer; }
 .rdcal-day.rdcal-clickeable:hover { transform:scale(1.1); box-shadow:0 0 0 1.5px var(--txt3) inset; }
 .rdcal-day.tiene-dato.rdcal-clickeable:hover, .rdcal-day.sin-dato.rdcal-clickeable:hover { box-shadow:0 2px 6px rgba(0,0,0,.18); }
@@ -2611,6 +2615,8 @@ function rdConfirmarGuardar() {
             comentario_prod: p.comentario_prod || ''
           });
         });
+        var _kg = (RD.plantaAdminVista || RD.planta || '') + '|' + String(_fechaGuardadaCal).slice(0, 7);
+        if (window._rdCalDias && window._rdCalDias[_kg]) window._rdCalDias[_kg].map[_fechaGuardadaCal] = { fecha: _fechaGuardadaCal, fuente: 'registro' };
         if (typeof rdRenderCalendario === 'function' && document.getElementById('rdCalendario')) rdRenderCalendario();
       }
     }
@@ -3191,6 +3197,28 @@ function rdRenderCabCell(viajes) {
 var _rdCalFecha = new Date(); // mes que se está mostrando (día 1 de ese mes)
 _rdCalFecha.setDate(1);
 
+// Pide al backend los días con cierre del mes (liviano: solo fechas) y repinta el calendario
+function rdCalCargarMes(anio, mes) {
+  var plantaEf = RD.plantaAdminVista || RD.planta;
+  if (!RD.token || !plantaEf) return;
+  var mm = String(mes + 1).padStart(2, '0');
+  var key = plantaEf + '|' + anio + '-' + mm;
+  window._rdCalPend = window._rdCalPend || {};
+  if (window._rdCalPend[key]) return;
+  window._rdCalPend[key] = true;
+  var ult = new Date(anio, mes + 1, 0).getDate();
+  rdGet('rdGetDiasReportados', { token: RD.token, planta: plantaEf, desde: anio + '-' + mm + '-01', hasta: anio + '-' + mm + '-' + String(ult).padStart(2, '0') })
+    .then(function(res) {
+      if (!res || !res.success) return;
+      var map = {};
+      (res.dias || []).forEach(function(d) { map[d.fecha] = d; });
+      (window._rdCalDias = window._rdCalDias || {})[key] = { map: map, ts: Date.now() };
+      rdRenderCalendario();
+    })
+    .catch(function(e) { console.warn('[CAL] no se pudo cargar el mes', e); })
+    .then(function() { delete window._rdCalPend[key]; });
+}
+
 function rdCalCambiarMes(delta) {
   _rdCalFecha.setMonth(_rdCalFecha.getMonth() + delta);
   rdRenderCalendario();
@@ -3233,6 +3261,13 @@ function rdRenderCalendario() {
   var minCargado = fechaCorte.toISOString().slice(0, 10);
 
   var anio = _rdCalFecha.getFullYear(), mes = _rdCalFecha.getMonth();
+  // Estado de TODO el mes (todas las fuentes: registro diario + E&D), pedido aparte y liviano:
+  // así se ve qué días faltan aunque el período del histórico sea de solo 7 días.
+  var _calKey = (RD.plantaAdminVista || RD.planta || '') + '|' + anio + '-' + String(mes + 1).padStart(2, '0');
+  var _calInfo = (window._rdCalDias || {})[_calKey];
+  var _repMes = _calInfo ? _calInfo.map : null;
+  if (!_calInfo || (Date.now() - _calInfo.ts) > 120000) rdCalCargarMes(anio, mes);
+  var faltantes = [];
   var primerDiaMes = new Date(anio, mes, 1);
   var ultimoDiaMes = new Date(anio, mes + 1, 0);
   // Lunes=0 ... Domingo=6 (para que la grilla empiece en lunes, como el
@@ -3253,15 +3288,20 @@ function rdRenderCalendario() {
     var esHoy = iso === hoy;
     var esFuturo = iso > hoy;
     var finde = rdEsDomingoOFeriado(iso);
-    var tieneDato = !!porDia[iso];
-    var cargado = iso >= minCargado && iso <= hoy;
+    var tieneDato = !!porDia[iso] || !!(_repMes && _repMes[iso]);
+    var cargado = _repMes ? (iso <= hoy) : (iso >= minCargado && iso <= hoy);
+    var esDomingo = new Date(iso + 'T12:00:00').getDay() === 0;
     var clases = ['rdcal-day'];
     if (otroMes) clases.push('otro-mes');
     if (esHoy) clases.push('hoy');
     if (esFuturo) clases.push('futuro');
     if (finde) clases.push('finde');
     if (tieneDato) clases.push('tiene-dato');
-    else if (cargado && !otroMes && !esFuturo) clases.push('sin-dato');
+    else if (cargado && !otroMes && !esFuturo) {
+      // Domingo sin cierre propio = se toma igual que el sábado (no es un día pendiente aparte)
+      if (esDomingo) clases.push('dom-replica');
+      else { clases.push('sin-dato'); if (_repMes && !esHoy) faltantes.push(iso); }
+    }
     // ⚠️ AGREGADO — clic en cualquier día pasado (no solo los que ya
     // tienen datos cargados en el período actual del desplegable de
     // arriba) navega DIRECTO al formulario de esa fecha, igual que si
@@ -3295,8 +3335,14 @@ function rdRenderCalendario() {
       '<div class="rdcal-leyenda">' +
         '<span><i style="background:#dcfce7"></i>Reportado</span>' +
         '<span><i style="background:#fee2e2"></i>Sin reportar</span>' +
+        '<span><i style="background:#f1f5f9"></i>Dom = sáb</span>' +
         '<span><i style="background:var(--bg);box-shadow:0 0 0 2px #dc2626 inset"></i>Hoy</span>' +
       '</div>' +
+      (_repMes
+        ? (faltantes.length
+            ? '<div class="rdcal-falt"><b>Sin reportar este mes (' + faltantes.length + '):</b> ' + faltantes.map(function(f) { return '<button type="button" class="rdcal-chip" onclick="rdCalIrAFecha(\'' + f + '\')">' + parseInt(f.slice(8, 10), 10) + '</button>'; }).join('') + '</div>'
+            : '<div class="rdcal-falt ok">\u2714 Mes al d\u00eda: sin d\u00edas pendientes.</div>')
+        : '<div class="rdcal-falt">Cargando d\u00edas pendientes\u2026</div>') +
     '</div>';
 
   // ⚠️ AGREGADO — precarga AUTOMÁTICA en segundo plano de todos los
@@ -3359,7 +3405,11 @@ function rdCalMostrarTip(ev, iso) {
     html += '<div><b>Despacho total:</b> ' + rdFmt(d.despachoTotal) + ' MB</div>';
     if (d.comentario) html += '<div style="margin-top:4px;opacity:.85">💬 ' + d.comentario.replace(/</g,'&lt;') + '</div>';
   } else {
-    html += '<div style="color:#fca5a5">⚠️ Sin reporte registrado este día</div>';
+    var _k = (RD.plantaAdminVista || RD.planta || '') + '|' + iso.slice(0, 7);
+    var _inf = (window._rdCalDias || {})[_k];
+    if (_inf && _inf.map && _inf.map[iso]) html += '<div style="color:#86efac">\u2714 Cierre registrado' + (_inf.map[iso].nombre ? ' por <b>' + _inf.map[iso].nombre + '</b>' : '') + '</div>';
+    else if (new Date(iso + 'T12:00:00').getDay() === 0) html += '<div style="opacity:.9">Domingo: se toma igual que el s\u00e1bado</div>';
+    else html += '<div style="color:#fca5a5">⚠️ Sin reporte registrado este día</div>';
   }
   var tip = document.getElementById('rdcalTooltip');
   if (!tip) {
