@@ -18099,6 +18099,7 @@ function renderPUpload() {
         + '</div>' // end grid 2-col
     + '</div>'; // end padding wrapper
   _uplOrganizar(el);
+  window._uplRefrescarCategorias = function(){ try { _uplOrganizar(el); } catch (e) {} };
   _bindUploadEvents();
   // Restaurar el estado abierto/cerrado de cada acordeón (ver nota arriba,
   // junto a "_uplPrevOpen") — solo si difiere de su estado recién pintado.
@@ -18138,7 +18139,10 @@ function _uplOrganizar(el) {
     var hdr = acc.querySelector('.upl-accordion-hdr'); var tag = hdr && hdr.querySelector('span[style*="📅"], span');
     var tags = hdr ? Array.prototype.filter.call(hdr.querySelectorAll('span'), function(x){ return /📅/.test(x.textContent); }) : [];
     if (!tags.length) return 'nd';
-    return /#16a34a/.test(tags[0].getAttribute('style') || '') ? 'ok' : 'pend';
+    var _b = tags[0];
+    if (/#16a34a/.test(_b.getAttribute('style') || '') || _b.getAttribute('data-hoy') === '1') return 'ok';
+    try { if (localStorage.getItem('upl_sub_' + acc.id.replace(/-wrap$/, '')) === hoy) return 'ok'; } catch (e) {}
+    return 'pend';
   };
   var titleDe = function(acc) { var t = acc.querySelector('.upl-accordion-title'); return t ? t.textContent.replace(/\s*[\[(].*$/, '').replace(/ — .*$/, '').trim() : ''; };
   var frag = document.createDocumentFragment();
@@ -18200,8 +18204,17 @@ function _uplAccordion(id, icon, title, desc, badge, openDefault, bodyHTML, last
     + '</div>';
 }
 window._uplAccordion = _uplAccordion;
-function _uplSetBadge(id,fecha){var el=document.getElementById(id+'-badge');if(!el)return;if(!fecha){el.textContent='';el.style.cssText='';return;}var today=(typeof currentDate!=='undefined'&&currentDate)?currentDate:new Date().toISOString().slice(0,10);var isHoy=(fecha===today);var d=new Date(fecha+'T12:00:00');var label='📅 '+d.toLocaleDateString('es-PE',{weekday:'short',day:'2-digit',month:'short'});el.textContent=label;el.style.background=isHoy?'rgba(26,158,80,.15)':'var(--bg3)';el.style.color=isHoy?'var(--grn)':'var(--txt3)';el.style.border=isHoy?'1px solid rgba(26,158,80,.4)':'1px solid var(--bdr)';el.style.fontWeight=isHoy?'700':'500';}
+function _uplSetBadge(id,fecha){var el=document.getElementById(id+'-badge');if(!el)return;if(!fecha){el.textContent='';el.style.cssText='';return;}var today=(typeof currentDate!=='undefined'&&currentDate)?currentDate:new Date().toISOString().slice(0,10);var isHoy=(fecha===today);var d=new Date(fecha+'T12:00:00');var label='📅 '+d.toLocaleDateString('es-PE',{weekday:'short',day:'2-digit',month:'short'});el.textContent=label;el.style.background=isHoy?'rgba(26,158,80,.15)':'var(--bg3)';el.style.color=isHoy?'var(--grn)':'var(--txt3)';el.style.border=isHoy?'1px solid rgba(26,158,80,.4)':'1px solid var(--bdr)';el.style.fontWeight=isHoy?'700':'500';el.setAttribute('data-hoy',isHoy?'1':'0');}
 window._uplSetBadge=_uplSetBadge;
+// Marca "subido hoy" por caja: un reporte cargado hoy cuenta como al día aunque su fecha interna sea anterior (ej. naves, cargas)
+document.addEventListener('change', function(ev){
+  var t = ev.target; if (!t || t.type !== 'file' || !t.files || !t.files.length) return;
+  var w = t.closest('[id$="-wrap"]'); if (!w) return;
+  var hoy = (typeof currentDate !== 'undefined' && currentDate) ? currentDate : new Date().toISOString().slice(0,10);
+  try { localStorage.setItem('upl_sub_' + w.id.replace(/-wrap$/, ''), hoy); } catch (e) {}
+  setTimeout(function(){ if (typeof window._uplRefrescarCategorias === 'function') window._uplRefrescarCategorias(); }, 1500);
+}, true);
+
 function _uplToggle(id) {
   var body  = document.getElementById(id+'-body');
   var hdr   = document.getElementById(id+'-hdr');
