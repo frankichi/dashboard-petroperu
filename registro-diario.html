@@ -1781,6 +1781,8 @@ function rdCheckExistenciaMinima(prod, existenciaVal) {
   if (!box) return;
   var ref = (RD.detalle && RD.detalle[prod]) || {};
   var fosi = parseFloat(ref.fondo_osinergmin) || 0;
+  // Dato incoherente (fondo mayor que la capacidad del tanque, típico de unidades mal cargadas): no se alerta
+  if (fosi > 0 && parseFloat(ref.capacidad) > 0 && fosi > parseFloat(ref.capacidad)) fosi = 0;
   var exist = existenciaVal !== undefined ? existenciaVal
     : parseFloat((document.querySelector('.rd-existencia[data-prod="' + prod + '"]') || {}).value) || 0;
   var inp = document.querySelector('.rd-existencia[data-prod="' + prod + '"]');
