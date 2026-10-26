@@ -34155,7 +34155,9 @@ function _buildRepoMarBuques() {
     // algún momento. Se guarda esa evidencia aparte (sin inventar una
     // fecha de zarpe que no tenemos) para que el render sepa que NUNCA
     // debe mostrar "En Talara" en ese caso.
-    b.zarpeConfirmadoPorEscalas = !b.zarpe && b.legs.some(function(l){ return l.estado === 'COMPLETADO'; });
+    // Una escala COMPLETADA en la propia Talara (ej. descarga de etanol/COE de un buque que sigue ahí cargando)
+    // NO prueba que ya zarpó: solo cuentan escalas en otros terminales. (Caso UCAYALI)
+    b.zarpeConfirmadoPorEscalas = !b.zarpe && b.legs.some(function(l){ return l.estado === 'COMPLETADO' && String(l.terminalNorm || l.terminal || '').toUpperCase().indexOf('TALARA') === -1; });
     // ⚠️ AGREGADO — a pedido: fecha estimada de retorno a Talara. El
     // backend ya calcula, junto a la rotación real de cada buque, cuál
     // es su PRÓXIMO puerto de ETA (puerto_eta/fecha_eta) — si ese
