@@ -6288,6 +6288,16 @@ function _rnAccion(tipo, t) {
   if (tipo === 'ir') { _rnCerrarModal(); irA(t.getAttribute('data-pid')); return; }
   if (tipo === 'cerrar-modal') { _rnCerrarModal(); return; }
   if (tipo === 'bt-step') { var iS = parseInt(t.getAttribute('data-i'), 10); if (!isNaN(iS) && iS >= 0) { window._btFichaEstado.sel = iS; openBTModal(window._btFichaEstado.buque); } return; }
+  if (tipo === 'add-escala') {
+    var _nb = t.getAttribute('data-buque'); _rnCerrarModal(); irA('pRepoMar');
+    var _n = 0, _iv = setInterval(function() {
+      _n++;
+      var ok = (window._repomarBuquesConfirmadosCache || []).some(function(x){ return x.buque === _nb; }) || (typeof simShips !== 'undefined' && simShips.some(function(x){ return x.name === _nb; }));
+      if (ok) { clearInterval(_iv); _repomarAgregarEscalaUI(_nb); }
+      else if (_n > 40) { clearInterval(_iv); alert('No se pudo cargar ' + _nb + ' en Reposiciones Marítimas. Espera a que cargue la vista y usa el botón ➕ Agregar escala de su caja.'); }
+    }, 250);
+    return;
+  }
   if (tipo === 'bt-hist') { _rnCerrarModal(); openBTModalHistorial(t.getAttribute('data-buque')); return; }
   if (tipo === 'planta') { _rnAbrirPlanta(t.getAttribute('data-planta')); return; }
   if (tipo === 'prod') { _rnAbrirProducto(t.getAttribute('data-prod')); return; }
@@ -10107,7 +10117,7 @@ function openBTModal(buqueName) {
     +   '<div class="btf-sec"><div class="rn-sec-t">Recorrido del viaje actual <span>toca una escala para ver su detalle</span></div>'
     +     '<div class="btf-steps">' + stepsHtml + '</div>' + detHtml + '</div>'
     + '</div>'
-    + '<div class="rn-m-foot"><button class="rn-btn" data-rn="bt-hist" data-buque="' + esc(b.buque) + '">Historial de viajes</button><button class="rn-btn" data-rn="cerrar-modal">Cerrar</button><button class="rn-btn rn-btn-acc" data-rn="ir" data-pid="pRepoMar">Ver en Reposiciones Marítimas →</button></div>'
+    + '<div class="rn-m-foot"><button class="rn-btn" data-rn="add-escala" data-buque="' + esc(b.buque) + '">➕ Agregar escala</button><button class="rn-btn" data-rn="bt-hist" data-buque="' + esc(b.buque) + '">Historial de viajes</button><button class="rn-btn" data-rn="cerrar-modal">Cerrar</button><button class="rn-btn rn-btn-acc" data-rn="ir" data-pid="pRepoMar">Ver en Reposiciones Marítimas →</button></div>'
     + '</div></div>';
   // Si la ficha ya está abierta (cambio de escala), solo se reemplaza el contenido para no parpadear
   var existente = document.getElementById('rn-modal');
