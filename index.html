@@ -19307,7 +19307,7 @@ function clearCisternas() {
 window.handleCisternasFile = handleCisternasFile;
 window.sendCisternasToGS = sendCisternasToGS;
 window.clearCisternas = clearCisternas;
-function _parseCargasFecha(token, year, refMes) {
+function _parseCargasFecha(token, year, refMes, prevHasta) {
   // ⚠️ CORREGIDO — bug real confirmado (MOCHE→Salaverry, UCAYALI→Conchán
   // y otras filas del reporte del 26-ago salían con el mes equivocado,
   // un mes ANTES de lo real): el PDF de Cargas de Naves usa "SET" como
@@ -19339,6 +19339,15 @@ function _parseCargasFecha(token, year, refMes) {
     var desde=d1>d2
       ? year+'-'+String(parseInt(mes)>1?parseInt(mes)-1:12).padStart(2,'0')+'-'+String(d1).padStart(2,'0')
       : year+'-'+mes+'-'+String(d1).padStart(2,'0');
+    // Rango que cruza de mes ("31-02/OCT"): el mes del token puede ser el de INICIO (31 oct-02 nov)
+    // o el de FIN (28 sep-01 oct). Si la lectura "mes de fin" deja esta columna ANTES de la columna
+    // anterior del mismo buque (imposible: las escalas van en orden), se usa "mes de inicio".
+    if (d1>d2 && prevHasta && hasta < prevHasta) {
+      var mi=parseInt(mes), yy=parseInt(year);
+      var mf=mi<12?mi+1:1, yf=mi<12?yy:yy+1;
+      desde=year+'-'+mes+'-'+String(d1).padStart(2,'0');
+      hasta=yf+'-'+String(mf).padStart(2,'0')+'-'+String(d2).padStart(2,'0');
+    }
     return [desde,hasta];
   }
   var m1p = token.match(/^(\d{1,2})\/([A-Z]+)/);
@@ -19772,7 +19781,9 @@ function _parseCargasNavesText(text, fechaRpt) {
           var vol = parseVol(rawVol);
           if (vol <= 0) continue;
           _sumaCol[colMap[vi]] = (_sumaCol[colMap[vi]] || 0) + vol;
-          var dt = _parseCargasFecha(dateTokensRaw[colMap[vi] + 1] || '', year, refMes);
+          var _prevH = '';
+          for (var pj = 0; pj < vi; pj++) { var _pd = _parseCargasFecha(dateTokensRaw[colMap[pj] + 1] || '', year, refMes); if (_pd[1] && _pd[1] > _prevH) _prevH = _pd[1]; }
+          var dt = _parseCargasFecha(dateTokensRaw[colMap[vi] + 1] || '', year, refMes, _prevH);
           var desde = dt[0], hasta = dt[1];
           var estado = 'PROGRAMADO';
           if (hasta && hasta < today) estado = 'COMPLETADO';
@@ -34088,7 +34099,8 @@ function _buildRepoMarBuques() {
       // pretender que ahí carga algo), distinta de "▲ CARGA" — para no
       // repetir el error de antes (inventar cargamento que no
       // corresponde) sin perder la información real de dónde está.
-      if (!pendientes.length && !hayAlgunOrigenInformado) pendientes = todasPendientes; // respaldo solo si no hay NINGÚN dato de origen
+      var _esPuertoCarga = /BAYOVAR|TALARA/.test(terminalNormBuscado); // solo estos cargan; en los demás terminales un buque presente descarga o espera
+      if (!pendientes.length && !hayAlgunOrigenInformado && _esPuertoCarga) pendientes = todasPendientes; // respaldo solo si no hay NINGÚN dato de origen
       if (pendientes.length) {
         var sumaPorProducto = {}; // producto -> {vol, producto}
         pendientes.forEach(function(l) {
@@ -34108,7 +34120,7 @@ function _buildRepoMarBuques() {
           terminal: planta, terminalNorm: terminalNormBuscado,
           producto: '', vol: 0,
           fecha_hasta: fechaHastaCarga, estado: 'PROGRAMADO', viaje: b.viaje, _sintetica: true,
-          tipo: hayAlgunOrigenInformado ? 'transito' : 'carga'
+          tipo: (hayAlgunOrigenInformado || !_esPuertoCarga) ? 'transito' : 'carga'
         });
       }
     });
@@ -34298,6 +34310,46 @@ function _buildRepoMarBuques() {
     // basta con que exista, porque puede haber otra escala de descarga
     // real más tardía (ej. MOCHE: tránsito a Bayóvar el 02-set, pero
     // todavía le queda una descarga real en Conchán el 05-set).
+    // ⚠️ AGREGADO — a pedido: si el buque está ESPERANDO (fondeado, "en espera de apertura de puerto",
+    // "ingresará una vez se apertura") o demorado, su descarga no ocurre en la fecha del plan sino cuando
+    // abran el puerto — y todo lo que sigue (incluido el retorno a Talara) se corre igual. Se toma la
+    // "APERTURA PREVISTA" del reporte diario (o hoy si no trae fecha) y se calcula el retraso contra la
+    // fecha planificada de esa escala; ese retraso se suma a la base del retorno estimado.
+    b.retrasoDias = 0; b.retrasoMotivo = '';
+    try {
+      var _posR = (typeof _navPosData !== 'undefined' && _navPosData) ? _navPosData[b.buque.toUpperCase()] : null;
+      var _txtR = _posR ? (_posR.estado_nav || _posR.estado || '') : '';
+      if (_posR && _txtR && /FONDEAD|ESPERA|APERTURA|INGRESAR[ÁA]/i.test(_txtR)) {
+        var _legEsp = null;
+        b.legs.forEach(function(l) {
+          if (l.estado !== 'COMPLETADO' && l.fecha_hasta && _repomarBuquePresenteEnTerminal(b.buque, l.terminalNorm)) {
+            if (!_legEsp || l.fecha_hasta < _legEsp.fecha_hasta) _legEsp = l;
+          }
+        });
+        if (_legEsp) {
+          var _hoyR = (typeof currentDate !== 'undefined' && currentDate) ? currentDate : new Date().toISOString().slice(0,10);
+          var _baseApert = _hoyR;
+          var _mAp = _txtR.match(/APERTURA\s+PREVISTA:\s*(\d{1,2})(?:\.\d{1,2})?\/(\d{1,2}):(\d{2})/i);
+          if (_mAp) {
+            var _rf = new Date(((_posR._fechaRpt || _posR.fecha || fechaRef || _hoyR) + '').slice(0,10) + 'T12:00:00');
+            var _dAp = parseInt(_mAp[1], 10);
+            if (_dAp < _rf.getDate()) _rf.setMonth(_rf.getMonth() + 1);
+            var _cand = _rf.getFullYear() + '-' + String(_rf.getMonth()+1).padStart(2,'0') + '-' + String(_dAp).padStart(2,'0');
+            if (_cand > _baseApert) _baseApert = _cand; // si la apertura ya pasó, se parte de hoy
+          }
+          var _ms = new Date(_baseApert + 'T12:00:00') - new Date(_legEsp.fecha_hasta.slice(0,10) + 'T12:00:00');
+          var _dias = Math.round(_ms / 86400000);
+          if (_dias > 0) {
+            b.retrasoDias = _dias;
+            b.retrasoMotivo = 'espera en ' + _legEsp.terminal + (_mAp ? ' (apertura prevista ' + _mAp[1].padStart(2,'0') + ' ' + _mAp[2] + ':' + _mAp[3] + ')' : '');
+            if (ultimaEscalaPendiente) {
+              var _u = new Date(ultimaEscalaPendiente + 'T12:00:00'); _u.setDate(_u.getDate() + _dias);
+              ultimaEscalaPendiente = _u.getFullYear() + '-' + String(_u.getMonth()+1).padStart(2,'0') + '-' + String(_u.getDate()).padStart(2,'0');
+            }
+          }
+        }
+      }
+    } catch (eRet) {}
     b.retornoEstimado = (!b.retornoTalara && !(_seAgregoEscalaTransitoRealCli && _terminalUltimaEscalaCliente === _puertoEtaNormCli))
       ? (ultimaEscalaPendiente
           ? _repomarEstimarRetorno(_terminalUltimaEscalaCliente, ultimaEscalaPendiente)
@@ -35482,6 +35534,30 @@ window.renderPRepoMar = function() {
     return partes.length ? partes.join(' · ') : null;
   }
 
+  // Estado operativo actual del buque tal como lo reporta Posicionamiento de Naves
+  // (ej. "NAVE FONDEADA EN ESPERA DE APERTURA DE PUERTO · apertura prevista 02/11 11:00",
+  // "AMARRADO", "PARÓ CARGA ...", "INGRESARÁ AL TSM ..."). Se muestra en la caja del buque cuando está presente.
+  function _repomarEstadoOperativo(buque) {
+    var pos = (typeof _navPosData !== 'undefined' && _navPosData) ? _navPosData[buque.toUpperCase()] : null;
+    if (!pos) return '';
+    var texto = pos.estado_nav || pos.estado || '';
+    if (!texto) return '';
+    var lineas = texto.split('\n').map(function(l){ return l.trim(); }).filter(Boolean);
+    if (lineas[0] && lineas[0].toUpperCase() === buque.toUpperCase()) lineas.shift();
+    var cand = null;
+    for (var i = 0; i < lineas.length; i++) {
+      var u = lineas[i].toUpperCase();
+      if (/^(ARRIB|FOND[EÉ]O|ROTACI|ZARP[OÓ]:|AMARR[OÓ]\s)/.test(u)) continue;
+      if (/FONDEAD|ESPERA|INGRESAR|AMARRAD|DESCARGANDO|CARGANDO|PAR[OÓ]\s|FAENA|SUSPEND|DEMORA|LISTO|APERTURA|CONDICI|MAL\s+TIEMPO|OLEAJE/.test(u)) { cand = lineas[i]; break; }
+    }
+    if (!cand) return '';
+    var ap = texto.match(/APERTURA\s+PREVISTA:\s*(\d{1,2})(?:\.\d{1,2})?\/(\d{1,2}:\d{2})/i);
+    cand = cand.replace(/\s{2,}.*$/, '').replace(/\s*APERTURA\s+PREVISTA.*$/i, '').replace(/\s*HRS\.?\s*$/i, '').trim();
+    var mesRpt = String(pos._fechaRpt || pos.fecha || '').slice(5, 7);
+    var apTxt = ap ? ' · Apertura prevista: ' + ap[1].padStart(2, '0') + (mesRpt ? '/' + mesRpt : '') + ' ' + ap[2] : '';
+    return cand + apTxt;
+  }
+
   // ⚠️ AGREGADO — a pedido: presencia FÍSICA del buque en un terminal,
   // independiente del estado de la escala (E.T.A./T.D.) — es lo que
   // enciende el indicador "en vivo" (recuadro pulsante + "EN PUERTO").
@@ -35653,6 +35729,8 @@ window.renderPRepoMar = function() {
               ? '<div class="repomar-legdate" style="color:#0071A4">' + detalleVivo + '</div>'
               : '<div class="repomar-legdate">' + etiqueta + ' ' + fmtCorta(g.fecha_hasta) + '</div>') +
             (estadoReal ? '<div class="repomar-legdate" style="color:#b45309;font-size:8.5px;font-weight:600">' + estadoReal.split('\n')[0] + '</div>' : '');
+          var _estOp = esVivo ? _repomarEstadoOperativo(b.buque) : '';
+          if (_estOp) lineaEstado += '<div class="repomar-legdate" style="color:#92400e;background:#fef3c7;border:1px solid #fcd34d;border-radius:5px;padding:2px 4px;margin-top:3px;font-size:8.5px;font-weight:700;white-space:normal;line-height:1.25">⚓ ' + _estOp.replace(/</g,'&lt;') + '</div>';
           // ⚠️ AGREGADO — a pedido: data-leg-idx ahora identifica el
           // GRUPO (no la escala individual) — necesario para que las
           // flechas conecten grupo 1 -> grupo 2 -> grupo 3 en el orden
@@ -35756,7 +35834,7 @@ window.renderPRepoMar = function() {
       if (b.retornoTalara) {
         retornoTxt = '<div class="repomar-legbox" style="border-color:#0071A4"><div class="repomar-legdate" style="color:#0071A4">Retorno Talara</div><div class="repomar-legprod">' + fmtCorta(b.retornoTalara) + fmtHora(b.retornoTalara) + '</div></div>';
       } else if (b.retornoEstimado) {
-        retornoTxt = '<div class="repomar-legbox" style="border-color:#d97706;border-style:dashed" title="Estimado con la tabla de distancias — última escala + 1 día de estadía + días de navegación hasta Talara. No es un E.T.A. confirmado."><div class="repomar-legdate" style="color:#d97706">~ Retorno Talara (est.)</div><div class="repomar-legprod">' + fmtCorta(b.retornoEstimado) + '</div></div>';
+        retornoTxt = '<div class="repomar-legbox" style="border-color:#d97706;border-style:dashed" title="Estimado con la tabla de distancias — última escala + 1 día de estadía + días de navegación hasta Talara. No es un E.T.A. confirmado."><div class="repomar-legdate" style="color:#d97706">~ Retorno Talara (est.)</div><div class="repomar-legprod">' + fmtCorta(b.retornoEstimado) + '</div>' + (b.retrasoDias ? '<div class="repomar-legdate" style="color:#b45309;font-size:8.5px;font-weight:700;white-space:normal">+' + b.retrasoDias + ' d por ' + b.retrasoMotivo + '</div>' : '') + '</div>';
       } else {
         var mensajeRetornoPendiente = b.ultimaEscalaPendienteFecha
           ? 'Se sabrá tras completar su última escala (' + fmtCorta(b.ultimaEscalaPendienteFecha) + ')'
