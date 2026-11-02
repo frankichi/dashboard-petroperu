@@ -35230,14 +35230,14 @@ function _repomarMostrarModalAgregar(buque, viaje) {
 // productos, escalas nuevas) con las herramientas que el Simulador ya
 // tiene, y recién se vuelve real cuando alguien la confirma más
 // adelante. Nunca modifica cargas_naves directamente.
-function _repomarCopiarBuqueAProyectado(nombreBuque) {
+function _repomarCopiarBuqueAProyectado(nombreBuque, silencioso) {
   var confirmados = window._repomarBuquesConfirmadosCache || [];
   var b = confirmados.find(function(x){ return x.buque === nombreBuque; });
   if (!b) { alert('No se encontró el buque ' + nombreBuque + ' en el Cabotaje Confirmado.'); return; }
 
   var yaExisteEnProyectado = (typeof simShips !== 'undefined') && simShips.some(function(s){ return s.name === nombreBuque; });
-  if (yaExisteEnProyectado && !confirm(nombreBuque + ' ya está en Cabotaje Proyectado — ¿reemplazar esa copia por el itinerario Confirmado actual? Se perderán los cambios que ya hayas hecho ahí.')) return;
-  if (!yaExisteEnProyectado && !confirm('¿Copiar el itinerario actual de ' + nombreBuque + ' a Cabotaje Proyectado para editarlo ahí como propuesta? Esto NO modifica el Confirmado — es solo una copia de trabajo.')) return;
+  if (yaExisteEnProyectado && !silencioso && !confirm(nombreBuque + ' ya está en Cabotaje Proyectado — ¿reemplazar esa copia por el itinerario Confirmado actual? Se perderán los cambios que ya hayas hecho ahí.')) return;
+  if (!yaExisteEnProyectado && !silencioso && !confirm('¿Copiar el itinerario actual de ' + nombreBuque + ' a Cabotaje Proyectado para editarlo ahí como propuesta? Esto NO modifica el Confirmado — es solo una copia de trabajo.')) return;
 
   var grupos = _repomarAgruparEscalas(b.legs);
   var pendientes = grupos.filter(function(g){ return g.estado !== 'COMPLETADO'; });
@@ -35276,8 +35276,93 @@ function _repomarCopiarBuqueAProyectado(nombreBuque) {
   if (typeof simInited !== 'undefined') simInited = true;
   if (typeof simActiveId !== 'undefined') simActiveId = nuevoId;
   if (typeof simSaveToGS === 'function') simSaveToGS();
-  _repomarCambiarModoLocal('proyectado');
+  if (!silencioso) _repomarCambiarModoLocal('proyectado');
 }
+
+
+// ⚠️ AGREGADO — a pedido: agregar una ESCALA nueva a un buque (ej. UCAYALI → Mollendo) directo desde
+// RepoMar, indicando fecha y volumen por producto. Trabaja sobre la copia en Cabotaje Proyectado (nunca
+// toca el Confirmado) y el volumen que se descarga en la escala nueva se RESTA de la(s) escala(s)
+// anterior(es) que llevaban ese producto (primero la inmediata anterior en fecha), porque el producto
+// es el mismo que va a bordo: lo que se entrega en Mollendo ya no llega a Conchán.
+function _repomarAgregarEscalaUI(nombreBuque) {
+  if (typeof simShips === 'undefined') { alert('El Simulador BT no está disponible en esta vista.'); return; }
+  var ship = simShips.find(function(x){ return x.name === nombreBuque; });
+  if (!ship) {
+    _repomarCopiarBuqueAProyectado(nombreBuque, true);
+    ship = simShips.find(function(x){ return x.name === nombreBuque; });
+  }
+  if (!ship || !ship.stops || !ship.stops.length) { alert(nombreBuque + ' no tiene escalas pendientes sobre las que ajustar volúmenes.'); return; }
+  // Productos a bordo = los que aún tienen volumen en escalas pendientes
+  var disp = {};
+  ship.stops.forEach(function(st) { (st.prods || []).forEach(function(pr) { disp[pr.producto] = (disp[pr.producto] || 0) + (pr.vol || 0); }); });
+  var prods = Object.keys(disp).filter(function(k){ return disp[k] > 0.05; });
+  if (!prods.length) { alert('No quedan productos por descargar a bordo de ' + nombreBuque + '.'); return; }
+  var old = document.getElementById('repomar-addesc-modal'); if (old) old.remove();
+  var plantas = (typeof REPOMAR_PLANTAS !== 'undefined') ? REPOMAR_PLANTAS : [];
+  var ultimaFecha = ship.stops.map(function(x){ return x.etaDate || ''; }).sort().pop() || (typeof currentDate !== 'undefined' ? currentDate : '');
+  var filas = prods.map(function(pr, i) {
+    return '<div style="display:flex;align-items:center;gap:8px;margin:4px 0"><div style="flex:1;font-size:12px;font-weight:700">' + pr + '<div style="font-size:10px;font-weight:500;color:#64748b">a bordo por descargar: ' + disp[pr].toFixed(1) + ' MB</div></div>' +
+      '<input type="number" min="0" max="' + disp[pr].toFixed(1) + '" step="0.1" value="0" data-addesc-prod="' + i + '" style="width:90px;padding:5px;border:1px solid #cbd5e1;border-radius:6px;font-family:monospace"> <span style="font-size:11px">MB</span></div>';
+  }).join('');
+  var m = document.createElement('div'); m.id = 'repomar-addesc-modal';
+  m.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,.55);z-index:99999;display:flex;align-items:center;justify-content:center;padding:16px';
+  m.innerHTML = '<div style="background:#fff;color:#0f172a;border-radius:12px;max-width:440px;width:100%;padding:18px 20px;box-shadow:0 20px 50px rgba(0,0,0,.35);max-height:90vh;overflow:auto">' +
+    '<div style="font-size:15px;font-weight:800;margin-bottom:2px">➕ Agregar escala — ' + nombreBuque + '</div>' +
+    '<div style="font-size:11px;color:#64748b;margin-bottom:10px">Se guarda en <b>Cabotaje Proyectado</b> (no modifica el Confirmado). El volumen se resta de las escalas anteriores.</div>' +
+    '<label style="font-size:11px;font-weight:700">Terminal</label>' +
+    '<select id="addesc-term" style="width:100%;padding:6px;border:1px solid #cbd5e1;border-radius:6px;margin:2px 0 8px">' + plantas.map(function(pl){ return '<option>' + pl + '</option>'; }).join('') + '</select>' +
+    '<label style="font-size:11px;font-weight:700">Fecha estimada de descarga (ETA)</label>' +
+    '<input id="addesc-fecha" type="date" value="' + ultimaFecha + '" style="width:100%;padding:6px;border:1px solid #cbd5e1;border-radius:6px;margin:2px 0 8px">' +
+    '<div style="font-size:11px;font-weight:700;margin-top:4px">Volumen a descargar por producto</div>' + filas +
+    '<div id="addesc-msg" style="font-size:11px;color:#b91c1c;min-height:16px;margin-top:6px"></div>' +
+    '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px">' +
+    '<button onclick="document.getElementById(\'repomar-addesc-modal\').remove()" style="padding:7px 14px;border:1px solid #cbd5e1;background:#fff;border-radius:6px;cursor:pointer">Cancelar</button>' +
+    '<button id="addesc-ok" style="padding:7px 14px;border:none;background:#0071A4;color:#fff;font-weight:700;border-radius:6px;cursor:pointer">Agregar escala</button></div></div>';
+  document.body.appendChild(m);
+  document.getElementById('addesc-ok').onclick = function() {
+    var msg = document.getElementById('addesc-msg');
+    var term = document.getElementById('addesc-term').value;
+    var fecha = document.getElementById('addesc-fecha').value;
+    if (!fecha) { msg.textContent = 'Indica la fecha.'; return; }
+    var nuevos = [];
+    var inputs = m.querySelectorAll('[data-addesc-prod]');
+    for (var i = 0; i < inputs.length; i++) {
+      var v = parseFloat(inputs[i].value) || 0; var pr = prods[parseInt(inputs[i].getAttribute('data-addesc-prod'), 10)];
+      if (v < 0) { msg.textContent = 'Volumen inválido.'; return; }
+      if (v > disp[pr] + 0.05) { msg.textContent = pr + ': máximo ' + disp[pr].toFixed(1) + ' MB a bordo.'; return; }
+      if (v > 0) nuevos.push({ producto: pr, vol: Math.round(v * 10) / 10 });
+    }
+    if (!nuevos.length) { msg.textContent = 'Indica al menos un producto con volumen.'; return; }
+    // Restar de escalas anteriores (primero la inmediata anterior en fecha, luego las demás hacia atrás, y al final las posteriores)
+    nuevos.forEach(function(n) {
+      var resto = n.vol;
+      var cands = ship.stops.filter(function(st){ return (st.prods || []).some(function(pr){ return pr.producto === n.producto && pr.vol > 0; }); });
+      var antes = cands.filter(function(st){ return (st.etaDate || '') <= fecha; }).sort(function(a, c){ return (c.etaDate || '').localeCompare(a.etaDate || ''); });
+      var despues = cands.filter(function(st){ return (st.etaDate || '') > fecha; }).sort(function(a, c){ return (a.etaDate || '').localeCompare(c.etaDate || ''); });
+      antes.concat(despues).forEach(function(st) {
+        if (resto <= 0.0001) return;
+        st.prods.forEach(function(pr) {
+          if (pr.producto !== n.producto || resto <= 0.0001) return;
+          var q = Math.min(pr.vol, resto); pr.vol = Math.round((pr.vol - q) * 10) / 10; resto = Math.round((resto - q) * 10) / 10;
+        });
+      });
+    });
+    ship.stops.forEach(function(st) {
+      st.prods = (st.prods || []).filter(function(pr){ return pr.vol > 0.0001; });
+      st.vol = st.prods.reduce(function(a, pr){ return a + pr.vol; }, 0);
+      st.producto = (st.prods[0] && st.prods[0].producto) || st.producto;
+    });
+    ship.stops = ship.stops.filter(function(st){ return st.prods.length; });
+    ship.stops.push({ planta: term, producto: nuevos[0].producto, vol: nuevos.reduce(function(a, n){ return a + n.vol; }, 0), etaDate: fecha, prods: nuevos });
+    ship.stops.sort(function(a, c){ return (a.etaDate || '').localeCompare(c.etaDate || ''); });
+    if (typeof simActiveId !== 'undefined') simActiveId = ship.id;
+    if (typeof simSaveToGS === 'function') simSaveToGS();
+    m.remove();
+    _repomarCambiarModoLocal('proyectado');
+  };
+}
+window._repomarAgregarEscalaUI = _repomarAgregarEscalaUI;
 
 function _repomarConfirmarProyectado() {
   if (typeof simActiveId === 'undefined' || simActiveId === null) { alert('Selecciona primero un buque en el Simulador.'); return; }
@@ -35662,8 +35747,10 @@ window.renderPRepoMar = function() {
       // visible en el panel normal (no en el modo compartido) y solo
       // en la vista de Confirmado (en Proyectado ya se edita directo
       // con las herramientas del Simulador).
-      var botonAgregarEscala = ((typeof REPOMAR_SHARE_MODE !== 'undefined' && REPOMAR_SHARE_MODE) || modo === 'proyectado') ? '' :
-        '<button class="repomar-addescala-btn" onclick="_repomarCopiarBuqueAProyectado(' + "'" + b.buque.replace(/'/g,"\\'") + "'" + ')">📋 Copiar a Proyectado</button>';
+      var _nmQ = b.buque.replace(/'/g,"\\'");
+      var botonAgregarEscala = (typeof REPOMAR_SHARE_MODE !== 'undefined' && REPOMAR_SHARE_MODE) ? '' :
+        '<button class="repomar-addescala-btn" onclick="_repomarAgregarEscalaUI(\'' + _nmQ + '\')">➕ Agregar escala</button>' +
+        (modo === 'proyectado' ? '' : '<button class="repomar-addescala-btn" style="margin-top:0" onclick="_repomarCopiarBuqueAProyectado(\'' + _nmQ + '\')">📋 Copiar a Proyectado</button>');
       var shipBox = '<div class="repomar-cell" style="align-items:flex-start;padding:4px">' +
         '<div class="repomar-shipbox' + (enVivoEnTalara ? ' en-vivo' : '') + '" style="width:100%">' +
           (modo !== 'proyectado' && !(typeof REPOMAR_SHARE_MODE !== 'undefined' && REPOMAR_SHARE_MODE) ? '<button class="repomar-ficha-btn" data-ficha-buque="' + b.buque.replace(/"/g,'&quot;') + '" title="Ficha del viaje actual de ' + b.buque + '">ⓘ</button>' : '') +
