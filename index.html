@@ -35374,6 +35374,139 @@ function _repomarAgregarEscalaUI(nombreBuque) {
 }
 window._repomarAgregarEscalaUI = _repomarAgregarEscalaUI;
 
+// ===== Exportar diapositiva (PPTX mínimo, sin librerías) =====
+function _rmCrc32(buf) {
+  var t = _rmCrc32._t;
+  if (!t) { t = _rmCrc32._t = new Uint32Array(256); for (var n = 0; n < 256; n++) { var c = n; for (var k = 0; k < 8; k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1); t[n] = c >>> 0; } }
+  var crc = 0xFFFFFFFF; for (var i = 0; i < buf.length; i++) crc = t[(crc ^ buf[i]) & 0xFF] ^ (crc >>> 8);
+  return (crc ^ 0xFFFFFFFF) >>> 0;
+}
+function _rmZip(files) { // files: [{name, data:Uint8Array}] — almacenado sin compresión
+  var enc = new TextEncoder(), parts = [], central = [], offset = 0;
+  function u16(v) { return [v & 255, (v >>> 8) & 255]; }
+  function u32(v) { return [v & 255, (v >>> 8) & 255, (v >>> 16) & 255, (v >>> 24) & 255]; }
+  files.forEach(function(f) {
+    var nm = enc.encode(f.name), crc = _rmCrc32(f.data), sz = f.data.length;
+    var lh = new Uint8Array([].concat(u32(0x04034b50), u16(20), u16(0x0800), u16(0), u16(0), u16(0x21), u32(crc), u32(sz), u32(sz), u16(nm.length), u16(0)));
+    parts.push(lh, nm, f.data);
+    central.push({ nm: nm, crc: crc, sz: sz, off: offset });
+    offset += lh.length + nm.length + sz;
+  });
+  var cdStart = offset, cdParts = [];
+  central.forEach(function(c) {
+    var h = new Uint8Array([].concat(u32(0x02014b50), u16(20), u16(20), u16(0x0800), u16(0), u16(0), u16(0x21), u32(c.crc), u32(c.sz), u32(c.sz), u16(c.nm.length), u16(0), u16(0), u16(0), u16(0), u32(0), u32(c.off)));
+    cdParts.push(h, c.nm); offset += h.length + c.nm.length;
+  });
+  var end = new Uint8Array([].concat(u32(0x06054b50), u16(0), u16(0), u16(central.length), u16(central.length), u32(offset - cdStart), u32(cdStart), u16(0)));
+  var all = parts.concat(cdParts, [end]), total = 0; all.forEach(function(a){ total += a.length; });
+  var out = new Uint8Array(total), p = 0; all.forEach(function(a){ out.set(a, p); p += a.length; });
+  return out;
+}
+function _rmBuildPptx(png, imgW, imgH, titulo, subtitulo, pie) {
+  var enc = new TextEncoder();
+  var esc = function(x){ return String(x == null ? '' : x).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); };
+  var W = 12192000, H = 6858000, mx = 300000;
+  var topY = 1000000, botY = 6858000 - 420000;
+  var availW = W - 2 * mx, availH = botY - topY;
+  var sc = Math.min(availW / imgW, availH / imgH);
+  var pw = Math.round(imgW * sc), ph = Math.round(imgH * sc);
+  var px = Math.round((W - pw) / 2), py = topY + Math.round((availH - ph) / 2);
+  var NS = 'xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"';
+  var X = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n';
+  function tb(id, name, x, y, w, h, txt, sz, bold, color) {
+    return '<p:sp><p:nvSpPr><p:cNvPr id="' + id + '" name="' + name + '"/><p:cNvSpPr txBox="1"/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x="' + x + '" y="' + y + '"/><a:ext cx="' + w + '" cy="' + h + '"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:noFill/></p:spPr><p:txBody><a:bodyPr wrap="square" lIns="0" tIns="0" rIns="0" bIns="0" anchor="ctr"/><a:lstStyle/><a:p><a:r><a:rPr lang="es-PE" sz="' + sz + '" b="' + (bold ? 1 : 0) + '"><a:solidFill><a:srgbClr val="' + color + '"/></a:solidFill><a:latin typeface="Calibri"/></a:rPr><a:t>' + esc(txt) + '</a:t></a:r></a:p></p:txBody></p:sp>';
+  }
+  var slide = X + '<p:sld ' + NS + '><p:cSld><p:spTree><p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr><p:grpSpPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="0" cy="0"/><a:chOff x="0" y="0"/><a:chExt cx="0" cy="0"/></a:xfrm></p:grpSpPr>'
+    + '<p:sp><p:nvSpPr><p:cNvPr id="2" name="Franja"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="' + W + '" cy="160000"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:solidFill><a:srgbClr val="C8102E"/></a:solidFill><a:ln><a:noFill/></a:ln></p:spPr></p:sp>'
+    + tb(3, 'Titulo', mx, 300000, W - 2 * mx, 400000, titulo, 2600, true, '003F5C')
+    + tb(4, 'Subtitulo', mx, 700000, W - 2 * mx, 250000, subtitulo, 1300, false, '64748B')
+    + '<p:pic><p:nvPicPr><p:cNvPr id="5" name="Movimiento de buques"/><p:cNvPicPr><a:picLocks noChangeAspect="1"/></p:cNvPicPr><p:nvPr/></p:nvPicPr><p:blipFill><a:blip r:embed="rId2"/><a:stretch><a:fillRect/></a:stretch></p:blipFill><p:spPr><a:xfrm><a:off x="' + px + '" y="' + py + '"/><a:ext cx="' + pw + '" cy="' + ph + '"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></p:spPr></p:pic>'
+    + tb(6, 'Pie', mx, botY + 80000, W - 2 * mx, 220000, pie, 1000, false, '94A3B8')
+    + '</p:spTree></p:cSld><p:clrMapOvr><a:masterClrMapping/></p:clrMapOvr></p:sld>';
+  var theme = X + '<a:theme xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" name="Petroperu"><a:themeElements><a:clrScheme name="P"><a:dk1><a:srgbClr val="000000"/></a:dk1><a:lt1><a:srgbClr val="FFFFFF"/></a:lt1><a:dk2><a:srgbClr val="003F5C"/></a:dk2><a:lt2><a:srgbClr val="F1F5F9"/></a:lt2><a:accent1><a:srgbClr val="0071A4"/></a:accent1><a:accent2><a:srgbClr val="C8102E"/></a:accent2><a:accent3><a:srgbClr val="E85D04"/></a:accent3><a:accent4><a:srgbClr val="16A34A"/></a:accent4><a:accent5><a:srgbClr val="64748B"/></a:accent5><a:accent6><a:srgbClr val="D97706"/></a:accent6><a:hlink><a:srgbClr val="0071A4"/></a:hlink><a:folHlink><a:srgbClr val="64748B"/></a:folHlink></a:clrScheme><a:fontScheme name="P"><a:majorFont><a:latin typeface="Calibri"/><a:ea typeface=""/><a:cs typeface=""/></a:majorFont><a:minorFont><a:latin typeface="Calibri"/><a:ea typeface=""/><a:cs typeface=""/></a:minorFont></a:fontScheme><a:fmtScheme name="P"><a:fillStyleLst><a:solidFill><a:schemeClr val="phClr"/></a:solidFill><a:solidFill><a:schemeClr val="phClr"/></a:solidFill><a:solidFill><a:schemeClr val="phClr"/></a:solidFill></a:fillStyleLst><a:lnStyleLst><a:ln w="6350"><a:solidFill><a:schemeClr val="phClr"/></a:solidFill></a:ln><a:ln w="12700"><a:solidFill><a:schemeClr val="phClr"/></a:solidFill></a:ln><a:ln w="19050"><a:solidFill><a:schemeClr val="phClr"/></a:solidFill></a:ln></a:lnStyleLst><a:effectStyleLst><a:effectStyle><a:effectLst/></a:effectStyle><a:effectStyle><a:effectLst/></a:effectStyle><a:effectStyle><a:effectLst/></a:effectStyle></a:effectStyleLst><a:bgFillStyleLst><a:solidFill><a:schemeClr val="phClr"/></a:solidFill><a:solidFill><a:schemeClr val="phClr"/></a:solidFill><a:solidFill><a:schemeClr val="phClr"/></a:solidFill></a:bgFillStyleLst></a:fmtScheme></a:themeElements></a:theme>';
+  var master = X + '<p:sldMaster ' + NS + '><p:cSld><p:bg><p:bgPr><a:solidFill><a:srgbClr val="FFFFFF"/></a:solidFill><a:effectLst/></p:bgPr></p:bg><p:spTree><p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr><p:grpSpPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="0" cy="0"/><a:chOff x="0" y="0"/><a:chExt cx="0" cy="0"/></a:xfrm></p:grpSpPr></p:spTree></p:cSld><p:clrMap bg1="lt1" tx1="dk1" bg2="lt2" tx2="dk2" accent1="accent1" accent2="accent2" accent3="accent3" accent4="accent4" accent5="accent5" accent6="accent6" hlink="hlink" folHlink="folHlink"/><p:sldLayoutIdLst><p:sldLayoutId id="2147483649" r:id="rId1"/></p:sldLayoutIdLst></p:sldMaster>';
+  var layout = X + '<p:sldLayout ' + NS + ' type="blank" preserve="1"><p:cSld name="Blank"><p:spTree><p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr><p:grpSpPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="0" cy="0"/><a:chOff x="0" y="0"/><a:chExt cx="0" cy="0"/></a:xfrm></p:grpSpPr></p:spTree></p:cSld><p:clrMapOvr><a:masterClrMapping/></p:clrMapOvr></p:sldLayout>';
+  var pres = X + '<p:presentation ' + NS + '><p:sldMasterIdLst><p:sldMasterId id="2147483648" r:id="rId1"/></p:sldMasterIdLst><p:sldIdLst><p:sldId id="256" r:id="rId2"/></p:sldIdLst><p:sldSz cx="' + W + '" cy="' + H + '"/><p:notesSz cx="6858000" cy="9144000"/></p:presentation>';
+  var R = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
+  var rel = function(items){ return X + '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' + items.map(function(i){ return '<Relationship Id="' + i[0] + '" Type="' + R + '/' + i[1] + '" Target="' + i[2] + '"/>'; }).join('') + '</Relationships>'; };
+  var ct = X + '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Default Extension="png" ContentType="image/png"/>'
+    + '<Override PartName="/ppt/presentation.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.presentation.main+xml"/>'
+    + '<Override PartName="/ppt/slideMasters/slideMaster1.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slideMaster+xml"/>'
+    + '<Override PartName="/ppt/slideLayouts/slideLayout1.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slideLayout+xml"/>'
+    + '<Override PartName="/ppt/slides/slide1.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slide+xml"/>'
+    + '<Override PartName="/ppt/theme/theme1.xml" ContentType="application/vnd.openxmlformats-officedocument.theme+xml"/></Types>';
+  var T = function(s){ return enc.encode(s); };
+  return _rmZip([
+    { name: '[Content_Types].xml', data: T(ct) },
+    { name: '_rels/.rels', data: T(rel([['rId1', 'officeDocument', 'ppt/presentation.xml']])) },
+    { name: 'ppt/presentation.xml', data: T(pres) },
+    { name: 'ppt/_rels/presentation.xml.rels', data: T(rel([['rId1', 'slideMaster', 'slideMasters/slideMaster1.xml'], ['rId2', 'slide', 'slides/slide1.xml']])) },
+    { name: 'ppt/slideMasters/slideMaster1.xml', data: T(master) },
+    { name: 'ppt/slideMasters/_rels/slideMaster1.xml.rels', data: T(rel([['rId1', 'slideLayout', '../slideLayouts/slideLayout1.xml'], ['rId2', 'theme', '../theme/theme1.xml']])) },
+    { name: 'ppt/slideLayouts/slideLayout1.xml', data: T(layout) },
+    { name: 'ppt/slideLayouts/_rels/slideLayout1.xml.rels', data: T(rel([['rId1', 'slideMaster', '../slideMasters/slideMaster1.xml']])) },
+    { name: 'ppt/theme/theme1.xml', data: T(theme) },
+    { name: 'ppt/slides/slide1.xml', data: T(slide) },
+    { name: 'ppt/slides/_rels/slide1.xml.rels', data: T(rel([['rId1', 'slideLayout', '../slideLayouts/slideLayout1.xml'], ['rId2', 'image', '../media/image1.png']])) },
+    { name: 'ppt/media/image1.png', data: png }
+  ]);
+}
+
+// Captura el diagrama de buques de RepoMar (encabezado de plantas + recorridos + flechas) como PNG.
+function _rmCapturarDiagrama() {
+  return new Promise(function(resolve, reject) {
+    var grid = document.getElementById('repomar-grid'), ships = document.getElementById('repomar-ships');
+    if (!grid || !ships) { reject(new Error('No hay diagrama de buques en pantalla.')); return; }
+    var gr = grid.getBoundingClientRect(), sr = ships.getBoundingClientRect();
+    var head = grid.querySelector('.repomar-headerrow');
+    var rows = grid.querySelectorAll('.repomar-headerrow'); // el encabezado existe arriba y abajo: se usa el de arriba
+    var top = head ? head.getBoundingClientRect().top - gr.top : (sr.top - gr.top);
+    // incluir también la etiqueta "CABOTAJE ..." / "Retorno" que está justo encima de los buques
+    var lab = ships.previousElementSibling; if (lab) { var lt = lab.getBoundingClientRect().top - gr.top; if (lt < top || !head) top = Math.min(top, lt); }
+    var bottom = sr.bottom - gr.top + 8, W = Math.ceil(gr.width), Hfull = Math.ceil(gr.height);
+    var clone = grid.cloneNode(true);
+    var walk = function(o, c) {
+      if (o.nodeType !== 1) return;
+      var cs = window.getComputedStyle(o), txt = '';
+      for (var i = 0; i < cs.length; i++) { var pn = cs[i]; txt += pn + ':' + cs.getPropertyValue(pn) + ';'; }
+      c.setAttribute('style', txt);
+      for (var k = 0; k < o.children.length; k++) walk(o.children[k], c.children[k]);
+    };
+    walk(grid, clone);
+    clone.style.margin = '0'; clone.style.position = 'relative';
+    clone.setAttribute('xmlns', 'http://www.w3.org/1999/xhtml');
+    var inner = new XMLSerializer().serializeToString(clone);
+    var h = Math.ceil(bottom - top);
+    var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="' + W + '" height="' + h + '" viewBox="0 ' + Math.floor(top) + ' ' + W + ' ' + h + '"><rect x="0" y="' + Math.floor(top) + '" width="' + W + '" height="' + h + '" fill="#ffffff"/><foreignObject x="0" y="0" width="' + W + '" height="' + Hfull + '">' + inner + '</foreignObject></svg>';
+    var img = new Image();
+    img.onload = function() {
+      var sc = 2, cv = document.createElement('canvas'); cv.width = W * sc; cv.height = h * sc;
+      var cx = cv.getContext('2d'); cx.fillStyle = '#fff'; cx.fillRect(0, 0, cv.width, cv.height); cx.scale(sc, sc); cx.drawImage(img, 0, 0, W, h);
+      cv.toBlob(function(b) { if (!b) { reject(new Error('No se pudo generar la imagen.')); return; } b.arrayBuffer().then(function(ab){ resolve({ png: new Uint8Array(ab), w: cv.width, h: cv.height, blob: b }); }); }, 'image/png');
+    };
+    img.onerror = function() { reject(new Error('El navegador no pudo renderizar el diagrama.')); };
+    img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+  });
+}
+function _rmDescargar(blob, nombre) {
+  var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = nombre;
+  document.body.appendChild(a); a.click(); setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); }, 1500);
+}
+function _repomarExportarDiapositiva(formato) {
+  var btn = document.getElementById('repomar-btn-exportar'); var txt0 = btn ? btn.innerHTML : '';
+  if (btn) { btn.disabled = true; btn.innerHTML = '⏳ Generando…'; }
+  var hoy = (typeof currentDate !== 'undefined' && currentDate) ? currentDate : new Date().toISOString().slice(0, 10);
+  var fx = hoy.split('-').reverse().join('/');
+  var modo = window._repomarModoActivo === 'proyectado' ? 'Cabotaje proyectado (aún no confirmado)' : 'Cabotaje confirmado';
+  _rmCapturarDiagrama().then(function(r) {
+    if (formato === 'png') { _rmDescargar(r.blob, 'movimiento_buques_' + hoy + '.png'); return; }
+    var pptx = _rmBuildPptx(r.png, r.w, r.h, 'Movimiento actual de buques', modo + ' · Estado al ' + fx, 'Petroperú · Gerencia de Planificación de Suministro · Reposiciones Marítimas');
+    _rmDescargar(new Blob([pptx], { type: 'application/vnd.openxmlformats-officedocument.presentationml.presentation' }), 'Movimiento_buques_' + hoy + '.pptx');
+  }).catch(function(e) { alert('No se pudo exportar: ' + (e && e.message ? e.message : e)); })
+    .then(function() { if (btn) { btn.disabled = false; btn.innerHTML = txt0; } });
+}
+window._repomarExportarDiapositiva = _repomarExportarDiapositiva;
+
 function _repomarConfirmarProyectado() {
   if (typeof simActiveId === 'undefined' || simActiveId === null) { alert('Selecciona primero un buque en el Simulador.'); return; }
   var s = simShips.find(function(x){ return x.id === simActiveId; });
@@ -36058,6 +36191,8 @@ window.renderPRepoMar = function() {
           // barra superior, fuera del interruptor de modo. Antes la
           // única forma de ver el estado más nuevo sin esperar el
           // auto-refresh era recargar la página entera.
+          '<button id="repomar-btn-exportar" class="repomar-programar-btn" onclick="_repomarExportarDiapositiva()" title="Descarga 1 diapositiva (PowerPoint) con el movimiento actual de los buques">📊 Exportar diapositiva</button>' +
+          '<button class="repomar-programar-btn" onclick="_repomarExportarDiapositiva(\'png\')" title="Descarga solo la imagen del diagrama de buques">🖼️ PNG</button>' +
           '<button id="repomar-btn-actualizar" class="repomar-programar-btn" onclick="_repomarActualizarManualInterno()" title="Volver a pedir el estado más reciente sin recargar la página"><span id="repomar-actualizar-icono">🔄</span> Actualizar estado</button>' +
           (typeof REPOMAR_SHARE_MODE !== 'undefined' && REPOMAR_SHARE_MODE ? '' :
           '<button class="repomar-share-btn" onclick="_repomarCompartir()">🔗 Compartir enlace</button>') +
