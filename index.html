@@ -18214,6 +18214,70 @@ function _uplAccordion(id, icon, title, desc, badge, openDefault, bodyHTML, last
     + '</div>';
 }
 window._uplAccordion = _uplAccordion;
+
+// ═══ Popup de "guardando…" para TODAS las cargas de Carga de Datos ═══
+// Bloquea la pantalla mientras se guarda (para no subir otro archivo encima) y desaparece solo al terminar.
+// Si falla, queda visible con el motivo y un botón para cerrar.
+(function() {
+  var NOMBRES = {
+    sendFluvialToGS: 'Reporte fluvial', sendCisternasToGS: 'Cisternas', sendCargasNavesToGS: 'Cargas de Naves',
+    sendRefTalaraInvToGS: 'Inventario Refinería Talara', sendRefConchanInvToGS: 'Inventario Refinería Conchán', sendRefIquitosInvToGS: 'Inventario Refinería Iquitos',
+    sendEDToGS: 'Reporte E&D', sendNavesToGS: 'Posicionamiento de Naves', sendCobToGS: 'Coberturas', sendPronToGS: 'Pronóstico', sendVentasToGS: 'Ventas'
+  };
+  function css() {
+    if (document.getElementById('upl-guard-css')) return;
+    var st = document.createElement('style'); st.id = 'upl-guard-css';
+    st.textContent = '#upl-guard{position:fixed;inset:0;z-index:100000;background:rgba(15,23,42,.62);display:flex;align-items:center;justify-content:center;padding:16px;backdrop-filter:blur(2px)}'
+      + '#upl-guard .g{background:var(--card,#fff);color:var(--txt,#0f172a);border:1px solid var(--bdr,#e2e8f0);border-radius:14px;padding:22px 26px;max-width:420px;width:100%;text-align:center;box-shadow:0 24px 60px rgba(0,0,0,.4)}'
+      + '#upl-guard .sp{width:38px;height:38px;border:4px solid var(--bdr,#e2e8f0);border-top-color:var(--acc,#0071A4);border-radius:50%;animation:uplspin .9s linear infinite;margin:0 auto 12px}'
+      + '@keyframes uplspin{to{transform:rotate(360deg)}}#upl-guard .t{font-size:15px;font-weight:800}#upl-guard .m{font-size:12px;color:var(--txt2,#475569);margin-top:6px;line-height:1.4}'
+      + '#upl-guard button{margin-top:14px;padding:7px 18px;border-radius:8px;border:none;background:var(--acc,#0071A4);color:#fff;font-weight:700;cursor:pointer}';
+    document.head.appendChild(st);
+  }
+  var timer = null, t0 = 0;
+  function mostrar(nombre) {
+    css(); ocultar();
+    var d = document.createElement('div'); d.id = 'upl-guard';
+    d.innerHTML = '<div class="g"><div class="sp"></div><div class="t">Guardando ' + nombre + '…</div><div class="m" id="upl-guard-m">Espera, no subas otro archivo hasta que termine.</div></div>';
+    document.body.appendChild(d); t0 = Date.now();
+    timer = setInterval(function() {
+      var m = document.getElementById('upl-guard-m'); if (!m) return;
+      var sg = Math.round((Date.now() - t0) / 1000);
+      m.textContent = 'Espera, no subas otro archivo hasta que termine. (' + sg + ' s)' + (sg > 40 ? ' — el servidor está tardando más de lo normal.' : '');
+    }, 1000);
+  }
+  function ocultar() { if (timer) { clearInterval(timer); timer = null; } var d = document.getElementById('upl-guard'); if (d) d.remove(); }
+  function fallo(nombre, msg) {
+    if (timer) { clearInterval(timer); timer = null; }
+    var d = document.getElementById('upl-guard'); if (!d) { css(); d = document.createElement('div'); d.id = 'upl-guard'; document.body.appendChild(d); }
+    d.innerHTML = '<div class="g"><div style="font-size:30px">❌</div><div class="t">No se guardó ' + nombre + '</div><div class="m">' + String(msg || 'Error desconocido').replace(/</g, '&lt;') + '</div><button onclick="document.getElementById(\'upl-guard\').remove()">Cerrar</button></div>';
+  }
+  function envolver() {
+    Object.keys(NOMBRES).forEach(function(fn) {
+      var orig = window[fn];
+      if (typeof orig !== 'function' || orig._uplGuard) return;
+      var w = function() {
+        var self = this, args = arguments;
+        var btn = document.activeElement;
+        var cont = btn && btn.closest ? btn.closest('.upload-actions') : null;
+        var statusEl = cont ? cont.querySelector('.upload-status') : null;
+        if (statusEl) statusEl.textContent = '';
+        mostrar(NOMBRES[fn]);
+        var r;
+        try { r = orig.apply(self, args); } catch (e) { fallo(NOMBRES[fn], e.message); throw e; }
+        return Promise.resolve(r).then(function(v) {
+          var txt = statusEl ? (statusEl.textContent || '') : '';
+          if (/^\s*❌/.test(txt)) { fallo(NOMBRES[fn], txt.replace(/^\s*❌\s*/, '')); }
+          else { ocultar(); }
+          return v;
+        }, function(e) { fallo(NOMBRES[fn], e && e.message); throw e; });
+      };
+      w._uplGuard = true; window[fn] = w;
+    });
+  }
+  window.addEventListener('load', function() { envolver(); setTimeout(envolver, 1500); });
+  document.addEventListener('DOMContentLoaded', envolver);
+})();
 function _uplSetBadge(id,fecha){var el=document.getElementById(id+'-badge');if(!el)return;if(!fecha){el.textContent='';el.style.cssText='';return;}var today=(typeof currentDate!=='undefined'&&currentDate)?currentDate:new Date().toISOString().slice(0,10);var isHoy=(fecha===today);try{var _k='upl_seen_'+id,_p=JSON.parse(localStorage.getItem(_k)||'null');if(!_p||_p.f!==fecha){localStorage.setItem(_k,JSON.stringify({f:fecha,d:today}));if(_p)localStorage.setItem('upl_sub_'+id,today);}}catch(e){}var d=new Date(fecha+'T12:00:00');var label='📅 '+d.toLocaleDateString('es-PE',{weekday:'short',day:'2-digit',month:'short'});el.textContent=label;el.style.background=isHoy?'rgba(26,158,80,.15)':'var(--bg3)';el.style.color=isHoy?'var(--grn)':'var(--txt3)';el.style.border=isHoy?'1px solid rgba(26,158,80,.4)':'1px solid var(--bdr)';el.style.fontWeight=isHoy?'700':'500';el.setAttribute('data-hoy',isHoy?'1':'0');}
 window._uplSetBadge=_uplSetBadge;
 // Marca "subido hoy" por caja: un reporte cargado hoy cuenta como al día aunque su fecha interna sea anterior (ej. naves, cargas)
