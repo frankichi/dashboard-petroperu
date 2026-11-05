@@ -36564,6 +36564,9 @@ window.renderPRepoMar = function() {
         if (esTransitoActual) {
           var midXTransito = (prevX + x1) / 2;
           var midYTransito = Math.min(prevY, y1) - 22;
+          // apoyar el buquecito sobre el punto medio REAL de la curva (no sobre el de los extremos)
+          var _mqT = /^M([\d.\-]+),([\d.\-]+) Q([\d.\-]+),([\d.\-]+) ([\d.\-]+),([\d.\-]+)$/.exec(pathD);
+          if (_mqT) { midXTransito = .25 * +_mqT[1] + .5 * +_mqT[3] + .25 * +_mqT[5]; midYTransito = .25 * +_mqT[2] + .5 * +_mqT[4] + .25 * +_mqT[6] - 27; }
           pathsHTML += '<image class="repomar-boat-transito" href="' + REPOMAR_BOAT_ICON_B64 + '" x="' + (midXTransito - 33) + '" y="' + midYTransito + '" width="66" height="23"/>';
         }
         // El punto de salida de la SIGUIENTE flecha es el centro
@@ -36691,10 +36694,13 @@ window.renderPRepoMar = function() {
     var ship = rowC.querySelector('.repomar-shipbox');
     var legs = Array.prototype.slice.call(rowC.querySelectorAll('.repomar-legbox[data-leg-idx]'))
       .sort(function(a, b) { return (+a.getAttribute('data-leg-idx')) - (+b.getAttribute('data-leg-idx')); });
-    var paths = '';
+    var paths = '', barcos = '';
     if (ship) {
       var pr = ship.getBoundingClientRect();
       var px = pr.right - gr.left, py = pr.top + pr.height / 2 - gr.top, prevRect = pr, prevIdx = '-1';
+      // Tramo "en tránsito": primera escala sin completar, siempre que el buque no esté ahora mismo en un puerto
+      // (ni cargando en Talara ni en una caja "en vivo"). Ahí se anima la flecha y se dibuja el buquecito encima.
+      var _transitoYa = ship.classList.contains('en-vivo') || legs.some(function(l){ return l.classList.contains('en-vivo'); });
       legs.forEach(function(el) {
         var r = el.getBoundingClientRect();
         var x1 = r.left + r.width / 2 - gr.left, y1 = r.top - gr.top;
@@ -36707,12 +36713,22 @@ window.renderPRepoMar = function() {
           d = 'M' + px + ',' + py + ' Q' + ((px + x1) / 2) + ',' + cy + ' ' + x1 + ',' + y1;
         }
         var idxAct = el.getAttribute('data-leg-idx');
-        paths += '<path d="' + d + '" data-from="' + prevIdx + '" data-to="' + idxAct + '" fill="none" stroke="' + (izq ? '#ea580c' : '#3b82f6') + '" stroke-width="2.4" stroke-dasharray="5 3" marker-end="url(#rpm-arr' + (izq ? '-r' : '') + ')" style="transition:opacity .15s,stroke-width .15s"/>';
+        var esTrans = !_transitoYa && !el.classList.contains('completado');
+        if (esTrans) {
+          _transitoYa = true;
+          // punto medio real de la curva (t = 0.5) para apoyar el buquecito justo encima de la línea
+          var bx, by;
+          var mq = /^M([\d.\-]+),([\d.\-]+) Q([\d.\-]+),([\d.\-]+) ([\d.\-]+),([\d.\-]+)$/.exec(d);
+          if (mq) { bx = .25 * +mq[1] + .5 * +mq[3] + .25 * +mq[5]; by = .25 * +mq[2] + .5 * +mq[4] + .25 * +mq[6]; }
+          else { var ml = /^M([\d.\-]+),([\d.\-]+) L([\d.\-]+),([\d.\-]+)$/.exec(d); bx = ml ? (+ml[1] + +ml[3]) / 2 : x1; by = ml ? (+ml[2] + +ml[4]) / 2 : y1; }
+          barcos += '<g transform="translate(' + (bx - 33) + ',' + (by - 27) + ')"><image class="repomar-boat-transito" href="' + REPOMAR_BOAT_ICON_B64 + '" x="0" y="0" width="66" height="23"/></g>';
+        }
+        paths += '<path d="' + d + '" data-from="' + prevIdx + '" data-to="' + idxAct + '" class="' + (esTrans ? 'repomar-arrow-transito' : '') + '" fill="none" stroke="' + (izq ? '#ea580c' : (esTrans ? '#d97706' : '#3b82f6')) + '" stroke-width="2.4" stroke-dasharray="5 3" marker-end="url(#rpm-arr' + (izq ? '-r' : '') + ')" style="transition:opacity .15s,stroke-width .15s"/>';
         px = x1; py = y1; prevRect = r; prevIdx = idxAct;
       });
     }
     svg.innerHTML = '<defs><marker id="rpm-arr" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#3b82f6"/></marker>' +
-      '<marker id="rpm-arr-r" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#ea580c"/></marker></defs>' + paths;
+      '<marker id="rpm-arr-r" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#ea580c"/></marker></defs>' + paths + barcos;
     zoom.style.transform = 'scale(' + k + ')';
     zoom.style.marginBottom = (g2.offsetHeight * (k - 1)) + 'px';
     _rpmResaltarSetup(g2, svg);
