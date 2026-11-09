@@ -34063,6 +34063,34 @@ function _buildRepoMarBuques() {
   }
 
   var buques = Object.keys(buquesMap).map(function(k){ return buquesMap[k]; });
+  // ⚠️ AGREGADO — a pedido: NO mezclar viajes numerados. Se toma como viaje ACTUAL el de la primera escala
+  // pendiente (más las escalas de otros códigos que ocurren al mismo tiempo, ej. 2 viajes que descargan juntos en
+  // Conchán). Las escalas pendientes que empiezan DESPUÉS de que termina el viaje actual pasan a b.proximosViajes
+  // (se muestran como un indicador aparte) y no entran al diagrama ni al cálculo del retorno a Talara.
+  buques.forEach(function(b) {
+    var pend = b.legs.filter(function(l){ return l.estado !== 'COMPLETADO' && l.fecha_hasta; });
+    b.proximosViajes = [];
+    if (pend.length < 2) return;
+    pend.sort(function(x, y){ return x.fecha_hasta.slice(0,10).localeCompare(y.fecha_hasta.slice(0,10)); });
+    var cur = pend[0].viaje || '';
+    var finActual = '';
+    pend.forEach(function(l){ if ((l.viaje || '') === cur) { var f = l.fecha_hasta.slice(0,10); if (f > finActual) finActual = f; } });
+    var siguientes = pend.filter(function(l){ return (l.viaje || '') !== cur && l.fecha_hasta.slice(0,10) > finActual; });
+    if (!siguientes.length) return;
+    var setSig = {}; siguientes.forEach(function(l){ setSig[l.terminalNorm + '|' + l.producto + '|' + l.fecha_hasta + '|' + (l.viaje || '')] = true; });
+    b.legs = b.legs.filter(function(l){ return !setSig[l.terminalNorm + '|' + l.producto + '|' + l.fecha_hasta + '|' + (l.viaje || '')]; });
+    var porViaje = {};
+    siguientes.forEach(function(l){ var k = l.viaje || 'sin código'; (porViaje[k] = porViaje[k] || []).push(l); });
+    Object.keys(porViaje).sort().forEach(function(k) {
+      var ls = porViaje[k], vol = 0, paradas = {};
+      ls.forEach(function(l){ vol += (l.vol || 0); var kk = l.terminal + '|' + l.fecha_hasta.slice(0,10); paradas[kk] = true; });
+      var orden = Object.keys(paradas).sort(function(x, y){ return x.split('|')[1].localeCompare(y.split('|')[1]); }).map(function(kk){ var q = kk.split('|'); return q[0] + ' ' + q[1].slice(8,10) + '/' + q[1].slice(5,7); });
+      b.proximosViajes.push({ viaje: k, vol: vol, ruta: orden });
+    });
+    // la carga a bordo del viaje actual se recalcula SIN las escalas del siguiente viaje
+    b.cargaInicial = {};
+    b.legs.forEach(function(l){ var ab = _repomarAbrevProd(l.producto); b.cargaInicial[ab] = (b.cargaInicial[ab] || 0) + (l.vol || 0); });
+  });
   // ⚠️ AGREGADO — a pedido, caso real confirmado (UCAYALI: carga en
   // Conchán ALCOHOL CARBURANTE/PREMIUM/REGULAR/B-100 para entregar en
   // Mollendo y Talara, ADEMÁS de descargar ahí mismo NAFTA REFORMADA/
@@ -34228,6 +34256,9 @@ function _buildRepoMarBuques() {
     // específicamente cuando el buque SÍ estaba en Talara) — con
     // fecha_zarpe como respaldo si ese dato todavía no llegó.
     b.zarpe = pos && (pos.fecha_zarpe_talara_real || pos.fecha_zarpe) ? (pos.fecha_zarpe_talara_real || pos.fecha_zarpe) : '';
+    // Si no hay zarpe REAL desde Talara y el buque ya completó escalas en otro puerto, fecha_zarpe es el último zarpe de
+    // ESE puerto (ej. UCAYALI zarpó de Conchán el 05/11) — no se muestra como "Zarpó de Talara".
+    if (b.zarpe && !(pos && pos.fecha_zarpe_talara_real) && b.legs.some(function(l){ return l.estado === 'COMPLETADO' && String(l.terminalNorm || '').indexOf('TALARA') === -1; })) b.zarpe = '';
     b.zarpeOrigen = 'Talara';
     // ⚠️ AGREGADO — bug real confirmado (UCAYALI/URUBAMBA/MOCHE
     // mostrando "En Talara" aunque ya tenían escalas COMPLETADAS en
@@ -35919,6 +35950,9 @@ window.renderPRepoMar = function() {
       // fondeado, con su ETC si ya se conoce) — ya calculado en
       // b.estadoActualPreZarpe usando los mismos campos detallados de
       // Posicionamiento de Naves.
+      var proxViajeTxt = (b.proximosViajes || []).map(function(pv) {
+        return '<div class="repomar-shipzarpe" style="background:#f1f5f9;border-color:#94a3b8;color:#334155;font-weight:600;white-space:normal;text-align:left" title="Viaje siguiente (aún no inicia): no se mezcla con el viaje actual">➡ Siguiente viaje ' + pv.viaje + ' · ' + pv.vol.toFixed(1) + ' MB<div style="font-size:9px;font-weight:500;margin-top:2px">' + pv.ruta.join(' → ') + '</div></div>';
+      }).join('');
       var zarpeTxt = b.zarpe
         ? '<div class="repomar-shipzarpe">Zarpó de ' + b.zarpeOrigen + ': ' + fmtCorta(b.zarpe) + fmtHora(b.zarpe) + '</div>'
         : b.zarpeConfirmadoPorEscalas
@@ -35966,6 +36000,7 @@ window.renderPRepoMar = function() {
           (enVivoEnTalara ? '<div class="repomar-livepill" style="margin:0 10px 4px">' + '<span class="repomar-livedot"></span>En puerto</div>' : '') +
           zarpeTxt +
           enTransitoTxt +
+          proxViajeTxt +
           botonAgregarEscala +
         '</div>' +
       '</div>';
